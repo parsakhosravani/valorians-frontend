@@ -1,3 +1,3 @@
-export const energy = () => {
+export const skill = () => {
   return null;
 };
