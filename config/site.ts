@@ -10,19 +10,19 @@ export const siteConfig = {
     },
     {
       label: "Resources",
-      href: "/docs",
+      href: "/resources",
     },
     {
       label: "Army",
-      href: "/pricing",
+      href: "/army",
     },
     {
       label: "Allies",
-      href: "/blog",
+      href: "/allies",
     },
     {
       label: "World",
-      href: "/about",
+      href: "/world",
     },
   ],
   navMenuItems: [
