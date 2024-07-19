@@ -1,13 +1,8 @@
 import "@/styles/globals.css";
 import { Metadata, Viewport } from "next";
-import clsx from "clsx";
-
 import { Providers } from "./providers";
-
 import { siteConfig } from "@/config/site";
-import { fontSans } from "@/config/fonts";
-import { Navbar } from "@/components/organisms/navbar";
-import { ThemeSwitch } from "@/components/theme-switch";
+import Head from "next/head";
 
 export const metadata: Metadata = {
   title: {
@@ -34,24 +29,16 @@ export default function RootLayout({
 }) {
   return (
     <html suppressHydrationWarning lang="en">
-      <head />
-      <body
-        className={clsx(
-          "min-h-screen bg-background font-sans antialiased",
-          fontSans.variable
-        )}
-      >
+      <Head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
+        />
+      </Head>
+      <body>
         <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
-          <div className="relative flex flex-col h-screen">
-            <div className="flex justify-center pt-16">
-              <ThemeSwitch />
-            </div>
-            <main className=" mx-auto max-w-7xl px-6 flex-grow">
-              {children}
-            </main>
-            <footer className="w-full flex items-center justify-center py-3">
-              <Navbar />
-            </footer>
+          <div className="relative flex flex-col h-screen max-w-md mx-auto">
+            <main className="w-full flex-grow">{children}</main>
           </div>
         </Providers>
       </body>

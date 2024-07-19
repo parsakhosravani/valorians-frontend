@@ -1,3 +1,20 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@font-face {
+    font-family: 'Supercell Magic';
+    src: url('/fonts/supercell-magic/Supercell-Magic.eot');
+    src: local('Supercell Magic'), local('Supercell-Magic'),
+        url('/fonts/supercell-magic/Supercell-Magic.eot?#iefix') format('embedded-opentype'),
+        url('/fonts/supercell-magic/Supercell-Magic.woff2') format('woff2'),
+        url('/fonts/supercell-magic/Supercell-Magic.woff') format('woff'),
+        url('/fonts/supercell-magic/Supercell-Magic.ttf') format('truetype');
+    font-weight: 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+* {
+    font-family: 'Supercell Magic';
+}

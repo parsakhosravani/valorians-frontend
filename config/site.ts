@@ -1,8 +1,8 @@
 export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
-  name: "Valerian",
-  description: "Make beautiful websites regardless of your design experience.",
+  name: "Valorians Legend",
+  description: "Valorians Legend",
   navItems: [
     {
       label: "Home",

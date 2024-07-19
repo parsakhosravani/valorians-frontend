@@ -1,3 +1,3 @@
 export const menu = () => {
-  return null;
+  return;
 };

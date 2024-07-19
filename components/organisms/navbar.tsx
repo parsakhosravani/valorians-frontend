@@ -1,60 +1,50 @@
-import {
-  Navbar as NextUINavbar,
-  NavbarContent,
-  NavbarMenu,
-  NavbarItem,
-  NavbarMenuItem,
-} from "@nextui-org/navbar";
-import { Link } from "@nextui-org/link";
-import { link as linkStyles } from "@nextui-org/theme";
-import NextLink from "next/link";
-import clsx from "clsx";
-
-import { siteConfig } from "@/config/site";
-
 export const Navbar = () => {
   return (
-    <NextUINavbar maxWidth="xl" position="sticky">
-      <NavbarContent className="basis-1/5 sm:basis-full" justify="center">
-        <ul className="hidden lg:flex gap-4 justify-between ml-2">
-          {siteConfig.navItems.map((item) => (
-            <NavbarItem key={item.href}>
-              <NextLink
-                className={clsx(
-                  linkStyles({ color: "foreground" }),
-                  "data-[active=true]:text-primary data-[active=true]:font-medium"
-                )}
-                color="foreground"
-                href={item.href}
-              >
-                {item.label}
-              </NextLink>
-            </NavbarItem>
-          ))}
-        </ul>
-      </NavbarContent>
+    <div className="w-[390px] h-[68px] left-[-2px] top-[668px] absolute">
+      <div className="w-[390px] h-[66px] left-0 top-[2px] absolute bg-neutral-900 rounded-tl-[30px] rounded-tr-[30px] backdrop-blur-sm" />
+      <div className="w-[56.33px] h-[46.24px] left-[21px] top-[12px] absolute flex-col justify-center items-center gap-[5px] inline-flex">
+        <img className="w-6 h-6 relative" src="./images/navs/resources.png" />
 
-      <NavbarMenu>
-        <div className="mx-4 mt-2 flex flex-col gap-2">
-          {siteConfig.navMenuItems.map((item, index) => (
-            <NavbarMenuItem key={`${item}-${index}`}>
-              <Link
-                color={
-                  index === 2
-                    ? "primary"
-                    : index === siteConfig.navMenuItems.length - 1
-                      ? "danger"
-                      : "foreground"
-                }
-                href="#"
-                size="lg"
-              >
-                {item.label}
-              </Link>
-            </NavbarMenuItem>
-          ))}
+        <div className="self-stretch h-3 flex-col justify-center items-center gap-1 flex">
+          <div className="self-stretch text-center text-white text-[10px] font-bold">
+            Resources
+          </div>
         </div>
-      </NavbarMenu>
-    </NextUINavbar>
+      </div>
+      <div className="w-[56.33px] h-[46.32px] left-[95px] top-[12px] absolute flex-col justify-center items-center gap-[5px] inline-flex">
+        <img className="w-6 h-6 relative" src="./images/navs/kingdom.png" />
+
+        <div className="self-stretch h-3 flex-col justify-center items-center gap-1 flex">
+          <div className="self-stretch text-center text-white/opacity-50 text-[10px] font-bold">
+            kingdom
+          </div>
+        </div>
+      </div>
+      <div className="w-[56.33px] h-[46.32px] left-[168px] top-[12px] absolute flex-col justify-center items-center gap-[5px] inline-flex">
+        <img className="w-6 h-6 relative" src="./images/navs/army.png" />
+
+        <div className="self-stretch h-3 flex-col justify-center items-center gap-1 flex">
+          <div className="self-stretch text-center text-white/opacity-50 text-[10px] font-bold">
+            Army
+          </div>
+        </div>
+      </div>
+      <div className="w-[56.33px] h-[47.45px] left-[314.63px] top-[12px] absolute flex-col justify-center items-center gap-[5px] inline-flex">
+        <img className="w-6 h-6 relative" src="./images/navs/world.png" />
+        <div className="self-stretch h-[13px] flex-col justify-center items-center gap-1 flex">
+          <div className="self-stretch text-center text-white/opacity-50 text-[11px] font-bold">
+            World
+          </div>
+        </div>
+      </div>
+      <div className="w-[56.33px] h-[46.32px] left-[241px] top-[12px] absolute flex-col justify-center items-center gap-[5px] inline-flex">
+        <img className="w-6 h-6 relative" src="./images/navs/allies.png" />
+        <div className="self-stretch h-3 flex-col justify-center items-center gap-1 flex">
+          <div className="self-stretch text-center text-white/opacity-50 text-[10px] font-bold">
+            Allies
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
