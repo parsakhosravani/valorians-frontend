@@ -28,8 +28,8 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
       }}
     >
       <div className="flex flex-col justify-between w-full">
-        <div className="text-center text-white text-[10px] font-semibold">
-          1,000,000,000
+        <div className="text-white text-[10px] font-semibold">
+          {resourceData.count}
         </div>
 
         <div className="h-1 relative w-[60px]">

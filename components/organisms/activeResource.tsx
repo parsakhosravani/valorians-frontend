@@ -1,19 +1,16 @@
-"use client";
-import { useEffect, useState } from "react";
 import { TResource } from "../templates";
-import { Skill } from "./skill";
-
-export const Action = ({ activeResource }: { activeResource: TResource }) => {
-  const [energy, setEnergy] = useState(0);
-  useEffect(() => {
-    setEnergy(0);
-  }, [activeResource]);
-
+export const ActiveResource = ({
+  activeResource,
+  onConsumeEnergy,
+}: {
+  activeResource: TResource;
+  onConsumeEnergy: () => void;
+}) => {
   return (
     <>
       <div className="flex w-full items-center flex-col">
         <div className="flex gap-1 text-[38px]">
-          <p>{1000000 + energy}</p>
+          <p>{activeResource.count}</p>
           <p>/</p>
           <p>1.2M</p>
         </div>
@@ -23,10 +20,7 @@ export const Action = ({ activeResource }: { activeResource: TResource }) => {
             className={`w-1/2 h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
           />
         </div>
-        <div
-          onClick={() => setEnergy(energy + 1)}
-          className="w-[260px] h-[260px] my-4"
-        >
+        <div onClick={onConsumeEnergy} className="w-[260px] h-[260px] my-4">
           <img src={activeResource?.img} alt="iron" />
         </div>
         <div>
@@ -39,7 +33,6 @@ export const Action = ({ activeResource }: { activeResource: TResource }) => {
           className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.1]"
         />
       </div>
-      <Skill energy={energy} />
     </>
   );
 };

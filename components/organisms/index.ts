@@ -1,3 +1,2 @@
-export * from "./action";
-export * from "./menu";
+export * from "./activeResource";
 export * from "./navbar";
