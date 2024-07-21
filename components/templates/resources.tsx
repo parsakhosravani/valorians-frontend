@@ -1,38 +1,68 @@
+"use client";
+
+import { useState } from "react";
 import { Coin, Resource, User } from "../molecules";
-import { Action, Navbar } from "../organisms";
+import { Action } from "../organisms";
 import { Skill } from "../organisms/skill";
 const resources = [
   {
-    img: "./images/resources/iron.png",
+    id: 1,
+    img: "./images/resources/iron.webp",
+    bg: "/images/background/stoneBg.webp",
     color: "bg-zinc-600",
+    name: "Iron",
   },
   {
-    img: "./images/resources/wood.png",
+    id: 2,
+    img: "./images/resources/wood.webp",
+    bg: "/images/background/woodbg.webp",
     color: "bg-orange-300",
+    name: "Wood",
   },
   {
-    img: "./images/resources/clay.png",
+    id: 3,
+    img: "./images/resources/clay.webp",
+    bg: "/images/background/claybg.webp",
     color: "bg-amber-700",
+    name: "Clay",
   },
   {
-    img: "./images/resources/crop.png",
+    id: 4,
+    img: "./images/resources/crop.webp",
+    bg: "/images/background/cropbg.webp",
     color: "bg-yellow-500",
+    name: "Crop",
   },
 ];
+export type TResource = (typeof resources)[number];
+
 export const Resources = () => {
+  const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
+
+  const onChangeResourceHandler = (resource: TResource) => {
+    setActiveResource(resource);
+  };
   return (
-    <div>
-      <Coin />
+    <div className="p-2 flex flex-col h-full gap-10 relative">
+      <header className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <User />
+          <Coin />
+        </div>
+
+        <div className="items-center gap-1 w-full flex">
+          {resources.map((item, index) => (
+            <Resource
+              key={index}
+              resourceData={item}
+              isActive={activeResource.id === item.id}
+              onChangeResource={onChangeResourceHandler}
+            />
+          ))}
+        </div>
+      </header>
+      <Action activeResource={activeResource} />
       <Skill />
-      <Navbar />
-      <Action />
-      <div className="w-[244px] h-[94px] left-0 top-[14px] absolute rounded-tr-[5px] rounded-br-[50px]" />
-      <User />
-      <div className="w-[389px] p-2.5 left-0 top-[56px] absolute justify-center items-center gap-2 inline-flex">
-        {resources.map((item, index) => (
-          <Resource key={index} img={item.img} color={item.color} />
-        ))}
-      </div>
     </div>
   );
 };

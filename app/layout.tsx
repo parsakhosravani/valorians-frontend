@@ -3,6 +3,7 @@ import { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import { siteConfig } from "@/config/site";
 import Head from "next/head";
+import { Navbar } from "@/components";
 
 export const metadata: Metadata = {
   title: {
@@ -38,7 +39,8 @@ export default function RootLayout({
       <body>
         <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
           <div className="relative flex flex-col h-screen max-w-md mx-auto">
-            <main className="w-full flex-grow">{children}</main>
+            <main className="w-full flex-1 overflow-auto">{children}</main>
+            <Navbar />
           </div>
         </Providers>
       </body>
