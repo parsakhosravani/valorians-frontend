@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { BoostIcon, DatabaseIcon, EnergyIcon, MineIcon } from "../atoms";
 import { Coin, Resource, User } from "../molecules";
 import { ActiveResource } from "../organisms";
@@ -12,7 +12,7 @@ const initialResources = [
     bg: "/images/background/stoneBg.webp",
     color: "bg-zinc-600",
     name: "Iron",
-    count: 1000000,
+    count: 10000,
   },
   {
     id: 2,
@@ -20,7 +20,7 @@ const initialResources = [
     bg: "/images/background/woodbg.webp",
     color: "bg-orange-300",
     name: "Wood",
-    count: 1000000,
+    count: 10000,
   },
   {
     id: 3,
@@ -28,7 +28,7 @@ const initialResources = [
     bg: "/images/background/claybg.webp",
     color: "bg-amber-700",
     name: "Clay",
-    count: 1000000,
+    count: 10000,
   },
   {
     id: 4,
@@ -36,49 +36,43 @@ const initialResources = [
     bg: "/images/background/cropbg.webp",
     color: "bg-yellow-500",
     name: "Crop",
-    count: 1000000,
+    count: 10000,
   },
 ];
+const earnLevelEnergy = 10;
+export const resourceCapacity = 15000;
 
-const skills = [
-  {
-    id: 1,
-    icon: <DatabaseIcon />,
-  },
-  {
-    id: 2,
-    icon: <MineIcon />,
-  },
-  {
-    id: 3,
-    icon: <BoostIcon />,
-  },
-];
-const energy = 4000;
 export type TResource = (typeof initialResources)[number];
 
 export const Resources = () => {
   const [resources, setResources] = useState<TResource[]>(initialResources);
   const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
   const [consumeEnergy, setConsumeEnergy] = useState(0);
+  const [energyCapacity, setEnergyCapacity] = useState(150000);
+  const [availableEnergy, setAvailableEnergy] = useState(10000);
 
   const onChangeResourceHandler = (resource: TResource) => {
     setActiveResource(resource);
   };
   const updatedResources = resources.map((res) =>
-    res.id === activeResource.id ? { ...res, count: res.count + 1 } : res
+    res.id === activeResource.id
+      ? { ...res, count: res.count + earnLevelEnergy }
+      : res
   );
   const onConsumeEnergyHandler = () => {
-    if (consumeEnergy !== energy) {
-      setConsumeEnergy(consumeEnergy + 1);
+    if (consumeEnergy !== availableEnergy) {
+      setConsumeEnergy(consumeEnergy + earnLevelEnergy);
       setActiveResource((prevActiveResource) => ({
         ...prevActiveResource,
-        count: prevActiveResource.count + 1,
+        count: prevActiveResource.count + earnLevelEnergy,
       }));
       setResources(updatedResources);
     }
   };
 
+  setTimeout(() => {
+    setAvailableEnergy(availableEnergy + 1);
+  }, 1000);
   return (
     <div className="p-2 flex flex-col h-full gap-10 relative">
       <header className="flex flex-col gap-2">
@@ -104,17 +98,23 @@ export const Resources = () => {
       <div className="flex justify-between px-2">
         <div className="flex items-center gap-2">
           <EnergyIcon />
-          <p className="text-[18px]">{energy - consumeEnergy} / 4000</p>
+          <p className="text-[18px]">
+            {availableEnergy - consumeEnergy} / {energyCapacity}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {skills.map((skill) => (
-            <div
-              key={skill.id}
-              className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
-            >
-              {skill.icon}
-            </div>
-          ))}
+          <div
+            onClick={() => setEnergyCapacity(energyCapacity + 500)}
+            className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+          >
+            <DatabaseIcon />
+          </div>
+          <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
+            <MineIcon />
+          </div>
+          <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
+            <BoostIcon />
+          </div>
         </div>
       </div>
     </div>

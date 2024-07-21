@@ -15,19 +15,19 @@ export const Navbar = () => {
       </div>
       <div className="flex flex-col justify-center items-center gap-1">
         <KingdomIcon />
-        <p>kingdom</p>
+        <p>Kingdom</p>
       </div>
       <div className="flex flex-col justify-center items-center gap-1">
         <WarIcon />
-        <p>war</p>
+        <p>War</p>
       </div>
       <div className="flex flex-col justify-center items-center gap-1">
         <FriendsIcon />
-        <p>friends</p>
+        <p>Friends</p>
       </div>
       <div className="flex flex-col justify-center items-center gap-1">
         <QuestIcon />
-        <p>quest</p>
+        <p>Quest</p>
       </div>
     </div>
   );

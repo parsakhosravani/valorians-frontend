@@ -1,33 +1,18 @@
-import "@/styles/globals.css";
-import { Metadata, Viewport } from "next";
-import { Providers } from "./providers";
-import { siteConfig } from "@/config/site";
-import Head from "next/head";
 import { Navbar } from "@/components";
+import type { Metadata } from "next";
+import Head from "next/head";
+import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: {
-    default: siteConfig.name,
-    template: `%s - ${siteConfig.name}`,
-  },
-  description: siteConfig.description,
-  icons: {
-    icon: "/favicon.ico",
-  },
-};
-
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "black" },
-  ],
+  title: "Valorians Legend",
+  description: "Valorians legend is a mini game",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html suppressHydrationWarning lang="en">
       <Head>
@@ -36,13 +21,11 @@ export default function RootLayout({
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
         />
       </Head>
-      <body>
-        <Providers themeProps={{ attribute: "class", defaultTheme: "dark" }}>
-          <div className="relative flex flex-col h-screen max-w-md mx-auto">
-            <main className="w-full flex-1 overflow-auto">{children}</main>
-            <Navbar />
-          </div>
-        </Providers>
+      <body className="bg-black">
+        <div className="relative flex flex-col h-screen max-w-md mx-auto  bg-transparent text-white">
+          <main className="w-full flex-1 overflow-auto">{children}</main>
+          <Navbar />
+        </div>
       </body>
     </html>
   );

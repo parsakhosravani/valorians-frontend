@@ -1,5 +1,5 @@
 import React, { FunctionComponent } from "react";
-import { TResource } from "../templates";
+import { resourceCapacity, TResource } from "../templates";
 
 interface resourcePropsType {
   resourceData: TResource;
@@ -35,7 +35,9 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         <div className="h-1 relative w-[60px]">
           <div className="h-full bg-white rounded-[10px] shadow-inner relative" />
           <div
-            style={{ width: (resourceData.count * 100) / 1200000 + "%" }}
+            style={{
+              width: (resourceData.count * 100) / resourceCapacity + "%",
+            }}
             className={`w-[24.59px] h-full rounded-[10px] top-0 absolute ${resourceData.color}`}
           />
         </div>
