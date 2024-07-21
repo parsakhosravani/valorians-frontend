@@ -17,7 +17,8 @@ export const ActiveResource = ({
         <div className="h-2 relative w-[290px]">
           <div className="h-full bg-white rounded-[10px] shadow-inner relative" />
           <div
-            className={`w-1/2 h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
+            style={{ width: (activeResource.count * 100) / 1200000 + "%" }}
+            className={`h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
           />
         </div>
         <div onClick={onConsumeEnergy} className="w-[260px] h-[260px] my-4">
