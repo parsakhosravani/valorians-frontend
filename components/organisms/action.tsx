@@ -1,10 +1,17 @@
+"use client";
+import { useEffect, useState } from "react";
 import { TResource } from "../templates";
 
 export const Action = ({ activeResource }: { activeResource: TResource }) => {
+  const [energy, setEnergy] = useState(0);
+  useEffect(() => {
+    setEnergy(0);
+  }, [activeResource]);
+
   return (
     <div className="flex w-full items-center flex-col">
       <div className="flex gap-1 text-[38px]">
-        <p>1000000</p>
+        <p>{1000000 + energy}</p>
         <p>/</p>
         <p>1.2M</p>
       </div>
@@ -14,7 +21,10 @@ export const Action = ({ activeResource }: { activeResource: TResource }) => {
           className={`w-1/2 h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
         />
       </div>
-      <div className="w-[260px] h-[260px] my-4">
+      <div
+        onClick={() => setEnergy(energy + 1)}
+        className="w-[260px] h-[260px] my-4"
+      >
         <img src={activeResource?.img} alt="iron" />
       </div>
       <div>
