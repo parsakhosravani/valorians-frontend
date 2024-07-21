@@ -22,7 +22,14 @@ export const ActiveResource = ({
           className={`h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
         />
       </div>
-      <div onClick={onConsumeEnergy} className="w-[260px] h-[260px] my-4">
+      <div
+        onClick={
+          activeResource.count < resourceCapacity
+            ? onConsumeEnergy
+            : () => console.log("capacity needed")
+        }
+        className="w-[260px] h-[260px] my-4"
+      >
         <img src={activeResource?.img} alt="iron" />
       </div>
       <div>

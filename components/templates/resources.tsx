@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { BoostIcon, DatabaseIcon, EnergyIcon, MineIcon } from "../atoms";
 import { Coin, Resource, User } from "../molecules";
 import { ActiveResource } from "../organisms";
