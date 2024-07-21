@@ -8,7 +8,6 @@ export const ActiveResource = ({
   activeResource: TResource;
   onConsumeEnergy: () => void;
 }) => {
-  const [showConsumeEnergy, setShowConsumeEnergy] = useState(false);
   const [clickPositions, setClickPositions] = useState<
     { x: number; y: number }[]
   >([]);
@@ -55,13 +54,13 @@ export const ActiveResource = ({
               position: "absolute",
               animation: "fadeUpAndOut 1s forwards",
             }}
-            className="font-bold text-3xl text-white"
+            className="font-bold text-3xl text-white select-none"
           >
             +{earnLevelEnergy}
           </span>
         ))}
 
-        <img src={activeResource?.img} alt="iron"></img>
+        <img src={activeResource?.img} alt={activeResource.name} />
       </div>
       <div>
         <h1 className="text-[46px]">{activeResource?.name}</h1>

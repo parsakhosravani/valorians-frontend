@@ -6,7 +6,7 @@ import { ProgressBar } from "../molecules";
 
 export const Intro = () => {
   return (
-    <div className="bg-intro bg-cover bg-no-repeat h-full flex w-full items-end justify-center">
+    <div className="fixed left-0 right-0 top-0 bottom-0  bg-intro bg-cover bg-no-repeat h-full flex w-full items-end justify-center">
       <div className=" bottom-0 flex h-64 w-60 flex-col justify-between rounded-tl-3xl rounded-tr-3xl bg-white/10 px-[57px] pb-[33px] pt-[26px] backdrop-blur-sm">
         <ProgressBar />
         <div className="flex w-full flex-col items-center justify-center gap-y-1">
