@@ -1,4 +1,6 @@
-import { resourceCapacity, TResource } from "../templates";
+"use client";
+import { useState } from "react";
+import { earnLevelEnergy, resourceCapacity, TResource } from "../templates";
 export const ActiveResource = ({
   activeResource,
   onConsumeEnergy,
@@ -6,6 +8,11 @@ export const ActiveResource = ({
   activeResource: TResource;
   onConsumeEnergy: () => void;
 }) => {
+  const [showConsumeEnergy, setShowConsumeEnergy] = useState(false);
+  const [clickPositions, setClickPositions] = useState<
+    { x: number; y: number }[]
+  >([]);
+
   return (
     <div className="flex w-full items-center flex-col">
       <div className="flex gap-1 text-[38px]">
@@ -23,14 +30,38 @@ export const ActiveResource = ({
         />
       </div>
       <div
-        onClick={
-          activeResource.count < resourceCapacity
-            ? onConsumeEnergy
-            : () => console.log("capacity needed")
-        }
-        className="w-[260px] h-[260px] my-4"
+        onClick={(e) => {
+          if (activeResource.count < resourceCapacity) {
+            onConsumeEnergy();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            setClickPositions((prev) => [...prev, { x, y }]);
+            setTimeout(() => {
+              setClickPositions((prev) => prev.slice(1));
+            }, 1000);
+          } else {
+            console.log("capacity needed");
+          }
+        }}
+        className="relative w-[260px] h-[260px] my-4"
       >
-        <img src={activeResource?.img} alt="iron" />
+        {clickPositions.map((pos, index) => (
+          <span
+            key={index}
+            style={{
+              left: pos.x,
+              top: pos.y,
+              position: "absolute",
+              animation: "fadeUpAndOut 1s forwards",
+            }}
+            className="font-bold text-3xl text-white"
+          >
+            +{earnLevelEnergy}
+          </span>
+        ))}
+
+        <img src={activeResource?.img} alt="iron"></img>
       </div>
       <div>
         <h1 className="text-[46px]">{activeResource?.name}</h1>
@@ -39,7 +70,7 @@ export const ActiveResource = ({
         src={activeResource?.bg}
         alt="bg"
         style={{ backgroundPosition: "center", backgroundSize: "100%" }}
-        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.1]"
+        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.16]"
       />
     </div>
   );

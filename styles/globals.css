@@ -5,9 +5,7 @@
 @font-face {
   font-family: "Supercell Magic";
   src: url("/fonts/supercell-magic/Supercell-Magic.eot");
-  src:
-    local("Supercell Magic"),
-    local("Supercell-Magic"),
+  src: local("Supercell Magic"), local("Supercell-Magic"),
     url("/fonts/supercell-magic/Supercell-Magic.eot?#iefix")
       format("embedded-opentype"),
     url("/fonts/supercell-magic/Supercell-Magic.woff2") format("woff2"),
@@ -20,4 +18,15 @@
 
 * {
   font-family: "Supercell Magic";
+}
+
+@keyframes fadeUpAndOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
 }

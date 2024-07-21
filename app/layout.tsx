@@ -21,9 +21,9 @@ export default function RootLayout({
           content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
         />
       </Head>
-      <body className="bg-black">
-        <div className="relative flex flex-col h-screen max-w-md mx-auto  bg-transparent text-white">
-          <main className="w-full flex-1 overflow-auto">{children}</main>
+      <body className="bg-black overflow-hidden">
+        <div className="relative flex flex-col h-screen max-w-md mx-auto bg-transparent text-white">
+          <main className="w-full flex-1">{children}</main>
           <Navbar />
         </div>
       </body>

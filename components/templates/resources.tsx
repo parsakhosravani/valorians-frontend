@@ -39,7 +39,7 @@ const initialResources = [
     count: 10000,
   },
 ];
-const earnLevelEnergy = 10;
+export const earnLevelEnergy = 10;
 export const resourceCapacity = 15000;
 
 export type TResource = (typeof initialResources)[number];
@@ -91,10 +91,12 @@ export const Resources = () => {
           ))}
         </div>
       </header>
+
       <ActiveResource
         onConsumeEnergy={onConsumeEnergyHandler}
         activeResource={activeResource}
       />
+
       <div className="flex justify-between px-2">
         <div className="flex items-center gap-2">
           <EnergyIcon />
