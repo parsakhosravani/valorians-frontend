@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Coin, Resource, User } from "../molecules";
 import { Action } from "../organisms";
-import { Skill } from "../organisms/skill";
 const resources = [
   {
     id: 1,
@@ -62,7 +61,6 @@ export const Resources = () => {
         </div>
       </header>
       <Action activeResource={activeResource} />
-      <Skill />
     </div>
   );
 };
