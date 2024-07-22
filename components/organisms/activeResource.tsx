@@ -101,7 +101,7 @@ export const ActiveResource = ({
         src={activeResource?.bg}
         alt="bg"
         style={{ backgroundPosition: "center", backgroundSize: "100%" }}
-        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.16]"
+        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.2]"
       />
     </div>
   );

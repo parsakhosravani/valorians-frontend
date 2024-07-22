@@ -70,7 +70,8 @@ export const Resources = () => {
     }
   };
   setTimeout(() => {
-    setAvailableEnergy(availableEnergy + 1);
+    resourceCapacity > availableEnergy &&
+      setAvailableEnergy(availableEnergy + 1);
   }, 1000);
 
   return (
