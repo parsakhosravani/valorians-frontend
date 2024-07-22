@@ -38,7 +38,7 @@ export const ActiveResource = ({
             setClickPositions((prev) => [...prev, { x, y }]);
             setTimeout(() => {
               setClickPositions((prev) => prev.slice(1));
-            }, 1000);
+            }, 50000);
           } else {
             console.log("capacity needed");
           }
