@@ -74,7 +74,7 @@ export const Resources = () => {
     setAvailableEnergy(availableEnergy + 1);
   }, 1000);
   return (
-    <div className="p-2 flex flex-col h-full gap-10 relative">
+    <div className="p-2 flex flex-col h-full gap-2 relative">
       <header className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <User />
