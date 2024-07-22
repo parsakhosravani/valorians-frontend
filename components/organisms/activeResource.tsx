@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { earnLevelEnergy, resourceCapacity, TResource } from "../templates";
+import clsx from "clsx";
 export const ActiveResource = ({
   activeResource,
   onConsumeEnergy,
@@ -12,6 +13,36 @@ export const ActiveResource = ({
     { x: number; y: number }[]
   >([]);
 
+  useEffect(() => {
+    const handleTouchStart = (e) => {
+      if (activeResource.count < resourceCapacity) {
+        onConsumeEnergy();
+        const rect = e.currentTarget.getBoundingClientRect();
+        for (let i = 0; i < e.touches.length; i++) {
+          const touch = e.touches[i];
+          const x = touch.clientX - rect.left;
+          const y = touch.clientY - rect.top;
+          setClickPositions((prev) => [...prev, { x, y }]);
+          setTimeout(() => {
+            setClickPositions((prev) => prev.slice(1));
+          }, 50000);
+        }
+      } else {
+        console.log("capacity needed");
+      }
+    };
+
+    const touchArea = document.getElementById("touchArea");
+    if (touchArea) {
+      touchArea.addEventListener("touchstart", handleTouchStart, false);
+    }
+
+    return () => {
+      if (touchArea) {
+        touchArea.removeEventListener("touchstart", handleTouchStart, false);
+      }
+    };
+  }, [activeResource, onConsumeEnergy, resourceCapacity]);
   return (
     <div className="flex w-full items-center flex-col">
       <div className="flex gap-1 text-[38px]">
@@ -29,6 +60,8 @@ export const ActiveResource = ({
         />
       </div>
       <div
+        id="touchArea"
+        className={"relative w-[260px] h-[260px] my-4 group"}
         onClick={(e) => {
           if (activeResource.count < resourceCapacity) {
             onConsumeEnergy();
@@ -43,7 +76,6 @@ export const ActiveResource = ({
             console.log("capacity needed");
           }
         }}
-        className="relative w-[260px] h-[260px] my-4"
       >
         {clickPositions.map((pos, index) => (
           <span
@@ -54,13 +86,14 @@ export const ActiveResource = ({
               position: "absolute",
               animation: "fadeUpAndOut 1s forwards",
             }}
-            className="font-bold text-3xl text-white select-none"
+            className="font-bold text-3xl text-white select-none z-50"
           >
             +{earnLevelEnergy}
           </span>
         ))}
-
-        <img src={activeResource?.img} alt={activeResource.name} />
+        <div className="w-full h-full group-active:animate-[scale_0.3s_ease-in-out]">
+          <img src={activeResource?.img} alt={activeResource.name} />
+        </div>
       </div>
       <div>
         <h1 className="text-[46px]">{activeResource?.name}</h1>

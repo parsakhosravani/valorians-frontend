@@ -69,10 +69,10 @@ export const Resources = () => {
       setResources(updatedResources);
     }
   };
-
   setTimeout(() => {
     setAvailableEnergy(availableEnergy + 1);
   }, 1000);
+
   return (
     <div className="p-2 flex flex-col h-full gap-2 relative">
       <header className="flex flex-col gap-2">
