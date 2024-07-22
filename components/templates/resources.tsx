@@ -49,7 +49,7 @@ export const Resources = () => {
   const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
   const [consumeEnergy, setConsumeEnergy] = useState(0);
   const [energyCapacity, setEnergyCapacity] = useState(15000);
-  const [availableEnergy, setAvailableEnergy] = useState(10000);
+  const [availableEnergy, setAvailableEnergy] = useState(12000);
 
   const onChangeResourceHandler = (resource: TResource) => {
     setActiveResource(resource);

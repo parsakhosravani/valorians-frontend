@@ -24,7 +24,7 @@ export const ActiveResource = ({
           setClickPositions((prev) => [...prev, { x, y }]);
           setTimeout(() => {
             setClickPositions((prev) => prev.slice(1));
-          }, 50000);
+          }, Infinity);
         }
       } else {
         console.log("capacity needed");
@@ -90,7 +90,7 @@ export const ActiveResource = ({
             +{earnLevelEnergy}
           </span>
         ))}
-        <div className="w-full h-full group-active:animate-[scale_0.3s_ease-in-out]">
+        <div className="w-full h-full group-active:animate-[scale_.2s_cubic-bezier(0.18,0.89,0.32,1.28)]">
           <img src={activeResource?.img} alt={activeResource.name} />
         </div>
       </div>

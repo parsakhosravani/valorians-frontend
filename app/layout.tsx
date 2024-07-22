@@ -18,11 +18,11 @@ export default function RootLayout({
       <Head>
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"
         />
       </Head>
-      <body className="bg-black overflow-hidden">
-        <div className="relative flex flex-col h-screen max-w-md mx-auto bg-transparent text-white">
+      <body className="bg-black text-white">
+        <div className="relative flex flex-col overflow-hidden h-screen">
           <main className="w-full flex-1">{children}</main>
           <Navbar />
         </div>
