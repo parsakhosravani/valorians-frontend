@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { earnLevelEnergy, resourceCapacity, TResource } from "../templates";
-import clsx from "clsx";
 export const ActiveResource = ({
   activeResource,
   onConsumeEnergy,
@@ -14,7 +13,7 @@ export const ActiveResource = ({
   >([]);
 
   useEffect(() => {
-    const handleTouchStart = (e) => {
+    const handleTouchStart = (e: any) => {
       if (activeResource.count < resourceCapacity) {
         onConsumeEnergy();
         const rect = e.currentTarget.getBoundingClientRect();
