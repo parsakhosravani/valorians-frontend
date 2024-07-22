@@ -92,31 +92,32 @@ export const Resources = () => {
           ))}
         </div>
       </header>
+      <div className="flex flex-col justify-center h-full">
+        <ActiveResource
+          onConsumeEnergy={onConsumeEnergyHandler}
+          activeResource={activeResource}
+        />
 
-      <ActiveResource
-        onConsumeEnergy={onConsumeEnergyHandler}
-        activeResource={activeResource}
-      />
-
-      <div className="flex justify-between px-2">
-        <div className="flex items-center gap-2">
-          <EnergyIcon />
-          <p className="text-[18px]">
-            {availableEnergy - consumeEnergy} / {energyCapacity}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            onClick={() => setEnergyCapacity(energyCapacity + 500)}
-            className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
-          >
-            <DatabaseIcon />
+        <div className="flex justify-between px-2">
+          <div className="flex items-center gap-2">
+            <EnergyIcon />
+            <p className="text-[18px]">
+              {availableEnergy - consumeEnergy} / {energyCapacity}
+            </p>
           </div>
-          <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
-            <MineIcon />
-          </div>
-          <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
-            <BoostIcon />
+          <div className="flex items-center gap-2">
+            <div
+              onClick={() => setEnergyCapacity(energyCapacity + 500)}
+              className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+            >
+              <DatabaseIcon />
+            </div>
+            <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
+              <MineIcon />
+            </div>
+            <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
+              <BoostIcon />
+            </div>
           </div>
         </div>
       </div>

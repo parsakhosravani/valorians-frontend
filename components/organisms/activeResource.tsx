@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { earnLevelEnergy, resourceCapacity, TResource } from "../templates";
+import clsx from "clsx";
 export const ActiveResource = ({
   activeResource,
   onConsumeEnergy,
@@ -45,7 +46,13 @@ export const ActiveResource = ({
   return (
     <div className="flex w-full items-center flex-col">
       <div className="flex gap-1 text-[38px]">
-        <p>{activeResource.count}</p>
+        <p
+          className={clsx(
+            activeResource.count === resourceCapacity && "text-[#F72214]"
+          )}
+        >
+          {activeResource.count}
+        </p>
         <p>/</p>
         <p>{resourceCapacity}</p>
       </div>
@@ -58,6 +65,11 @@ export const ActiveResource = ({
           className={`h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
         />
       </div>
+      {activeResource.count === resourceCapacity && (
+        <p className="mt-5 border p-2 bg-[#191F27] rounded text-sm  border-[#F72214]">
+          The {activeResource.name} warehouse is full
+        </p>
+      )}
       <div
         id="touchArea"
         className={"relative w-[260px] h-[260px] my-4 group"}
@@ -101,7 +113,7 @@ export const ActiveResource = ({
         src={activeResource?.bg}
         alt="bg"
         style={{ backgroundPosition: "center", backgroundSize: "100%" }}
-        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.2]"
+        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.15]"
       />
     </div>
   );
