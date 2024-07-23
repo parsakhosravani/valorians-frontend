@@ -5,7 +5,7 @@ export const User = () => {
         width={37}
         className="rounded-xl m-1"
         height={37}
-        src="./images/user.png"
+        src="./images/avatar.webp"
       />
       <div className="flex flex-col">
         <div className="text-center text-white text-base font-bold">
