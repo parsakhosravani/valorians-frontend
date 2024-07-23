@@ -26,7 +26,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         }}
         className={`h-full rounded-[10px] top-0 absolute ${color}`}
       >
-        <p className="text-[8px] -mb-2 text-center">
+        <p className="text-[7px] -mt-[1px] text-center">
           {size == "medium" && percentage}
         </p>
       </div>
