@@ -4,7 +4,7 @@ import youtube from "@/public/images/intro/youtube.png";
 import telegram from "@/public/images/intro/telegram.png";
 import x from "@/public/images/intro/x.png";
 import clsx from "clsx";
-import { useRouter } from "next/router";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export const Intro = () => {
