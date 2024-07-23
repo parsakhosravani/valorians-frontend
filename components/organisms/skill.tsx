@@ -1,12 +1,6 @@
 "use client";
 import { useState } from "react";
-import {
-  BoostIcon,
-  Button,
-  DatabaseIcon,
-  EnergyIcon,
-  MineIcon,
-} from "../atoms";
+import { BoostIcon, Button, EarnIcon, EnergyIcon, MineIcon } from "../atoms";
 import { Drawer } from "../molecules";
 import { TResource } from "../templates";
 
@@ -16,6 +10,7 @@ interface SkillProps {
   activeResource: TResource;
 }
 
+type TDrawerState = "mine" | "earn" | "boost";
 export const Skill: React.FC<SkillProps> = ({
   availableEnergy,
   consumeEnergy,
@@ -26,6 +21,9 @@ export const Skill: React.FC<SkillProps> = ({
   const handleEnergyIncrease = () => {
     setEnergyCapacity(energyCapacity + 500);
     console.log("energy capacity increased");
+  };
+  const handleDrawerOpen = (state: TDrawerState) => {
+    setIsDrawerOpen(true);
   };
   return (
     <div className="flex justify-between px-2">
@@ -39,29 +37,49 @@ export const Skill: React.FC<SkillProps> = ({
         <Drawer
           onClose={() => setIsDrawerOpen(false)}
           isOpen={isDrawerOpen}
-          title={activeResource.name}
+          title={`Earn more ${activeResource.name}`}
           position="bottom"
         >
-          <div className="text-sm pb-6">
-            As you level up, you will earn more iron per tap earum perspiciatis
-            aliquam, voluptatem eligendi, asperiores et incidunt maxime delectus
-            illum ipsam recusandae nobis suscipit quos consectetur reiciendis
-            ipsum sunt natus.
+          <div className="text-sm py-4 space-y-2">
+            <p className="text-[#A2B5BF]">
+              As you level up, you will earn more iron per tap
+            </p>
+            <p>
+              <b>Level 1:</b> Earn 1 per Tap (current Level)
+            </p>
+            <p>
+              <b>Level 2:</b> Earn 2 per Tap (Next Level){" "}
+            </p>
+            <p className="flex items-center space-x-1">
+              <b>Upgrade cost: </b>
+              <img
+                className="w-[16px] h-[16px]"
+                src="./images/resources/coin.webp"
+                alt="coin"
+              />
+              <b>100</b>
+            </p>
           </div>
-          <Button onClick={handleEnergyIncrease} isFull>
+          <Button size="large" onClick={handleEnergyIncrease} isFull>
             Upgrade {activeResource.name}
           </Button>
         </Drawer>
         <div
-          onClick={() => setIsDrawerOpen(true)}
+          onClick={() => handleDrawerOpen("earn")}
           className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
         >
-          <DatabaseIcon />
+          <EarnIcon />
         </div>
-        <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
+        <div
+          onClick={() => handleDrawerOpen("mine")}
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+        >
           <MineIcon />
         </div>
-        <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
+        <div
+          onClick={() => handleDrawerOpen("boost")}
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+        >
           <BoostIcon />
         </div>
       </div>

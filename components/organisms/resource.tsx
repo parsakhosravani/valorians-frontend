@@ -15,7 +15,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
 }) => {
   return (
     <div
-      className="flex w-full border-1 border-transparent bg-[#080808] rounded h-[40px] px-[2px] overflow-hidden relative"
+      className="flex w-full border-1 border-transparent bg-[#212F42] rounded h-[40px] px-[2px] overflow-hidden relative"
       style={
         isActive
           ? {

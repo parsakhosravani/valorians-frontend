@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Coin, User } from "../molecules";
-import { ActiveResource, Resource, Skill } from "../organisms";
+import { ActiveResource, Header, Skill } from "../organisms";
 
 const initialResources = [
   {
@@ -74,24 +73,13 @@ export const Resources = () => {
   }, 1000);
 
   return (
-    <div className="p-2 flex flex-col h-full gap-2 relative">
-      <header className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <User />
-          <Coin />
-        </div>
-        <div className="items-center gap-1 w-full flex">
-          {resources.map((item) => (
-            <Resource
-              key={item.id}
-              resourceData={item}
-              isActive={activeResource.id === item.id}
-              onChangeResource={onChangeResourceHandler}
-            />
-          ))}
-        </div>
-      </header>
-      <div className="flex flex-col justify-center h-full">
+    <>
+      <Header
+        resources={resources}
+        onChangeResource={onChangeResourceHandler}
+        activeResourceId={activeResource.id}
+      />
+      <div className="pt-12">
         <ActiveResource
           onConsumeEnergy={onConsumeEnergyHandler}
           activeResource={activeResource}
@@ -102,6 +90,6 @@ export const Resources = () => {
           activeResource={activeResource}
         />
       </div>
-    </div>
+    </>
   );
 };

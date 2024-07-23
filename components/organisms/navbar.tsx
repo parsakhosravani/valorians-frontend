@@ -37,7 +37,7 @@ const navbarItems: TNavbarItems[] = [
 
 export const Navbar = () => {
   return (
-    <div className="text-[11px] pt-2 flex px-6 items-center justify-between bg-[#191F27] w-full h-[60px] rounded-t-3xl">
+    <div className="text-[11px] border-t-2 border-[#019AF0] pt-2 flex px-6 items-center justify-between bg-[#191F27] w-full h-[60px] rounded-t-3xl">
       {navbarItems.map((item) => (
         <div className="flex flex-col justify-center items-center gap-1 flex-1">
           {item.icon}

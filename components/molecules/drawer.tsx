@@ -1,5 +1,5 @@
 import React, { ReactNode } from "react";
-import { Button } from "../atoms";
+import { CloseIcon } from "../atoms";
 
 type DrawerPosition = "bottom" | "right" | "left";
 
@@ -28,7 +28,7 @@ export const Drawer: React.FC<DrawerProps> = ({
     <>
       {isOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40" />}
       <div
-        className={`fixed bg-[#191F27] shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
+        className={`fixed bg-[#191F27]  shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
           positionClasses[position]
         } ${
           isOpen
@@ -40,12 +40,10 @@ export const Drawer: React.FC<DrawerProps> = ({
             : "transform -translate-x-full"
         }`}
       >
-        <div className="p-4 relative">
-          <div className="flex justify-between items-baseline">
-            <h2 className="text-lg font-bold mb-4">{title}</h2>
-            <Button onClick={onClose} size="small">
-              X
-            </Button>
+        <div className="p-4 relative border-t-2 border-[#019AF0] rounded-t-3xl">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">{title}</h2>
+            <CloseIcon onClick={onClose} />
           </div>
           {children}
         </div>

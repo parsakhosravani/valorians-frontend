@@ -26,6 +26,45 @@ export const ResourcesIcon = ({
   </svg>
 );
 
+export const CloseIcon = ({
+  size = 24,
+  width,
+  height,
+  ...props
+}: IconSvgProps) => (
+  <svg
+    aria-hidden="true"
+    focusable="false"
+    height={size || height}
+    role="presentation"
+    viewBox="0 0 25 25"
+    width={size || width}
+    {...props}
+  >
+    <rect
+      x="0.5"
+      y="0.5"
+      width="24"
+      height="24"
+      rx="7.5"
+      fill="#019AF0"
+      stroke="#019AF0"
+    />
+    <path
+      d="M18.728 6L6.0001 18.7279"
+      stroke="#191F27"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+    <path
+      d="M19.1904 18.2481L6.00015 5.99999"
+      stroke="#191F27"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 export const KingdomIcon = ({
   size = 24,
   width,
@@ -174,7 +213,7 @@ export const EnergyIcon = ({
   </svg>
 );
 
-export const DatabaseIcon = ({
+export const EarnIcon = ({
   size = 24,
   width,
   height,
