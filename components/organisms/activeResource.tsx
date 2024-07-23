@@ -77,8 +77,8 @@ export const ActiveResource = ({
           if (activeResource.count < resourceCapacity) {
             onConsumeEnergy();
             const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = e.clientX - rect.left - 40;
+            const y = e.clientY - rect.top - 40;
             setClickPositions((prev) => [...prev, { x, y }]);
             setTimeout(() => {
               setClickPositions((prev) => prev.slice(1));

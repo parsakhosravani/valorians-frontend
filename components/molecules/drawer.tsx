@@ -1,19 +1,22 @@
 import React, { ReactNode } from "react";
+import { Button } from "../atoms/button";
 
 type DrawerPosition = "bottom" | "right" | "left";
 
 interface DrawerProps {
   isOpen: boolean;
-  onClose: () => void;
+  title: string;
   position: DrawerPosition;
   children: ReactNode;
+  onClose: () => void;
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
-  isOpen,
-  onClose,
   position,
   children,
+  isOpen,
+  title,
+  onClose,
 }) => {
   const positionClasses = {
     bottom: "inset-x-0 bottom-0 h-auto",
@@ -23,14 +26,9 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   return (
     <>
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
-          onClick={onClose}
-        />
-      )}
+      {isOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40" />}
       <div
-        className={`fixed bg-[#191F27] shadow-lg transition-transform duration-300 ease-in-out z-50 ${
+        className={`fixed bg-[#191F27] shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
           positionClasses[position]
         } ${
           isOpen
@@ -42,7 +40,15 @@ export const Drawer: React.FC<DrawerProps> = ({
             : "transform -translate-x-full"
         }`}
       >
-        <div className="p-4">{children}</div>
+        <div className="p-4 relative">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-bold mb-4">{title}</h2>
+            <Button onClick={onClose} size="small">
+              X
+            </Button>
+          </div>
+          {children}
+        </div>
       </div>
     </>
   );

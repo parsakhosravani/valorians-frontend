@@ -50,7 +50,7 @@ export const Resources = () => {
   const [consumeEnergy, setConsumeEnergy] = useState(0);
   const [energyCapacity, setEnergyCapacity] = useState(15000);
   const [availableEnergy, setAvailableEnergy] = useState(12000);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const onChangeResourceHandler = (resource: TResource) => {
     setActiveResource(resource);
@@ -70,6 +70,13 @@ export const Resources = () => {
       setResources(updatedResources);
     }
   };
+
+  const handleEnergyIncrease = () => {
+    setEnergyCapacity(energyCapacity + 500);
+    console.log("energy capacity increased");
+    setIsDrawerOpen(true);
+  };
+
   setTimeout(() => {
     resourceCapacity > availableEnergy &&
       setAvailableEnergy(availableEnergy + 1);
@@ -108,26 +115,20 @@ export const Resources = () => {
           </div>
           <div className="flex items-center gap-2">
             <Drawer
-              onClose={() => console.log("hi")}
-              isOpen={drawerOpen}
+              onClose={() => setIsDrawerOpen(false)}
+              isOpen={isDrawerOpen}
+              title="Full Energy"
               position="bottom"
             >
-              <h2 className="text-white text-lg font-semibold mb-4">
-                Full Energy 2/3
-                <span className="text-sm">
-                  Lorem ipsum dolor sit amet consectetur, adipisicing elit.
-                  Itaque earum perspiciatis aliquam, voluptatem eligendi,
-                  asperiores et incidunt maxime delectus illum ipsam recusandae
-                  nobis suscipit quos consectetur reiciendis ipsum sunt natus.
-                </span>
-              </h2>
+              <span className="text-sm">
+                Lorem ipsum dolor sit amet consectetur, adipisicing elit. Itaque
+                earum perspiciatis aliquam, voluptatem eligendi, asperiores et
+                incidunt maxime delectus illum ipsam recusandae nobis suscipit
+                quos consectetur reiciendis ipsum sunt natus.
+              </span>
             </Drawer>
-
             <div
-              onClick={() => {
-                setEnergyCapacity(energyCapacity + 500);
-                setDrawerOpen(true);
-              }}
+              onClick={handleEnergyIncrease}
               className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
             >
               <DatabaseIcon />
