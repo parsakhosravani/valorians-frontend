@@ -77,9 +77,10 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           if (activeResource.count < resourceCapacity) {
             onConsumeEnergy();
             const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left - 40;
-            const y = e.clientY - rect.top - 40;
+            const x = e.clientX - rect.left - 50;
+            const y = e.clientY - rect.top - 50;
             setClickPositions((prev) => [...prev, { x, y }]);
+            //TODO: interval request needed!
             setTimeout(() => {
               setClickPositions((prev) => prev.slice(1));
             }, 50000);
