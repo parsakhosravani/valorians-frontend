@@ -1,5 +1,6 @@
 import React, { FunctionComponent } from "react";
 import { resourceCapacity, TResource } from "../templates";
+import { ProgressBar } from "../molecules";
 
 interface resourcePropsType {
   resourceData: TResource;
@@ -31,16 +32,12 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         <div className="text-white text-[10px] font-semibold">
           {resourceData.count}
         </div>
-
-        <div className="h-1 relative w-[60px]">
-          <div className="h-full bg-white rounded-[10px] shadow-inner relative" />
-          <div
-            style={{
-              width: (resourceData.count * 100) / resourceCapacity + "%",
-            }}
-            className={`w-[24.59px] h-full rounded-[10px] top-0 absolute ${resourceData.color}`}
-          />
-        </div>
+        <ProgressBar
+          size="small"
+          value={resourceData.count}
+          totalValue={resourceCapacity}
+          color={resourceData.color}
+        />
         <div className="text-zinc-400 text-[8px] w-full font-semibold">
           +100 per hour
         </div>

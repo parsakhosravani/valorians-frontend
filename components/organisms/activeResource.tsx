@@ -2,17 +2,20 @@
 import { useEffect, useState } from "react";
 import { earnLevelEnergy, resourceCapacity, TResource } from "../templates";
 import clsx from "clsx";
-export const ActiveResource = ({
-  activeResource,
-  onConsumeEnergy,
-}: {
+import { ProgressBar } from "../molecules";
+
+interface ActiveResource {
   activeResource: TResource;
   onConsumeEnergy: () => void;
+}
+
+export const ActiveResource: React.FC<ActiveResource> = ({
+  activeResource,
+  onConsumeEnergy,
 }) => {
   const [clickPositions, setClickPositions] = useState<
     { x: number; y: number }[]
   >([]);
-
   useEffect(() => {
     const handleTouchStart = (e: any) => {
       if (activeResource.count < resourceCapacity) {
@@ -44,7 +47,7 @@ export const ActiveResource = ({
     };
   }, [activeResource, onConsumeEnergy, resourceCapacity]);
   return (
-    <div className="flex w-full items-center flex-col">
+    <div className="flex w-full items-center flex-col relative">
       <div className="flex gap-1 text-[38px]">
         <p
           className={clsx(
@@ -56,17 +59,14 @@ export const ActiveResource = ({
         <p>/</p>
         <p>{resourceCapacity}</p>
       </div>
-      <div className="h-2 relative w-[290px]">
-        <div className="h-full bg-white rounded-[10px] shadow-inner relative" />
-        <div
-          style={{
-            width: (activeResource.count * 100) / resourceCapacity + "%",
-          }}
-          className={`h-full rounded-[10px] top-0 absolute ${activeResource?.color}`}
-        />
-      </div>
+      <ProgressBar
+        size="medium"
+        value={activeResource.count}
+        totalValue={resourceCapacity}
+        color={activeResource?.color}
+      />
       {activeResource.count === resourceCapacity && (
-        <p className="mt-5 border p-2 bg-[#191F27] rounded text-sm  border-[#F72214]">
+        <p className="border p-2 bg-[#191F27] rounded text-xs absolute top-[72px]  border-[#F72214]">
           The {activeResource.name} warehouse is full
         </p>
       )}

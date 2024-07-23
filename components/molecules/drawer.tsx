@@ -41,7 +41,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         }`}
       >
         <div className="p-4 relative">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-baseline">
             <h2 className="text-lg font-bold mb-4">{title}</h2>
             <Button onClick={onClose} size="small">
               X

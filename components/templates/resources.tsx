@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { BoostIcon, DatabaseIcon, EnergyIcon, MineIcon } from "../atoms";
-import { Coin, Drawer, Resource, User } from "../molecules";
-import { ActiveResource } from "../organisms";
+import { Coin, User } from "../molecules";
+import { ActiveResource, Resource, Skill } from "../organisms";
 
 const initialResources = [
   {
@@ -48,9 +47,7 @@ export const Resources = () => {
   const [resources, setResources] = useState<TResource[]>(initialResources);
   const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
   const [consumeEnergy, setConsumeEnergy] = useState(0);
-  const [energyCapacity, setEnergyCapacity] = useState(15000);
   const [availableEnergy, setAvailableEnergy] = useState(12000);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const onChangeResourceHandler = (resource: TResource) => {
     setActiveResource(resource);
@@ -69,12 +66,6 @@ export const Resources = () => {
       }));
       setResources(updatedResources);
     }
-  };
-
-  const handleEnergyIncrease = () => {
-    setEnergyCapacity(energyCapacity + 500);
-    console.log("energy capacity increased");
-    setIsDrawerOpen(true);
   };
 
   setTimeout(() => {
@@ -105,42 +96,11 @@ export const Resources = () => {
           onConsumeEnergy={onConsumeEnergyHandler}
           activeResource={activeResource}
         />
-
-        <div className="flex justify-between px-2">
-          <div className="flex items-center gap-2">
-            <EnergyIcon />
-            <p className="text-[18px]">
-              {availableEnergy - consumeEnergy} / {energyCapacity}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Drawer
-              onClose={() => setIsDrawerOpen(false)}
-              isOpen={isDrawerOpen}
-              title="Full Energy"
-              position="bottom"
-            >
-              <span className="text-sm">
-                Lorem ipsum dolor sit amet consectetur, adipisicing elit. Itaque
-                earum perspiciatis aliquam, voluptatem eligendi, asperiores et
-                incidunt maxime delectus illum ipsam recusandae nobis suscipit
-                quos consectetur reiciendis ipsum sunt natus.
-              </span>
-            </Drawer>
-            <div
-              onClick={handleEnergyIncrease}
-              className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
-            >
-              <DatabaseIcon />
-            </div>
-            <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
-              <MineIcon />
-            </div>
-            <div className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]">
-              <BoostIcon />
-            </div>
-          </div>
-        </div>
+        <Skill
+          availableEnergy={availableEnergy}
+          consumeEnergy={consumeEnergy}
+          activeResource={activeResource}
+        />
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ interface ButtonProps {
   variant?: "primary" | "secondary" | "outline";
   size?: "small" | "medium" | "large";
   disabled?: boolean;
+  isFull?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -14,6 +15,7 @@ export const Button: React.FC<ButtonProps> = ({
   variant = "primary",
   size = "medium",
   disabled = false,
+  isFull = false,
 }) => {
   const baseClasses =
     "font-bold rounded focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors";
@@ -33,7 +35,7 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const disabledClasses = "opacity-50 cursor-not-allowed";
-
+  const fullClasses = "w-full";
   return (
     <button
       onClick={onClick}
@@ -43,6 +45,7 @@ export const Button: React.FC<ButtonProps> = ({
         ${variantClasses[variant]}
         ${sizeClasses[size]}
         ${disabled ? disabledClasses : ""}
+        ${isFull ? fullClasses : ""}
       `}
     >
       {children}

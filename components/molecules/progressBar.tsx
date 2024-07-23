@@ -1,31 +1,29 @@
-"use client";
-import clsx from "clsx";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+interface ProgressBarProps {
+  color: string;
+  value: number;
+  totalValue: number;
+  size?: "small" | "medium" | "large";
+}
 
-export const ProgressBar = () => {
-  const [progressBarStart, setProgressBarStart] = useState(0);
-  const router = useRouter();
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setProgressBarStart(100);
-    }, 500);
-    setTimeout(() => {
-      router.push("resources");
-    }, 3000);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, []);
-
+export const ProgressBar: React.FC<ProgressBarProps> = ({
+  color,
+  value,
+  totalValue,
+  size = "medium",
+}) => {
+  const sizeClasses = {
+    small: "h-1 w-[60px]",
+    medium: "h-2 w-[290px]",
+    large: "px-6 py-3 text-lg",
+  };
   return (
-    <div className="relative flex h-[11px] w-full items-center justify-left overflow-hidden rounded-full bg-white px-[2px] transition-all delay-100">
+    <div className={`relative ${sizeClasses[size]}`}>
+      <div className="h-full bg-white rounded-[10px] shadow-inner relative" />
       <div
-        className={clsx(
-          "h-[7px] w-0 rounded bg-[#B86843] transition-all duration-[3s] ease-in-out hxs:left-[1.5%] hxs:top-[50%] z-20",
-          progressBarStart === 100 && "w-[99%]"
-        )}
+        style={{
+          width: (value * 100) / totalValue + "%",
+        }}
+        className={`h-full rounded-[10px] top-0 absolute ${color}`}
       />
     </div>
   );
