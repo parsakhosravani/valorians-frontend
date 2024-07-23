@@ -1,5 +1,5 @@
 import React, { ReactNode } from "react";
-import { Button } from "../atoms/button";
+import { Button } from "../atoms";
 
 type DrawerPosition = "bottom" | "right" | "left";
 
