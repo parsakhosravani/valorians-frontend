@@ -102,7 +102,13 @@ export const ActiveResource = ({
             +{earnLevelEnergy}
           </span>
         ))}
-        <div className="w-full h-full group-active:animate-[scale_0.3s_ease-in-out]">
+        <div
+          className={clsx(
+            "w-full h-full group-active:animate-[scale_0.3s_ease-in-out]",
+            activeResource.count === resourceCapacity &&
+              "opacity-[.5] group-active:animate-none"
+          )}
+        >
           <img src={activeResource?.img} alt={activeResource.name} />
         </div>
       </div>
