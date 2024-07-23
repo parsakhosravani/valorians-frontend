@@ -8,7 +8,7 @@ const initialResources = [
   {
     id: 1,
     img: "./images/resources/iron.webp",
-    bg: "/images/background/stoneBg.webp",
+    bg: "/images/background/iron.webp",
     color: "bg-zinc-600",
     name: "Iron",
     count: 10000,
@@ -16,7 +16,7 @@ const initialResources = [
   {
     id: 2,
     img: "./images/resources/wood.webp",
-    bg: "/images/background/woodbg.webp",
+    bg: "/images/background/wood.webp",
     color: "bg-orange-300",
     name: "Wood",
     count: 10000,
@@ -24,7 +24,7 @@ const initialResources = [
   {
     id: 3,
     img: "./images/resources/clay.webp",
-    bg: "/images/background/claybg.webp",
+    bg: "/images/background/clay.webp",
     color: "bg-amber-700",
     name: "Clay",
     count: 10000,
@@ -32,7 +32,7 @@ const initialResources = [
   {
     id: 4,
     img: "./images/resources/crop.webp",
-    bg: "/images/background/cropbg.webp",
+    bg: "/images/background/crop.webp",
     color: "bg-yellow-500",
     name: "Crop",
     count: 10000,
