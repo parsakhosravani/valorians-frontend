@@ -37,16 +37,16 @@ const initialResources = [
     count: 10000,
   },
 ];
-export const resourceCapacity = 15000;
-
 export type TResource = (typeof initialResources)[number];
 
 export const Resources = () => {
   const [resources, setResources] = useState<TResource[]>(initialResources);
+  const [resourceCapacity, setResourceCapacity] = useState(15000);
   const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
   const [consumeEnergy, setConsumeEnergy] = useState(0);
   const [earnLevelEnergy, setEarnLevelEnergy] = useState(10);
   const [availableEnergy, setAvailableEnergy] = useState(12000);
+  const [coin, setCoin] = useState(1000);
 
   const onChangeResourceHandler = (resource: TResource) => {
     setActiveResource(resource);
@@ -74,17 +74,22 @@ export const Resources = () => {
   return (
     <>
       <Header
+        resourceCapacity={resourceCapacity}
+        coin={coin}
         resources={resources}
         onChangeResource={onChangeResourceHandler}
         activeResourceId={activeResource.id}
       />
       <div className="pt-4">
         <ActiveResource
+          resourceCapacity={resourceCapacity}
           onConsumeEnergy={onConsumeEnergyHandler}
           activeResource={activeResource}
           mineLevel={earnLevelEnergy}
         />
         <Skill
+          coin={coin}
+          setCoin={setCoin}
           setMineLevel={setEarnLevelEnergy}
           mineLevel={earnLevelEnergy}
           availableEnergy={availableEnergy}

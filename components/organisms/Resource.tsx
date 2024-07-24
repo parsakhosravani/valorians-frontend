@@ -1,16 +1,18 @@
 import React, { FunctionComponent } from "react";
-import { resourceCapacity, TResource } from "../templates";
+import { TResource } from "../templates";
 import { ProgressBar } from "../molecules";
 
 interface resourcePropsType {
   resourceData: TResource;
   isActive: boolean;
+  resourceCapacity: number;
   onChangeResource: (resourceData: TResource) => void;
 }
 
 export const Resource: FunctionComponent<resourcePropsType> = ({
   resourceData,
   isActive,
+  resourceCapacity,
   onChangeResource: onChangeResourceHandler,
 }) => {
   return (

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { resourceCapacity, TResource } from "../templates";
+import { TResource } from "../templates";
 import clsx from "clsx";
 import { ProgressBar } from "../molecules";
 
@@ -8,11 +8,13 @@ interface ActiveResource {
   activeResource: TResource;
   onConsumeEnergy: () => void;
   mineLevel: number;
+  resourceCapacity: number;
 }
 
 export const ActiveResource: React.FC<ActiveResource> = ({
   activeResource,
   onConsumeEnergy,
+  resourceCapacity,
   mineLevel,
 }) => {
   const [clickPositions, setClickPositions] = useState<
@@ -32,8 +34,6 @@ export const ActiveResource: React.FC<ActiveResource> = ({
             setClickPositions((prev) => prev.slice(1));
           }, Infinity);
         }
-      } else {
-        console.log("capacity needed");
       }
     };
 
@@ -88,7 +88,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
               setClickPositions((prev) => prev.slice(1));
             }, 50000);
           } else {
-            console.log("capacity needed");
+            activeResource.count = resourceCapacity;
           }
         }}
       >

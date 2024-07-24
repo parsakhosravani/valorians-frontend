@@ -1,10 +1,14 @@
-export const Coin = () => {
+interface CoinProps {
+  coin: number;
+}
+
+export const Coin: React.FC<CoinProps> = ({ coin }) => {
   return (
     <div className="flex items-center bg-[#212F42] rounded p-1 gap-1">
       <div className="w-[27px] h-[27px] bg-[#1A1C1F] rounded-full">
         <img src="./images/resources/coin.webp" alt="coin" />
       </div>
-      <div className=" text-white text-sm font-bold ">1000</div>
+      <div className=" text-white text-sm font-bold ">{coin}</div>
     </div>
   );
 };

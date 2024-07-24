@@ -11,6 +11,8 @@ interface SkillProps {
   availableEnergy: number;
   consumeEnergy: number;
   mineLevel: number;
+  coin: number;
+  setCoin: (value: number) => void;
   activeResource: TResource;
   setMineLevel: (value: number) => void;
 }
@@ -25,13 +27,20 @@ export const Skill: React.FC<SkillProps> = ({
   consumeEnergy,
   activeResource,
   mineLevel,
+  coin,
+  setCoin,
   setMineLevel,
 }) => {
   const [energyCapacity, setEnergyCapacity] = useState(15000);
   const [openDrawer, setOpenDrawer] = useState<DrawerType | null>(null);
 
   const handleSkillUp = () => {
-    openDrawer === DrawerType.MINE && setMineLevel(mineLevel * 2);
+    if (openDrawer === DrawerType.MINE) {
+      if (coin >= 100) {
+        setMineLevel(Math.round(mineLevel * 1.2));
+        setCoin(coin - 100);
+      }
+    }
   };
   const handleDrawerOpen = (type: DrawerType) => {
     setOpenDrawer(type);
