@@ -2,7 +2,7 @@ interface EarnDrawerContentProps {}
 
 export const EarnDrawerContent: React.FC<EarnDrawerContentProps> = ({}) => {
   return (
-    <div className="text-sm py-4 space-y-2">
+    <>
       <p className="text-[#A2B5BF]">
         As you level up, you will earn more iron per tap
       </p>
@@ -21,6 +21,6 @@ export const EarnDrawerContent: React.FC<EarnDrawerContentProps> = ({}) => {
         />
         <b>100</b>
       </p>
-    </div>
+    </>
   );
 };

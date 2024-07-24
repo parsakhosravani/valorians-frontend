@@ -10,7 +10,9 @@ import { BoostDrawerContent } from "./BoostDrawerContent";
 interface SkillProps {
   availableEnergy: number;
   consumeEnergy: number;
+  mineLevel: number;
   activeResource: TResource;
+  setMineLevel: (value: number) => void;
 }
 
 enum DrawerType {
@@ -22,13 +24,14 @@ export const Skill: React.FC<SkillProps> = ({
   availableEnergy,
   consumeEnergy,
   activeResource,
+  mineLevel,
+  setMineLevel,
 }) => {
   const [energyCapacity, setEnergyCapacity] = useState(15000);
   const [openDrawer, setOpenDrawer] = useState<DrawerType | null>(null);
 
-  const handleEnergyIncrease = () => {
-    setEnergyCapacity(energyCapacity + 500);
-    console.log("energy capacity increased");
+  const handleSkillUp = () => {
+    openDrawer === DrawerType.MINE && setMineLevel(mineLevel * 2);
   };
   const handleDrawerOpen = (type: DrawerType) => {
     setOpenDrawer(type);
@@ -53,10 +56,15 @@ export const Skill: React.FC<SkillProps> = ({
           } ${activeResource.name}`}
           position="bottom"
         >
-          {openDrawer === DrawerType.EARN && <EarnDrawerContent />}
-          {openDrawer === DrawerType.MINE && <MineDrawerContent />}
-          {openDrawer === DrawerType.BOOST && <BoostDrawerContent />}
-          <Button size="large" onClick={handleEnergyIncrease} isFull>
+          <div className="text-sm h-40 py-4 space-y-2">
+            {openDrawer === DrawerType.EARN && <EarnDrawerContent />}
+            {openDrawer === DrawerType.MINE && (
+              <MineDrawerContent mineLevel={mineLevel} />
+            )}
+            {openDrawer === DrawerType.BOOST && <BoostDrawerContent />}
+          </div>
+
+          <Button size="large" onClick={handleSkillUp} isFull>
             Upgrade {activeResource.name}
           </Button>
         </Drawer>

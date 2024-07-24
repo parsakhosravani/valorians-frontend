@@ -1,16 +1,20 @@
-interface MineDrawerContentProps {}
+interface MineDrawerContentProps {
+  mineLevel: number;
+}
 
-export const MineDrawerContent: React.FC<MineDrawerContentProps> = () => {
+export const MineDrawerContent: React.FC<MineDrawerContentProps> = ({
+  mineLevel,
+}) => {
   return (
-    <div className="text-sm py-4 space-y-2">
+    <>
       <p className="text-[#A2B5BF]">
         As you level up, you will earn more iron per tap
       </p>
       <p>
-        <b>Level 1:</b> Earn 1 per Tap (current Level)
+        <b>Level 1:</b> Earn 1 per Tap ({mineLevel})
       </p>
       <p>
-        <b>Level 2:</b> Earn 2 per Tap (Next Level)
+        <b>Level 2:</b> Earn 2 per Tap ({mineLevel * 2})
       </p>
       <p className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
@@ -19,8 +23,8 @@ export const MineDrawerContent: React.FC<MineDrawerContentProps> = () => {
           src="./images/resources/coin.webp"
           alt="coin"
         />
-        <b>100</b>
+        <b>{100}</b>
       </p>
-    </div>
+    </>
   );
 };

@@ -1,17 +1,19 @@
 "use client";
 import { useEffect, useState } from "react";
-import { earnLevelEnergy, resourceCapacity, TResource } from "../templates";
+import { resourceCapacity, TResource } from "../templates";
 import clsx from "clsx";
 import { ProgressBar } from "../molecules";
 
 interface ActiveResource {
   activeResource: TResource;
   onConsumeEnergy: () => void;
+  mineLevel: number;
 }
 
 export const ActiveResource: React.FC<ActiveResource> = ({
   activeResource,
   onConsumeEnergy,
+  mineLevel,
 }) => {
   const [clickPositions, setClickPositions] = useState<
     { x: number; y: number }[]
@@ -46,6 +48,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
       }
     };
   }, [activeResource, onConsumeEnergy, resourceCapacity]);
+  console.log(mineLevel);
   return (
     <div className="flex w-full items-center flex-col relative">
       <div className="flex gap-1 text-[38px]">
@@ -100,7 +103,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
             }}
             className="font-bold text-3xl text-white select-none z-50"
           >
-            +{earnLevelEnergy}
+            +{Number(mineLevel)}
           </span>
         ))}
         <div
