@@ -1,6 +1,6 @@
 import { Coin, User } from "../molecules";
 import { TResource } from "../templates";
-import { Resource } from "./resource";
+import { Resource } from "./Resource";
 
 interface HeaderProps {
   resources: TResource[];
