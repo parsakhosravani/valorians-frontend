@@ -1,17 +1,15 @@
 export const User = () => {
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-[2px] items-center">
       <img
-        width={37}
-        className="rounded-xl m-1"
-        height={37}
+        className="rounded-full flex-shrink-0 w-[28px] h-[28px]"
         src="./images/avatar.webp"
       />
       <div className="flex flex-col">
-        <div className="text-center text-white text-base font-bold">
+        <div className="text-center text-white text-[12px] font-bold">
           ierfaaan
         </div>
-        <div className="text-neutral-400 text-xs font-bold">Rank 1000</div>
+        <div className="text-neutral-400 text-[10px]">Rank 1000</div>
       </div>
     </div>
   );

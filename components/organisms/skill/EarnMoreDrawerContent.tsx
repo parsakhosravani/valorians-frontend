@@ -1,6 +1,6 @@
 interface EarnDrawerContentProps {}
 
-export const EarnDrawerContent: React.FC<EarnDrawerContentProps> = ({}) => {
+export const EarnMoreDrawerContent: React.FC<EarnDrawerContentProps> = ({}) => {
   return (
     <>
       <p className="text-[#A2B5BF]">

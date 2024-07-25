@@ -66,7 +66,6 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         size="medium"
         value={activeResource.count}
         totalValue={resourceCapacity}
-        color={activeResource?.color}
       />
       {activeResource.count === resourceCapacity && (
         <p className="border p-2 bg-[#191F27] rounded text-xs absolute top-[72px]  border-[#F72214]">
@@ -117,13 +116,12 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         </div>
       </div>
       <div>
-        <h1 className="text-[46px]">{activeResource?.name}</h1>
+        <h1 className="-mt-10 text-[46px]">{activeResource?.name}</h1>
       </div>
       <img
         src={activeResource?.bg}
         alt="bg"
-        style={{ backgroundPosition: "center", backgroundSize: "100%" }}
-        className="fixed left-0 right-0 top-0 bottom-0 -z-10 opacity-[0.15]"
+        className="fixed h-screen top-0 w-full -z-10 opacity-[0.15]"
       />
     </div>
   );

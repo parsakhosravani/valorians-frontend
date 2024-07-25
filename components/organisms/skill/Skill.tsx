@@ -3,9 +3,10 @@ import { useState } from "react";
 import { BoostIcon, Button, EarnIcon, EnergyIcon, MineIcon } from "../../atoms";
 import { Drawer } from "../../molecules";
 import { TResource } from "../../templates";
-import { EarnDrawerContent } from "./EarnDrawerContent";
-import { MineDrawerContent } from "./MineDrawerContent";
-import { BoostDrawerContent } from "./BoostDrawerContent";
+
+import { FullEnergyDrawerContent } from "./FullEnergyDrawerContent";
+import { EnergyCpacityDrawerContent } from "./EnergyCpacityDrawerContent";
+import { EarnMoreDrawerContent } from "./EarnMoreDrawerContent";
 
 interface SkillProps {
   availableEnergy: number;
@@ -18,9 +19,9 @@ interface SkillProps {
 }
 
 enum DrawerType {
-  EARN = "earn",
-  MINE = "mine",
-  BOOST = "boost",
+  FULL_ENERGY = "FULL_ENERGY",
+  EARN_MORE = "EARN_MORE",
+  ENERGY_CAPACITY = "ENERGY_CAPACITY",
 }
 export const Skill: React.FC<SkillProps> = ({
   availableEnergy,
@@ -35,7 +36,7 @@ export const Skill: React.FC<SkillProps> = ({
   const [openDrawer, setOpenDrawer] = useState<DrawerType | null>(null);
 
   const handleSkillUp = () => {
-    if (openDrawer === DrawerType.MINE) {
+    if (openDrawer === DrawerType.ENERGY_CAPACITY) {
       if (coin >= 100) {
         setMineLevel(Math.round(mineLevel * 1.2));
         setCoin(coin - 100);
@@ -58,43 +59,53 @@ export const Skill: React.FC<SkillProps> = ({
         <Drawer
           onClose={() => setOpenDrawer(null)}
           isOpen={openDrawer !== null}
-          title={`${
-            openDrawer
-              ? openDrawer.charAt(0).toUpperCase() + openDrawer.slice(1)
+          title={
+            openDrawer === DrawerType.FULL_ENERGY
+              ? "Full Energy"
+              : openDrawer === DrawerType.EARN_MORE
+              ? `Earn More ${activeResource.name}`
+              : openDrawer === DrawerType.ENERGY_CAPACITY
+              ? "Energy capacity"
               : ""
-          } ${activeResource.name}`}
+          }
           position="bottom"
         >
           <div className="text-sm h-40 py-4 space-y-2">
-            {openDrawer === DrawerType.EARN && <EarnDrawerContent />}
-            {openDrawer === DrawerType.MINE && (
-              <MineDrawerContent mineLevel={mineLevel} />
+            {openDrawer === DrawerType.EARN_MORE && <EarnMoreDrawerContent />}
+            {openDrawer === DrawerType.ENERGY_CAPACITY && (
+              <EnergyCpacityDrawerContent mineLevel={mineLevel} />
             )}
-            {openDrawer === DrawerType.BOOST && <BoostDrawerContent />}
+            {openDrawer === DrawerType.FULL_ENERGY && (
+              <FullEnergyDrawerContent />
+            )}
           </div>
 
           <Button size="large" onClick={handleSkillUp} isFull>
-            Upgrade {activeResource.name}
+            {openDrawer === DrawerType.FULL_ENERGY
+              ? "Use For Free"
+              : openDrawer === DrawerType.EARN_MORE
+              ? `Upgrade ${activeResource.name}`
+              : "Upgrade"}
           </Button>
         </Drawer>
 
         <div
-          onClick={() => handleDrawerOpen(DrawerType.EARN)}
-          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
-        >
-          <EarnIcon />
-        </div>
-        <div
-          onClick={() => handleDrawerOpen(DrawerType.MINE)}
+          onClick={() => handleDrawerOpen(DrawerType.EARN_MORE)}
           className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
         >
           <MineIcon />
         </div>
         <div
-          onClick={() => handleDrawerOpen(DrawerType.BOOST)}
+          onClick={() => handleDrawerOpen(DrawerType.ENERGY_CAPACITY)}
           className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
         >
           <BoostIcon />
+        </div>
+        <div
+          onClick={() => handleDrawerOpen(DrawerType.FULL_ENERGY)}
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+        >
+          <EarnIcon />
         </div>
       </div>
     </div>

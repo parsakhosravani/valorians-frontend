@@ -80,7 +80,7 @@ export const Resources = () => {
         onChangeResource={onChangeResourceHandler}
         activeResourceId={activeResource.id}
       />
-      <div className="pt-4">
+      <div className="pt-2">
         <ActiveResource
           resourceCapacity={resourceCapacity}
           onConsumeEnergy={onConsumeEnergyHandler}

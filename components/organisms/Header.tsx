@@ -1,4 +1,4 @@
-import { Coin, User } from "../molecules";
+import { Coin, Population, User } from "../molecules";
 import { TResource } from "../templates";
 import { Resource } from "./Resource";
 
@@ -18,12 +18,13 @@ export const Header: React.FC<HeaderProps> = ({
   coin,
 }) => {
   return (
-    <header className="flex flex-col p-2 border-b-2 rounded-b-3xl border-[#019AF0] bg-[#191F27]">
-      <div className="flex items-center justify-between">
+    <header className="flex gap-2 flex-col p-2 border-b-2 rounded-b-3xl border-[#019AF0] bg-[#191F27]">
+      <div className="flex items-center gap-2 h-[30px]">
         <User />
+        <Population />
         <Coin coin={coin} />
       </div>
-      <div className="items-center w-full flex pb-1">
+      <div className="items-center justify-between w-full gap-2 flex pb-2">
         {resources.map((item) => (
           <Resource
             key={item.id}

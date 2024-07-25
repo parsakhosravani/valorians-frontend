@@ -1,6 +1,8 @@
-interface BoostDrawerContentProps {}
+interface FullEnergyDrawerContentProps {}
 
-export const BoostDrawerContent: React.FC<BoostDrawerContentProps> = () => {
+export const FullEnergyDrawerContent: React.FC<
+  FullEnergyDrawerContentProps
+> = () => {
   return (
     <>
       <p className="text-[#A2B5BF]">

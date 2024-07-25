@@ -1,12 +1,10 @@
 interface ProgressBarProps {
-  color: string;
   value: number;
   totalValue: number;
   size?: "small" | "medium" | "large";
 }
 
 export const ProgressBar: React.FC<ProgressBarProps> = ({
-  color,
   value,
   totalValue,
   size = "medium",
@@ -24,9 +22,9 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         style={{
           width: percentage,
         }}
-        className={`h-full rounded-[10px] top-0 absolute ${color}`}
+        className="h-full rounded-[10px] top-0 absolute bg-[#00A3FF] flex items-center justify-center"
       >
-        <p className="text-[6px] -mt-[1px] text-center">
+        <p className="text-[8px] font-bold text-center">
           {size == "medium" && percentage}
         </p>
       </div>
