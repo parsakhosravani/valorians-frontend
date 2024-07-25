@@ -1,11 +1,17 @@
 "use client";
 import { useState } from "react";
-import { BoostIcon, Button, EarnIcon, EnergyIcon, MineIcon } from "../../atoms";
+import {
+  Button,
+  EarnMoreIcon,
+  EnergyIcon,
+  FullEnergyIcon,
+  EnergyCapacityIcon,
+} from "../../atoms";
 import { Drawer } from "../../molecules";
 import { TResource } from "../../templates";
 
 import { FullEnergyDrawerContent } from "./FullEnergyDrawerContent";
-import { EnergyCpacityDrawerContent } from "./EnergyCpacityDrawerContent";
+import { EnergyCapacityDrawerContent } from "./EnergyCapacityDrawerContent";
 import { EarnMoreDrawerContent } from "./EarnMoreDrawerContent";
 
 interface SkillProps {
@@ -73,7 +79,7 @@ export const Skill: React.FC<SkillProps> = ({
           <div className="text-sm h-40 py-4 space-y-2">
             {openDrawer === DrawerType.EARN_MORE && <EarnMoreDrawerContent />}
             {openDrawer === DrawerType.ENERGY_CAPACITY && (
-              <EnergyCpacityDrawerContent mineLevel={mineLevel} />
+              <EnergyCapacityDrawerContent mineLevel={mineLevel} />
             )}
             {openDrawer === DrawerType.FULL_ENERGY && (
               <FullEnergyDrawerContent />
@@ -88,24 +94,23 @@ export const Skill: React.FC<SkillProps> = ({
               : "Upgrade"}
           </Button>
         </Drawer>
-
+        <div
+          onClick={() => handleDrawerOpen(DrawerType.FULL_ENERGY)}
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+        >
+          <FullEnergyIcon />
+        </div>
         <div
           onClick={() => handleDrawerOpen(DrawerType.EARN_MORE)}
           className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
         >
-          <MineIcon />
+          <EarnMoreIcon />
         </div>
         <div
           onClick={() => handleDrawerOpen(DrawerType.ENERGY_CAPACITY)}
           className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
         >
-          <BoostIcon />
-        </div>
-        <div
-          onClick={() => handleDrawerOpen(DrawerType.FULL_ENERGY)}
-          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
-        >
-          <EarnIcon />
+          <EnergyCapacityIcon />
         </div>
       </div>
     </div>

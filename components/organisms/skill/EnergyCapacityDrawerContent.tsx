@@ -1,9 +1,9 @@
-interface EnergyCpacityDrawerContentProps {
+interface EnergyCapacityDrawerContentProps {
   mineLevel: number;
 }
 
-export const EnergyCpacityDrawerContent: React.FC<
-  EnergyCpacityDrawerContentProps
+export const EnergyCapacityDrawerContent: React.FC<
+  EnergyCapacityDrawerContentProps
 > = ({ mineLevel }) => {
   return (
     <>

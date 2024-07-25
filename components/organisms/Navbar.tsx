@@ -1,10 +1,10 @@
 import {
   FriendsIcon,
   IconSvgProps,
-  KingdomIcon,
   QuestIcon,
   ResourcesIcon,
-  WarIcon,
+  TribeIcon,
+  BattleIcon,
 } from "../atoms";
 
 type TNavbarItems = {
@@ -18,12 +18,12 @@ const navbarItems: TNavbarItems[] = [
     name: "Resources",
   },
   {
-    icon: <KingdomIcon />,
-    name: "Kingdom",
+    icon: <TribeIcon />,
+    name: "Tribe",
   },
   {
-    icon: <WarIcon />,
-    name: "War",
+    icon: <BattleIcon />,
+    name: "Battle",
   },
   {
     icon: <FriendsIcon />,
