@@ -67,10 +67,6 @@ export const Resources = () => {
     }
   };
 
-  setTimeout(() => {
-    resourceCapacity > availableEnergy &&
-      setAvailableEnergy(availableEnergy + 1);
-  }, 1000);
   return (
     <>
       <Header
@@ -93,6 +89,7 @@ export const Resources = () => {
           setMineLevel={setEarnLevelEnergy}
           mineLevel={earnLevelEnergy}
           availableEnergy={availableEnergy}
+          setAvailableEnergy={setAvailableEnergy}
           consumeEnergy={consumeEnergy}
           activeResource={activeResource}
         />

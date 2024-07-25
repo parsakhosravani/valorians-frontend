@@ -22,6 +22,7 @@ interface SkillProps {
   setCoin: (value: number) => void;
   activeResource: TResource;
   setMineLevel: (value: number) => void;
+  setAvailableEnergy: (value: number) => void;
 }
 
 enum DrawerType {
@@ -37,14 +38,24 @@ export const Skill: React.FC<SkillProps> = ({
   coin,
   setCoin,
   setMineLevel,
+  setAvailableEnergy,
 }) => {
   const [energyCapacity, setEnergyCapacity] = useState(15000);
   const [openDrawer, setOpenDrawer] = useState<DrawerType | null>(null);
 
   const handleSkillUp = () => {
-    if (openDrawer === DrawerType.ENERGY_CAPACITY) {
+    if (openDrawer === DrawerType.EARN_MORE) {
       if (coin >= 100) {
         setMineLevel(Math.round(mineLevel * 1.2));
+        setCoin(coin - 100);
+      }
+    }
+    if (openDrawer === DrawerType.FULL_ENERGY) {
+      setAvailableEnergy(energyCapacity);
+    }
+    if (openDrawer === DrawerType.ENERGY_CAPACITY) {
+      setEnergyCapacity(energyCapacity + 500);
+      if (coin >= 100) {
         setCoin(coin - 100);
       }
     }
@@ -77,9 +88,11 @@ export const Skill: React.FC<SkillProps> = ({
           position="bottom"
         >
           <div className="text-sm h-40 py-4 space-y-2">
-            {openDrawer === DrawerType.EARN_MORE && <EarnMoreDrawerContent />}
+            {openDrawer === DrawerType.EARN_MORE && (
+              <EarnMoreDrawerContent mineLevel={mineLevel} />
+            )}
             {openDrawer === DrawerType.ENERGY_CAPACITY && (
-              <EnergyCapacityDrawerContent mineLevel={mineLevel} />
+              <EnergyCapacityDrawerContent energyCapacity={energyCapacity} />
             )}
             {openDrawer === DrawerType.FULL_ENERGY && (
               <FullEnergyDrawerContent />

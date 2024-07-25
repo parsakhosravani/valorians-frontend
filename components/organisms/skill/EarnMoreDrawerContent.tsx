@@ -1,16 +1,20 @@
-interface EarnDrawerContentProps {}
+interface EarnDrawerContentProps {
+  mineLevel: number;
+}
 
-export const EarnMoreDrawerContent: React.FC<EarnDrawerContentProps> = ({}) => {
+export const EarnMoreDrawerContent: React.FC<EarnDrawerContentProps> = ({
+  mineLevel,
+}) => {
   return (
     <>
       <p className="text-[#A2B5BF]">
         As you level up, you will earn more iron per tap
       </p>
       <p>
-        <b>Level 1:</b> Earn 1 per Tap (current Level)
+        <b>Level 1:</b> Earn 1 per Tap ({mineLevel})
       </p>
       <p>
-        <b>Level 2:</b> Earn 2 per Tap (Next Level){" "}
+        <b>Level 2:</b> Earn 2 per Tap ({mineLevel * 2})
       </p>
       <p className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
