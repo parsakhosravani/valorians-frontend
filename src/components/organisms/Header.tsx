@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   coin,
 }) => {
   return (
-    <header className="flex gap-2 flex-col p-2 border-b-2 rounded-b-3xl border-[#019AF0] bg-[#191F27]">
+    <header className="flex gap-2 flex-col p-2">
       <div className="flex items-center gap-2 h-[30px]">
         <User />
         <Population />

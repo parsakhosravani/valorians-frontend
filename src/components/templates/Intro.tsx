@@ -1,8 +1,8 @@
 "use client";
 import Image from "next/image";
-import youtube from "@/public/images/intro/youtube.png";
-import telegram from "@/public/images/intro/telegram.png";
-import x from "@/public/images/intro/x.png";
+import youtube from "~/images/intro/youtube.png";
+import telegram from "~/images/intro/telegram.png";
+import x from "~/images/intro/x.png";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";

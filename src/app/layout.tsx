@@ -1,7 +1,7 @@
-import { Navbar } from "@/components";
 import type { Metadata } from "next";
 import Head from "next/head";
 import "@/styles/globals.css";
+import { Header, Navbar } from "@/components";
 
 export const metadata: Metadata = {
   title: "Valorians Legend",

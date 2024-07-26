@@ -20,6 +20,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
   const [clickPositions, setClickPositions] = useState<
     { x: number; y: number }[]
   >([]);
+
   useEffect(() => {
     const handleTouchStart = (e: any) => {
       if (activeResource.count < resourceCapacity) {
@@ -48,10 +49,10 @@ export const ActiveResource: React.FC<ActiveResource> = ({
       }
     };
   }, [activeResource, onConsumeEnergy, resourceCapacity]);
-  console.log(mineLevel);
+
   return (
     <div className="flex w-full items-center flex-col relative">
-      <div className="flex gap-1 text-[38px]">
+      <div className="flex gap-1 text-[38px] font-bold">
         <p
           className={clsx(
             activeResource.count === resourceCapacity && "text-[#F72214]"
@@ -116,7 +117,9 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         </div>
       </div>
       <div>
-        <h1 className="-mt-10 text-[46px]">{activeResource?.name}</h1>
+        <h1 className="-mt-10 text-[40px] font-bold">
+          {activeResource?.name.toUpperCase()}
+        </h1>
       </div>
       <img
         src={activeResource?.bg}

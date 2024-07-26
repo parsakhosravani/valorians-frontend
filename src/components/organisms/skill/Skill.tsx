@@ -65,7 +65,7 @@ export const Skill: React.FC<SkillProps> = ({
   };
 
   return (
-    <div className="flex justify-between px-2">
+    <div className="flex justify-between px-2 my-4">
       <div className="flex items-center gap-2">
         <EnergyIcon />
         <p className="text-[18px]">
