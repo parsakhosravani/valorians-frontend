@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import Head from "next/head";
 import "@/styles/globals.css";
-import { Header, Navbar } from "@/components";
+
+import Head from "next/head";
+import { Navbar } from "@/components";
+import { Providers } from "./providers";
+
 import GoogleScript from "@/scripts/GoogleScript";
 import TelegramScript from "@/scripts/TelegramScript";
+
 
 export const metadata: Metadata = {
   title: "Valorians Legend",
@@ -24,10 +28,12 @@ export default function RootLayout({
         />
       </Head>
       <body className="bg-black text-white">
-        <div className="relative flex flex-col overflow-hidden h-screen">
-          <main className="w-full flex-1">{children}</main>
-          <Navbar />
-        </div>
+        <Providers>
+          <div className="relative flex flex-col overflow-hidden h-screen">
+            <main className="w-full flex-1">{children}</main>
+            <Navbar />
+          </div>
+        </Providers>
 
         <GoogleScript />
         <TelegramScript />

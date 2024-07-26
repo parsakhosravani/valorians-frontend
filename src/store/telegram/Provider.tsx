@@ -1,0 +1,40 @@
+import React, { ReactNode, useEffect, useState } from "react";
+import TelegramContext from "./Context";
+import { TelegramContextType, TelegramUser } from "./types";
+
+interface TelegramProviderProps {
+    children: ReactNode;
+}
+
+export const TelegramProvider: React.FC<TelegramProviderProps> = ({ children }) => {
+
+    const [user, setUser] = useState(null);
+
+
+    // Start app
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'Telegram' in window) {
+            const telgram = (window as any).Telegram.WebApp;
+
+            // configs
+            telgram.ready();
+            telgram.expand();
+            telgram.setHeaderColor("#000000");
+            telgram.setBackgroundColor("#27272A");
+
+            // initial data
+            setUser(telgram.user);
+        }
+    }, []);
+
+
+    const value: TelegramContextType = {
+        user
+    };
+
+    return (
+        <TelegramContext.Provider value={value}>
+            {children}
+        </TelegramContext.Provider>
+    );
+};
