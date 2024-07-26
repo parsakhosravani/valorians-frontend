@@ -23,7 +23,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({ children }) 
             telgram.setBackgroundColor("#27272A");
 
             // initial data
-            setUser(telgram.user);
+            setUser(telgram.initDataUnsafe.user);
         }
     }, []);
 
