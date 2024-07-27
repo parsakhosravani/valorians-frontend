@@ -52,7 +52,7 @@ export const Navbar = () => {
   return (
     <div className="text-[11px] border-t-2 border-[#019AF0] pt-2 flex px-6 items-center justify-between bg-[#191F27] w-full h-[60px] rounded-t-3xl">
       {navbarItems.map((item) => (
-        <Link href={item.link}>
+        <Link key={item.name} href={item.link}>
           <div
             style={{
               cursor: "pointer",
