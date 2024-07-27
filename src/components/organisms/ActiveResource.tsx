@@ -59,10 +59,10 @@ export const ActiveResource: React.FC<ActiveResource> = ({
             activeResource.count === resourceCapacity && "text-[#F72214]"
           )}
         >
-          {activeResource.count}
+          {activeResource.count.toLocaleString("en-US")}
         </p>
         <p>/</p>
-        <p>{resourceCapacity}</p>
+        <p>{resourceCapacity.toLocaleString("en-US")}</p>
       </div>
       <ProgressBar
         size="medium"

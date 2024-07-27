@@ -42,8 +42,8 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         <p className="text-[13px]">{resourceData.name.toLocaleUpperCase()}</p>
       </div>
       <div className="flex flex-col justify-between w-full gap-[2px]">
-        <div className="text-white text-center text-[10px] font-semibold">
-          {resourceData.count}
+        <div className="text-white text-center text-xs font-semibold">
+          {resourceData.count.toLocaleString("en-US")}
         </div>
         <ProgressBar
           size="small"

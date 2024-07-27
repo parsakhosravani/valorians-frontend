@@ -68,8 +68,9 @@ export const Skill: React.FC<SkillProps> = ({
     <div className="flex justify-between px-2 my-4">
       <div className="flex items-center gap-2">
         <EnergyIcon />
-        <p className="text-[18px]">
-          {availableEnergy - consumeEnergy} / {energyCapacity}
+        <p className="text-lg">
+          {(availableEnergy - consumeEnergy).toLocaleString("en-US")} /{" "}
+          {energyCapacity.toLocaleString("en-US")}
         </p>
       </div>
       <div className="flex items-center gap-2">
