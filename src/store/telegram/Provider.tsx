@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import TelegramContext from "./Context";
+import TelegramContext from "./context";
 import { TelegramContextType, TelegramUser } from "./types";
 
 interface TelegramProviderProps {

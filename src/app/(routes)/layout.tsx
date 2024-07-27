@@ -3,7 +3,7 @@ import "@/styles/globals.css";
 
 import Head from "next/head";
 import { Navbar } from "@/components";
-import { Providers } from "./providers";
+import { Providers } from "../providers";
 
 import GoogleScript from "@/scripts/GoogleScript";
 import TelegramScript from "@/scripts/TelegramScript";

@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import TelegramContext from "./Context";
+import TelegramContext from "./context";
 import { TelegramContextType } from "./types";
 
 export const useTelegramContext = (): TelegramContextType => {
