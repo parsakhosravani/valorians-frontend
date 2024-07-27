@@ -13,7 +13,7 @@ const createHeaders = () => {
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token?.value}`,
-        'X-Hash': process.env.X_Hash,
+        'X-Hash': 'process.env.X_Hash',
     };
 };
 
