@@ -22,7 +22,7 @@ export const Intro = () => {
     };
   }, []);
   return (
-    <div className="fixed left-0 right-0 top-0 bottom-0 bg-intro bg-cover bg-no-repeat h-full flex w-full items-end justify-center">
+    <div className="fixed bg-intro bg-cover bg-no-repeat h-full flex w-full items-end justify-center">
       <div className=" bottom-0 flex h-52 w-60 flex-col justify-between rounded-tl-3xl rounded-tr-3xl bg-white/10 px-[57px] pb-[33px] pt-[26px] backdrop-blur-sm">
         <div className="relative flex h-[11px] w-full items-center justify-left overflow-hidden rounded-full bg-white px-[2px] transition-all delay-100">
           <div
