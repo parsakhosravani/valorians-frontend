@@ -6,6 +6,7 @@ const config: Config = {
     extend: {
       backgroundImage: {
         intro: "url('/images/background/intro.webp')",
+        battle: "url('/images/background/battle.webp')",
       },
     },
   },

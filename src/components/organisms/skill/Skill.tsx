@@ -109,19 +109,19 @@ export const Skill: React.FC<SkillProps> = ({
         </Drawer>
         <div
           onClick={() => handleDrawerOpen(DrawerType.FULL_ENERGY)}
-          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#191F27]"
         >
           <FullEnergyIcon />
         </div>
         <div
           onClick={() => handleDrawerOpen(DrawerType.EARN_MORE)}
-          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#191F27]"
         >
           <EarnMoreIcon />
         </div>
         <div
           onClick={() => handleDrawerOpen(DrawerType.ENERGY_CAPACITY)}
-          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#0F1114]"
+          className="w-[40px] h-[40px] flex items-center justify-center border-2 border-[#FCA234] rounded-full bg-[#191F27]"
         >
           <EnergyCapacityIcon />
         </div>

@@ -1,3 +1,4 @@
+"use client";
 import { Route } from "next";
 import {
   FriendsIcon,
@@ -8,6 +9,8 @@ import {
   BattleIcon,
 } from "../atoms";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import React from "react";
 
 type TNavbarItems = {
   icon: React.ReactElement<IconSvgProps>;
@@ -44,12 +47,22 @@ const navbarItems: TNavbarItems[] = [
 ];
 
 export const Navbar = () => {
+  const pathname = usePathname();
+
   return (
     <div className="text-[11px] border-t-2 border-[#019AF0] pt-2 flex px-6 items-center justify-between bg-[#191F27] w-full h-[60px] rounded-t-3xl">
       {navbarItems.map((item) => (
         <Link href={item.link}>
-          <div className="flex flex-col justify-center items-center gap-1 flex-1">
-            {item.icon}
+          <div
+            style={{
+              cursor: "pointer",
+              color: item.link === pathname ? "#FFF" : "#8C8F93",
+            }}
+            className="flex flex-col justify-center items-center gap-1 flex-1 text-[#8C8F93]"
+          >
+            {React.cloneElement(item.icon, {
+              fill: item.link === pathname ? "#FFF" : "#8C8F93",
+            })}
             <p>{item.name}</p>
           </div>
         </Link>
