@@ -117,8 +117,8 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           <Image src={activeResource?.img} alt={activeResource.name} />
         </div>
       </div>
-      <div>
-        <h1 className="-mt-10 text-[40px] font-bold">
+      <div style={{ backgroundImage: `url(${activeResource.bg})` }}>
+        <h1 className="text-[40px] font-bold">
           {activeResource?.name.toUpperCase()}
         </h1>
       </div>
