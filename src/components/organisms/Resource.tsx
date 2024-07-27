@@ -1,6 +1,7 @@
 import React, { FunctionComponent } from "react";
 import { TResource } from "../templates";
 import { ProgressBar } from "../molecules";
+import Image from "next/image";
 
 interface resourcePropsType {
   resourceData: TResource;
@@ -32,7 +33,12 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
       }}
     >
       <div className="flex items-center justify-center gap-[2px]">
-        <img width={18} height={18} src={resourceData.img} />
+        <Image
+          width={18}
+          height={18}
+          src={resourceData.img}
+          alt={resourceData.name}
+        />
         <p className="text-[13px]">{resourceData.name.toLocaleUpperCase()}</p>
       </div>
       <div className="flex flex-col justify-between w-full gap-[2px]">

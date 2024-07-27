@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { TResource } from "../templates";
 import clsx from "clsx";
 import { ProgressBar } from "../molecules";
+import Image from "next/image";
 
 interface ActiveResource {
   activeResource: TResource;
@@ -113,7 +114,12 @@ export const ActiveResource: React.FC<ActiveResource> = ({
               "opacity-[.5] group-active:animate-none"
           )}
         >
-          <img src={activeResource?.img} alt={activeResource.name} />
+          <Image
+            width={500}
+            height={500}
+            src={activeResource?.img}
+            alt={activeResource.name}
+          />
         </div>
       </div>
       <div>
@@ -121,9 +127,11 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           {activeResource?.name.toUpperCase()}
         </h1>
       </div>
-      <img
-        src={activeResource?.bg}
-        alt="bg"
+      <Image
+        src={activeResource.bg}
+        alt={activeResource.name}
+        width={1024}
+        height={1024}
         className="fixed h-screen top-0 w-full -z-10 opacity-[0.15]"
       />
     </div>

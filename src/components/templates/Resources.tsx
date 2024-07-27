@@ -6,7 +6,7 @@ import { ActiveResource, Header, Skill } from "../organisms";
 const initialResources = [
   {
     id: 1,
-    img: "./images/resources/iron.webp",
+    img: "/images/resources/iron.webp",
     bg: "/images/background/iron.webp",
     color: "bg-zinc-600",
     name: "Iron",
@@ -14,7 +14,7 @@ const initialResources = [
   },
   {
     id: 2,
-    img: "./images/resources/wood.webp",
+    img: "/images/resources/wood.webp",
     bg: "/images/background/wood.webp",
     color: "bg-orange-300",
     name: "Wood",
@@ -22,7 +22,7 @@ const initialResources = [
   },
   {
     id: 3,
-    img: "./images/resources/clay.webp",
+    img: "/images/resources/clay.webp",
     bg: "/images/background/clay.webp",
     color: "bg-amber-700",
     name: "Clay",
@@ -30,7 +30,7 @@ const initialResources = [
   },
   {
     id: 4,
-    img: "./images/resources/crop.webp",
+    img: "/images/resources/crop.webp",
     bg: "/images/background/crop.webp",
     color: "bg-yellow-500",
     name: "Crop",
