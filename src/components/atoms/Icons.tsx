@@ -370,3 +370,23 @@ export const EnergyCapacityIcon = ({
     />
   </svg>
 );
+
+export const TipIcon = ({
+  size = 24,
+  width,
+  height,
+  ...props
+}: IconSvgProps) => (
+  <svg
+    viewBox="0 0 15 15"
+    fill="none"
+    aria-hidden="true"
+    focusable="false"
+    height={size || height}
+    role="presentation"
+    width={size || width}
+    {...props}
+  >
+    <circle cx="7.5" cy="7.5" r="7" stroke="#00A2FF" />
+  </svg>
+);

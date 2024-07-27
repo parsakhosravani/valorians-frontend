@@ -10,7 +10,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   size = "medium",
 }) => {
   const sizeClasses = {
-    small: "h-1 w-[60px]",
+    small: "h-1 w-full",
     medium: "h-2 w-[290px]",
     large: "px-6 py-3 text-lg",
   };

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { TResource } from "../templates";
 import clsx from "clsx";
-import { ProgressBar } from "../molecules";
+import { Capacity, ProgressBar } from "../molecules";
 import Image from "next/image";
 
 interface ActiveResource {
@@ -53,17 +53,11 @@ export const ActiveResource: React.FC<ActiveResource> = ({
 
   return (
     <div className="flex w-full items-center flex-col relative">
-      <div className="flex gap-1 text-[38px] font-bold">
-        <p
-          className={clsx(
-            activeResource.count === resourceCapacity && "text-[#F72214]"
-          )}
-        >
-          {activeResource.count.toLocaleString("en-US")}
-        </p>
-        <p>/</p>
-        <p>{resourceCapacity.toLocaleString("en-US")}</p>
-      </div>
+      <Capacity
+        size="large"
+        value={activeResource.count}
+        totalValue={resourceCapacity}
+      />
       <ProgressBar
         size="medium"
         value={activeResource.count}

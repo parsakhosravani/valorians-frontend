@@ -7,7 +7,7 @@ import {
   FullEnergyIcon,
   EnergyCapacityIcon,
 } from "../../atoms";
-import { Drawer } from "../../molecules";
+import { Capacity, Drawer } from "../../molecules";
 import { TResource } from "../../templates";
 
 import { FullEnergyDrawerContent } from "./FullEnergyDrawerContent";
@@ -68,10 +68,10 @@ export const Skill: React.FC<SkillProps> = ({
     <div className="flex justify-between px-2 my-4">
       <div className="flex items-center gap-2">
         <EnergyIcon />
-        <p className="text-lg">
-          {(availableEnergy - consumeEnergy).toLocaleString("en-US")} /{" "}
-          {energyCapacity.toLocaleString("en-US")}
-        </p>
+        <Capacity
+          value={availableEnergy - consumeEnergy}
+          totalValue={energyCapacity}
+        />
       </div>
       <div className="flex items-center gap-2">
         <Drawer
