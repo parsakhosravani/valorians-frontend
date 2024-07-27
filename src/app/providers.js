@@ -1,6 +1,7 @@
 'use client';
 
-import { TelegramProvider } from "@/store/telegram/provider";
+import { TelegramProvider } from "@/store/telegram/Provider";
+
 
 export function Providers({ children }) {
 

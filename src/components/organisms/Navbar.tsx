@@ -1,4 +1,4 @@
-import { ROUTES } from "@/constants/routes";
+import { Route } from "next";
 import {
   FriendsIcon,
   IconSvgProps,
@@ -11,35 +11,35 @@ import Link from "next/link";
 
 type TNavbarItems = {
   icon: React.ReactElement<IconSvgProps>;
+  link: Route;
   name: string;
-  link: (typeof ROUTES)[keyof typeof ROUTES];
 };
 
 const navbarItems: TNavbarItems[] = [
   {
     icon: <ResourcesIcon />,
     name: "Resources",
-    link: ROUTES.RESOURCES,
+    link: "/resources",
   },
   {
     icon: <TribeIcon />,
     name: "Tribe",
-    link: ROUTES.TRIBE,
+    link: "/tribe",
   },
   {
     icon: <BattleIcon />,
     name: "Battle",
-    link: ROUTES.BATTLE,
+    link: "/battle",
   },
   {
     icon: <FriendsIcon />,
     name: "Friends",
-    link: ROUTES.FRIENDS,
+    link: "/friends",
   },
   {
     icon: <QuestIcon />,
     name: "Quest",
-    link: ROUTES.QUEST,
+    link: "/quest",
   },
 ];
 

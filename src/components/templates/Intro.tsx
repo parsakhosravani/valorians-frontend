@@ -15,7 +15,7 @@ export const Intro = () => {
       setProgressBarStart(100);
     }, 500);
     setTimeout(() => {
-      router.push("resources");
+      router.push("/resources");
     }, 3000);
     return () => {
       clearTimeout(timer);
