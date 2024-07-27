@@ -114,12 +114,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
               "opacity-[.5] group-active:animate-none"
           )}
         >
-          <Image
-            width={500}
-            height={500}
-            src={activeResource?.img}
-            alt={activeResource.name}
-          />
+          <Image src={activeResource?.img} alt={activeResource.name} />
         </div>
       </div>
       <div>
@@ -130,8 +125,6 @@ export const ActiveResource: React.FC<ActiveResource> = ({
       <Image
         src={activeResource.bg}
         alt={activeResource.name}
-        width={1024}
-        height={1024}
         className="fixed h-screen top-0 w-full -z-10 opacity-[0.15]"
       />
     </div>

@@ -2,36 +2,44 @@
 
 import React, { useState } from "react";
 import { ActiveResource, Header, Skill } from "../organisms";
+import iron from "~/images/resources/iron.webp";
+import wood from "~/images/resources/wood.webp";
+import clay from "~/images/resources/clay.webp";
+import crop from "~/images/resources/crop.webp";
+import ironBg from "~/images/background/iron.webp";
+import woodBg from "~/images/background/wood.webp";
+import clayBg from "~/images/background/clay.webp";
+import cropBg from "~/images/background/crop.webp";
 
 const initialResources = [
   {
     id: 1,
-    img: "/images/resources/iron.webp",
-    bg: "/images/background/iron.webp",
+    img: iron,
+    bg: ironBg,
     color: "bg-zinc-600",
     name: "Iron",
     count: 10000,
   },
   {
     id: 2,
-    img: "/images/resources/wood.webp",
-    bg: "/images/background/wood.webp",
+    img: wood,
+    bg: woodBg,
     color: "bg-orange-300",
     name: "Wood",
     count: 10000,
   },
   {
     id: 3,
-    img: "/images/resources/clay.webp",
-    bg: "/images/background/clay.webp",
+    img: clay,
+    bg: clayBg,
     color: "bg-amber-700",
     name: "Clay",
     count: 10000,
   },
   {
     id: 4,
-    img: "/images/resources/crop.webp",
-    bg: "/images/background/crop.webp",
+    img: crop,
+    bg: cropBg,
     color: "bg-yellow-500",
     name: "Crop",
     count: 10000,
