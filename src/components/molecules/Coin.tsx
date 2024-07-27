@@ -1,14 +1,15 @@
+import Image from "next/image";
+import coin from "~/images/resources/coin.webp";
+
 interface CoinProps {
-  coin: number;
+  value: number;
 }
 
-export const Coin: React.FC<CoinProps> = ({ coin }) => {
+export const Coin: React.FC<CoinProps> = ({ value }) => {
   return (
-    <div className="flex items-center bg-[#212F42] rounded p-1 gap-[2px] h-full">
-      <div className="w-[16px] h-[16px] pt-[1px] rounded-full">
-        <img src="./images/resources/coin.webp" alt="coin" />
-      </div>
-      <div className=" text-white text-[12px] font-bold ">{coin}</div>
-    </div>
+    <>
+      <Image width={16} height={16} src={coin} alt="coin" />
+      <div className=" text-white text-xs font-bold ">{value}</div>
+    </>
   );
 };

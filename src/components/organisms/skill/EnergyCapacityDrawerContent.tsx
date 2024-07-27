@@ -1,3 +1,5 @@
+import { Coin } from "@/components/molecules";
+
 interface EnergyCapacityDrawerContentProps {
   energyCapacity: number;
 }
@@ -18,12 +20,7 @@ export const EnergyCapacityDrawerContent: React.FC<
       </p>
       <p className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
-        <img
-          className="w-[16px] h-[16px]"
-          src="./images/resources/coin.webp"
-          alt="coin"
-        />
-        <b>{100}</b>
+        <Coin value={100} />
       </p>
     </>
   );

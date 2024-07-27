@@ -22,7 +22,9 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2 h-[30px]">
         <User />
         <Population />
-        <Coin coin={coin} />
+        <div className="flex items-center bg-[#212F42] rounded p-1 gap-[2px] h-full">
+          <Coin value={coin} />
+        </div>
       </div>
       <div className="items-center justify-between w-full gap-2 flex pb-2">
         {resources.map((item) => (
