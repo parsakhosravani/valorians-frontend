@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import "@/styles/globals.css";
+import type { Metadata } from "next";
 import { Navbar, Header } from "@/components";
 import { Providers } from "../providers";
 import { Roboto } from "next/font/google";
@@ -37,7 +37,6 @@ export default function RootLayout({
             </div>
           </ResourceProvider>
         </Providers>
-
         <GoogleScript />
         <TelegramScript />
       </body>

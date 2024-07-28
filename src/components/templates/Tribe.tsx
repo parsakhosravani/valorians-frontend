@@ -5,16 +5,14 @@ interface TribePropsType {}
 
 export const Tribe: FunctionComponent<TribePropsType> = () => {
   return (
-    <div className="bg-tribe -z-10 fixed top-0 bg-no-repeat bg-cover bg-center  items-center justify-center w-full h-full p-2">
-      <div className="bg-tribe pt-12 fixed top-0 bg-no-repeat bg-cover bg-center w-full h-full p-2 overflow-hidden">
-        <div className="flex flex-col items-center justify-center h-full overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4 max-w-md">
-            {[0, 1, 2, 3, 4, 5].map((item) => (
-              <div key={item} className="w-full">
-                <Building />
-              </div>
-            ))}
-          </div>
+    <div className="bg-tribe fixed  bg-no-repeat bg-cover bg-center -z-10 items-center justify-center w-full h-full ">
+      <div className="m-2 my-0">
+        <div className="grid grid-cols-2 gap-2.5 w-full">
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((item) => (
+            <div key={item}>
+              <Building />
+            </div>
+          ))}
         </div>
       </div>
     </div>

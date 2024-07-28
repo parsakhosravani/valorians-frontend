@@ -39,7 +39,7 @@ export const TextImage: React.FC<TextImageProps> = ({
         src={imgSrc}
         alt={imgAlt}
       />
-      <p>{title.toLocaleUpperCase()}</p>
+      <p className="whitespace-nowrap">{title.toLocaleUpperCase()}</p>
     </div>
   );
 };
