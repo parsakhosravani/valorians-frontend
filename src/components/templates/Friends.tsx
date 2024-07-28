@@ -1,5 +1,4 @@
 import React, { FunctionComponent } from "react";
-import { Button } from "../atoms";
 
 interface FriendsPropsType {}
 
