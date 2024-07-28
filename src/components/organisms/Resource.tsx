@@ -1,7 +1,7 @@
 import React, { FunctionComponent } from "react";
-import { TResource } from "../templates";
 import { ProgressBar, TextImage } from "../molecules";
 import Image from "next/image";
+import { TResource } from "@/context/ResourceContext";
 
 interface resourcePropsType {
   resourceData: TResource;

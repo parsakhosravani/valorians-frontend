@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { TResource } from "../templates";
 import clsx from "clsx";
 import { Capacity, ProgressBar } from "../molecules";
 import Image from "next/image";
+import { TResource } from "@/context/ResourceContext";
 
 interface ActiveResource {
   activeResource: TResource;
