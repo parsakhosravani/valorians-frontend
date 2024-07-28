@@ -11,7 +11,7 @@ const config: Config = {
         xs: "2px",
       },
       backgroundImage: {
-        intro: "url('/images/background/intro.svg')",
+        intro: "url('/images/background/intro.webp')",
         tribe: "url('/images/background/tribe.webp')",
         battle: "url('/images/background/battle.webp')",
         friends: "url('/images/background/friends.webp')",
