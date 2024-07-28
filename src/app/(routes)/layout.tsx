@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "@/styles/globals.css";
-import { Navbar } from "@/components";
+import { Navbar, Header } from "@/components";
 import { Providers } from "../providers";
 import { Roboto } from "next/font/google";
+import { ResourceProvider } from "@/context/ResourceContext";
 
 import GoogleScript from "@/scripts/GoogleScript";
 import TelegramScript from "@/scripts/TelegramScript";
@@ -28,10 +29,13 @@ export default function RootLayout({
     <html suppressHydrationWarning lang="en" className={roboto.className}>
       <body className="bg-black text-white">
         <Providers>
-          <div className="relative flex flex-col overflow-hidden h-screen">
-            <main className="w-full flex-1">{children}</main>
-            <Navbar />
-          </div>
+          <ResourceProvider>
+            <div className="relative flex flex-col overflow-hidden h-screen">
+              <Header />
+              <main className="w-full flex-1">{children}</main>
+              <Navbar />
+            </div>
+          </ResourceProvider>
         </Providers>
 
         <GoogleScript />

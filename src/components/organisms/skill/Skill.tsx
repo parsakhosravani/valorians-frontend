@@ -8,11 +8,11 @@ import {
   EnergyCapacityIcon,
 } from "../../atoms";
 import { Capacity, Drawer } from "../../molecules";
-import { TResource } from "../../templates";
 
 import { FullEnergyDrawerContent } from "./FullEnergyDrawerContent";
 import { EnergyCapacityDrawerContent } from "./EnergyCapacityDrawerContent";
 import { EarnMoreDrawerContent } from "./EarnMoreDrawerContent";
+import { TResource } from "@/context/ResourceContext";
 
 interface SkillProps {
   availableEnergy: number;
