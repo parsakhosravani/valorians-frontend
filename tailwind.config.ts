@@ -5,7 +5,7 @@ const config: Config = {
   theme: {
     extend: {
       backgroundImage: {
-        intro: "url('/images/background/intro.webp')",
+        intro: "url('/images/background/intro.svg')",
         tribe: "url('/images/background/tribe.webp')",
         battle: "url('/images/background/battle.webp')",
         friends: "url('/images/background/friends.webp')",
