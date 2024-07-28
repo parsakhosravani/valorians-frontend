@@ -1,22 +1,19 @@
+"use client";
+
+import React from "react";
 import { Coin, Population, User } from "../molecules";
-import { TResource } from "../templates";
 import { Resource } from "./Resource";
+import { useResourceContext } from "../../context/ResourceContext";
 
-interface HeaderProps {
-  resources: TResource[];
-  activeResourceId: number;
-  coin: number;
-  resourceCapacity: number;
-  onChangeResource: (resource: TResource) => void;
-}
+export const Header: React.FC = () => {
+  const {
+    resources,
+    activeResource,
+    resourceCapacity,
+    coin,
+    setActiveResource,
+  } = useResourceContext();
 
-export const Header: React.FC<HeaderProps> = ({
-  resources,
-  onChangeResource,
-  activeResourceId,
-  resourceCapacity,
-  coin,
-}) => {
   return (
     <header className="flex gap-2 flex-col p-2">
       <div className="flex items-center gap-2 h-[30px]">
@@ -32,8 +29,8 @@ export const Header: React.FC<HeaderProps> = ({
             key={item.id}
             resourceData={item}
             resourceCapacity={resourceCapacity}
-            isActive={activeResourceId === item.id}
-            onChangeResource={onChangeResource}
+            isActive={activeResource.id === item.id}
+            onChangeResource={() => setActiveResource(item)}
           />
         ))}
       </div>
