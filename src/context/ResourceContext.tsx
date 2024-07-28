@@ -1,6 +1,5 @@
 "use client";
 import React, { createContext, useState, useContext, ReactNode } from "react";
-import { TResource } from "../components/templates/Resources";
 import iron from "~/images/resources/iron.webp";
 import wood from "~/images/resources/wood.webp";
 import clay from "~/images/resources/clay.webp";
@@ -9,6 +8,7 @@ import ironBg from "~/images/background/iron.webp";
 import woodBg from "~/images/background/wood.webp";
 import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
+export type TResource = (typeof initialResources)[number];
 
 const initialResources = [
   {
