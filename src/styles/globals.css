@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  /* touch-action: pan-y; */
+  touch-action: none;
+  overflow: hidden;
+
+  -webkit-user-select: none; /* Safari */
+  -ms-user-select: none; /* IE 10 and IE 11 */
+  user-select: none; /* Standard syntax */
+
+  height: 100%;
+  margin: 0;
+  overflow: auto;
+}
+
 @keyframes fadeUpAndOut {
   0% {
     opacity: 1;
