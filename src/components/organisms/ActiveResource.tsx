@@ -105,7 +105,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           className={clsx(
             "w-full h-full group-active:animate-[scale_0.3s_ease-in-out]",
             activeResource.count === resourceCapacity &&
-              "opacity-[.5] group-active:animate-none"
+            "opacity-[.5] group-active:animate-none"
           )}
         >
           <Image src={activeResource?.img} alt={activeResource.name} />
@@ -116,11 +116,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           {activeResource?.name.toUpperCase()}
         </h1>
       </div>
-      <Image
-        src={activeResource.bg}
-        alt={activeResource.name}
-        className="fixed h-screen top-0 w-full -z-10 opacity-[0.15]"
-      />
+      
     </div>
   );
 };

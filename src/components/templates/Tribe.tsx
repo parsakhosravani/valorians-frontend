@@ -14,7 +14,7 @@ export const Tribe: FunctionComponent<TribePropsType> = () => {
   };
 
   return (
-    <div className="bg-tribe fixed bg-no-repeat bg-cover bg-center -z-10 w-full h-full">
+    <div className="bg-tribe relative bg-no-repeat bg-cover bg-center -z-10 w-full h-full">
       <div className="h-full overflow-y-auto">
         <div className="m-2 my-0">
           <div className="grid grid-cols-2 gap-2.5 w-full">

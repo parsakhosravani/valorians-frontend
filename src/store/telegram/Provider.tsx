@@ -1,6 +1,10 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import { TelegramContextType, TelegramUser } from "./types";
-import TelegramContext from "./Context";
+import { TelegramContextType } from "./types";
+import TelegramContext, { initialUserProfileData } from "./Context";
+import useDisableZoom from "@/hooks/useDisableZoom";
+import useDisableScroll from "@/hooks/useDisableScroll";
+import useMobilePlatform from "@/hooks/useMobilePlatform";
+import { Telegram } from "@twa-dev/types";
 
 interface TelegramProviderProps {
   children: ReactNode;
@@ -9,26 +13,37 @@ interface TelegramProviderProps {
 export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   children,
 }) => {
+  const [telegram, setTelegram] = useState<Telegram>()
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(initialUserProfileData);
 
   // Start app
   useEffect(() => {
     if (typeof window !== "undefined" && "Telegram" in window) {
-      const telgram = (window as any).Telegram.WebApp;
+      const telgram = (window as any).Telegram;
+      const miniApp = (window as any).Telegram.WebApp;
 
       // configs
-      telgram.ready();
-      telgram.expand();
-      telgram.setHeaderColor("#000000");
-      telgram.setBackgroundColor("#27272A");
+      miniApp.ready();
+      miniApp.expand();
+      miniApp.setHeaderColor("#000000");
+      miniApp.setBackgroundColor("#27272A");
 
       // initial data
-      setUser(telgram.initDataUnsafe.user);
+      setTelegram(telgram);
+      setUser(miniApp.initDataUnsafe.user);
     }
   }, []);
 
+  useDisableZoom()
+  useDisableScroll(true);
+  const isMobile = useMobilePlatform(telegram)
+
   const value: TelegramContextType = {
+    telegram,
     user,
+    userProfile,
+    isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile
   };
 
   return (
