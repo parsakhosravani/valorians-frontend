@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { ActiveResource, Skill } from "../organisms";
 import { useResourceContext } from "../../context/ResourceContext";
+import Image from "next/image";
 
 export const Resources = () => {
   const {
@@ -37,23 +38,34 @@ export const Resources = () => {
   };
 
   return (
-    <div className="pt-2">
-      <ActiveResource
-        resourceCapacity={resourceCapacity}
-        onConsumeEnergy={onConsumeEnergyHandler}
-        activeResource={activeResource}
-        mineLevel={earnLevelEnergy}
+    <>
+      <div className="w-full flex flex-col items-stretch">
+        <div className="pt-2">
+          <ActiveResource
+            resourceCapacity={resourceCapacity}
+            onConsumeEnergy={onConsumeEnergyHandler}
+            activeResource={activeResource}
+            mineLevel={earnLevelEnergy}
+          />
+        </div>
+        <Skill
+          coin={coin}
+          setCoin={setCoin}
+          setMineLevel={setEarnLevelEnergy}
+          mineLevel={earnLevelEnergy}
+          availableEnergy={availableEnergy}
+          setAvailableEnergy={setAvailableEnergy}
+          consumeEnergy={consumeEnergy}
+          activeResource={activeResource}
+        />
+      </div>
+
+      <Image
+        priority
+        src={activeResource.bg}
+        alt={activeResource.name}
+        className="absolute h-full top-0 left-0 w-full -z-10 object-cover opacity-[0.15]"
       />
-      <Skill
-        coin={coin}
-        setCoin={setCoin}
-        setMineLevel={setEarnLevelEnergy}
-        mineLevel={earnLevelEnergy}
-        availableEnergy={availableEnergy}
-        setAvailableEnergy={setAvailableEnergy}
-        consumeEnergy={consumeEnergy}
-        activeResource={activeResource}
-      />
-    </div>
+    </>
   );
 };
