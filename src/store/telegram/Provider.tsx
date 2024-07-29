@@ -43,7 +43,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
     telegram,
     user,
     userProfile,
-    isMobile
+    isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile
   };
 
   return (
