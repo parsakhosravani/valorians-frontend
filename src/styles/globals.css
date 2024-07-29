@@ -16,6 +16,20 @@ body {
   overflow: auto;
 }
 
+.animation-touch-coin {
+  animation: moveUpAndFade 0.6s forwards ease-out;
+}
+@keyframes moveUpAndFade {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-70px);
+  }
+}
+
 @keyframes fadeUpAndOut {
   0% {
     opacity: 1;
