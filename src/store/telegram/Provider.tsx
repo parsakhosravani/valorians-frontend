@@ -36,7 +36,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   }, []);
 
   useDisableZoom()
-  useDisableScroll(true);
+  useDisableScroll(true); 
   const isMobile = useMobilePlatform(telegram)
 
   const value: TelegramContextType = {
