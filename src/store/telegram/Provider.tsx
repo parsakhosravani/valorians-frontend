@@ -1,6 +1,7 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import { TelegramContextType } from "./types";
 import TelegramContext, { initialUserProfileData } from "./Context";
+import useDisableZoom from "@/hooks/useDisableZoom";
 
 interface TelegramProviderProps {
   children: ReactNode;
@@ -29,6 +30,8 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       setUser(telgram.initDataUnsafe.user);
     }
   }, []);
+
+  useDisableZoom()
 
   const value: TelegramContextType = {
     telegram,
