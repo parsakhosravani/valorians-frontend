@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html suppressHydrationWarning lang="en" className={roboto.className}>
-      <body className="bg-black text-white">
+      <body className="bg-black text-white mx-auto flex justify-center">
         <Toaster toastOptions={{ duration: 2000 }} position="top-center" />
 
         <Providers>

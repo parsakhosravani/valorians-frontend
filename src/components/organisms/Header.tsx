@@ -16,7 +16,7 @@ export const Header: React.FC = () => {
   } = useResourceContext();
   const pathname = usePathname();
   return (
-    <header className="flex gap-2 flex-col p-2">
+    <header className="w-full flex gap-2 flex-col p-2">
       <div className="flex items-center gap-2 h-[30px]">
         <User />
         <Population />
