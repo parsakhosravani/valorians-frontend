@@ -1,6 +1,6 @@
 import "@/styles/globals.css";
 import type { Metadata } from "next";
-import { Navbar, Header } from "@/components";
+import { Navbar, Header, Main } from "@/components";
 import { Providers } from "../providers";
 import { Roboto } from "next/font/google";
 import { ResourceProvider } from "@/context/ResourceContext";
@@ -32,15 +32,13 @@ export default function RootLayout({
         <Toaster toastOptions={{ duration: 2000 }} position="top-center" />
 
         <Providers>
-           <ResourceProvider>
-            <div className="relative flex flex-col overflow-hidden h-screen">
-              <Header />
-              <main className="w-full flex-1">{children}</main>
-              <Navbar />
-            </div>
+          <ResourceProvider>
+            <Main>
+              {children}
+            </Main>
           </ResourceProvider>
-
         </Providers>
+
         <GoogleScript />
         <TelegramScript />
       </body>

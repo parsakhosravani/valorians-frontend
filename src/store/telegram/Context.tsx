@@ -10,7 +10,8 @@ export const initialUserProfileData = {
 const TelegramContext = createContext<TelegramContextType>({
     telegram: null,
     user: null,
-    userProfile: initialUserProfileData
+    userProfile: initialUserProfileData,
+    isMobile: true
 });
 
 export default TelegramContext;

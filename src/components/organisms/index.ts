@@ -5,3 +5,4 @@ export * from "./Header";
 export * from "./skill";
 export * from "./tribe";
 export * from "./InviteLink";
+export * from "./Main";

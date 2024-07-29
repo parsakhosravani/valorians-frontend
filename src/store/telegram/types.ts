@@ -17,4 +17,5 @@ export interface TelegramContextType {
     telegram: any;
     user: TelegramUser;
     userProfile: TelegramUserProfile;
+    isMobile: boolean
 }
