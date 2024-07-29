@@ -50,9 +50,9 @@ export const Navbar = () => {
   const pathname = usePathname();
 
   return (
-    <div className="max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] pt-2 flex px-6 items-center justify-between bg-[#191F27] w-full h-[60px] rounded-t-3xl fixed bottom-0">
+    <div className="max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 pb-5 rounded-t-3xl fixed bottom-0">
       {navbarItems.map((item) => (
-        <Link key={item.name} href={item.link}>
+        <Link className="w-[50px] h-[50px]" key={item.name} href={item.link}>
           <div
             style={{
               cursor: "pointer",
