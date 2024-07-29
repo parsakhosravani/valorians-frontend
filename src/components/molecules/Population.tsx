@@ -1,6 +1,6 @@
 import React, { FunctionComponent } from "react";
-import population from "~/images/resources/population.png";
-import populationPerHour from "~/images/resources/populationPerHour.png";
+import population from "~/images/resources/population.webp";
+import populationPerHour from "~/images/resources/populationPerHour.webp";
 import { TextImage } from "./TextImage";
 
 interface PopulationPropsType {}

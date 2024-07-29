@@ -16,5 +16,9 @@ export const Chip: React.FC<ChipProps> = ({ label, color = "primary" }) => {
     error: "bg-[#F72214] text-white",
   };
 
-  return <div className={`${baseClasses} ${colorClasses[color]}`}>{label}</div>;
+  return (
+    <div className={`text-[10px] ${baseClasses} ${colorClasses[color]}`}>
+      {label}
+    </div>
+  );
 };

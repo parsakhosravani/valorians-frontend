@@ -1,6 +1,5 @@
 import React, { FunctionComponent } from "react";
 import { ProgressBar, TextImage } from "../molecules";
-import Image from "next/image";
 import { TResource } from "@/context/ResourceContext";
 
 interface resourcePropsType {
@@ -23,6 +22,8 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         isActive
           ? {
               border: "1px solid #00A3FF",
+              background: "#B1D7ED",
+              color: "#212F42",
             }
           : {
               border: "1px solid transparent",
@@ -38,7 +39,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         title={resourceData.name}
       />
       <div className="flex flex-col justify-between w-full gap-[2px]">
-        <div className="text-white text-center text-xs font-semibold">
+        <div className="text-center text-xs font-semibold">
           {resourceData.count.toLocaleString("en-US")}
         </div>
         <ProgressBar
@@ -46,7 +47,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
           value={resourceData.count}
           totalValue={resourceCapacity}
         />
-        <div className="text-zinc-400 text-center text-[8px] w-full font-semibold">
+        <div className="text-center text-[8px] w-full font-semibold">
           +100 per hour
         </div>
       </div>

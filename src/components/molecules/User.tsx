@@ -7,14 +7,8 @@ export const User = () => {
   const { user } = useTelegramContext();
 
   return (
-    <div className="flex gap-[2px] items-center">
-      <Image
-        width={28}
-        height={28}
-        className="rounded-full"
-        alt="avatar"
-        src={avatar}
-      />
+    <div className="flex gap-1 items-center">
+      <Image className="rounded h-7 w-7" alt="avatar" src={avatar} />
       <div className="flex flex-col">
         <div className="text-center text-white text-[12px] font-bold">
           {user?.username}

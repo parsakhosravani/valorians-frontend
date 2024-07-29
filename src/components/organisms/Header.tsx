@@ -4,6 +4,7 @@ import React from "react";
 import { Coin, Population, User } from "../molecules";
 import { Resource } from "./Resource";
 import { useResourceContext } from "../../context/ResourceContext";
+import { usePathname } from "next/navigation";
 
 export const Header: React.FC = () => {
   const {
@@ -13,7 +14,7 @@ export const Header: React.FC = () => {
     coin,
     setActiveResource,
   } = useResourceContext();
-
+  const pathname = usePathname();
   return (
     <header className="flex gap-2 flex-col p-2">
       <div className="flex items-center gap-2 h-[30px]">
@@ -23,17 +24,20 @@ export const Header: React.FC = () => {
           <Coin value={coin} />
         </div>
       </div>
-      <div className="items-center justify-between w-full gap-2 flex pb-2">
-        {resources.map((item) => (
-          <Resource
-            key={item.id}
-            resourceData={item}
-            resourceCapacity={resourceCapacity}
-            isActive={activeResource.id === item.id}
-            onChangeResource={() => setActiveResource(item)}
-          />
-        ))}
-      </div>
+
+      {pathname === "/resources" && (
+        <div className="items-center justify-between w-full gap-2 flex pb-2">
+          {resources.map((item) => (
+            <Resource
+              key={item.id}
+              resourceData={item}
+              resourceCapacity={resourceCapacity}
+              isActive={activeResource.id === item.id}
+              onChangeResource={() => setActiveResource(item)}
+            />
+          ))}
+        </div>
+      )}
     </header>
   );
 };

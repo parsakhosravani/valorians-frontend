@@ -18,27 +18,22 @@ export const TextImage: React.FC<TextImageProps> = ({
   const sizeClasses = {
     small: "text-[10px]",
     medium: "text-sm",
-    large: "text-xl ",
+    large: "text-[14px] font-",
   };
 
   const imageSizes = {
-    small: 12,
-    medium: 18,
-    large: 82,
+    small: "h-[12px] w-[12px]",
+    medium: "h-[18px] w-[18px]",
+    large: "h-[85px] w-[85px]",
   };
 
   const directionClass = direction === "column" ? "flex-col" : "flex-row";
 
   return (
     <div
-      className={`flex font-bold gap-1 items-center justify-center ${sizeClasses[size]} ${directionClass}`}
+      className={`flex font-bold gap-1 items-center justify-center  ${sizeClasses[size]} ${directionClass}`}
     >
-      <Image
-        width={imageSizes[size]}
-        height={imageSizes[size]}
-        src={imgSrc}
-        alt={imgAlt}
-      />
+      <Image className={imageSizes[size]} src={imgSrc} alt={imgAlt} />
       <p className="whitespace-nowrap">{title.toLocaleUpperCase()}</p>
     </div>
   );

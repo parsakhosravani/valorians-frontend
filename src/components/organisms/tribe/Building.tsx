@@ -1,18 +1,20 @@
 import { TextImage } from "@/components/molecules";
-import building from "~/images/resources/building.webp";
+
 import iron from "~/images/resources/iron.webp";
 import wood from "~/images/resources/wood.webp";
 import clay from "~/images/resources/clay.webp";
 import crop from "~/images/resources/crop.webp";
-import time from "~/images/resources/time.png";
+import time from "~/images/resources/time.webp";
 
-import population from "~/images/resources/population.png";
-import populationPerHour from "~/images/resources/populationPerHour.png";
+import population from "~/images/resources/population.webp";
+import populationPerHour from "~/images/resources/populationPerHour.webp";
 
 import { StaticImageData } from "next/image";
 import { Chip } from "@/components/atoms";
 
-interface BuildingProps {}
+interface BuildingProps {
+  buidling: StaticImageData;
+}
 type TBuildingCost = {
   resource: StaticImageData;
   value: string;
@@ -44,7 +46,7 @@ const buildingCost: TBuildingCost[] = [
   },
 ];
 
-export const Building: React.FC<BuildingProps> = () => {
+export const Building: React.FC<BuildingProps> = ({ buidling }) => {
   return (
     <div className="p-2 bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] flex flex-col items-center space-y-5">
       <div className="flex justify-between w-full">
@@ -57,7 +59,7 @@ export const Building: React.FC<BuildingProps> = () => {
       </div>
       <TextImage
         direction="column"
-        imgSrc={building}
+        imgSrc={buidling}
         imgAlt="building"
         title="Main Building"
         size="large"

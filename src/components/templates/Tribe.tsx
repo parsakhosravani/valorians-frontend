@@ -1,18 +1,29 @@
 import React, { FunctionComponent } from "react";
 import { Building } from "../organisms";
+import mainBuilding from "~/images/building/mainBuilding.webp";
+import barracksBuilding from "~/images/building/barracksBuilding.webp";
+import resourcesBuilding from "~/images/building/resourcesBuilding.webp";
 
 interface TribePropsType {}
 
 export const Tribe: FunctionComponent<TribePropsType> = () => {
+  const buildings = [mainBuilding, barracksBuilding, resourcesBuilding];
+
+  const getRandomBuilding = () => {
+    return buildings[Math.floor(Math.random() * buildings.length)];
+  };
+
   return (
-    <div className="bg-tribe fixed  bg-no-repeat bg-cover bg-center -z-10 items-center justify-center w-full h-full ">
-      <div className="m-2 my-0">
-        <div className="grid grid-cols-2 gap-2.5 w-full">
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((item) => (
-            <div key={item}>
-              <Building />
-            </div>
-          ))}
+    <div className="bg-tribe fixed bg-no-repeat bg-cover bg-center -z-10 w-full h-full">
+      <div className="h-full overflow-y-auto">
+        <div className="m-2 my-0">
+          <div className="grid grid-cols-2 gap-2.5 w-full">
+            {[...Array(20)].map((_, index) => (
+              <div key={index}>
+                <Building buidling={getRandomBuilding()} />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
