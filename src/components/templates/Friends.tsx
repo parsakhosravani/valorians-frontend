@@ -1,9 +1,22 @@
 import React, { FunctionComponent } from "react";
+import InviteLink from "../organisms/InviteLink";
+import { Header } from "../organisms";
 
-interface FriendsPropsType {}
+const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
+  id: i + 1,
+  img: "iron",
+  name: "Parsa",
+  tribe: 10 * (i + 1),
+  population: 1000 * (i + 1),
+}));
+
+interface FriendsPropsType { }
 
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
   return (
-    <div className="bg-friends -z-10 fixed top-0 bg-no-repeat bg-cover bg-center flex flex-col items-center justify-center w-full h-full gap-1"></div>
+    <div className="relative flex justify-center items-center max-w-[95%] m-auto bg-friends bg-no-repeat bg-cover bg-center w-full h-full">
+      
+      <InviteLink className="absolute bottom-4 w-[98%]" />
+    </div>
   );
 };

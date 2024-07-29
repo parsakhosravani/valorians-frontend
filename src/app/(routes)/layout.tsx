@@ -4,6 +4,7 @@ import { Navbar, Header } from "@/components";
 import { Providers } from "../providers";
 import { Roboto } from "next/font/google";
 import { ResourceProvider } from "@/context/ResourceContext";
+import { Toaster } from "react-hot-toast";
 
 import GoogleScript from "@/scripts/GoogleScript";
 import TelegramScript from "@/scripts/TelegramScript";
@@ -28,14 +29,17 @@ export default function RootLayout({
   return (
     <html suppressHydrationWarning lang="en" className={roboto.className}>
       <body className="bg-black text-white">
+        <Toaster toastOptions={{ duration: 2000 }} position="top-center" />
+
         <Providers>
-          <ResourceProvider>
+           <ResourceProvider>
             <div className="relative flex flex-col overflow-hidden h-screen">
               <Header />
               <main className="w-full flex-1">{children}</main>
               <Navbar />
             </div>
           </ResourceProvider>
+
         </Providers>
         <GoogleScript />
         <TelegramScript />

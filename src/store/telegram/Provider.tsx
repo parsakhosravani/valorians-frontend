@@ -1,6 +1,6 @@
 import React, { ReactNode, useEffect, useState } from "react";
-import { TelegramContextType, TelegramUser } from "./types";
-import TelegramContext from "./Context";
+import { TelegramContextType } from "./types";
+import TelegramContext, { initialUserProfileData } from "./Context";
 
 interface TelegramProviderProps {
   children: ReactNode;
@@ -9,7 +9,9 @@ interface TelegramProviderProps {
 export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   children,
 }) => {
+  const [telegram, setTelegram] = useState(null)
   const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(initialUserProfileData);
 
   // Start app
   useEffect(() => {
@@ -23,12 +25,15 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       telgram.setBackgroundColor("#27272A");
 
       // initial data
+      setTelegram(telegram);
       setUser(telgram.initDataUnsafe.user);
     }
   }, []);
 
   const value: TelegramContextType = {
+    telegram,
     user,
+    userProfile
   };
 
   return (
