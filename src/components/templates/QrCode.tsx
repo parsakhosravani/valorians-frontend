@@ -1,5 +1,5 @@
 import Image from "next/image";
-import rqcode from "~/images/qr/qr-code.jpg";
+import rqcode from "~/images/qr/qr-code.png";
 
 export const QrCode = () => {
 
