@@ -1,16 +1,14 @@
-"use client"
+"use client";
 import React, { FunctionComponent } from "react";
 import InviteLink from "../organisms/InviteLink";
 import bg from "~/images/background/friends.webp";
-import avatar from "~/images/friends/avatar.png";
-import population from "~/images/friends/population.png";
-import tribe from "~/images/friends/tribe.png";
+import population from "~/images/resources/population.webp";
+import populationPerHour from "~/images/resources/populationPerHour.webp";
+import avatar from "~/images/avatar.webp";
 import viking from "~/images/friends/viking.png";
-import coin from "~/images/friends/coin.png";
 import Image from "next/image";
-import { TextImage } from "../molecules";
+import { Coin, TextImage } from "../molecules";
 import useBackButton from "@/hooks/useBackButton";
-
 
 const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
   id: i + 1,
@@ -20,14 +18,13 @@ const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
   population: 1000 * (i + 1),
 }));
 
-interface FriendsPropsType { }
+interface FriendsPropsType {}
 
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
-  useBackButton()
+  useBackButton();
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
-
         <div className="bg-[#6393d4]/20 min-h-[100px] w-full flex justify-end rounded-[5px]">
           <div className="w-2/6 flex flex-col justify-start relative">
             <Image
@@ -37,60 +34,51 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
             />
           </div>
           <div className="w-4/6 flex flex-col justify-between pl-3 py-2.5">
-            <div className="text-left text-white text-base font-bold">Invite Friends!</div>
-            <div className="text-[#b0d7ec] text-xs font-normal">You and your friend will receive bonuses</div>
-            <div className="flex items-center w-full gap-1">
-              <TextImage
-                direction="row"
-                imgSrc={coin}
-                imgAlt="building"
-                title="100"
-                size="small"
-              />
-              <div className="text-center text-white text-[9px] font-bold">For you and your friend</div>
+            <div className="text-left text-white text-base font-bold">
+              Invite Friends!
+            </div>
+            <div className="text-[#b0d7ec] text-xs font-normal">
+              You and your friend will receive bonuses
             </div>
             <div className="flex items-center w-full gap-1">
-              <TextImage
-                direction="row"
-                imgSrc={coin}
-                imgAlt="building"
-                title="500"
-                size="small"
-              />
+              <Coin amount={100} />
+              <div className="text-center text-white text-[9px] font-bold">
+                For you and your friend
+              </div>
+            </div>
+            <div className="flex items-center w-full gap-1">
+              <Coin amount={100} />
+
               <div className="text-[9px] font-bold">
                 <span className="text-white">For you and your friend </span>
                 <span className="text-[#019af0]">(Telegram Premium)</span>
               </div>
             </div>
           </div>
-
         </div>
 
         <div className="flex flex-col w-full items-start mt-4">
-          <div className="text-center text-white text-lg font-bold">Your Firends:</div>
+          <div className="text-center text-white text-lg font-bold">
+            Your Firends:
+          </div>
           <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
             {[...Array(60)].map((_, index) => (
               <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-[#6393d4]/20 rounded-md">
-                <Image
-                  src={avatar}
-                  width={34}
-                  height={34}
-                  alt="avatar"
-                />
+                <Image src={avatar} width={34} height={34} alt="avatar" />
                 <div className="flex flex-col justify-start gap-[5px]">
                   <div className="leading-none font-bold">Parsa</div>
                   <div className="flex gap-3">
                     <TextImage
                       direction="row"
-                      imgSrc={population}
+                      imgSrc={populationPerHour}
                       imgAlt="building"
                       title="+100"
                       size="small"
                     />
                     <TextImage
                       direction="row"
-                      imgSrc={tribe}
-                      imgAlt="building"
+                      imgSrc={population}
+                      imgAlt="population"
                       title="+100"
                       size="small"
                     />
@@ -107,7 +95,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
       <Image
         priority
         src={bg}
-        alt={'intro'}
+        alt={"intro"}
         className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
       />
     </>

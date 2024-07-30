@@ -5,12 +5,11 @@ import bg from "~/images/background/friends.webp";
 import telegram from "~/images/social/telegram.png";
 import youtube from "~/images/social/youtube.png";
 import x from "~/images/social/x.png";
-import population from "~/images/friends/population.png";
-import tribe from "~/images/friends/tribe.png";
+import population from "~/images/resources/population.webp";
+import populationPerHour from "~/images/resources/populationPerHour.webp";
 import viking from "~/images/quest/viking.png";
-import coin from "~/images/friends/coin.png";
 import Image from "next/image";
-import { TextImage } from "../molecules";
+import { Coin, TextImage } from "../molecules";
 import useBackButton from "@/hooks/useBackButton";
 
 const socialLinks = [
@@ -56,26 +55,20 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
                 <div className="flex flex-col justify-start gap-[5px]">
                   <div className="leading-none font-bold">{item.title}</div>
                   <div className="flex gap-3">
-                    <TextImage
-                      direction="row"
-                      imgSrc={coin}
-                      imgAlt="building"
-                      title="500"
-                      size="small"
-                    />
-                    <p className="text-xs">and</p>
+                    <Coin amount={1000} />
+                    <b className="text-xs">and</b>
                     <TextImage
                       direction="row"
                       imgSrc={population}
-                      imgAlt="building"
-                      title="+100"
+                      imgAlt="population"
+                      title="+10"
                       size="small"
                     />
                     <TextImage
                       direction="row"
-                      imgSrc={tribe}
-                      imgAlt="building"
-                      title="+100"
+                      imgSrc={populationPerHour}
+                      imgAlt="populationPerHour"
+                      title="+4"
                       size="small"
                     />
                   </div>

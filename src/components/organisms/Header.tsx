@@ -21,7 +21,7 @@ export const Header: React.FC = () => {
         <User />
         <Population />
         <div className="flex items-center bg-[#212F42] rounded p-1 gap-[2px] h-full">
-          <Coin value={coin} />
+          <Coin amount={coin} />
         </div>
       </div>
 

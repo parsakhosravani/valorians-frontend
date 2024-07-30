@@ -20,7 +20,7 @@ export const EarnMoreDrawerContent: React.FC<EarnDrawerContentProps> = ({
       </p>
       <p className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
-        <Coin value={100} />
+        <Coin amount={100} />
       </p>
     </>
   );

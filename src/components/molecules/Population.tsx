@@ -1,5 +1,5 @@
 import React, { FunctionComponent } from "react";
-import population from "~/images/friends/population.png";
+import population from "~/images/resources/population.webp";
 import populationPerHour from "~/images/resources/populationPerHour.webp";
 import { TextImage } from "./TextImage";
 
@@ -16,8 +16,7 @@ export const Population: FunctionComponent<PopulationPropsType> = () => {
           title="100"
         />
       </div>
-      <div className="w-[2px] h-ful justify-centerl bg-[#191F27] flex-shrink-0 mr-2" />
-      <div className="flex flex-col items-center w-1/2">
+      <div className="flex flex-col justify-center items-center w-1/2">
         <TextImage
           size="small"
           imgSrc={populationPerHour}

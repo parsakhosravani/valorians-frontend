@@ -6,7 +6,7 @@ import clay from "~/images/resources/clay.webp";
 import crop from "~/images/resources/crop.webp";
 import time from "~/images/resources/time.webp";
 
-import population from "~/images/friends/population.png";
+import population from "~/images/resources/population.webp";
 import populationPerHour from "~/images/resources/populationPerHour.webp";
 
 import { StaticImageData } from "next/image";

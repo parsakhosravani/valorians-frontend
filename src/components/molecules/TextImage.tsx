@@ -18,7 +18,7 @@ export const TextImage: React.FC<TextImageProps> = ({
   const sizeClasses = {
     small: "text-[10px]",
     medium: "text-sm",
-    large: "text-[14px] font-",
+    large: "text-[14px]",
   };
 
   const imageSizes = {
