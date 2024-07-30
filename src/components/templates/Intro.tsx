@@ -7,24 +7,26 @@ import bg from "~/images/background/intro.webp";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTelegramContext } from "@/store/telegram/hook";
 
 export const Intro = () => {
-  const [progressBarStart, setProgressBarStart] = useState(0);
+  const { progressBarStart, setProgressBarStart } = useTelegramContext();
   const router = useRouter();
   useEffect(() => {
     const timer = setTimeout(() => {
       setProgressBarStart(100);
-    }, 50000);
-    setTimeout(() => {
+    }, 300);
+    const redirect = setTimeout(() => {
       router.push("/resources");
-    }, 300000);
+    }, 3300+100);
     return () => {
       clearTimeout(timer);
+      clearTimeout(redirect);
     };
   }, []);
   return (
     <>
-      <div className="left-0 right-0 top-0 bottom-0 bg-intro bg-cover bg-no-repeat h-full flex w-full items-end justify-center">
+      <div className="h-full flex w-full items-end justify-center">
         <div className="text-[#B1D7ED] bottom-0 flex h-52 flex-col justify-between rounded-tl-3xl rounded-tr-3xl px-[57px] pb-[33px] pt-[26px] backdrop-blur-sm">
           <div className="text-4xl font-[900] leading-none text-center whitespace-nowrap">
             Valorians Legend
@@ -34,7 +36,7 @@ export const Intro = () => {
               <div
                 className={clsx(
                   "h-[7px] w-0 rounded bg-[#0695E5] transition-all duration-[3s] ease-in-out hxs:left-[1.5%] hxs:top-[50%] z-20",
-                  progressBarStart === 100 && "w-[99%]"
+                  progressBarStart === 100 && "w-[100%]"
                 )}
               />
             </div>

@@ -6,27 +6,35 @@ import { Header } from "./Header";
 import { Navbar } from "./Navbar";
 import { useResourceContext } from "@/context/ResourceContext";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 export const Main = ({ children }: Readonly<{
   children: React.ReactNode;
 }>) => {
 
-  const { isMobile } = useTelegramContext()
+  const { isMobile, progressBarStart } = useTelegramContext()
+  const pathname = usePathname();
 
   if (!isMobile) {
     return <QrCode />;
   }
 
   if (isMobile) {
-    return (
+    if (pathname !== "/") {
+      return (
         <div className="px-4 text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
           <Header />
           <main className="w-full flex-1 flex justify-center items-center pb-[84px]">{children}</main>
           <Navbar />
-
-          
         </div>
-    )
+      )
+    } else {
+      return (
+        <div className="px-4 text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
+          <main className="w-full flex-1 flex justify-center items-end pb-[84px]">{children}</main>
+        </div>
+      )
+    }
   }
 
 

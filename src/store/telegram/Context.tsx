@@ -11,7 +11,9 @@ const TelegramContext = createContext<TelegramContextType>({
     telegram: null,
     user: null,
     userProfile: initialUserProfileData,
-    isMobile: true
+    isMobile: true,
+    progressBarStart: 0,
+    setProgressBarStart: () => {}
 });
 
 export default TelegramContext;
