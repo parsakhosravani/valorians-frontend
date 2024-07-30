@@ -20,4 +20,5 @@ export interface TelegramContextType {
     isMobile: boolean,
     progressBarStart: number,
     setProgressBarStart: any,
+    navigateTo: (address: string) => void,
 }
