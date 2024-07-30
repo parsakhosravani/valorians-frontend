@@ -56,7 +56,7 @@ export const Navbar = () => {
       {navbarItems.map((item) => (
         <div className="w-[50px] h-[50px]"
           key={item.name}
-          onTouchStart={() => navigateTo(item.link)}
+          onTouchStart={() => navigateTo(item.link, "on")}
         >
           <div
             style={{
