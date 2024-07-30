@@ -23,7 +23,7 @@ interface FriendsPropsType { }
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
   return (
     <>
-      <div className="relative flex flex-col justify-start max-w-[95%] m-auto bg-no-repeat bg-cover bg-center w-full h-[100vh] mt-7">
+      <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
 
         <div className="bg-[#6393d4]/20 min-h-[100px] w-full flex justify-end rounded-[5px]">
           <div className="w-2/6 flex flex-col justify-start relative">
@@ -105,7 +105,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
         priority
         src={bg}
         alt={'intro'}
-        className="absolute h-full top-0 left-0 w-full -z-10 object-cover opacity-[0.15]"
+        className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
       />
     </>
   );
