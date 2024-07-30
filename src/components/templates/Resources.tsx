@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ActiveResource, Skill } from "../organisms";
 import { useResourceContext } from "../../context/ResourceContext";
 import Image from "next/image";
+import { useTelegramContext } from "@/store/telegram/hook";
 
 export const Resources = () => {
   const {
@@ -15,6 +16,7 @@ export const Resources = () => {
     coin,
     setCoin,
   } = useResourceContext();
+  const { telegram } = useTelegramContext()
 
   const [consumeEnergy, setConsumeEnergy] = useState(0);
   const [earnLevelEnergy, setEarnLevelEnergy] = useState(10);
@@ -36,6 +38,10 @@ export const Resources = () => {
       );
     }
   };
+
+  useEffect(() => {
+    telegram?.WebApp.BackButton.hide();
+  }, []);
 
   return (
     <>

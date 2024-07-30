@@ -5,6 +5,7 @@ import useDisableZoom from "@/hooks/useDisableZoom";
 import useDisableScroll from "@/hooks/useDisableScroll";
 import useMobilePlatform from "@/hooks/useMobilePlatform";
 import { Telegram } from "@twa-dev/types";
+import { useRouter } from "next/navigation";
 
 interface TelegramProviderProps {
   children: ReactNode;
@@ -32,7 +33,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       miniApp.setBackgroundColor("#27272A");
 
       // initial data
-      setTelegram(telgram);
+      setTelegram(telegram);
       setUser(miniApp.initDataUnsafe.user);
     }
   }, []);
@@ -41,6 +42,12 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   useDisableScroll(true);
   const isMobile = useMobilePlatform(telegram)
 
+  const router = useRouter();
+  const navigateTo = (address: string) => {
+    telegram?.WebApp.BackButton.show();
+    router.push(address as any);
+  };
+
   const value: TelegramContextType = {
     telegram,
     user,
@@ -48,6 +55,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
     isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile,
     progressBarStart,
     setProgressBarStart,
+    navigateTo
   };
 
   return (

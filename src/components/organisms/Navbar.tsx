@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import { useTelegramContext } from "@/store/telegram/hook";
 
 type TNavbarItems = {
   icon: React.ReactElement<IconSvgProps>;
@@ -48,11 +49,15 @@ const navbarItems: TNavbarItems[] = [
 
 export const Navbar = () => {
   const pathname = usePathname();
+  const { navigateTo } = useTelegramContext()
 
   return (
     <div className="max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 pb-5 rounded-t-3xl fixed bottom-0">
       {navbarItems.map((item) => (
-        <Link className="w-[50px] h-[50px]" key={item.name} href={item.link}>
+        <div className="w-[50px] h-[50px]"
+          key={item.name}
+          onTouchStart={() => navigateTo(item.link)}
+        >
           <div
             style={{
               cursor: "pointer",
@@ -65,7 +70,7 @@ export const Navbar = () => {
             })}
             <p>{item.name}</p>
           </div>
-        </Link>
+        </div>
       ))}
     </div>
   );
