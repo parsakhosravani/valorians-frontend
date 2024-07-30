@@ -49,12 +49,13 @@ const navbarItems: TNavbarItems[] = [
 
 export const Navbar = () => {
   const pathname = usePathname();
-  const { navigateTo } = useTelegramContext()
+  const { navigateTo } = useTelegramContext();
 
   return (
-    <div className="max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 pb-5 rounded-t-3xl fixed bottom-0">
+    <div className="max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0">
       {navbarItems.map((item) => (
-        <div className="w-[50px] h-[50px]"
+        <div
+          className="w-[50px] h-[50px]"
           key={item.name}
           onTouchStart={() => navigateTo(item.link, "on")}
         >
