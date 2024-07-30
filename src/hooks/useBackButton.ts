@@ -3,10 +3,10 @@ import { useEffect } from "react"
 
 export default function useBackButton() {
   const { telegram, navigateTo } = useTelegramContext()
-  
+
   useEffect(() => {
     telegram?.WebApp.onEvent("backButtonClicked", () =>
-      navigateTo("/", "off")
+      navigateTo("/resources", "off")
     );
     return () => {
       telegram?.WebApp.offEvent("backButtonClicked", () => null);
