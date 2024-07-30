@@ -8,7 +8,7 @@ import { useTelegramContext } from "@/store/telegram/hook";
 
 interface ActiveResource {
   activeResource: TResource;
-  onConsumeEnergy: () => void;
+  onConsumeEnergy: any;
   mineLevel: number;
   resourceCapacity: number;
 }
