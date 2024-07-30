@@ -74,7 +74,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
     }));
 
     activeResource.count += newTouchesNumbers.length * mineLevel;
-    onConsumeEnergy();
+    onConsumeEnergy((prev: any) => prev + (newTouchesNumbers.length * mineLevel));
 
     setTouches((prevTouches: any) => [...prevTouches, ...newTouches]);
     setTouchesNumber((prevTouches: any) => [...prevTouches, ...newTouchesNumbers]);
