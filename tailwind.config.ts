@@ -10,13 +10,6 @@ const config: Config = {
       backdropBlur: {
         xs: "2px",
       },
-      backgroundImage: {
-        intro: "url('/images/background/intro.webp')",
-        tribe: "url('/images/background/tribe.webp')",
-        battle: "url('/images/background/battle.webp')",
-        friends: "url('/images/background/friends.webp')",
-        quest: "url('/images/background/quest.webp')",
-      },
     },
   },
   plugins: [],

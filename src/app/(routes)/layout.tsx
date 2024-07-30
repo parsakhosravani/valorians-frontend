@@ -1,8 +1,7 @@
 import "@/styles/globals.css";
 import type { Metadata } from "next";
-import { Navbar, Header, Main } from "@/components";
+import { Main } from "@/components";
 import { Providers } from "../providers";
-import { Roboto } from "next/font/google";
 import { ResourceProvider } from "@/context/ResourceContext";
 import { Toaster } from "react-hot-toast";
 
@@ -14,28 +13,19 @@ export const metadata: Metadata = {
   description: "Valorians legend is a mini game",
 };
 
-const roboto = Roboto({
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-  display: "swap",
-});
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html suppressHydrationWarning lang="en" className={roboto.className}>
+    <html suppressHydrationWarning lang="en">
       <body className="bg-black text-white mx-auto flex justify-center">
         <Toaster toastOptions={{ duration: 2000 }} position="top-center" />
 
         <Providers>
           <ResourceProvider>
-            <Main>
-              {children}
-            </Main>
+            <Main>{children}</Main>
           </ResourceProvider>
         </Providers>
 

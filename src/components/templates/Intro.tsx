@@ -6,7 +6,7 @@ import x from "~/images/social/x.webp";
 import bg from "~/images/background/intro.webp";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useTelegramContext } from "@/store/telegram/hook";
 
 export const Intro = () => {
@@ -18,7 +18,7 @@ export const Intro = () => {
     }, 300);
     const redirect = setTimeout(() => {
       router.push("/resources");
-    }, 3300+100);
+    }, 3300 + 100);
     return () => {
       clearTimeout(timer);
       clearTimeout(redirect);
@@ -82,7 +82,7 @@ export const Intro = () => {
       <Image
         priority
         src={bg}
-        alt={'intro'}
+        alt={"intro"}
         className="absolute h-full top-0 left-0 w-full -z-10 object-cover opacity-[0.15]"
       />
     </>
