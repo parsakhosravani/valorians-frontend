@@ -8,7 +8,7 @@ import { useTelegramContext } from "@/store/telegram/hook";
 
 interface ActiveResource {
   activeResource: TResource;
-  onConsumeEnergy: () => void;
+  onConsumeEnergy: any;
   mineLevel: number;
   resourceCapacity: number;
 }
@@ -23,34 +23,34 @@ export const ActiveResource: React.FC<ActiveResource> = ({
     { x: number; y: number }[]
   >([]);
 
-  useEffect(() => {
-    const handleTouchStart = (e: any) => {
-      if (activeResource.count < resourceCapacity) {
-        onConsumeEnergy();
-        const rect = e.currentTarget.getBoundingClientRect();
-        for (let i = 0; i < e.touches.length; i++) {
-          const touch = e.touches[i];
-          const x = touch.clientX - rect.left;
-          const y = touch.clientY - rect.top;
-          setClickPositions((prev) => [...prev, { x, y }]);
-          setTimeout(() => {
-            setClickPositions((prev) => prev.slice(1));
-          }, Infinity);
-        }
-      }
-    };
+  // useEffect(() => {
+  //   const handleTouchStart = (e: any) => {
+  //     if (activeResource.count < resourceCapacity) {
+  //       onConsumeEnergy();
+  //       const rect = e.currentTarget.getBoundingClientRect();
+  //       for (let i = 0; i < e.touches.length; i++) {
+  //         const touch = e.touches[i];
+  //         const x = touch.clientX - rect.left;
+  //         const y = touch.clientY - rect.top;
+  //         setClickPositions((prev) => [...prev, { x, y }]);
+  //         setTimeout(() => {
+  //           setClickPositions((prev) => prev.slice(1));
+  //         }, Infinity);
+  //       }
+  //     }
+  //   };
 
-    const touchArea = document.getElementById("touchArea");
-    if (touchArea) {
-      touchArea.addEventListener("touchstart", handleTouchStart, false);
-    }
+  //   const touchArea = document.getElementById("touchArea");
+  //   if (touchArea) {
+  //     touchArea.addEventListener("touchstart", handleTouchStart, false);
+  //   }
 
-    return () => {
-      if (touchArea) {
-        touchArea.removeEventListener("touchstart", handleTouchStart, false);
-      }
-    };
-  }, [activeResource, onConsumeEnergy, resourceCapacity]);
+  //   return () => {
+  //     if (touchArea) {
+  //       touchArea.removeEventListener("touchstart", handleTouchStart, false);
+  //     }
+  //   };
+  // }, [activeResource, onConsumeEnergy, resourceCapacity]);
 
 
   const { telegram } = useTelegramContext()
@@ -72,6 +72,9 @@ export const ActiveResource: React.FC<ActiveResource> = ({
       x: touch.clientX - 85,
       y: touch.clientY - 70,
     }));
+
+    activeResource.count += newTouchesNumbers.length * mineLevel;
+    onConsumeEnergy((prev: any) => prev + (newTouchesNumbers.length * mineLevel));
 
     setTouches((prevTouches: any) => [...prevTouches, ...newTouches]);
     setTouchesNumber((prevTouches: any) => [...prevTouches, ...newTouchesNumbers]);

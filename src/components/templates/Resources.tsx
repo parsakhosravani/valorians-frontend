@@ -23,9 +23,9 @@ export const Resources = () => {
   const [earnLevelEnergy, setEarnLevelEnergy] = useState(10);
   const [availableEnergy, setAvailableEnergy] = useState(12000);
 
-  const onConsumeEnergyHandler = () => {
+  const onConsumeEnergyHandler = (value:any) => {
     if (consumeEnergy !== availableEnergy) {
-      setConsumeEnergy(consumeEnergy + earnLevelEnergy);
+      setConsumeEnergy(value);
       setActiveResource((prevActiveResource) => ({
         ...prevActiveResource,
         count: prevActiveResource.count + earnLevelEnergy,
