@@ -16,6 +16,8 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   const [telegram, setTelegram] = useState<Telegram>()
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(initialUserProfileData);
+  const [progressBarStart, setProgressBarStart] = useState(0);
+
 
   // Start app
   useEffect(() => {
@@ -43,7 +45,9 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
     telegram,
     user,
     userProfile,
-    isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile
+    isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile,
+    progressBarStart,
+    setProgressBarStart,
   };
 
   return (

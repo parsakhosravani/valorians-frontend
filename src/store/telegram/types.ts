@@ -17,5 +17,7 @@ export interface TelegramContextType {
     telegram: any;
     user: TelegramUser;
     userProfile: TelegramUserProfile;
-    isMobile: boolean
+    isMobile: boolean,
+    progressBarStart: number,
+    setProgressBarStart: any,
 }
