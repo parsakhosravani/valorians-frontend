@@ -1,3 +1,4 @@
+"use client"
 import React, { FunctionComponent } from "react";
 import InviteLink from "../organisms/InviteLink";
 import bg from "~/images/background/friends.webp";
@@ -8,6 +9,7 @@ import viking from "~/images/friends/viking.png";
 import coin from "~/images/friends/coin.png";
 import Image from "next/image";
 import { TextImage } from "../molecules";
+import useBackButton from "@/hooks/useBackButton";
 
 
 const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
@@ -21,6 +23,7 @@ const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
 interface FriendsPropsType { }
 
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
+  useBackButton()
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">

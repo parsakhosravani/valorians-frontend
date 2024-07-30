@@ -43,8 +43,12 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   const isMobile = useMobilePlatform(telegram)
 
   const router = useRouter();
-  const navigateTo = (address: string) => {
-    telegram?.WebApp.BackButton.show();
+  const navigateTo = (address: string, actionType: 'on' | 'off' = 'on') => {
+    if (actionType === 'on') {
+      telegram?.WebApp.BackButton.show();
+    } else {
+      telegram?.WebApp.BackButton.hide();
+    }
     router.push(address as any);
   };
 

@@ -1,13 +1,16 @@
+"use client"
 import React, { FunctionComponent } from "react";
 import { BattleIcon } from "../atoms";
 
 import bg from "~/images/background/battle.webp";
 import Image from "next/image";
+import useBackButton from "@/hooks/useBackButton";
 
 
 interface BattlePropsType { }
 
 export const Battle: FunctionComponent<BattlePropsType> = () => {
+  useBackButton()
   return (
     <>
       <div className="flex flex-col items-center justify-center w-full h-full gap-1">

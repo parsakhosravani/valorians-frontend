@@ -5,6 +5,7 @@ import { ActiveResource, Skill } from "../organisms";
 import { useResourceContext } from "../../context/ResourceContext";
 import Image from "next/image";
 import { useTelegramContext } from "@/store/telegram/hook";
+import useBackButtonReset from "@/hooks/useBackButtonReset";
 
 export const Resources = () => {
   const {
@@ -39,9 +40,7 @@ export const Resources = () => {
     }
   };
 
-  useEffect(() => {
-    telegram?.WebApp.BackButton.hide();
-  }, []);
+  useBackButtonReset()
 
   return (
     <>
