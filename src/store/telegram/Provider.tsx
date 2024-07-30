@@ -23,7 +23,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   // Start app
   useEffect(() => {
     if (typeof window !== "undefined" && "Telegram" in window) {
-      const telgram = (window as any).Telegram;
+      const telegram = (window as any).Telegram;
       const miniApp = (window as any).Telegram.WebApp;
 
       // configs
