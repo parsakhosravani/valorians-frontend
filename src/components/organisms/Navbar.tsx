@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
 import { useTelegramContext } from "@/store/telegram/hook";
+import clsx from "clsx";
 
 type TNavbarItems = {
   icon: React.ReactElement<IconSvgProps>;
@@ -49,10 +50,12 @@ const navbarItems: TNavbarItems[] = [
 
 export const Navbar = () => {
   const pathname = usePathname();
-  const { navigateTo } = useTelegramContext();
+  const { navigateTo, telegram } = useTelegramContext();
 
   return (
-    <div className="max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0">
+    <div className={clsx("max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0",
+      telegram?.WebApp.platform === "ios" ? "pb-5" : "pb-0"
+    )}>
       {navbarItems.map((item) => (
         <div
           className="w-[50px] h-[50px]"
