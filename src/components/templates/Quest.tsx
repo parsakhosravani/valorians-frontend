@@ -1,6 +1,6 @@
 "use client";
-import React, { FunctionComponent } from "react";
-import InviteLink from "../organisms/InviteLink";
+
+import React, { FunctionComponent, useState } from "react";
 import bg from "~/images/background/friends.webp";
 import telegram from "~/images/social/telegram.png";
 import youtube from "~/images/social/youtube.png";
@@ -9,18 +9,32 @@ import population from "~/images/resources/population.webp";
 import populationPerHour from "~/images/resources/populationPerHour.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
-import { Coin, TextImage } from "../molecules";
+import { Coin, Drawer, TextImage } from "../molecules";
 import useBackButton from "@/hooks/useBackButton";
+import { Button } from "../atoms";
+
+enum DrawerContent {
+  TELEGRAM = "Join our Telegram Channel",
+  YOUTUBE = "Subscribe our Yotube Channel",
+  X = "Follow our X Account",
+}
 
 const socialLinks = [
-  { icon: telegram, title: "Join our Telegram Channel" },
-  { icon: youtube, title: "Subscribe our Yotube Channel" },
-  { icon: x, title: "Follow our X Account" },
+  { icon: telegram, title: DrawerContent.TELEGRAM },
+  { icon: youtube, title: DrawerContent.YOUTUBE },
+  { icon: x, title: DrawerContent.X },
 ];
+
 interface QuestPropsType {}
 
 export const Quest: FunctionComponent<QuestPropsType> = () => {
   useBackButton();
+  const [openDrawer, setOpenDrawer] = useState<DrawerContent | null>(null);
+
+  const handleDrawerOpen = (type: DrawerContent) => {
+    setOpenDrawer(type);
+  };
+
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
@@ -50,9 +64,15 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
           </div>
           <div className="grid gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
             {socialLinks.map((item) => (
-              <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-[#6393d4]/20 rounded-md">
+              <div
+                key={item.title}
+                className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-[#6393d4]/20 rounded-md"
+              >
                 <Image src={item.icon} width={34} height={34} alt="social" />
-                <div className="flex flex-col justify-start gap-[5px]">
+                <div
+                  onClick={() => handleDrawerOpen(item.title as DrawerContent)}
+                  className="flex flex-col justify-start gap-[5px]"
+                >
                   <div className="leading-none font-bold">{item.title}</div>
                   <div className="flex gap-3">
                     <Coin amount={1000} />
@@ -77,10 +97,49 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
             ))}
           </div>
         </div>
-
-        <InviteLink className="absolute bottom-[174px] w-[98%]" />
       </div>
+      <Drawer
+        position="bottom"
+        onClose={() => setOpenDrawer(null)}
+        isOpen={openDrawer !== null}
+      >
+        <div className="text-sm h-40 py-4 space-y-2">
+          {openDrawer === DrawerContent.TELEGRAM && (
+            <TextImage
+              direction="column"
+              imgSrc={socialLinks[0].icon}
+              imgAlt={socialLinks[0].title}
+              title={socialLinks[0].title}
+              size="large"
+              gap={8}
+            />
+          )}
+          {openDrawer === DrawerContent.YOUTUBE && (
+            <TextImage
+              direction="column"
+              imgSrc={socialLinks[1].icon}
+              imgAlt={socialLinks[1].title}
+              title={socialLinks[1].title}
+              size="large"
+              gap={8}
+            />
+          )}
+          {openDrawer === DrawerContent.X && (
+            <TextImage
+              direction="column"
+              imgSrc={socialLinks[2].icon}
+              imgAlt={socialLinks[2].title}
+              title={socialLinks[2].title}
+              size="large"
+              gap={8}
+            />
+          )}
+        </div>
 
+        <Button size="large" isFull>
+          Claim Reward
+        </Button>
+      </Drawer>
       <Image
         priority
         src={bg}

@@ -6,6 +6,7 @@ interface TextImageProps {
   title: string;
   size?: "small" | "medium" | "large";
   direction?: "row" | "column";
+  gap?: number | string;
 }
 
 export const TextImage: React.FC<TextImageProps> = ({
@@ -14,6 +15,7 @@ export const TextImage: React.FC<TextImageProps> = ({
   imgAlt,
   size = "medium",
   direction = "row",
+  gap = 1,
 }) => {
   const sizeClasses = {
     small: "text-[10px]",
@@ -31,7 +33,8 @@ export const TextImage: React.FC<TextImageProps> = ({
 
   return (
     <div
-      className={`flex font-bold gap-1 items-center justify-center  ${sizeClasses[size]} ${directionClass}`}
+      className={`flex font-bold items-center justify-center ${sizeClasses[size]} ${directionClass}`}
+      style={{ gap: typeof gap === "number" ? `${gap}px` : gap }}
     >
       <Image className={imageSizes[size]} src={imgSrc} alt={imgAlt} />
       <p className="whitespace-nowrap">{title.toLocaleUpperCase()}</p>

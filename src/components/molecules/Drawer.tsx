@@ -1,11 +1,12 @@
-import React, { ReactNode } from "react";
+"use client";
+import React, { ReactNode, useEffect, useRef } from "react";
 import { CloseIcon } from "../atoms";
 
 type DrawerPosition = "bottom" | "right" | "left";
 
 interface DrawerProps {
   isOpen: boolean;
-  title: string;
+  title?: string;
   position: DrawerPosition;
   children: ReactNode;
   onClose: () => void;
@@ -18,6 +19,25 @@ export const Drawer: React.FC<DrawerProps> = ({
   title,
   onClose,
 }) => {
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        drawerRef.current &&
+        !drawerRef.current.contains(event.target as Node) &&
+        isOpen
+      ) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, onClose]);
+
   const positionClasses = {
     bottom: "inset-x-0 bottom-0 h-auto",
     right: "inset-y-0 right-0 w-64",
@@ -28,6 +48,7 @@ export const Drawer: React.FC<DrawerProps> = ({
     <>
       {isOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40" />}
       <div
+        ref={drawerRef}
         className={`fixed bg-[#191F27]  shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
           positionClasses[position]
         } ${
