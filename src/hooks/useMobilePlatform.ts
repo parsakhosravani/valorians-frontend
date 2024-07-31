@@ -7,11 +7,11 @@ export default function useMobilePlatform(telegram: Telegram | any) {
 
   useEffect(() => {
     if (window) {
-      setIsMobile(
-        telegram?.WebApp?.platform === "ios" ||
-        telegram?.WebApp?.platform === "android" ||
-        telegram?.WebApp?.platform === "android_x"
-      );
+      // setIsMobile(
+      //   telegram?.WebApp?.platform === "ios" ||
+      //   telegram?.WebApp?.platform === "android" ||
+      //   telegram?.WebApp?.platform === "android_x"
+      // );
     }
   }, [telegram])
 
