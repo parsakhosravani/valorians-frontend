@@ -27,7 +27,7 @@ export const Intro = () => {
   return (
     <>
       <div className="h-full flex w-full items-end justify-center">
-        <div className="text-[#B1D7ED] bottom-0 flex h-52 flex-col justify-between rounded-tl-3xl rounded-tr-3xl px-[57px] pb-[33px] pt-[26px] backdrop-blur-sm">
+        <div className="text-[#B1D7ED] bottom-0 flex h-52 flex-col justify-between rounded-tl-3xl rounded-tr-3xl px-[57px] pb-[33px] pt-[26px]">
           <div className="text-4xl font-[900] leading-none text-center whitespace-nowrap">
             Valorians Legend
           </div>
@@ -83,7 +83,7 @@ export const Intro = () => {
         priority
         src={bg}
         alt={"intro"}
-        className="absolute h-full top-0 left-0 w-full -z-10 object-cover opacity-[0.15]"
+        className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
       />
     </>
   );

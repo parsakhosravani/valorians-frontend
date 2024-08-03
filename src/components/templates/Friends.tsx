@@ -25,7 +25,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
-        <div className="bg-[#6393d4]/20 min-h-[100px] w-full flex justify-end rounded-[5px]">
+        <div className="bg-buildingBg backdrop-blur-xs min-h-[100px] w-full flex justify-end rounded-[5px]">
           <div className="w-2/6 flex flex-col justify-start relative">
             <Image
               src={viking}
@@ -63,7 +63,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
           </div>
           <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
             {[...Array(60)].map((_, index) => (
-              <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-[#6393d4]/20 rounded-md">
+              <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md">
                 <Image src={avatar} width={34} height={34} alt="avatar" />
                 <div className="flex flex-col justify-start gap-[5px]">
                   <div className="leading-none font-bold">Parsa</div>

@@ -53,14 +53,17 @@ export const Navbar = () => {
   const { navigateTo, telegram } = useTelegramContext();
 
   return (
-    <div className={clsx("max-w-[400px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0",
-      telegram?.WebApp.platform === "ios" ? "pb-5" : "pb-0"
-    )}>
+    <div
+      className={clsx(
+        "max-w-[425px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0",
+        telegram?.WebApp.platform === "ios" ? "pb-5" : "pb-0"
+      )}
+    >
       {navbarItems.map((item) => (
         <div
           className="w-[50px] h-[50px]"
           key={item.name}
-          onTouchStart={() => navigateTo(item.link, "on")}
+          onClick={() => navigateTo(item.link, "on")}
         >
           <div
             style={{

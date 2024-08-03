@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import React, { FunctionComponent } from "react";
 import { Building } from "../organisms";
 import mainBuilding from "~/images/building/mainBuilding.webp";
@@ -8,7 +8,7 @@ import bg from "~/images/background/tribe.webp";
 import Image from "next/image";
 import useBackButton from "@/hooks/useBackButton";
 
-interface TribePropsType { }
+interface TribePropsType {}
 
 export const Tribe: FunctionComponent<TribePropsType> = () => {
   const buildings = [mainBuilding, barracksBuilding, resourcesBuilding];
@@ -17,7 +17,7 @@ export const Tribe: FunctionComponent<TribePropsType> = () => {
     return buildings[Math.floor(Math.random() * buildings.length)];
   };
 
-  useBackButton()
+  useBackButton();
 
   return (
     <>
@@ -34,7 +34,7 @@ export const Tribe: FunctionComponent<TribePropsType> = () => {
       <Image
         priority
         src={bg}
-        alt={'intro'}
+        alt={"intro"}
         className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
       />
     </>

@@ -21,7 +21,7 @@ export const Main = ({
   if (isMobile) {
     if (pathname !== "/") {
       return (
-        <div className="px-4 text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
+        <div className="text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
           <Header />
           <main className="w-full flex-1 flex justify-center items-center pb-[84px]">
             {children}
@@ -31,8 +31,8 @@ export const Main = ({
       );
     } else {
       return (
-        <div className="px-4 text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
-          <main className="w-full flex-1 flex justify-center items-end pb-[84px]">
+        <div className=" text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
+          <main className="w-full flex-1 flex justify-center items-end ">
             {children}
           </main>
         </div>

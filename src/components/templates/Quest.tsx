@@ -38,7 +38,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
-        <div className="bg-[#6393d4]/20 min-h-[100px] w-full flex justify-end rounded-[5px]">
+        <div className="bg-buildingBg backdrop-blur-xs min-h-[100px] w-full flex justify-end rounded-[5px]">
           <div className="w-2/6 flex flex-col justify-start relative">
             <Image
               src={viking}
@@ -66,7 +66,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
             {socialLinks.map((item) => (
               <div
                 key={item.title}
-                className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-[#6393d4]/20 rounded-md"
+                className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md"
               >
                 <Image src={item.icon} width={34} height={34} alt="social" />
                 <div
