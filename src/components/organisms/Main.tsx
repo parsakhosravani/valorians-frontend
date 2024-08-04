@@ -1,6 +1,6 @@
 "use client";
 
-import { useTelegramContext } from "@/store/telegram/hook";
+import { useTelegramContext } from "@/context";
 import { QrCode } from "../templates";
 import { Header } from "./Header";
 import { Navbar } from "./Navbar";

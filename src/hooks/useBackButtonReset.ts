@@ -1,8 +1,8 @@
-import { useTelegramContext } from "@/store/telegram/hook";
-import { useEffect } from "react"
+import { useTelegramContext } from "@/context";
+import { useEffect } from "react";
 
 export default function useBackButtonReset() {
-  const { telegram } = useTelegramContext()
+  const { telegram } = useTelegramContext();
   useEffect(() => {
     telegram?.WebApp.BackButton.hide();
   }, []);

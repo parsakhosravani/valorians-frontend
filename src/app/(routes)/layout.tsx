@@ -2,7 +2,7 @@ import "@/styles/globals.css";
 import type { Metadata } from "next";
 import { Main } from "@/components";
 import { Providers } from "../providers";
-import { ResourceProvider } from "@/context/ResourceContext";
+import { ResourceProvider } from "@/context/resource/ResourceContext";
 import { Toaster } from "react-hot-toast";
 
 import GoogleScript from "@/scripts/GoogleScript";

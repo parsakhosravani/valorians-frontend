@@ -7,7 +7,7 @@ import bg from "~/images/background/intro.webp";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { useTelegramContext } from "@/store/telegram/hook";
+import { useTelegramContext } from "@/context";
 
 export const Intro = () => {
   const { progressBarStart, setProgressBarStart } = useTelegramContext();

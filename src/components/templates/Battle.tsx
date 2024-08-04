@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import React, { FunctionComponent } from "react";
 import { BattleIcon } from "../atoms";
 
@@ -6,11 +6,10 @@ import bg from "~/images/background/battle.webp";
 import Image from "next/image";
 import useBackButton from "@/hooks/useBackButton";
 
-
-interface BattlePropsType { }
+interface BattlePropsType {}
 
 export const Battle: FunctionComponent<BattlePropsType> = () => {
-  useBackButton()
+  useBackButton();
   return (
     <>
       <div className="flex flex-col items-center justify-center w-full h-full gap-1">
@@ -22,7 +21,7 @@ export const Battle: FunctionComponent<BattlePropsType> = () => {
       <Image
         priority
         src={bg}
-        alt={'battle'}
+        alt={"battle"}
         className="absolute h-full top-0 left-0 w-full -z-10 object-cover "
       />
     </>

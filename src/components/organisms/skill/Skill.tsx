@@ -12,7 +12,7 @@ import { Capacity, Drawer } from "../../molecules";
 import { FullEnergyDrawerContent } from "./FullEnergyDrawerContent";
 import { EnergyCapacityDrawerContent } from "./EnergyCapacityDrawerContent";
 import { EarnMoreDrawerContent } from "./EarnMoreDrawerContent";
-import { TResource } from "@/context/ResourceContext";
+import { TResource } from "@/context/resource/ResourceContext";
 
 interface SkillProps {
   availableEnergy: number;

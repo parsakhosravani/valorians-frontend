@@ -2,8 +2,8 @@
 
 import React from "react";
 import { Coin, Population, User } from "../molecules";
-import { Resource } from "./Resource";
-import { useResourceContext } from "../../context/ResourceContext";
+import { Resource } from "./resource/Resource";
+import { useResourceContext } from "../../context/resource/ResourceContext";
 import { usePathname } from "next/navigation";
 
 export const Header: React.FC = () => {

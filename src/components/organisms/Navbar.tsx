@@ -8,11 +8,10 @@ import {
   TribeIcon,
   BattleIcon,
 } from "../atoms";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
-import { useTelegramContext } from "@/store/telegram/hook";
 import clsx from "clsx";
+import { useTelegramContext } from "@/context";
 
 type TNavbarItems = {
   icon: React.ReactElement<IconSvgProps>;

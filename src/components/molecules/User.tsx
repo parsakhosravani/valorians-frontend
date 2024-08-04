@@ -1,5 +1,5 @@
 "use client";
-import { useTelegramContext } from "@/store/telegram/hook";
+import { useTelegramContext } from "@/context";
 import Image from "next/image";
 import avatar from "~/images/avatar.webp";
 
