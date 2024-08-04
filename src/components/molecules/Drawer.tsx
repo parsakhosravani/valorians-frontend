@@ -49,7 +49,7 @@ export const Drawer: React.FC<DrawerProps> = ({
       {isOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40" />}
       <div
         ref={drawerRef}
-        className={`fixed bg-[#191F27]  shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
+        className={`fixed bg-[#191F27] max-w-md mx-auto w-full shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
           positionClasses[position]
         } ${
           isOpen
