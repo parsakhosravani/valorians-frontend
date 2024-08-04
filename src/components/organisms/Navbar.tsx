@@ -55,7 +55,7 @@ export const Navbar = () => {
   return (
     <div
       className={clsx(
-        "max-w-[425px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0",
+        "max-w-[450px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0",
         telegram?.WebApp.platform === "ios" ? "pb-5" : "pb-0"
       )}
     >
