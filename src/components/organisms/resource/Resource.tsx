@@ -1,6 +1,7 @@
 import React, { FunctionComponent } from "react";
 import { ProgressBar, TextImage } from "../../molecules";
 import { TResource } from "@/context/resource/ResourceContext";
+import { Col, Row, Text } from "@/components/atoms";
 
 interface resourcePropsType {
   resourceData: TResource;
@@ -33,24 +34,26 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         onChangeResourceHandler(resourceData);
       }}
     >
-      <TextImage
-        imgAlt={resourceData.name}
-        imgSrc={resourceData.img}
-        title={resourceData.name}
-      />
-      <div className="flex flex-col justify-between w-full gap-[2px]">
-        <div className="text-center text-xs font-semibold">
+      <Row className="justify-center">
+        <TextImage
+          imgAlt={resourceData.name}
+          imgSrc={resourceData.img}
+          title={resourceData.name}
+        />
+      </Row>
+      <Col className="gap-1 text-red-50 text-center">
+        <Text color={isActive ? "dark" : "white"} size="tiny">
           {resourceData.count.toLocaleString("en-US")}
-        </div>
+        </Text>
         <ProgressBar
           size="small"
           value={resourceData.count}
           totalValue={resourceCapacity}
         />
-        <div className="text-center text-[8px] w-full font-semibold">
+        <Text color={isActive ? "dark" : "white"} size="tiny">
           +100 per hour
-        </div>
-      </div>
+        </Text>
+      </Col>
     </div>
   );
 };

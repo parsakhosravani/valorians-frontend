@@ -1,21 +1,27 @@
 import Image, { StaticImageData } from "next/image";
 
-interface TextImageProps {
+type TextImagePropsBase = {
   imgSrc: StaticImageData;
   imgAlt: string;
-  title: string;
   size?: "small" | "medium" | "large";
   direction?: "row" | "column";
   gap?: number | string;
-}
+};
+
+type TextImageProps = TextImagePropsBase &
+  (
+    | { title: string; children?: never }
+    | { title?: never; children: React.ReactNode }
+  );
 
 export const TextImage: React.FC<TextImageProps> = ({
   imgSrc,
-  title,
   imgAlt,
+  title,
+  children,
   size = "medium",
   direction = "row",
-  gap = 1,
+  gap = 2,
 }) => {
   const sizeClasses = {
     small: "text-[10px]",
@@ -24,20 +30,20 @@ export const TextImage: React.FC<TextImageProps> = ({
   };
 
   const imageSizes = {
-    small: "h-[12px] w-[12px]",
+    small: "h-[14px] w-[14px]",
     medium: "h-[18px] w-[18px]",
-    large: "h-[85px] w-[85px]",
+    large: "h-[130px] w-[130px]",
   };
 
   const directionClass = direction === "column" ? "flex-col" : "flex-row";
 
   return (
     <div
-      className={`flex font-bold items-center justify-center ${sizeClasses[size]} ${directionClass}`}
+      className={`flex ${sizeClasses[size]} ${directionClass}`}
       style={{ gap: typeof gap === "number" ? `${gap}px` : gap }}
     >
       <Image className={imageSizes[size]} src={imgSrc} alt={imgAlt} />
-      <p className="whitespace-nowrap">{title.toLocaleUpperCase()}</p>
+      {title ? <p className="whitespace-nowrap">{title}</p> : children}
     </div>
   );
 };

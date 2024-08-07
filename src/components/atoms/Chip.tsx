@@ -17,7 +17,9 @@ export const Chip: React.FC<ChipProps> = ({ label, color = "primary" }) => {
   };
 
   return (
-    <div className={`text-[10px] ${baseClasses} ${colorClasses[color]}`}>
+    <div
+      className={`text-[10px] font-normal ${baseClasses} ${colorClasses[color]}`}
+    >
       {label}
     </div>
   );

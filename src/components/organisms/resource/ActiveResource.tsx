@@ -5,6 +5,7 @@ import { Capacity, ProgressBar } from "../../molecules";
 import Image from "next/image";
 import { TResource } from "@/context/resource/ResourceContext";
 import { useTelegramContext } from "@/context";
+import { Col } from "@/components/atoms";
 
 interface ActiveResource {
   activeResource: TResource;
@@ -83,7 +84,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         </div>
       ))}
 
-      <div className="flex w-full items-center flex-col relative">
+      <Col className=" items-center relative">
         <Capacity
           size="large"
           value={activeResource.count}
@@ -121,7 +122,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
             {activeResource?.name.toUpperCase()}
           </h1>
         </div>
-      </div>
+      </Col>
     </>
   );
 };

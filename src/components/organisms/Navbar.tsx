@@ -7,11 +7,15 @@ import {
   ResourcesIcon,
   TribeIcon,
   BattleIcon,
+  Col,
+  Text,
+  Row,
 } from "../atoms";
 import { usePathname } from "next/navigation";
 import React from "react";
 import clsx from "clsx";
 import { useTelegramContext } from "@/context";
+import Link from "next/link";
 
 type TNavbarItems = {
   icon: React.ReactElement<IconSvgProps>;
@@ -49,35 +53,30 @@ const navbarItems: TNavbarItems[] = [
 
 export const Navbar = () => {
   const pathname = usePathname();
-  const { navigateTo, telegram } = useTelegramContext();
+  const { telegram } = useTelegramContext();
 
   return (
-    <div
+    <Row
       className={clsx(
-        "max-w-[450px] mx-auto text-[11px] border-t-2 border-[#019AF0] flex px-6 items-center justify-between bg-[#191F27] w-full min-h-[60px] pt-3 rounded-t-3xl fixed bottom-0",
+        "max-w-[450px] border-t-2 border-[#019AF0] px-6 justify-between bg-[#191F27] w-full pt-3 rounded-t-3xl fixed bottom-0",
         telegram?.WebApp.platform === "ios" ? "pb-5" : "pb-0"
       )}
     >
       {navbarItems.map((item) => (
-        <div
-          className="w-[50px] h-[50px]"
-          key={item.name}
-          onClick={() => navigateTo(item.link, "on")}
-        >
-          <div
-            style={{
-              cursor: "pointer",
-              color: item.link === pathname ? "#FFF" : "#8C8F93",
-            }}
-            className="flex flex-col justify-center items-center gap-1 flex-1 text-[#8C8F93]"
-          >
+        <Link className="w-[50px] h-[50px]" key={item.name} href={item.link}>
+          <Col className=" items-center gap-1 text-[#8C8F93]">
             {React.cloneElement(item.icon, {
               fill: item.link === pathname ? "#FFF" : "#8C8F93",
             })}
-            <p>{item.name}</p>
-          </div>
-        </div>
+            <Text
+              size="tiny"
+              color={item.link === pathname ? "white" : "primary"}
+            >
+              {item.name}
+            </Text>
+          </Col>
+        </Link>
       ))}
-    </div>
+    </Row>
   );
 };

@@ -1,32 +1,24 @@
-"use client";
 import React, { FunctionComponent } from "react";
-import { Building } from "../organisms";
-import mainBuilding from "~/images/building/mainBuilding.webp";
-import barracksBuilding from "~/images/building/barracksBuilding.webp";
-import resourcesBuilding from "~/images/building/resourcesBuilding.webp";
+import { Builder, Building } from "../organisms";
 import bg from "~/images/background/tribe.webp";
-import Image from "next/image";
-import useBackButton from "@/hooks/useBackButton";
+import Image, { StaticImageData } from "next/image";
 
-interface TribePropsType {}
+export type TBuilding = {
+  name: string;
+  src: StaticImageData;
+};
+interface TribePropsType {
+  buildings: TBuilding[];
+}
 
-export const Tribe: FunctionComponent<TribePropsType> = () => {
-  const buildings = [mainBuilding, barracksBuilding, resourcesBuilding];
-
-  const getRandomBuilding = () => {
-    return buildings[Math.floor(Math.random() * buildings.length)];
-  };
-
-  useBackButton();
-
+export const Tribe: FunctionComponent<TribePropsType> = ({ buildings }) => {
   return (
     <>
       <div className="m-2 my-0 h-auto">
-        <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[85svh] pb-10">
-          {[...Array(20)].map((_, index) => (
-            <div key={index}>
-              <Building buidling={getRandomBuilding()} />
-            </div>
+        <Builder />
+        <div className="space-y-2 scrollable max-h-[80svh]">
+          {buildings.map((item, index) => (
+            <Building key={index} buidling={item} />
           ))}
         </div>
       </div>

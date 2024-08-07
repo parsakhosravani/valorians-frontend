@@ -1,29 +1,35 @@
-import React, { FunctionComponent } from "react";
+import { FunctionComponent } from "react";
 import population from "~/images/resources/population.webp";
-import populationPerHour from "~/images/resources/populationPerHour.webp";
 import { TextImage } from "./TextImage";
+import { Col, Row, Text } from "../atoms";
 
 interface PopulationPropsType {}
 
 export const Population: FunctionComponent<PopulationPropsType> = () => {
   return (
-    <div className="bg-[#212F42] p-1 rounded-md flex-1 flex h-full">
-      <div className="flex flex-col justify-center items-center w-1/2">
+    <Row className="bg-[#212F42]  rounded-md flex-1 h-full">
+      <Col className="items-center w-1/2">
+        <Text size="tiny" color="gray">
+          population growth
+        </Text>
         <TextImage
           size="small"
           imgSrc={population}
           imgAlt="population"
           title="100"
         />
-      </div>
-      <div className="flex flex-col justify-center items-center w-1/2">
+      </Col>
+      <Col className="items-center w-1/2 border-l-2 border-[#191F27]">
+        <Text size="tiny" color="gray">
+          population
+        </Text>
         <TextImage
           size="small"
-          imgSrc={populationPerHour}
+          imgSrc={population}
           imgAlt="populationPerHour"
           title="+100"
         />
-      </div>
-    </div>
+      </Col>
+    </Row>
   );
 };

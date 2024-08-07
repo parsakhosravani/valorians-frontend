@@ -3,7 +3,6 @@ import React, { FunctionComponent } from "react";
 import InviteLink from "../organisms/InviteLink";
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
-import populationPerHour from "~/images/resources/populationPerHour.webp";
 import avatar from "~/images/avatar.webp";
 import viking from "~/images/friends/viking.png";
 import Image from "next/image";
@@ -70,7 +69,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
                   <div className="flex gap-3">
                     <TextImage
                       direction="row"
-                      imgSrc={populationPerHour}
+                      imgSrc={population}
                       imgAlt="building"
                       title="+100"
                       size="small"

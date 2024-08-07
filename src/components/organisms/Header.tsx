@@ -5,6 +5,7 @@ import { Coin, Population, User } from "../molecules";
 import { Resource } from "./resource/Resource";
 import { useResourceContext } from "../../context/resource/ResourceContext";
 import { usePathname } from "next/navigation";
+import { Row } from "../atoms";
 
 export const Header: React.FC = () => {
   const {
@@ -26,7 +27,7 @@ export const Header: React.FC = () => {
       </div>
 
       {pathname === "/resources" && (
-        <div className="items-center justify-between w-full gap-2 flex pb-2">
+        <Row className="gap-2">
           {resources.map((item) => (
             <Resource
               key={item.id}
@@ -36,7 +37,7 @@ export const Header: React.FC = () => {
               onChangeResource={() => setActiveResource(item)}
             />
           ))}
-        </div>
+        </Row>
       )}
     </header>
   );

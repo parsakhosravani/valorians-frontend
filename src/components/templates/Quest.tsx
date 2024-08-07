@@ -6,12 +6,11 @@ import telegram from "~/images/social/telegram.png";
 import youtube from "~/images/social/youtube.png";
 import x from "~/images/social/x.png";
 import population from "~/images/resources/population.webp";
-import populationPerHour from "~/images/resources/populationPerHour.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
 import { Coin, Drawer, TextImage } from "../molecules";
 import useBackButton from "@/hooks/useBackButton";
-import { Button } from "../atoms";
+import { Button, Row } from "../atoms";
 
 enum DrawerContent {
   TELEGRAM = "Join our Telegram Channel",
@@ -86,7 +85,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
                     />
                     <TextImage
                       direction="row"
-                      imgSrc={populationPerHour}
+                      imgSrc={population}
                       imgAlt="populationPerHour"
                       title="+4"
                       size="small"
@@ -103,7 +102,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
         onClose={() => setOpenDrawer(null)}
         isOpen={openDrawer !== null}
       >
-        <div className="text-sm h-40 py-4 space-y-2">
+        <Row className="pb-4 justify-center">
           {openDrawer === DrawerContent.TELEGRAM && (
             <TextImage
               direction="column"
@@ -111,7 +110,6 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               imgAlt={socialLinks[0].title}
               title={socialLinks[0].title}
               size="large"
-              gap={8}
             />
           )}
           {openDrawer === DrawerContent.YOUTUBE && (
@@ -121,7 +119,6 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               imgAlt={socialLinks[1].title}
               title={socialLinks[1].title}
               size="large"
-              gap={8}
             />
           )}
           {openDrawer === DrawerContent.X && (
@@ -131,10 +128,9 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               imgAlt={socialLinks[2].title}
               title={socialLinks[2].title}
               size="large"
-              gap={8}
             />
           )}
-        </div>
+        </Row>
 
         <Button size="large" isFull>
           Claim Reward
