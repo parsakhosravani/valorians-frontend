@@ -23,7 +23,7 @@ export const Main = ({
       return (
         <div className="text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
           <Header />
-          <main className="container justify-center items-center">
+          <main className="w-full flex-1 flex justify-center items-center pb-[84px]">
             {children}
           </main>
           <Navbar />
@@ -32,7 +32,7 @@ export const Main = ({
     } else {
       return (
         <div className=" text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
-          <main className="container justify-center items-center">
+          <main className="w-full flex-1 flex justify-center items-end ">
             {children}
           </main>
         </div>
