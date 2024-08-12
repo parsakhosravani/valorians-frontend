@@ -71,9 +71,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           )}
           style={{ left: `${touch.x}px`, top: `${touch.y}px` }}
         >
-          {activeResource.count > resourceCapacity
-            ? "NO CAPACITY!"
-            : `+${mineLevel}`}
+          {activeResource.count < resourceCapacity && `+${mineLevel}`}
         </div>
       ))}
 
@@ -102,7 +100,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
             <div
               className={clsx(
                 "w-full h-full group-active:animate-[scale_0.3s_ease-in-out]",
-                activeResource.count === resourceCapacity &&
+                activeResource.count > resourceCapacity &&
                   "opacity-[.5] group-active:animate-none"
               )}
             >
