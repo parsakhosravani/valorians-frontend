@@ -4,7 +4,7 @@ import { option, responder, targetPoint } from "@/app/api/config";
 export async function GET(request: NextRequest) {
   const body = await request.json();
 
-  const endPointUrl = targetPoint(`user/game/userAssets`);
+  const endPointUrl = targetPoint(`/userAssets`);
   const serverResponse = await fetch(endPointUrl, option("GET", body));
 
   return responder(serverResponse);
