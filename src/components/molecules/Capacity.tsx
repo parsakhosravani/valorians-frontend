@@ -1,9 +1,10 @@
 import clsx from "clsx";
+import { Row } from "../atoms";
 
 interface CapacityProps {
   value: number;
   totalValue: number;
-  size?: "small" | "medium" | "large";
+  size?: "tiny" | "small" | "medium" | "large";
 }
 
 export const Capacity: React.FC<CapacityProps> = ({
@@ -12,17 +13,20 @@ export const Capacity: React.FC<CapacityProps> = ({
   totalValue,
 }) => {
   const fontSizeClasses = {
+    tiny: "text-[10px]",
     small: "text-sm",
     medium: "text-lg",
     large: "text-[38px]",
   };
 
   return (
-    <div className={`flex gap-1 font-bold ${fontSizeClasses[size]}`}>
-      <p className={clsx(value === totalValue && "text-[#F72214]")}>
-        {value.toLocaleString("en-US")}
+    <Row className={`flex gap-1 font-bold ${fontSizeClasses[size]}`}>
+      <p className={clsx(value > totalValue && "text-[#F72214]")}>
+        {value < totalValue
+          ? value.toLocaleString("en-US")
+          : totalValue.toLocaleString("en-US")}
       </p>
       /<p>{totalValue.toLocaleString("en-US")}</p>
-    </div>
+    </Row>
   );
 };

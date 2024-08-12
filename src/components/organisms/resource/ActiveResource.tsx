@@ -3,26 +3,22 @@ import { useState } from "react";
 import clsx from "clsx";
 import { Capacity, ProgressBar } from "../../molecules";
 import Image from "next/image";
-import { TResource } from "@/context/resource/ResourceContext";
-import { useTelegramContext } from "@/context";
 import { Col } from "@/components/atoms";
+import { useResourceContext, useTelegramContext } from "@/context";
 
 interface ActiveResource {
-  activeResource: TResource;
   onConsumeEnergy: any;
   mineLevel: number;
-  resourceCapacity: number;
 }
 
 export const ActiveResource: React.FC<ActiveResource> = ({
-  activeResource,
   onConsumeEnergy,
-  resourceCapacity,
   mineLevel,
 }) => {
   const { telegram } = useTelegramContext();
   const [touches, setTouches] = useState<any>([]);
   const [touchesNumber, setTouchesNumber] = useState<any>([]);
+  const { activeResource, resourceCapacity } = useResourceContext();
 
   const handleTouch = (event: any) => {
     telegram?.WebApp.HapticFeedback.impactOccurred("soft");
@@ -37,30 +33,31 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         y: touch.clientY - 70,
       })
     );
-
-    activeResource.count += newTouchesNumbers.length * mineLevel;
-    onConsumeEnergy((prev: any) => prev + newTouchesNumbers.length * mineLevel);
-
+    activeResource.count < resourceCapacity &&
+      onConsumeEnergy(
+        (prev: any) => prev + newTouchesNumbers.length * mineLevel
+      );
     setTouches((prevTouches: any) => [...prevTouches, ...newTouches]);
     setTouchesNumber((prevTouches: any) => [
       ...prevTouches,
       ...newTouchesNumbers,
     ]);
 
-    // Remove the touch element after the animation is done
+    //TIP: Remove the touch element after the animation is done
     setTimeout(() => {
       setTouches((prevTouches: any) =>
         prevTouches.filter((t: any) => !newTouches.some((nt) => nt.id === t.id))
       );
-    }, 20); // Match this duration with the animation duration
+    }, 20);
+
+    //TIP: Match this duration with the animation duration
     setTimeout(() => {
       setTouchesNumber((prevTouches: any) =>
         prevTouches.filter(
           (t: any) => !newTouchesNumbers.some((nt) => nt.id === t.id)
         )
       );
-    }, 300); // Match this duration with the animation duration
-    // Match this duration with the animation duration
+    }, 300);
   };
 
   return (
@@ -70,17 +67,13 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           key={touch.id}
           className={clsx(
             "touch-element z-[2] font-medium absolute  text-white animation-touch-coin",
-            // resourceCapacity >= earn_per_tap || isLastTouch
             true ? "text-4xl" : "text-sm"
           )}
           style={{ left: `${touch.x}px`, top: `${touch.y}px` }}
         >
-          {
-            // resourceCapacity >= earn_per_tap || isLastTouch
-            activeResource.count === resourceCapacity
-              ? "NO CAPACITY!"
-              : `+${mineLevel}`
-          }
+          {activeResource.count > resourceCapacity
+            ? "NO CAPACITY!"
+            : `+${mineLevel}`}
         </div>
       ))}
 
@@ -96,7 +89,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           totalValue={resourceCapacity}
         />
 
-        {activeResource.count === resourceCapacity && (
+        {activeResource.count >= resourceCapacity && (
           <p className="border p-2 bg-[#191F27] rounded text-xs absolute top-[72px]  border-[#F72214]">
             The {activeResource.name} warehouse is full
           </p>
@@ -118,7 +111,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           </div>
         </div>
         <div style={{ backgroundImage: `url(${activeResource.bg})` }}>
-          <h1 className="text-[40px] font-bold">
+          <h1 className="text-4xl font-bold">
             {activeResource?.name.toUpperCase()}
           </h1>
         </div>

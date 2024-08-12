@@ -8,7 +8,7 @@ import time from "~/images/resources/time.webp";
 import population from "~/images/resources/population.webp";
 
 import { StaticImageData } from "next/image";
-import { Chip, Row, Text } from "@/components/atoms";
+import { Chip, Col, Row, Text } from "@/components/atoms";
 import { TBuilding } from "@/components/templates";
 
 interface BuildingProps {
@@ -47,50 +47,56 @@ const buildingCost: TBuildingCost[] = [
 
 export const Building: React.FC<BuildingProps> = ({ buidling }) => {
   return (
-    <div className="p-2 bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] flex items-center">
-      <div>
-        <div className="-mt-1">
-          <Chip color="primary" label="Level 1" />
-        </div>
-        <TextImage
-          direction="row"
-          imgSrc={buidling.src}
-          imgAlt="building"
-          size="large"
-          gap={20}
-        >
-          <div>
-            <Row className="justify-between">
-              <h2 className="text-sm font-bold">{buidling.name}</h2>
-              <TextImage imgSrc={time} imgAlt={"time cost"} title={"10s"} />
-            </Row>
+    <Col className="bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] p-2 items-center">
+      <TextImage
+        direction="row"
+        imgSrc={buidling.src}
+        imgAlt="building"
+        size="large"
+        gap={20}
+      >
+        <Col className="justify-center gap-1">
+          <Row className="justify-between items-center">
+            <h2 className="text-lg font-bold">{buidling.name}</h2>
+            <TextImage
+              imgSrc={time}
+              imgAlt={"time cost"}
+              title={"10s"}
+              size="small"
+            />
+          </Row>
+          <Col>
             <Text color="gray" size="tiny">
               upgrade cost:
             </Text>
-            <div className="flex flex-wrap gap-2">
+            <Row className="flex-wrap gap-1">
               {buildingCost.map((item, index) => (
-                <div className="">
-                  <TextImage
-                    key={index}
-                    imgSrc={item.resource}
-                    imgAlt={item.value}
-                    title={item.value}
-                  />
-                </div>
+                <TextImage
+                  key={index}
+                  imgSrc={item.resource}
+                  imgAlt={item.value}
+                  title={item.value}
+                  size="small"
+                />
               ))}
-            </div>
+            </Row>
+          </Col>
+          <Col>
             <Text color="gray" size="tiny">
               your benefit:
             </Text>
-            <TextImage
-              imgSrc={population}
-              imgAlt="populationPerHour"
-              title="+2 growth per hour"
-              size="small"
-            />
-          </div>
-        </TextImage>
-      </div>
-    </div>
+            <Row className="justify-between">
+              <TextImage
+                imgSrc={population}
+                imgAlt="populationPerHour"
+                title="+2 growth per hour"
+                size="small"
+              />
+              <Chip color="primary" label="1" />
+            </Row>
+          </Col>
+        </Col>
+      </TextImage>
+    </Col>
   );
 };

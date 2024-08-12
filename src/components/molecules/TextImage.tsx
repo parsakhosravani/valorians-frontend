@@ -32,7 +32,7 @@ export const TextImage: React.FC<TextImageProps> = ({
   const imageSizes = {
     small: "h-[14px] w-[14px]",
     medium: "h-[18px] w-[18px]",
-    large: "h-[130px] w-[130px]",
+    large: "h-[120px] w-[120px]",
   };
 
   const directionClass = direction === "column" ? "flex-col" : "flex-row";

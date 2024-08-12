@@ -2,6 +2,7 @@ import React, { FunctionComponent } from "react";
 import { Builder, Building } from "../organisms";
 import bg from "~/images/background/tribe.webp";
 import Image, { StaticImageData } from "next/image";
+import { Col } from "../atoms";
 
 export type TBuilding = {
   name: string;
@@ -14,14 +15,14 @@ interface TribePropsType {
 export const Tribe: FunctionComponent<TribePropsType> = ({ buildings }) => {
   return (
     <>
-      <div className="m-2 my-0 h-auto">
+      <Col className="m-2 my-0">
         <Builder />
-        <div className="space-y-2 scrollable max-h-[80svh]">
+        <div className="gap-2.5 space-y-2 w-full overflow-y-auto scrollable max-h-[85svh] pb-32">
           {buildings.map((item, index) => (
             <Building key={index} buidling={item} />
           ))}
         </div>
-      </div>
+      </Col>
 
       <Image
         priority

@@ -7,7 +7,7 @@ interface PopulationPropsType {}
 
 export const Population: FunctionComponent<PopulationPropsType> = () => {
   return (
-    <Row className="bg-[#212F42]  rounded-md flex-1 h-full">
+    <Row className="bg-[#212F42]  rounded flex-1 h-full">
       <Col className="items-center w-1/2">
         <Text size="tiny" color="gray">
           population growth

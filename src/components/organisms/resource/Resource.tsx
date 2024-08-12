@@ -5,9 +5,9 @@ import { Col, Row, Text } from "@/components/atoms";
 
 interface resourcePropsType {
   resourceData: TResource;
-  isActive: boolean;
+  isActive?: boolean;
   resourceCapacity: number;
-  onChangeResource: (resourceData: TResource) => void;
+  onChangeResource?: (resourceData: TResource) => void;
 }
 
 export const Resource: FunctionComponent<resourcePropsType> = ({
@@ -31,7 +31,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
             }
       }
       onClick={() => {
-        onChangeResourceHandler(resourceData);
+        onChangeResourceHandler && onChangeResourceHandler(resourceData);
       }}
     >
       <Row className="justify-center">
@@ -43,8 +43,11 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
       </Row>
       <Col className="gap-1 text-red-50 text-center">
         <Text color={isActive ? "dark" : "white"} size="tiny">
-          {resourceData.count.toLocaleString("en-US")}
+          {resourceData.count < resourceCapacity
+            ? resourceData.count.toLocaleString("en-US")
+            : resourceCapacity.toLocaleString("en-US")}
         </Text>
+
         <ProgressBar
           size="small"
           value={resourceData.count}

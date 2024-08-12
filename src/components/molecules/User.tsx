@@ -11,7 +11,9 @@ export const User = () => {
       <Image className="rounded h-7 w-7" alt="avatar" src={avatar} />
       <div className="flex flex-col">
         <div className="text-center text-white text-[12px] font-bold">
-          {user?.username}
+          <div className="text-center text-white text-[12px] font-bold">
+            {`${user?.username?.slice(0, 8)}...`}
+          </div>
         </div>
         <div className="text-neutral-400 text-[10px]">Rank 1000</div>
       </div>

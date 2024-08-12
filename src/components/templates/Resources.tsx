@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { ActiveResource, Skill } from "../organisms";
-import { useResourceContext } from "../../context/resource/ResourceContext";
 import Image from "next/image";
+import { useResourceContext } from "@/context";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
+import { ActiveResource, Skill } from "../organisms";
 
 export const Resources = () => {
   const {
@@ -12,10 +12,10 @@ export const Resources = () => {
     setResources,
     activeResource,
     setActiveResource,
-    resourceCapacity,
     coin,
     setCoin,
   } = useResourceContext();
+
   const [consumeEnergy, setConsumeEnergy] = useState(0);
   const [earnLevelEnergy, setEarnLevelEnergy] = useState(10);
   const [availableEnergy, setAvailableEnergy] = useState(12000);
@@ -44,9 +44,7 @@ export const Resources = () => {
       <div className="w-full flex flex-col items-stretch">
         <div className="pt-2">
           <ActiveResource
-            resourceCapacity={resourceCapacity}
             onConsumeEnergy={onConsumeEnergyHandler}
-            activeResource={activeResource}
             mineLevel={earnLevelEnergy}
           />
         </div>

@@ -3,9 +3,10 @@
 import React from "react";
 import { Coin, Population, User } from "../molecules";
 import { Resource } from "./resource/Resource";
-import { useResourceContext } from "../../context/resource/ResourceContext";
 import { usePathname } from "next/navigation";
 import { Row } from "../atoms";
+import { useResourceContext } from "@/context";
+import { Router } from "next/router";
 
 export const Header: React.FC = () => {
   const {
@@ -15,16 +16,17 @@ export const Header: React.FC = () => {
     coin,
     setActiveResource,
   } = useResourceContext();
+
   const pathname = usePathname();
   return (
     <header className="w-full flex gap-2 flex-col p-2">
-      <div className="flex items-center gap-2 h-[30px]">
+      <Row className="gap-1 h-[30px]">
         <User />
         <Population />
-        <div className="flex items-center bg-[#212F42] rounded p-1 gap-[2px] h-full">
+        <Row className="bg-[#212F42] rounded p-1 h-full">
           <Coin amount={coin} />
-        </div>
-      </div>
+        </Row>
+      </Row>
 
       {pathname === "/resources" && (
         <Row className="gap-2">
@@ -35,6 +37,17 @@ export const Header: React.FC = () => {
               resourceCapacity={resourceCapacity}
               isActive={activeResource.id === item.id}
               onChangeResource={() => setActiveResource(item)}
+            />
+          ))}
+        </Row>
+      )}
+      {pathname === "/tribe" && (
+        <Row className="gap-2">
+          {resources.map((item) => (
+            <Resource
+              key={item.id}
+              resourceData={item}
+              resourceCapacity={resourceCapacity}
             />
           ))}
         </Row>
