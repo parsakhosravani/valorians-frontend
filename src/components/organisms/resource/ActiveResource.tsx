@@ -3,8 +3,9 @@ import { useState } from "react";
 import clsx from "clsx";
 import { Capacity, ProgressBar } from "../../molecules";
 import Image from "next/image";
-import { Col } from "@/components/atoms";
+import { Col, Row } from "@/components/atoms";
 import { useResourceContext, useTelegramContext } from "@/context";
+import { InfoDrawer } from "../InfoDrawer";
 
 interface ActiveResource {
   onConsumeEnergy: any;
@@ -76,6 +77,12 @@ export const ActiveResource: React.FC<ActiveResource> = ({
       ))}
 
       <Col className=" items-center relative">
+        <Row className=" w-full absolute left-[85%] ">
+          <InfoDrawer
+            content="There is a limit for each resource in the warehouse.to increase the capacity of the warehouse, level up your warehouse building"
+            title="Warehouse capacity"
+          />
+        </Row>
         <Capacity
           size="large"
           value={activeResource.count}
@@ -86,7 +93,6 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           value={activeResource.count}
           totalValue={resourceCapacity}
         />
-
         {activeResource.count >= resourceCapacity && (
           <p className="border p-2 bg-[#191F27] rounded text-xs absolute top-[72px]  border-[#F72214]">
             The {activeResource.name} warehouse is full

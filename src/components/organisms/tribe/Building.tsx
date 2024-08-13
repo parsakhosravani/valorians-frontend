@@ -52,7 +52,7 @@ export const Building: React.FC<BuildingProps> = ({ buidling }) => {
         direction="row"
         imgSrc={buidling.src}
         imgAlt="building"
-        size="large"
+        size="extraLarge"
         gap={20}
       >
         <Col className="justify-center gap-1">

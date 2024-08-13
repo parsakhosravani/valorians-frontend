@@ -109,7 +109,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               imgSrc={socialLinks[0].icon}
               imgAlt={socialLinks[0].title}
               title={socialLinks[0].title}
-              size="large"
+              size="extraLarge"
             />
           )}
           {openDrawer === DrawerContent.YOUTUBE && (
@@ -118,7 +118,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               imgSrc={socialLinks[1].icon}
               imgAlt={socialLinks[1].title}
               title={socialLinks[1].title}
-              size="large"
+              size="extraLarge"
             />
           )}
           {openDrawer === DrawerContent.X && (
@@ -127,7 +127,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               imgSrc={socialLinks[2].icon}
               imgAlt={socialLinks[2].title}
               title={socialLinks[2].title}
-              size="large"
+              size="extraLarge"
             />
           )}
         </Row>
