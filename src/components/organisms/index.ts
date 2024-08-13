@@ -4,4 +4,5 @@ export * from "./skill";
 export * from "./tribe";
 export * from "./InviteLink";
 export * from "./Main";
+export * from "./InfoDrawer";
 export * from "./resource";
