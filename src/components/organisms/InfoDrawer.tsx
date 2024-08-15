@@ -16,13 +16,7 @@ export const InfoDrawer: React.FC<InfoDrawerProps> = ({ title, content }) => {
 
   return (
     <Row className="text-center justify-center">
-      <Image
-        onClick={() => setIsOpen(true)}
-        width={16}
-        height={18}
-        alt="info"
-        src={info}
-      />
+      <Image onClick={() => setIsOpen(true)} width={18} alt="info" src={info} />
       <Drawer
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
