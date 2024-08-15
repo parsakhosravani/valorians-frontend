@@ -77,7 +77,7 @@ export const ActiveResource: React.FC<ActiveResource> = ({
       ))}
 
       <Col className=" items-center relative">
-        <Row className=" w-full absolute left-[85%] ">
+        <Row className=" w-full absolute left-[90%] ">
           <InfoDrawer
             content="There is a limit for each resource in the warehouse.to increase the capacity of the warehouse, level up your warehouse building"
             title="Warehouse capacity"

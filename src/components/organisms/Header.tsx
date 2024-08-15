@@ -6,7 +6,6 @@ import { Resource } from "./resource/Resource";
 import { usePathname } from "next/navigation";
 import { Row } from "../atoms";
 import { useResourceContext } from "@/context";
-import { Router } from "next/router";
 
 export const Header: React.FC = () => {
   const {
