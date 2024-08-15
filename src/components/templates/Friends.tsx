@@ -60,7 +60,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
           <div className="text-center text-white text-lg font-bold">
             Your Firends:
           </div>
-          <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
+          <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[65svh] pb-10">
             {[...Array(60)].map((_, index) => (
               <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md">
                 <Image src={avatar} width={34} height={34} alt="avatar" />
@@ -88,7 +88,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
           </div>
         </div>
 
-        <InviteLink className="absolute bottom-[174px] w-[98%]" />
+        <InviteLink className="absolute bottom-[150px] w-[98%]" />
       </div>
 
       <Image

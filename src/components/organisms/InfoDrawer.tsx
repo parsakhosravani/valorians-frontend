@@ -22,7 +22,7 @@ export const InfoDrawer: React.FC<InfoDrawerProps> = ({ title, content }) => {
         onClose={() => setIsOpen(false)}
         position="bottom"
       >
-        <Col className="justify-center items-center space-y-8">
+        <Col className="justify-center items-center gap-5">
           <TextImage
             size="large"
             direction="column"

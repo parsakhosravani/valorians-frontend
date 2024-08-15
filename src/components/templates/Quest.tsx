@@ -1,36 +1,22 @@
 "use client";
-
 import React, { FunctionComponent, useState } from "react";
 import bg from "~/images/background/friends.webp";
-import telegram from "~/images/social/telegram.png";
-import youtube from "~/images/social/youtube.png";
-import x from "~/images/social/x.png";
 import population from "~/images/resources/population.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
-import { Coin, Drawer, TextImage } from "../molecules";
-import useBackButton from "@/hooks/useBackButton";
-import { Button, Row } from "../atoms";
-
-enum DrawerContent {
-  TELEGRAM = "Join our Telegram Channel",
-  YOUTUBE = "Subscribe our Yotube Channel",
-  X = "Follow our X Account",
-}
-
-const socialLinks = [
-  { icon: telegram, title: DrawerContent.TELEGRAM },
-  { icon: youtube, title: DrawerContent.YOUTUBE },
-  { icon: x, title: DrawerContent.X },
-];
+import { Coin, TextImage } from "../molecules";
+import {
+  QuestDrawer,
+  QuestDrawerContent,
+  socialLinks,
+} from "../organisms/quest";
 
 interface QuestPropsType {}
 
 export const Quest: FunctionComponent<QuestPropsType> = () => {
-  useBackButton();
-  const [openDrawer, setOpenDrawer] = useState<DrawerContent | null>(null);
+  const [openDrawer, setOpenDrawer] = useState<QuestDrawerContent | null>(null);
 
-  const handleDrawerOpen = (type: DrawerContent) => {
+  const handleDrawerOpen = (type: QuestDrawerContent) => {
     setOpenDrawer(type);
   };
 
@@ -69,7 +55,9 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               >
                 <Image src={item.icon} width={34} height={34} alt="social" />
                 <div
-                  onClick={() => handleDrawerOpen(item.title as DrawerContent)}
+                  onClick={() =>
+                    handleDrawerOpen(item.title as QuestDrawerContent)
+                  }
                   className="flex flex-col justify-start gap-[5px]"
                 >
                   <div className="leading-none font-bold">{item.title}</div>
@@ -97,45 +85,8 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
           </div>
         </div>
       </div>
-      <Drawer
-        position="bottom"
-        onClose={() => setOpenDrawer(null)}
-        isOpen={openDrawer !== null}
-      >
-        <Row className="pb-4 justify-center">
-          {openDrawer === DrawerContent.TELEGRAM && (
-            <TextImage
-              direction="column"
-              imgSrc={socialLinks[0].icon}
-              imgAlt={socialLinks[0].title}
-              title={socialLinks[0].title}
-              size="extraLarge"
-            />
-          )}
-          {openDrawer === DrawerContent.YOUTUBE && (
-            <TextImage
-              direction="column"
-              imgSrc={socialLinks[1].icon}
-              imgAlt={socialLinks[1].title}
-              title={socialLinks[1].title}
-              size="extraLarge"
-            />
-          )}
-          {openDrawer === DrawerContent.X && (
-            <TextImage
-              direction="column"
-              imgSrc={socialLinks[2].icon}
-              imgAlt={socialLinks[2].title}
-              title={socialLinks[2].title}
-              size="extraLarge"
-            />
-          )}
-        </Row>
+      <QuestDrawer openDrawer={openDrawer} setOpenDrawer={setOpenDrawer} />
 
-        <Button size="large" isFull>
-          Claim Reward
-        </Button>
-      </Drawer>
       <Image
         priority
         src={bg}
