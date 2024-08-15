@@ -48,55 +48,59 @@ const buildingCost: TBuildingCost[] = [
 export const Building: React.FC<BuildingProps> = ({ buidling }) => {
   return (
     <Col className="bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] p-2 items-center">
-      <TextImage
-        direction="row"
-        imgSrc={buidling.src}
-        imgAlt="building"
-        size="extraLarge"
-        gap={20}
-      >
-        <Col className="justify-center gap-1">
-          <Row className="justify-between items-center">
-            <h2 className="text-lg font-bold">{buidling.name}</h2>
-            <TextImage
-              imgSrc={time}
-              imgAlt={"time cost"}
-              title={"10s"}
-              size="small"
-            />
-          </Row>
-          <Col>
-            <Text color="gray" size="tiny">
-              upgrade cost:
-            </Text>
-            <Row className="flex-wrap gap-1">
-              {buildingCost.map((item, index) => (
-                <TextImage
-                  key={index}
-                  imgSrc={item.resource}
-                  imgAlt={item.value}
-                  title={item.value}
-                  size="small"
-                />
-              ))}
-            </Row>
-          </Col>
-          <Col>
-            <Text color="gray" size="tiny">
-              your benefit:
-            </Text>
-            <Row className="justify-between">
+      <Row className="relative">
+        <Row className="-top-2 left-0 absolute">
+          <Chip color="primary" label="1" />
+        </Row>
+        <TextImage
+          direction="row"
+          imgSrc={buidling.src}
+          imgAlt="building"
+          size="extraLarge"
+          gap={20}
+        >
+          <Col className="justify-center gap-2">
+            <Row className="justify-between items-center">
+              <h2 className="text-lg font-bold">{buidling.name}</h2>
               <TextImage
-                imgSrc={population}
-                imgAlt="populationPerHour"
-                title="+2 growth per hour"
+                imgSrc={time}
+                imgAlt={"time cost"}
+                title={"10s"}
                 size="small"
               />
-              <Chip color="primary" label="1" />
             </Row>
+            <Col>
+              <Text color="gray" size="tiny">
+                Upgrade Expenses
+              </Text>
+              <Row className="justify-between">
+                <TextImage
+                  imgSrc={population}
+                  imgAlt="populationPerHour"
+                  title="+2 growth per hour"
+                  size="small"
+                />
+              </Row>
+            </Col>
+            <Col>
+              <Text color="gray" size="tiny">
+                upgrade Impact on population growth
+              </Text>
+              <Row className="flex-wrap gap-1">
+                {buildingCost.map((item, index) => (
+                  <TextImage
+                    key={index}
+                    imgSrc={item.resource}
+                    imgAlt={item.value}
+                    title={item.value}
+                    size="small"
+                  />
+                ))}
+              </Row>
+            </Col>
           </Col>
-        </Col>
-      </TextImage>
+        </TextImage>
+      </Row>
     </Col>
   );
 };

@@ -6,7 +6,7 @@ interface ChipProps {
 }
 
 export const Chip: React.FC<ChipProps> = ({ label, color = "primary" }) => {
-  const baseClasses = "inline-flex items-center px-2 rounded-full font-medium";
+  const baseClasses = "inline-flex items-center px-2 w";
 
   const colorClasses = {
     primary: "bg-[#374D6A] text-white",
@@ -18,7 +18,7 @@ export const Chip: React.FC<ChipProps> = ({ label, color = "primary" }) => {
 
   return (
     <div
-      className={`text-[10px] font-normal ${baseClasses} ${colorClasses[color]}`}
+      className={`text-xs w-4 h-5 text-center justify-center text-[#B5C7DE] rounded-b-lg font-bold ${baseClasses} ${colorClasses[color]}`}
     >
       {label}
     </div>

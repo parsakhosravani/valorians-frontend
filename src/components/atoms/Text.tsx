@@ -24,7 +24,7 @@ export const Text: React.FC<TextProps> = ({
           "text-base": size === "medium",
           "text-lg": size === "large",
           "text-primary-800": color === "primary",
-          "text-[#BAB6B6]": color === "gray",
+          "text-[#B5C7DE]": color === "gray",
           "text-[#212F42]": color === "dark",
           "text-white": color === "white",
           "font-normal": weight === "normal",
