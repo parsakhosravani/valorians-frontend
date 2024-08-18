@@ -1,4 +1,4 @@
-import { Coin } from "@/components/molecules";
+import { Text, Coin } from "@/components";
 
 interface EnergyCapacityDrawerContentProps {
   energyCapacity: number;
@@ -9,19 +9,19 @@ export const EnergyCapacityDrawerContent: React.FC<
 > = ({ energyCapacity }) => {
   return (
     <>
-      <p className="text-[#A2B5BF]">
+      <Text color="gray" size="small">
         As you level up, you will earn more iron per tap
-      </p>
-      <p>
+      </Text>
+      <Text>
         <b>Level 1:</b> Energy capacity {energyCapacity} (current Level)
-      </p>
-      <p>
+      </Text>
+      <Text>
         <b>Level 2:</b> Energy capacity {energyCapacity * 1.2} (next Level)
-      </p>
-      <p className="flex items-center space-x-1">
+      </Text>
+      <Text className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
         <Coin amount={100} />
-      </p>
+      </Text>
     </>
   );
 };

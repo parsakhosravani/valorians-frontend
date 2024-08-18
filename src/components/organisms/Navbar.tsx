@@ -10,7 +10,7 @@ import {
   Col,
   Text,
   Row,
-} from "../atoms";
+} from "@/components";
 import { usePathname } from "next/navigation";
 import React from "react";
 import clsx from "clsx";

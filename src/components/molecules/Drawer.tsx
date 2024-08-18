@@ -1,6 +1,6 @@
 "use client";
 import React, { ReactNode, useEffect, useRef } from "react";
-import { CloseIcon } from "../atoms";
+import { CloseIcon } from "@/components";
 
 type DrawerPosition = "bottom" | "right" | "left";
 

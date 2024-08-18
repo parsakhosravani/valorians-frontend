@@ -1,64 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Image from "next/image";
 import { useResourceContext } from "@/context";
+import { ActiveResource, Col, Skill } from "@/components";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { ActiveResource, Skill } from "../organisms";
 
 export const Resources = () => {
-  const {
-    resources,
-    setResources,
-    activeResource,
-    setActiveResource,
-    coin,
-    setCoin,
-  } = useResourceContext();
-
-  const [consumeEnergy, setConsumeEnergy] = useState(0);
-  const [earnLevelEnergy, setEarnLevelEnergy] = useState(10);
-  const [availableEnergy, setAvailableEnergy] = useState(12000);
-
-  const onConsumeEnergyHandler = (value: any) => {
-    if (consumeEnergy !== availableEnergy) {
-      setConsumeEnergy(value);
-      setActiveResource((prevActiveResource) => ({
-        ...prevActiveResource,
-        count: prevActiveResource.count + earnLevelEnergy,
-      }));
-      setResources(
-        resources.map((res) =>
-          res.id === activeResource.id
-            ? { ...res, count: res.count + earnLevelEnergy }
-            : res
-        )
-      );
-    }
-  };
+  const { activeResource } = useResourceContext();
 
   useBackButtonReset();
 
   return (
     <>
-      <div className="w-full flex flex-col items-stretch">
-        <div className="pt-2">
-          <ActiveResource
-            onConsumeEnergy={onConsumeEnergyHandler}
-            mineLevel={earnLevelEnergy}
-          />
-        </div>
-        <Skill
-          coin={coin}
-          setCoin={setCoin}
-          setMineLevel={setEarnLevelEnergy}
-          mineLevel={earnLevelEnergy}
-          availableEnergy={availableEnergy}
-          setAvailableEnergy={setAvailableEnergy}
-          consumeEnergy={consumeEnergy}
-          activeResource={activeResource}
-        />
-      </div>
+      <Col className="w-full">
+        <Col>
+          <ActiveResource />
+        </Col>
+        <Skill />
+      </Col>
 
       <Image
         priority

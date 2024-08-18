@@ -1,22 +1,21 @@
 "use client";
 import { useState } from "react";
+import { useResourceContext } from "@/context";
 import {
   Button,
+  Col,
+  Drawer,
+  EarnMoreDrawerContent,
   EarnMoreIcon,
-  FullEnergyIcon,
+  EnergyCapacityDrawerContent,
   EnergyCapacityIcon,
-} from "../../atoms";
-import { Drawer } from "../../molecules";
-
-import { FullEnergyDrawerContent } from "./FullEnergyDrawerContent";
-import { EnergyCapacityDrawerContent } from "./EnergyCapacityDrawerContent";
-import { EarnMoreDrawerContent } from "./EarnMoreDrawerContent";
-import { useResourceContext } from "@/context/resource/ResourceContext";
+  FullEnergyDrawerContent,
+  FullEnergyIcon,
+} from "@/components";
 
 interface SkillDrawerProps {
   mineLevel: number;
   setMineLevel: (value: number) => void;
-  setAvailableEnergy: (value: number) => void;
 }
 
 enum SkillDrawerType {
@@ -27,11 +26,19 @@ enum SkillDrawerType {
 export const SkillDrawer: React.FC<SkillDrawerProps> = ({
   mineLevel,
   setMineLevel,
-  setAvailableEnergy,
 }) => {
-  const { activeResource, coin, setCoin } = useResourceContext();
+  const {
+    activeResource,
+    coin,
+    setCoin,
+    setEnergyCapacity,
+    availableEnergy,
+    energyCapacity,
+    setAvailableEnergy,
+    availableFullEnergy,
+    setAvailableFullEnergy,
+  } = useResourceContext();
 
-  const [energyCapacity, setEnergyCapacity] = useState(15000);
   const [openDrawer, setOpenDrawer] = useState<SkillDrawerType | null>(null);
 
   const handleSkillUp = () => {
@@ -42,11 +49,14 @@ export const SkillDrawer: React.FC<SkillDrawerProps> = ({
       }
     }
     if (openDrawer === SkillDrawerType.FULL_ENERGY) {
-      setAvailableEnergy(energyCapacity);
+      if (availableFullEnergy > 0 && availableEnergy !== energyCapacity) {
+        setAvailableFullEnergy(availableFullEnergy - 1);
+        setAvailableEnergy(energyCapacity);
+      }
     }
     if (openDrawer === SkillDrawerType.ENERGY_CAPACITY) {
-      setEnergyCapacity(energyCapacity + 500);
       if (coin >= 100) {
+        setEnergyCapacity(energyCapacity + 500);
         setCoin(coin - 100);
       }
     }
@@ -71,7 +81,7 @@ export const SkillDrawer: React.FC<SkillDrawerProps> = ({
         }
         position="bottom"
       >
-        <div className="text-sm h-40 py-4 space-y-2">
+        <Col className="space-y-1 py-3">
           {openDrawer === SkillDrawerType.EARN_MORE && (
             <EarnMoreDrawerContent mineLevel={mineLevel} />
           )}
@@ -79,9 +89,11 @@ export const SkillDrawer: React.FC<SkillDrawerProps> = ({
             <EnergyCapacityDrawerContent energyCapacity={energyCapacity} />
           )}
           {openDrawer === SkillDrawerType.FULL_ENERGY && (
-            <FullEnergyDrawerContent />
+            <FullEnergyDrawerContent
+              availableFullEnergy={availableFullEnergy}
+            />
           )}
-        </div>
+        </Col>
 
         <Button size="large" onClick={handleSkillUp} isFull>
           {openDrawer === SkillDrawerType.FULL_ENERGY

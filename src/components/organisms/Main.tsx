@@ -1,9 +1,7 @@
 "use client";
 
 import { useTelegramContext } from "@/context";
-import { QrCode } from "../templates";
-import { Header } from "./Header";
-import { Navbar } from "./Navbar";
+import { Header, Navbar, QrCode } from "@/components";
 import { usePathname } from "next/navigation";
 
 export const Main = ({
@@ -11,7 +9,7 @@ export const Main = ({
 }: Readonly<{
   children: React.ReactNode;
 }>) => {
-  const { isMobile, progressBarStart } = useTelegramContext();
+  const { isMobile } = useTelegramContext();
   const pathname = usePathname();
 
   if (!isMobile) {

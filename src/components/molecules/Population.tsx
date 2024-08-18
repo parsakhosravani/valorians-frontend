@@ -1,7 +1,6 @@
 import { FunctionComponent } from "react";
 import population from "~/images/resources/population.webp";
-import { TextImage } from "./TextImage";
-import { Col, Row, Text } from "../atoms";
+import { Col, Row, Text, TextImage } from "@/components";
 
 interface PopulationPropsType {}
 

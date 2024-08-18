@@ -4,12 +4,13 @@ import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
-import { Coin, TextImage } from "../molecules";
 import {
+  Coin,
   QuestDrawer,
   QuestDrawerContent,
   socialLinks,
-} from "../organisms/quest";
+  TextImage,
+} from "@/components";
 
 interface QuestPropsType {}
 

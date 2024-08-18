@@ -1,14 +1,11 @@
-@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@200&family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap");
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
 
 body {
   touch-action: pan-y;
   touch-action: none;
   overflow: hidden;
-  font-family: "Roboto";
-
   -webkit-user-select: none; /* Safari */
   -ms-user-select: none; /* IE 10 and IE 11 */
   user-select: none; /* Standard syntax */
@@ -32,39 +29,4 @@ body {
 
 .scrollable::-webkit-scrollbar {
   display: none; /* WebKit */
-}
-
-.animation-touch-coin {
-  animation: moveUpAndFade 0.6s forwards ease-out;
-}
-@keyframes moveUpAndFade {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-70px);
-  }
-}
-
-@keyframes fadeUpAndOut {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-}
-
-@keyframes scale {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
 }

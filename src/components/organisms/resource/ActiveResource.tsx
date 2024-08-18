@@ -1,29 +1,43 @@
 "use client";
 import { useState } from "react";
 import clsx from "clsx";
-import { Capacity, ProgressBar } from "../../molecules";
 import Image from "next/image";
-import { Col, Row } from "@/components/atoms";
+import { Col, Row, InfoDrawer, Capacity, ProgressBar } from "@/components";
 import { useResourceContext, useTelegramContext } from "@/context";
-import { InfoDrawer } from "../InfoDrawer";
 
-interface ActiveResource {
-  onConsumeEnergy: any;
-  mineLevel: number;
-}
+interface ActiveResource {}
 
-export const ActiveResource: React.FC<ActiveResource> = ({
-  onConsumeEnergy,
-  mineLevel,
-}) => {
+export const ActiveResource: React.FC<ActiveResource> = () => {
   const { telegram } = useTelegramContext();
   const [touches, setTouches] = useState<any>([]);
   const [touchesNumber, setTouchesNumber] = useState<any>([]);
-  const { activeResource, resourceCapacity } = useResourceContext();
-
+  const {
+    activeResource,
+    resourceCapacity,
+    setAvailableEnergy,
+    availableEnergy,
+    mineLevel,
+    energyCapacity,
+    setActiveResource,
+    setResources,
+    resources,
+  } = useResourceContext();
+  const onConsumeEnergy = () => {
+    if (availableEnergy < energyCapacity) {
+      setActiveResource((prevActiveResource) => ({
+        ...prevActiveResource,
+        count: prevActiveResource.count + mineLevel,
+      }));
+      setResources(
+        resources.map((res) =>
+          res.id === activeResource.id
+            ? { ...res, count: res.count + mineLevel }
+            : res
+        )
+      );
+    }
+  };
   const handleTouch = (event: any) => {
-    telegram?.WebApp.HapticFeedback.impactOccurred("soft");
-
     const newTouches = Array.from(event.changedTouches).map(() => ({
       id: Math.random(),
     }));
@@ -34,10 +48,15 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         y: touch.clientY - 70,
       })
     );
-    activeResource.count < resourceCapacity &&
-      onConsumeEnergy(
-        (prev: any) => prev + newTouchesNumbers.length * mineLevel
-      );
+    if (
+      activeResource.count < resourceCapacity &&
+      availableEnergy >= mineLevel
+    ) {
+      telegram?.WebApp.HapticFeedback.impactOccurred("soft");
+      onConsumeEnergy();
+      setAvailableEnergy(availableEnergy - mineLevel);
+    }
+
     setTouches((prevTouches: any) => [...prevTouches, ...newTouches]);
     setTouchesNumber((prevTouches: any) => [
       ...prevTouches,
@@ -67,12 +86,14 @@ export const ActiveResource: React.FC<ActiveResource> = ({
         <div
           key={touch.id}
           className={clsx(
-            "touch-element z-[2] font-medium absolute  text-white animation-touch-coin",
+            "touch-element z-[2] font-medium absolute  text-white animate-mine-animation",
             true ? "text-4xl" : "text-sm"
           )}
           style={{ left: `${touch.x}px`, top: `${touch.y}px` }}
         >
-          {activeResource.count < resourceCapacity && `+${mineLevel}`}
+          {activeResource.count < resourceCapacity &&
+            availableEnergy > mineLevel &&
+            `+${mineLevel}`}
         </div>
       ))}
 
@@ -107,8 +128,8 @@ export const ActiveResource: React.FC<ActiveResource> = ({
           >
             <div
               className={clsx(
-                "w-full h-full group-active:animate-[scale_0.3s_ease-in-out]",
-                activeResource.count > resourceCapacity &&
+                "w-full h-full group-active:animate-touch-animation",
+                activeResource.count >= resourceCapacity &&
                   "opacity-[.5] group-active:animate-none"
               )}
             >

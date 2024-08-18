@@ -1,10 +1,8 @@
 "use client";
 
 import React from "react";
-import { Coin, Population, User } from "../molecules";
-import { Resource } from "./resource/Resource";
+import { Coin, Population, Resource, Row, User } from "@/components";
 import { usePathname } from "next/navigation";
-import { Row } from "../atoms";
 import { useResourceContext } from "@/context";
 
 export const Header: React.FC = () => {

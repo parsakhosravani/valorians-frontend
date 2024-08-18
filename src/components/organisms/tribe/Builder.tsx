@@ -1,7 +1,5 @@
-import { Row } from "@/components/atoms";
-import { TextImage } from "@/components/molecules";
+import { InfoDrawer, Row, TextImage } from "@/components";
 import builder from "~/images/resources/builder.webp";
-import { InfoDrawer } from "../InfoDrawer";
 
 interface BuilderProps {}
 

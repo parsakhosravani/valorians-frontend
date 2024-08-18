@@ -1,12 +1,11 @@
 "use client";
 import React, { FunctionComponent } from "react";
-import InviteLink from "../organisms/InviteLink";
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import avatar from "~/images/avatar.webp";
 import viking from "~/images/friends/viking.png";
 import Image from "next/image";
-import { Coin, TextImage } from "../molecules";
+import { Coin, TextImage, InviteLink } from "@/components";
 import useBackButton from "@/hooks/useBackButton";
 
 const initialReferrals = Array.from({ length: 20 }, (_, i) => ({

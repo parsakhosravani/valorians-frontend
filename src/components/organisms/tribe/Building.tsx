@@ -8,8 +8,7 @@ import time from "~/images/resources/time.webp";
 import population from "~/images/resources/population.webp";
 
 import { StaticImageData } from "next/image";
-import { Chip, Col, Row, Text } from "@/components/atoms";
-import { TBuilding } from "@/components/templates";
+import { Chip, Col, Row, Text, TBuilding } from "@/components";
 
 interface BuildingProps {
   buidling: TBuilding;

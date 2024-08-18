@@ -1,3 +1,4 @@
+"use client";
 import { useTelegramContext } from "@/context";
 import { useEffect } from "react";
 

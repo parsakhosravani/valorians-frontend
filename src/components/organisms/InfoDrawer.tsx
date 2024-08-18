@@ -1,10 +1,8 @@
 "use client";
 import React, { useState } from "react";
-import { Drawer } from "../molecules/Drawer";
-import { Button, Col, Row } from "../atoms";
+import { Button, Col, Drawer, Row, TextImage } from "@/components";
 import info from "~/images/info.webp";
 import Image from "next/image";
-import { TextImage } from "../molecules";
 
 interface InfoDrawerProps {
   title: string;

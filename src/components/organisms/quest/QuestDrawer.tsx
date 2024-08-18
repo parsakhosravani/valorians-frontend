@@ -1,5 +1,5 @@
 "use client";
-import { Button, Row } from "@/components/atoms";
+import { Button, Row } from "@/components";
 import { Drawer, TextImage } from "@/components/molecules";
 import telegram from "~/images/social/telegram.png";
 import youtube from "~/images/social/youtube.png";

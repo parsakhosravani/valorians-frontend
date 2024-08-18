@@ -1,5 +1,5 @@
 import React, { FunctionComponent } from "react";
-import { BattleIcon, Col, Row } from "../atoms";
+import { BattleIcon, Col, Row } from "@/components";
 
 import bg from "~/images/background/battle.webp";
 import Image from "next/image";

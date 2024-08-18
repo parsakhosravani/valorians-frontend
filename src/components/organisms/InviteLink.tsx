@@ -1,10 +1,9 @@
 "use client";
 import { CopyToClipboard } from "react-copy-to-clipboard";
-import Image from "next/image";
 import React from "react";
 import toast from "react-hot-toast";
 import Link from "next/link";
-import { CopyIcon } from "../atoms";
+import { CopyIcon } from "@/components";
 import clsx from "clsx";
 import { useTelegramContext } from "@/context";
 

@@ -1,8 +1,7 @@
 import React, { FunctionComponent } from "react";
-import { Builder, Building } from "../organisms";
+import { Builder, Building, Col } from "@/components";
 import bg from "~/images/background/tribe.webp";
 import Image, { StaticImageData } from "next/image";
-import { Col } from "../atoms";
 
 export type TBuilding = {
   name: string;

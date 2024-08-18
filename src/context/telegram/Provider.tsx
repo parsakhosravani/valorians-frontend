@@ -14,11 +14,10 @@ interface TelegramProviderProps {
 export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   children,
 }) => {
-  const [telegram, setTelegram] = useState<Telegram>()
+  const [telegram, setTelegram] = useState<Telegram>();
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(initialUserProfileData);
   const [progressBarStart, setProgressBarStart] = useState(0);
-
 
   // Start app
   useEffect(() => {
@@ -38,13 +37,13 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
     }
   }, []);
 
-  useDisableZoom()
+  useDisableZoom();
   useDisableScroll(true);
-  const isMobile = useMobilePlatform(telegram)
+  const isMobile = useMobilePlatform(telegram);
 
   const router = useRouter();
-  const navigateTo = (address: string, actionType: 'on' | 'off' = 'on') => {
-    if (actionType === 'on') {
+  const navigateTo = (address: string, actionType: "on" | "off" = "on") => {
+    if (actionType === "on") {
       telegram?.WebApp.BackButton.show();
     } else {
       telegram?.WebApp.BackButton.hide();
@@ -59,7 +58,7 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
     isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile,
     progressBarStart,
     setProgressBarStart,
-    navigateTo
+    navigateTo,
   };
 
   return (

@@ -51,8 +51,17 @@ interface ResourceContextType {
   activeResource: TResource;
   setActiveResource: React.Dispatch<React.SetStateAction<TResource>>;
   resourceCapacity: number;
+  setResourceCapacity: React.Dispatch<React.SetStateAction<number>>;
+  energyCapacity: number;
+  setEnergyCapacity: React.Dispatch<React.SetStateAction<number>>;
+  availableEnergy: number;
+  setAvailableEnergy: React.Dispatch<React.SetStateAction<number>>;
+  availableFullEnergy: number;
+  setAvailableFullEnergy: React.Dispatch<React.SetStateAction<number>>;
   coin: number;
   setCoin: React.Dispatch<React.SetStateAction<number>>;
+  mineLevel: number;
+  setMineLevel: React.Dispatch<React.SetStateAction<number>>;
 }
 
 const ResourceContext = createContext<ResourceContextType | undefined>(
@@ -64,8 +73,12 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const [resources, setResources] = useState<TResource[]>(initialResources);
   const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
-  const [resourceCapacity] = useState(15000);
+  const [resourceCapacity, setResourceCapacity] = useState(15000);
   const [coin, setCoin] = useState(1000);
+  const [energyCapacity, setEnergyCapacity] = useState(15000);
+  const [availableEnergy, setAvailableEnergy] = useState(12000);
+  const [mineLevel, setMineLevel] = useState(10);
+  const [availableFullEnergy, setAvailableFullEnergy] = useState(3);
 
   return (
     <ResourceContext.Provider
@@ -75,6 +88,15 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({
         activeResource,
         setActiveResource,
         resourceCapacity,
+        setResourceCapacity,
+        energyCapacity,
+        setEnergyCapacity,
+        availableEnergy,
+        setAvailableEnergy,
+        availableFullEnergy,
+        setAvailableFullEnergy,
+        mineLevel,
+        setMineLevel,
         coin,
         setCoin,
       }}
