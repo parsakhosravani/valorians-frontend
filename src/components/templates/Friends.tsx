@@ -1,5 +1,5 @@
 "use client";
-import React, { FunctionComponent } from "react";
+import React, { FunctionComponent, useEffect } from "react";
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import avatar from "~/images/avatar.webp";
@@ -7,6 +7,7 @@ import viking from "~/images/friends/viking.png";
 import Image from "next/image";
 import { Coin, TextImage, InviteLink } from "@/components";
 import useBackButton from "@/hooks/useBackButton";
+import { fetcher } from "@/app/api/fetcher";
 
 const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
   id: i + 1,
@@ -19,6 +20,17 @@ const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
 interface FriendsPropsType {}
 
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
+  useEffect(() => {
+    fetcher("/api/friends", {
+      method: "GET",
+    })
+      .then(({ data }) => {
+        console.log(data);
+      })
+      .catch((res: any) => {
+        console.log(res);
+      });
+  }, []);
   useBackButton();
   return (
     <>

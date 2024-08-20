@@ -42,9 +42,10 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       miniApp.expand();
       miniApp.setHeaderColor("#000000");
       miniApp.setBackgroundColor("#27272A");
-      miniApp.requestContact().then((contact: any) => {
-        sendContactToBackend(contact);
-      });
+      process.env.NODE_ENV === "production" &&
+        miniApp.requestContact().then((contact: any) => {
+          sendContactToBackend(contact);
+        });
       // initial data
       setTelegram(telegram);
       setUser(miniApp.initDataUnsafe.user);
