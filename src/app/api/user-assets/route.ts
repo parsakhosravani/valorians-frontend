@@ -1,11 +1,9 @@
-import { NextRequest } from "next/server";
-import { option, responder, targetPoint } from "@/app/api/config";
+import { targetPoint, option, responder } from "../config";
 
-export async function GET(request: NextRequest) {
-  const body = await request.json();
+export async function GET() {
+  const url = targetPoint("userAssets", "internal");
+  const options = option("GET");
 
-  const endPointUrl = targetPoint(`/userAssets`);
-  const serverResponse = await fetch(endPointUrl, option("GET", body));
-
-  return responder(serverResponse);
+  const response = await fetch(url, options);
+  return responder(response);
 }

@@ -8,6 +8,7 @@ import Image from "next/image";
 import { Coin, TextImage, InviteLink } from "@/components";
 import useBackButton from "@/hooks/useBackButton";
 import { fetcher } from "@/app/api/fetcher";
+import useSWR from "swr";
 
 const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
   id: i + 1,
@@ -20,18 +21,8 @@ const initialReferrals = Array.from({ length: 20 }, (_, i) => ({
 interface FriendsPropsType {}
 
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
-  useEffect(() => {
-    fetcher("/api/friends", {
-      method: "GET",
-    })
-      .then(({ data }) => {
-        console.log(data);
-      })
-      .catch((res: any) => {
-        console.log(res);
-      });
-  }, []);
-  useBackButton();
+  const { data: friends } = useSWR("/api/friends", fetcher);
+  erki5ul.useBackButton();
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
@@ -72,7 +63,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
             Your Firends:
           </div>
           <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
-            {[...Array(60)].map((_, index) => (
+            {friends.map(() => (
               <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md">
                 <Image src={avatar} width={34} height={34} alt="avatar" />
                 <div className="flex flex-col justify-start gap-[5px]">

@@ -17,7 +17,7 @@ const createHeaders = () => {
   const token = cookies().get("token");
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token?.value}`,
+    Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNTQzNzk2My01ZWExLTQ2MjMtODNjNS03NGM1ZGY1MmU1YmQiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ0MzUxNjEsImV4cCI6MTcyNDQ0NTk2MX0.ewzVFW7vMyFA7JynJvxpQg1QZiBAvRl4qOHecXN0w78`,
     "X-Hash": "process.env.X_Hash",
   };
 };

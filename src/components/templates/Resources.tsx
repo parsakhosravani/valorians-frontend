@@ -9,11 +9,6 @@ import { fetcher } from "@/app/api/fetcher";
 
 export const Resources = ({}: any) => {
   const { activeResource } = useResourceContext();
-  fetcher("/api/assets-info", {
-    method: "GET",
-  }).then(({ data }) => {
-    console.log(data);
-  });
 
   return (
     <>

@@ -1,5 +1,5 @@
 import { Friends } from "@/components";
 
-export default function Page() {
+export default async function Page() {
   return <Friends />;
 }

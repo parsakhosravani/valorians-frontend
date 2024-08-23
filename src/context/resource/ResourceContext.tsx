@@ -8,6 +8,8 @@ import ironBg from "~/images/background/iron.webp";
 import woodBg from "~/images/background/wood.webp";
 import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
+import useSWR from "swr";
+import { fetcher } from "@/app/api/fetcher";
 export type TResource = (typeof initialResources)[number];
 
 const initialResources = [
@@ -79,7 +81,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({
   const [availableEnergy, setAvailableEnergy] = useState(12000);
   const [mineLevel, setMineLevel] = useState(10);
   const [availableFullEnergy, setAvailableFullEnergy] = useState(3);
-
+  const { data } = useSWR("/api/user-assets", fetcher);
   return (
     <ResourceContext.Provider
       value={{
