@@ -17,7 +17,7 @@ const createHeaders = () => {
   const token = cookies().get("token");
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNTQzNzk2My01ZWExLTQ2MjMtODNjNS03NGM1ZGY1MmU1YmQiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ0MzUxNjEsImV4cCI6MTcyNDQ0NTk2MX0.ewzVFW7vMyFA7JynJvxpQg1QZiBAvRl4qOHecXN0w78`,
+    Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5OTJjMjQ2NS1jN2Y3LTQwMzgtYjU2Ni00ODc1MTRiYzJiMmYiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ0NDYwNTUsImV4cCI6MTcyNDQ1Njg1NX0.5yA9Njh6UmiUBr8LNRfZsOrj3GFNH9tvcrOlnELjOh4`,
     "X-Hash": "process.env.X_Hash",
   };
 };
@@ -42,7 +42,7 @@ export const optionFormData = (method: "POST" | "PUT", body: FormData) => {
 export const responder = async (responseServer: Response) => {
   if (responseServer.ok) {
     const responseData = await responseServer.json();
-    return new Response(JSON.stringify(responseData), {
+    return new Response(JSON.stringify(responseData.result), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

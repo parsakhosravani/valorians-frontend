@@ -42,18 +42,18 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
       </Row>
       <Col className="gap-1 text-red-50 text-center">
         <Text color={isActive ? "dark" : "white"} size="tiny">
-          {resourceData.count < resourceCapacity
-            ? resourceData.count.toLocaleString("en-US")
+          {resourceData.quantity < resourceCapacity
+            ? resourceData.quantity.toLocaleString("en-US")
             : resourceCapacity.toLocaleString("en-US")}
         </Text>
 
         <ProgressBar
           size="small"
-          value={resourceData.count}
+          value={resourceData.quantity}
           totalValue={resourceCapacity}
         />
         <Text color={isActive ? "dark" : "white"} size="tiny">
-          +100 per hour
+          +{resourceData.quantityPerHour} per hour
         </Text>
       </Col>
     </div>

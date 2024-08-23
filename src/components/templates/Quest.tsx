@@ -5,7 +5,7 @@ import population from "~/images/resources/population.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
 import {
-  Coin,
+  Silver,
   QuestDrawer,
   QuestDrawerContent,
   socialLinks,
@@ -63,7 +63,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
                 >
                   <div className="leading-none font-bold">{item.title}</div>
                   <div className="flex gap-3">
-                    <Coin amount={1000} />
+                    <Silver amount={1000} />
                     <b className="text-xs">and</b>
                     <TextImage
                       direction="row"

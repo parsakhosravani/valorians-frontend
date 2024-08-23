@@ -22,19 +22,43 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
     setResources,
     resources,
   } = useResourceContext();
+  const updateResourceQuantity = async (newQuantity: number) => {
+    try {
+      const response = await fetch(
+        `http://localhost:3000/userAssets/updatesQuantity/${activeResource.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5OTJjMjQ2NS1jN2Y3LTQwMzgtYjU2Ni00ODc1MTRiYzJiMmYiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ0NDYwNTUsImV4cCI6MTcyNDQ1Njg1NX0.5yA9Njh6UmiUBr8LNRfZsOrj3GFNH9tvcrOlnELjOh4`,
+          },
+          body: JSON.stringify({ quantity: newQuantity }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update resource quantity");
+      }
+
+      // Handle successful update
+      console.log("Resource quantity updated successfully");
+    } catch (error) {
+      console.error("Error updating resource quantity:", error);
+    }
+  };
   const onConsumeEnergy = () => {
     if (availableEnergy < energyCapacity) {
+      const newQuantity = activeResource.quantity + mineLevel;
       setActiveResource((prevActiveResource) => ({
         ...prevActiveResource,
-        count: prevActiveResource.count + mineLevel,
+        quantity: newQuantity,
       }));
       setResources(
         resources.map((res) =>
-          res.id === activeResource.id
-            ? { ...res, count: res.count + mineLevel }
-            : res
+          res.id === activeResource.id ? { ...res, quantity: newQuantity } : res
         )
       );
+      updateResourceQuantity(newQuantity);
     }
   };
   const handleTouch = (event: any) => {
@@ -49,7 +73,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
       })
     );
     if (
-      activeResource.count < resourceCapacity &&
+      activeResource.quantity < resourceCapacity &&
       availableEnergy >= mineLevel
     ) {
       telegram?.WebApp.HapticFeedback.impactOccurred("soft");
@@ -91,7 +115,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
           )}
           style={{ left: `${touch.x}px`, top: `${touch.y}px` }}
         >
-          {activeResource.count < resourceCapacity &&
+          {activeResource.quantity < resourceCapacity &&
             availableEnergy > mineLevel &&
             `+${mineLevel}`}
         </div>
@@ -101,7 +125,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
         <Row className="relative">
           <Capacity
             size="large"
-            value={activeResource.count}
+            value={activeResource.quantity}
             totalValue={resourceCapacity}
           />
           <Row className="absolute -right-5">
@@ -113,10 +137,10 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
         </Row>
         <ProgressBar
           size="medium"
-          value={activeResource.count}
+          value={activeResource.quantity}
           totalValue={resourceCapacity}
         />
-        {activeResource.count >= resourceCapacity && (
+        {activeResource.quantity >= resourceCapacity && (
           <p className="border p-2 bg-[#191F27] rounded text-xs absolute top-[72px]  border-[#F72214]">
             The {activeResource.name} warehouse is full
           </p>
@@ -129,7 +153,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
             <div
               className={clsx(
                 "w-full h-full group-active:animate-touch-animation",
-                activeResource.count >= resourceCapacity &&
+                activeResource.quantity >= resourceCapacity &&
                   "opacity-[.5] group-active:animate-none"
               )}
             >

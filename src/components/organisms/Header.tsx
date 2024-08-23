@@ -1,18 +1,13 @@
 "use client";
 
 import React from "react";
-import { Coin, Population, Resource, Row, User } from "@/components";
+import { Silver, Population, Resource, Row, User } from "@/components";
 import { usePathname } from "next/navigation";
 import { useResourceContext } from "@/context";
 
 export const Header: React.FC = () => {
-  const {
-    resources,
-    activeResource,
-    resourceCapacity,
-    coin,
-    setActiveResource,
-  } = useResourceContext();
+  const { resources, activeResource, resourceCapacity, setActiveResource } =
+    useResourceContext();
 
   const pathname = usePathname();
   return (
@@ -21,13 +16,18 @@ export const Header: React.FC = () => {
         <User />
         <Population />
         <Row className="bg-[#212F42] rounded p-1 h-full">
-          <Coin amount={coin} />
+          <Silver
+            amount={
+              resources.find((resource) => resource.name === "Silver")
+                ?.quantity || 0
+            }
+          />
         </Row>
       </Row>
 
       {pathname === "/resources" && (
         <Row className="gap-2">
-          {resources.map((item) => (
+          {resources?.slice(0, 4).map((item) => (
             <Resource
               key={item.id}
               resourceData={item}
@@ -40,7 +40,7 @@ export const Header: React.FC = () => {
       )}
       {pathname === "/tribe" && (
         <Row className="gap-2">
-          {resources.map((item) => (
+          {resources?.slice(0, 4).map((item) => (
             <Resource
               key={item.id}
               resourceData={item}

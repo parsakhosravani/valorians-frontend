@@ -1,12 +1,11 @@
 "use client";
-import React, { FunctionComponent, useEffect } from "react";
+import React, { FunctionComponent } from "react";
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import avatar from "~/images/avatar.webp";
 import viking from "~/images/friends/viking.png";
 import Image from "next/image";
-import { Coin, TextImage, InviteLink } from "@/components";
-import useBackButton from "@/hooks/useBackButton";
+import { Silver, TextImage, InviteLink } from "@/components";
 import { fetcher } from "@/app/api/fetcher";
 import useSWR from "swr";
 
@@ -22,7 +21,6 @@ interface FriendsPropsType {}
 
 export const Friends: FunctionComponent<FriendsPropsType> = () => {
   const { data: friends } = useSWR("/api/friends", fetcher);
-  erki5ul.useBackButton();
   return (
     <>
       <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
@@ -42,13 +40,13 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
               You and your friend will receive bonuses
             </div>
             <div className="flex items-center w-full gap-1">
-              <Coin amount={100} />
+              <Silver amount={100} />
               <div className="text-center text-white text-[9px] font-bold">
                 For you and your friend
               </div>
             </div>
             <div className="flex items-center w-full gap-1">
-              <Coin amount={100} />
+              <Silver amount={100} />
 
               <div className="text-[9px] font-bold">
                 <span className="text-white">For you and your friend </span>
@@ -63,7 +61,7 @@ export const Friends: FunctionComponent<FriendsPropsType> = () => {
             Your Firends:
           </div>
           <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
-            {friends.map(() => (
+            {friends?.map(() => (
               <div className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md">
                 <Image src={avatar} width={34} height={34} alt="avatar" />
                 <div className="flex flex-col justify-start gap-[5px]">

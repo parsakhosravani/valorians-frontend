@@ -1,27 +1,35 @@
+"use client";
 import React, { FunctionComponent } from "react";
-import { Builder, Building, Col } from "@/components";
+import { Building } from "../organisms";
 import bg from "~/images/background/tribe.webp";
-import Image, { StaticImageData } from "next/image";
+import Image from "next/image";
+import useBackButton from "@/hooks/useBackButton";
+import useSWR from "swr";
+import { fetcher } from "@/app/api/fetcher";
+import { TResource } from "@/context";
 
-export type TBuilding = {
-  name: string;
-  src: StaticImageData;
-};
-interface TribePropsType {
-  buildings: TBuilding[];
-}
+interface TribePropsType {}
 
-export const Tribe: FunctionComponent<TribePropsType> = ({ buildings }) => {
+export const Tribe: FunctionComponent<TribePropsType> = () => {
+  const { data, error } = useSWR<TResource[]>("/api/user-assets", fetcher);
+
+  useBackButton();
+
+  const buildings = data?.filter((item) => item.type === "BUILDING") || [];
+  if (error) return <div>Failed to load buildings</div>;
+  if (!data) return <div>Loading...</div>;
+
   return (
     <>
-      <Col className="m-2 my-0">
-        <Builder />
-        <div className="gap-2.5 space-y-2 w-full overflow-y-auto scrollable max-h-[85svh] pb-32">
-          {buildings.map((item, index) => (
-            <Building key={index} buidling={item} />
+      <div className="m-2 my-0 h-auto">
+        <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[85svh] pb-10">
+          {buildings.map((building) => (
+            <div key={building.id}>
+              <Building building={building} />
+            </div>
           ))}
         </div>
-      </Col>
+      </div>
 
       <Image
         priority

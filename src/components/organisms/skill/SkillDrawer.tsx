@@ -29,8 +29,8 @@ export const SkillDrawer: React.FC<SkillDrawerProps> = ({
 }) => {
   const {
     activeResource,
-    coin,
-    setCoin,
+    silver,
+    setSilver,
     setEnergyCapacity,
     availableEnergy,
     energyCapacity,
@@ -43,9 +43,9 @@ export const SkillDrawer: React.FC<SkillDrawerProps> = ({
 
   const handleSkillUp = () => {
     if (openDrawer === SkillDrawerType.EARN_MORE) {
-      if (coin >= 100) {
+      if (silver >= 100) {
         setMineLevel(Math.round(mineLevel * 1.2));
-        setCoin(coin - 100);
+        setSilver(silver - 100);
       }
     }
     if (openDrawer === SkillDrawerType.FULL_ENERGY) {
@@ -55,9 +55,9 @@ export const SkillDrawer: React.FC<SkillDrawerProps> = ({
       }
     }
     if (openDrawer === SkillDrawerType.ENERGY_CAPACITY) {
-      if (coin >= 100) {
+      if (silver >= 100) {
         setEnergyCapacity(energyCapacity + 500);
-        setCoin(coin - 100);
+        setSilver(silver - 100);
       }
     }
   };

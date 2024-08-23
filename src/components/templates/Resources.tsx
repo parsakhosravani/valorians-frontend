@@ -4,8 +4,6 @@ import React, { useEffect } from "react";
 import Image from "next/image";
 import { useResourceContext } from "@/context";
 import { ActiveResource, Col, Skill } from "@/components";
-import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { fetcher } from "@/app/api/fetcher";
 
 export const Resources = ({}: any) => {
   const { activeResource } = useResourceContext();

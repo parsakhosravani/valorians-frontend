@@ -1,4 +1,4 @@
-import { Text, Coin } from "@/components";
+import { Text, Silver } from "@/components";
 
 interface EarnDrawerContentProps {
   mineLevel: number;
@@ -20,7 +20,7 @@ export const EarnMoreDrawerContent: React.FC<EarnDrawerContentProps> = ({
       </Text>
       <Text className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
-        <Coin amount={100} />
+        <Silver amount={100} />
       </Text>
     </>
   );

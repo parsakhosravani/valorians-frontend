@@ -1,4 +1,4 @@
-import { Text, Coin } from "@/components";
+import { Text, Silver } from "@/components";
 
 interface EnergyCapacityDrawerContentProps {
   energyCapacity: number;
@@ -20,7 +20,7 @@ export const EnergyCapacityDrawerContent: React.FC<
       </Text>
       <Text className="flex items-center space-x-1">
         <b>Upgrade cost: </b>
-        <Coin amount={100} />
+        <Silver amount={100} />
       </Text>
     </>
   );
