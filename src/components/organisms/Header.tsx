@@ -27,26 +27,30 @@ export const Header: React.FC = () => {
 
       {pathname === "/resources" && (
         <Row className="gap-2">
-          {resources?.slice(0, 4).map((item) => (
-            <Resource
-              key={item.id}
-              resourceData={item}
-              resourceCapacity={resourceCapacity}
-              isActive={activeResource.id === item.id}
-              onChangeResource={() => setActiveResource(item)}
-            />
-          ))}
+          {resources
+            ?.filter((item) => [1, 2, 3, 4].includes(item.id))
+            .map((item) => (
+              <Resource
+                key={item.id}
+                resourceData={item}
+                resourceCapacity={resourceCapacity}
+                isActive={activeResource.id === item.id}
+                onChangeResource={() => setActiveResource(item)}
+              />
+            ))}
         </Row>
       )}
       {pathname === "/tribe" && (
         <Row className="gap-2">
-          {resources?.slice(0, 4).map((item) => (
-            <Resource
-              key={item.id}
-              resourceData={item}
-              resourceCapacity={resourceCapacity}
-            />
-          ))}
+          {resources
+            ?.filter((item) => [1, 2, 3, 4].includes(item.id))
+            .map((item) => (
+              <Resource
+                key={item.id}
+                resourceData={item}
+                resourceCapacity={resourceCapacity}
+              />
+            ))}
         </Row>
       )}
     </header>

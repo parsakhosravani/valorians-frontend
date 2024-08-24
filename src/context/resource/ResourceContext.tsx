@@ -82,7 +82,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({
   const [resources, setResources] = useState<TResource[]>(initialResources);
   const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
   const [resourceCapacity, setResourceCapacity] = useState(15000);
-  const [energyCapacity, setEnergyCapacity] = useState(15000);
+  const [energyCapacity, setEnergyCapacity] = useState(0);
   const [availableEnergy, setAvailableEnergy] = useState(12000);
   const [mineLevel, setMineLevel] = useState(10);
   const [availableFullEnergy, setAvailableFullEnergy] = useState(3);
@@ -95,7 +95,10 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({
         Clay: { img: clay, bg: clayBg },
         Crop: { img: crop, bg: cropBg },
       };
-
+      const energyResource = data.find((asset: TResource) => asset.id === 6);
+      if (energyResource) {
+        setEnergyCapacity(energyResource.value);
+      }
       const updatedResources = data.map((asset: TResource) => ({
         ...asset,
         img: resourceImages[asset.name]?.img || "",

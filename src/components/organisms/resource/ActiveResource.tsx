@@ -4,6 +4,7 @@ import clsx from "clsx";
 import Image from "next/image";
 import { Col, Row, InfoDrawer, Capacity, ProgressBar } from "@/components";
 import { useResourceContext, useTelegramContext } from "@/context";
+import useSWR from "swr";
 
 interface ActiveResource {}
 
@@ -17,49 +18,26 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
     setAvailableEnergy,
     availableEnergy,
     mineLevel,
-    energyCapacity,
     setActiveResource,
     setResources,
     resources,
   } = useResourceContext();
+  const { mutate } = useSWR("/api/user-assets");
   const updateResourceQuantity = async (newQuantity: number) => {
-    try {
-      const response = await fetch(
-        `http://localhost:3000/userAssets/updatesQuantity/${activeResource.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5OTJjMjQ2NS1jN2Y3LTQwMzgtYjU2Ni00ODc1MTRiYzJiMmYiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ0NDYwNTUsImV4cCI6MTcyNDQ1Njg1NX0.5yA9Njh6UmiUBr8LNRfZsOrj3GFNH9tvcrOlnELjOh4`,
-          },
-          body: JSON.stringify({ quantity: newQuantity }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to update resource quantity");
-      }
-
-      // Handle successful update
-      console.log("Resource quantity updated successfully");
-    } catch (error) {
-      console.error("Error updating resource quantity:", error);
-    }
+    mutate({ quantity: newQuantity });
   };
   const onConsumeEnergy = () => {
-    if (availableEnergy < energyCapacity) {
-      const newQuantity = activeResource.quantity + mineLevel;
-      setActiveResource((prevActiveResource) => ({
-        ...prevActiveResource,
-        quantity: newQuantity,
-      }));
-      setResources(
-        resources.map((res) =>
-          res.id === activeResource.id ? { ...res, quantity: newQuantity } : res
-        )
-      );
-      updateResourceQuantity(newQuantity);
-    }
+    const newQuantity = mineLevel;
+    setActiveResource((prevActiveResource) => ({
+      ...prevActiveResource,
+      quantity: newQuantity,
+    }));
+    setResources(
+      resources.map((res) =>
+        res.id === activeResource.id ? { ...res, quantity: newQuantity } : res
+      )
+    );
+    updateResourceQuantity(newQuantity);
   };
   const handleTouch = (event: any) => {
     const newTouches = Array.from(event.changedTouches).map(() => ({
