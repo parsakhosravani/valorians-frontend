@@ -23,9 +23,39 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
     resources,
   } = useResourceContext();
   const { mutate } = useSWR("/api/user-assets");
+
   const updateResourceQuantity = async (newQuantity: number) => {
-    mutate({ quantity: newQuantity });
+    try {
+      const response = await fetch("/api/user-assets", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resourceId: activeResource.id,
+          quantity: newQuantity,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        await mutate();
+        setResources((prevResources) =>
+          prevResources.map((resource) =>
+            resource.id === activeResource.id
+              ? { ...resource, quantity: newQuantity }
+              : resource
+          )
+        );
+      } else {
+        throw new Error("Failed to update resource quantity");
+      }
+    } catch (error) {
+      console.error("Failed to update resource quantity:", error);
+      // Handle error (e.g., show error message to user)
+    }
   };
+
   const onConsumeEnergy = () => {
     const newQuantity = mineLevel;
     setActiveResource((prevActiveResource) => ({
