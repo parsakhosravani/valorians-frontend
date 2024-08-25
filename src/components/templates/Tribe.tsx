@@ -1,12 +1,13 @@
 "use client";
 import React, { FunctionComponent } from "react";
-import { Building } from "../organisms";
+import { Builder, Building } from "../organisms";
 import bg from "~/images/background/tribe.webp";
 import Image from "next/image";
 import useBackButton from "@/hooks/useBackButton";
 import useSWR from "swr";
 import { fetcher } from "@/app/api/fetcher";
 import { TResource } from "@/context";
+import { Col } from "../atoms";
 
 interface TribePropsType {}
 
@@ -21,15 +22,14 @@ export const Tribe: FunctionComponent<TribePropsType> = () => {
 
   return (
     <>
-      <div className="m-2 my-0 h-auto">
-        <div className="grid grid-cols-2 gap-2.5 w-full overflow-y-auto scrollable max-h-[85svh] pb-10">
-          {buildings.map((building) => (
-            <div key={building.id}>
-              <Building building={building} />
-            </div>
+      <Col className="m-2 my-0">
+        <Builder />
+        <div className="gap-2.5 space-y-2 w-full overflow-y-auto scrollable max-h-[85svh] pb-32">
+          {buildings.map((item) => (
+            <Building key={item.id} building={item} />
           ))}
         </div>
-      </div>
+      </Col>
 
       <Image
         priority

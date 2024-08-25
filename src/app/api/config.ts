@@ -17,7 +17,7 @@ const createHeaders = () => {
   const token = cookies().get("token");
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMzUzODJmOC05ZDI5LTQ5ZWEtYWVhNC01OTQxYjdhMjUxMmYiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ1ODYxODAsImV4cCI6MTcyNDU5Njk4MH0.8azi_BlMHcw6-vH-sUWriWSEj2rG3HIQx2tYflRkkgE`,
+    Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyMzUzODJmOC05ZDI5LTQ5ZWEtYWVhNC01OTQxYjdhMjUxMmYiLCJ1c2VybmFtZSI6IkVyZmFuIEFiYmFzaSAiLCJpYXQiOjE3MjQ2MDY2MDYsImV4cCI6MTcyNDYxNzQwNn0.2OrmktlZd72qiu5rZwInXJHo59zoleXD0JsoHh2L37o`,
     "X-Hash": "process.env.X_Hash",
   };
 };

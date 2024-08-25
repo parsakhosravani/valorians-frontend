@@ -4,7 +4,7 @@ import clsx from "clsx";
 import Image from "next/image";
 import { Col, Row, InfoDrawer, Capacity, ProgressBar } from "@/components";
 import { useResourceContext, useTelegramContext } from "@/context";
-import useSWR from "swr";
+import { fetcherWithToken } from "@/app/api/fetcher";
 
 interface ActiveResource {}
 
@@ -22,38 +22,12 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
     setResources,
     resources,
   } = useResourceContext();
-  const { mutate } = useSWR("/api/user-assets");
 
   const updateResourceQuantity = async (newQuantity: number) => {
-    try {
-      const response = await fetch("/api/user-assets", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          resourceId: activeResource.id,
-          quantity: newQuantity,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        await mutate();
-        setResources((prevResources) =>
-          prevResources.map((resource) =>
-            resource.id === activeResource.id
-              ? { ...resource, quantity: newQuantity }
-              : resource
-          )
-        );
-      } else {
-        throw new Error("Failed to update resource quantity");
-      }
-    } catch (error) {
-      console.error("Failed to update resource quantity:", error);
-      // Handle error (e.g., show error message to user)
-    }
+    fetcherWithToken(
+      `${process.env.NEXT_PUBLIC_BASE_URL}userAssets/updateQuantity/${activeResource.id}`,
+      { method: "PUT", body: JSON.stringify({ quantity: newQuantity }) }
+    );
   };
 
   const onConsumeEnergy = () => {
@@ -123,7 +97,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
           )}
           style={{ left: `${touch.x}px`, top: `${touch.y}px` }}
         >
-          {activeResource.quantity < resourceCapacity &&
+          {activeResource.activeQuantity < resourceCapacity &&
             availableEnergy > mineLevel &&
             `+${mineLevel}`}
         </div>
@@ -133,7 +107,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
         <Row className="relative">
           <Capacity
             size="large"
-            value={activeResource.quantity}
+            value={activeResource.activeQuantity}
             totalValue={resourceCapacity}
           />
           <Row className="absolute -right-5">
@@ -145,10 +119,10 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
         </Row>
         <ProgressBar
           size="medium"
-          value={activeResource.quantity}
+          value={activeResource.activeQuantity}
           totalValue={resourceCapacity}
         />
-        {activeResource.quantity >= resourceCapacity && (
+        {activeResource.activeQuantity >= resourceCapacity && (
           <p className="border p-2 bg-[#191F27] rounded text-xs absolute top-[72px]  border-[#F72214]">
             The {activeResource.name} warehouse is full
           </p>
@@ -161,7 +135,7 @@ export const ActiveResource: React.FC<ActiveResource> = () => {
             <div
               className={clsx(
                 "w-full h-full group-active:animate-touch-animation",
-                activeResource.quantity >= resourceCapacity &&
+                activeResource.activeQuantity >= resourceCapacity &&
                   "opacity-[.5] group-active:animate-none"
               )}
             >
