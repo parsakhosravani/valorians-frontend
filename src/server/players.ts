@@ -1,27 +1,13 @@
 import "server-only";
 
 import crypto from "crypto";
+import type { InStatement, Row } from "@libsql/client";
 
-import { db } from "./db";
+import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
 
 import { REFERRAL_REWARD } from "@/lib/game/config";
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
-
-type UserRow = {
-  id: number;
-  username: string | null;
-  first_name: string;
-  last_name: string | null;
-  photo_url: string | null;
-  is_premium: number;
-  referral_code: string;
-  referred_by: number | null;
-  population: number;
-  state: string;
-  created_at: number;
-  last_seen_at: number;
-};
 
 export type Player = {
   id: number;
@@ -32,111 +18,151 @@ export type Player = {
   isPremium: boolean;
   referralCode: string;
   referredBy: number | null;
+  version: number;
   state: GameState;
 };
 
-const toPlayer = (r: UserRow): Player => ({
-  id: r.id,
-  username: r.username,
-  firstName: r.first_name,
-  lastName: r.last_name,
-  photoUrl: r.photo_url,
-  isPremium: !!r.is_premium,
-  referralCode: r.referral_code,
-  referredBy: r.referred_by,
-  state: normalizeState(JSON.parse(r.state)),
+const str = (v: unknown) => (v == null ? null : String(v));
+
+const toPlayer = (r: Row): Player => ({
+  id: Number(r.id),
+  username: str(r.username),
+  firstName: String(r.first_name ?? ""),
+  lastName: str(r.last_name),
+  photoUrl: str(r.photo_url),
+  isPremium: Number(r.is_premium) === 1,
+  referralCode: String(r.referral_code),
+  referredBy: r.referred_by == null ? null : Number(r.referred_by),
+  version: Number(r.version),
+  state: normalizeState(JSON.parse(String(r.state))),
 });
 
-const selectById = db.prepare<[number], UserRow>("SELECT * FROM users WHERE id = ?");
-const selectByCode = db.prepare<[string], UserRow>("SELECT * FROM users WHERE referral_code = ?");
-const insertUser = db.prepare(`
-  INSERT INTO users (id, username, first_name, last_name, photo_url, language_code, is_premium,
-                     referral_code, referred_by, population, state, created_at, last_seen_at)
-  VALUES (@id, @username, @first_name, @last_name, @photo_url, @language_code, @is_premium,
-          @referral_code, @referred_by, @population, @state, @now, @now)
-`);
-const updateProfile = db.prepare(`
-  UPDATE users SET username = @username, first_name = @first_name, last_name = @last_name,
-    photo_url = @photo_url, language_code = @language_code, is_premium = @is_premium, last_seen_at = @now
-  WHERE id = @id
-`);
-const updateState = db.prepare("UPDATE users SET state = ?, population = ? WHERE id = ?");
-const rankQuery = db.prepare<[number], { rank: number }>(
-  "SELECT COUNT(*) + 1 AS rank FROM users WHERE population > ?"
-);
-
-function newReferralCode() {
-  for (;;) {
-    const code = crypto.randomBytes(6).toString("base64url").replace(/[-_]/g, "").slice(0, 8);
-    if (code.length === 8 && !selectByCode.get(code)) return code;
-  }
+async function findById(id: number) {
+  const db = await getDb();
+  const rs = await db.execute({ sql: "SELECT * FROM users WHERE id = ?", args: [id] });
+  return rs.rows[0] ? toPlayer(rs.rows[0]) : null;
 }
 
-function save(id: number, state: GameState) {
-  updateState.run(JSON.stringify(state), state.population, id);
+async function findIdByCode(code: string) {
+  const db = await getDb();
+  const rs = await db.execute({ sql: "SELECT id FROM users WHERE referral_code = ?", args: [code] });
+  return rs.rows[0] ? Number(rs.rows[0].id) : null;
 }
 
-const profileParams = (u: TelegramAuthUser, now: number) => ({
-  id: u.id,
-  username: u.username ?? null,
-  first_name: u.first_name ?? "",
-  last_name: u.last_name ?? null,
-  photo_url: u.photo_url ?? null,
-  language_code: u.language_code ?? null,
-  is_premium: u.is_premium ? 1 : 0,
-  now,
-});
+const newReferralCode = () =>
+  crypto.randomBytes(9).toString("base64url").replace(/[-_]/g, "").slice(0, 8);
+
+const profileArgs = (u: TelegramAuthUser) => [
+  u.username ?? null,
+  u.first_name ?? "",
+  u.last_name ?? null,
+  u.photo_url ?? null,
+  u.language_code ?? null,
+  u.is_premium ? 1 : 0,
+];
 
 /** Loads the player, creating them (and paying referral bonuses) on first visit. */
-export const getOrCreatePlayer = db.transaction((auth: AuthResult, now: number): Player => {
-  const existing = selectById.get(auth.user.id);
+export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<Player> {
+  const db = await getDb();
+  const existing = await findById(auth.user.id);
+
   if (existing) {
-    updateProfile.run(profileParams(auth.user, now));
-    return toPlayer({ ...existing });
+    await db.execute({
+      sql: `UPDATE users SET username = ?, first_name = ?, last_name = ?, photo_url = ?,
+              language_code = ?, is_premium = ?, last_seen_at = ? WHERE id = ?`,
+      args: [...profileArgs(auth.user), now, auth.user.id],
+    });
+    return existing;
   }
 
   const state = createInitialState(now);
+  const stmts: InStatement[] = [];
   let referredBy: number | null = null;
 
-  const inviterRow = auth.startParam ? selectByCode.get(auth.startParam) : undefined;
-  if (inviterRow && inviterRow.id !== auth.user.id) {
-    referredBy = inviterRow.id;
+  const inviterId = auth.startParam ? await findIdByCode(auth.startParam) : null;
+  if (inviterId && inviterId !== auth.user.id) {
+    referredBy = inviterId;
     const bonus = auth.user.is_premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins;
-    const inviter = advance(toPlayer(inviterRow).state, now);
-    inviter.coins += bonus;
-    inviter.population += REFERRAL_REWARD.population;
-    save(inviterRow.id, inviter);
     state.coins += bonus;
+    // Credit the inviter atomically in SQL, so it can't clash with their own saves.
+    stmts.push({
+      sql: `UPDATE users SET
+              state = json_set(state,
+                '$.coins', json_extract(state, '$.coins') + ?,
+                '$.population', json_extract(state, '$.population') + ?),
+              population = population + ?,
+              version = version + 1
+            WHERE id = ?`,
+      args: [bonus, REFERRAL_REWARD.population, REFERRAL_REWARD.population, inviterId],
+    });
   }
 
-  insertUser.run({
-    ...profileParams(auth.user, now),
-    referral_code: newReferralCode(),
-    referred_by: referredBy,
-    population: state.population,
-    state: JSON.stringify(state),
-  });
-  return toPlayer(selectById.get(auth.user.id)!);
-});
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const insert: InStatement = {
+      sql: `INSERT INTO users (username, first_name, last_name, photo_url, language_code, is_premium,
+              id, referral_code, referred_by, population, state, version, created_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      args: [
+        ...profileArgs(auth.user),
+        auth.user.id,
+        newReferralCode(),
+        referredBy,
+        state.population,
+        JSON.stringify(state),
+        now,
+        now,
+      ],
+    };
+    try {
+      // Insert first: if a parallel request already created this player, the
+      // whole batch fails and the inviter isn't paid twice.
+      await db.batch([insert, ...stmts], "write");
+      break;
+    } catch (e) {
+      const msg = String((e as Error).message);
+      if (/UNIQUE constraint failed: users\.id|PRIMARY KEY/i.test(msg)) break; // created concurrently
+      if (/UNIQUE constraint failed: users\.referral_code/i.test(msg)) continue; // code clash, retry
+      throw e;
+    }
+  }
+
+  return (await findById(auth.user.id))!;
+}
 
 /**
- * Runs `fn` on the player's state brought up to `now`, inside a transaction,
- * and saves what it returns. Throws whatever `fn` throws without saving.
+ * Runs `fn` on the player's state brought up to `now` and saves the result.
+ * Uses optimistic locking: if another request saved in between, it reloads and
+ * runs `fn` again on the fresh state. Throws whatever `fn` throws, unsaved.
  */
-export const mutatePlayer = db.transaction(
-  (id: number, now: number, fn: (s: GameState) => GameState): Player => {
-    const row = selectById.get(id);
-    if (!row) throw new Error("Player not found");
-    const player = toPlayer(row);
+export async function mutatePlayer(
+  id: number,
+  now: number,
+  fn: (s: GameState) => GameState
+): Promise<Player> {
+  const db = await getDb();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const player = await findById(id);
+    if (!player) throw new Error("Player not found");
     const next = fn(advance(player.state, now));
-    save(id, next);
-    return { ...player, state: next };
+    const rs = await db.execute({
+      sql: "UPDATE users SET state = ?, population = ?, version = version + 1 WHERE id = ? AND version = ?",
+      args: [JSON.stringify(next), next.population, id, player.version],
+    });
+    if (rs.rowsAffected === 1) return { ...player, version: player.version + 1, state: next };
   }
-);
+  throw new Error("Too many simultaneous updates, try again");
+}
 
-export const rankOf = (population: number) => rankQuery.get(population)!.rank;
+export async function rankOf(population: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: "SELECT COUNT(*) + 1 AS rank FROM users WHERE population > ?",
+    args: [population],
+  });
+  return Number(rs.rows[0].rank);
+}
 
-export function playerView(p: Player, now: number) {
+export async function playerView(p: Player, now: number) {
   return {
     serverTime: now,
     me: {
@@ -146,36 +172,42 @@ export function playerView(p: Player, now: number) {
       lastName: p.lastName,
       photoUrl: p.photoUrl,
       referralCode: p.referralCode,
-      rank: rankOf(p.state.population),
+      rank: await rankOf(p.state.population),
     },
     state: p.state,
   };
 }
 
-export type PlayerView = ReturnType<typeof playerView>;
+export type PlayerView = Awaited<ReturnType<typeof playerView>>;
 
-const friendsQuery = db.prepare<
-  [number],
-  Pick<UserRow, "id" | "username" | "first_name" | "photo_url" | "is_premium" | "population" | "created_at">
->(
-  `SELECT id, username, first_name, photo_url, is_premium, population, created_at
-   FROM users WHERE referred_by = ? ORDER BY created_at DESC LIMIT 200`
-);
-const friendsCount = db.prepare<[number], { n: number }>("SELECT COUNT(*) AS n FROM users WHERE referred_by = ?");
-
-export function listFriends(id: number) {
+export async function listFriends(id: number) {
+  const db = await getDb();
+  const [count, rows] = await db.batch(
+    [
+      { sql: "SELECT COUNT(*) AS n FROM users WHERE referred_by = ?", args: [id] },
+      {
+        sql: `SELECT id, username, first_name, photo_url, is_premium, population, created_at
+              FROM users WHERE referred_by = ? ORDER BY created_at DESC LIMIT 200`,
+        args: [id],
+      },
+    ],
+    "read"
+  );
   return {
-    total: friendsCount.get(id)!.n,
-    friends: friendsQuery.all(id).map((f) => ({
-      id: f.id,
-      name: f.first_name || f.username || "Player",
-      username: f.username,
-      photoUrl: f.photo_url,
-      isPremium: !!f.is_premium,
-      population: Math.floor(f.population),
-      bonusCoins: f.is_premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins,
-      bonusPopulation: REFERRAL_REWARD.population,
-      joinedAt: f.created_at,
-    })),
+    total: Number(count.rows[0].n),
+    friends: rows.rows.map((f) => {
+      const premium = Number(f.is_premium) === 1;
+      return {
+        id: Number(f.id),
+        name: String(f.first_name || f.username || "Player"),
+        username: str(f.username),
+        photoUrl: str(f.photo_url),
+        isPremium: premium,
+        population: Math.floor(Number(f.population)),
+        bonusCoins: premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins,
+        bonusPopulation: REFERRAL_REWARD.population,
+        joinedAt: Number(f.created_at),
+      };
+    }),
   };
 }

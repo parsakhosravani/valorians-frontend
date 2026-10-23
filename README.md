@@ -2,7 +2,7 @@
 
 A Telegram Mini App game: tap to mine iron, wood, clay and crop, upgrade 24 buildings to grow your tribe, complete social quests and invite friends for bonuses.
 
-This repo is the whole game — the Next.js frontend **and** its backend (API routes + SQLite). The server is authoritative: every tap, upgrade and reward is checked and saved on the server, so progress survives reloads and devices and can't be faked from the browser.
+This repo is the whole game — the Next.js frontend **and** its backend (API routes + a SQLite/Turso database). The server is authoritative: every tap, upgrade and reward is checked and saved on the server, so progress survives reloads and devices and can't be faked from the browser.
 
 ## How it works
 
@@ -11,11 +11,12 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 | Game rules and balance numbers (costs, rates, rewards) | `src/lib/game/config.ts` |
 | Game engine — pure functions shared by server and client | `src/lib/game/engine.ts` |
 | Telegram sign-in verification (initData HMAC) | `src/server/auth.ts` |
-| Database (SQLite, auto-created) and players | `src/server/db.ts`, `src/server/players.ts` |
+| Database (Turso or local SQLite, tables auto-created) and players | `src/server/db.ts`, `src/server/players.ts` |
 | API routes | `src/app/api/*` |
 | Client state, tap batching, live counters | `src/context/resource/ResourceContext.tsx` |
 
 - **Sign-in:** the Mini App sends Telegram's signed `initData` on every request (`Authorization: tma <initData>`). The server checks the signature with your bot token, so nobody can play as someone else.
+- **Saving** is safe under parallel requests: every save checks a version number and retries on a clash, so taps and upgrades sent at the same moment are never lost.
 - **Time-based progress** (energy refill, passive production, population growth, building timers, coin income) is computed from timestamps — nothing needs to run in the background.
 - **Taps** are applied instantly on screen and sent to the server in small batches. The server caps them by energy, warehouse space and a human tapping speed.
 - **Referrals:** each player gets an invite link `https://t.me/<bot>/<app>?startapp=<code>`. When a new player opens it, both get coins (more if the friend has Telegram Premium) and the inviter gets population.
@@ -64,11 +65,24 @@ Add `?dev_user=2` to the URL to play as a different test player, and `?startapp=
 ## Go live on Telegram
 
 1. Create a bot with [@BotFather](https://t.me/BotFather), then `/newapp` to create the Mini App. Its short name goes in `NEXT_PUBLIC_APP_SHORT_NAME`.
-2. Deploy somewhere with a **persistent disk** (a VPS, Fly.io, Railway, Render with a disk…). SQLite lives at `DATABASE_PATH`. Serverless hosts like Vercel wipe the disk, so they won't keep progress.
-3. Set the environment (see `.env` for every option). Required in production: `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_BOT_ADDRESS`. Never set `NEXT_PUBLIC_DEV_LOGIN` in production.
-4. Point the Mini App URL in BotFather at your HTTPS domain.
+2. Create the database (Vercel and other serverless hosts):
+   - Sign up at [turso.tech](https://turso.tech) (free plan is enough to start) and create a database. Pick a region close to your Vercel functions.
+   - Copy its URL (`libsql://…`) and create a token for it.
+   - The tables are created automatically on the first request.
+3. In Vercel → Project → Settings → Environment Variables, add:
+   - `TELEGRAM_BOT_TOKEN`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`
+   - `NEXT_PUBLIC_BOT_ADDRESS`, `NEXT_PUBLIC_APP_SHORT_NAME`, and the quest links (`NEXT_PUBLIC_TELEGRAM_CHANNEL`, …)
+   - Never set `NEXT_PUBLIC_DEV_LOGIN` in production.
+   Redeploy after adding them (`NEXT_PUBLIC_*` values are baked in at build time).
+4. Point the Mini App URL in BotFather at your Vercel domain.
 
-With Docker:
+Node.js 24 is required (pinned in `package.json`).
+
+**Without Turso** the game still runs on Vercel, but it can only store players in `/tmp`, which Vercel wipes whenever it restarts the server — so progress can reset. Add the two Turso variables to make it permanent; no code change needed.
+
+### Hosting on your own server instead
+
+Leave the Turso variables empty and the game uses a local SQLite file at `DATABASE_PATH`, which needs a persistent disk. With Docker:
 
 ```bash
 docker build -t valorians \

@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@fontsource/roboto": "^5.3.0",
+    "@libsql/client": "^0.18.0",
     "@twa-dev/types": "^7.0.0",
-    "better-sqlite3": "^13.0.3",
     "clsx": "2.1.1",
     "next": "14.2.5",
     "react": "^18",
@@ -23,7 +23,6 @@
     "sharp": "^0.33.4"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-copy-to-clipboard": "^5.0.7",
@@ -34,5 +33,8 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
   },
-  "packageManager": "yarn@1.22.21+sha1.1959a18351b811cdeedbd484a8f86c3cc3bbaf72"
+  "packageManager": "yarn@1.22.21+sha1.1959a18351b811cdeedbd484a8f86c3cc3bbaf72",
+  "engines": {
+    "node": "24.x"
+  }
 }

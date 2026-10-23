@@ -70,7 +70,9 @@ export function authenticate(header: string | null): AuthResult {
   const value = header.slice(space + 1);
 
   if (scheme === "tma") {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
+    // Older deployments stored the token as NEXT_PUBLIC_TELEGRAM_BOT_TOKEN; accept
+    // it so they keep working, but move it to TELEGRAM_BOT_TOKEN (server-only).
+    const token = process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
     if (!token) throw new AuthError("Server is missing TELEGRAM_BOT_TOKEN");
     return verifyInitData(value, token);
   }
