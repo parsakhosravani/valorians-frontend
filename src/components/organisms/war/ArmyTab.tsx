@@ -41,15 +41,15 @@ const UnitCard = ({ unit }: { unit: UnitDef }) => {
             <h3 className="font-bold">{unit.name}</h3>
             <span className="text-sm">
               <b>{fmt(state.army[unit.id])}</b>
-              <span className="text-[#B5C7DE]"> home{away ? ` · ${fmt(away)} away` : ""}</span>
+              <span className="text-[#B19C80]"> home{away ? ` · ${fmt(away)} away` : ""}</span>
             </span>
           </div>
-          <p className="text-xs text-[#B5C7DE]">{unit.description}</p>
+          <p className="text-xs text-[#B19C80]">{unit.description}</p>
           <div className="flex gap-3 text-xs mt-1">
             <span>⚔️ {unit.attack}</span>
             <span>🛡️ {unit.defense}</span>
             <span>🎒 {unit.carry}</span>
-            <span className="text-[#F72214]">-{unit.upkeep} crop/h</span>
+            <span className="text-[#F08A6C]">-{unit.upkeep} crop/h</span>
           </div>
         </div>
       </div>
@@ -60,13 +60,13 @@ const UnitCard = ({ unit }: { unit: UnitDef }) => {
             {RESOURCES.map((r) => (
               <span
                 key={r.id}
-                className={clsx("flex items-center gap-1", state.resources[r.id] < unit.cost[r.id] * count && "text-[#F72214]")}
+                className={clsx("flex items-center gap-1", state.resources[r.id] < unit.cost[r.id] * count && "text-[#F08A6C]")}
               >
                 <Image alt={r.name} className="h-3.5 w-3.5" src={r.img} />
                 {fmt(unit.cost[r.id] * count)}
               </span>
             ))}
-            <span className="text-[#B5C7DE]">⏱ {formatDuration(seconds * 1000)}</span>
+            <span className="text-[#B19C80]">⏱ {formatDuration(seconds * 1000)}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <Stepper max={Math.max(1, affordable)} value={count} onChange={(n) => setCount(Math.max(1, n))} />
@@ -76,7 +76,7 @@ const UnitCard = ({ unit }: { unit: UnitDef }) => {
           </div>
         </div>
       ) : (
-        <p className="mt-2 text-xs text-[#FCA234]">
+        <p className="mt-2 text-xs text-[#E3A948]">
           🔒 Build {BUILDING_BY_ID[unit.requires.building].name} to level {unit.requires.level} to unlock
         </p>
       )}
@@ -92,16 +92,16 @@ export const ArmyTab = () => {
     <div className="flex flex-col gap-2">
       <Card className="grid grid-cols-3 text-center">
         <div>
-          <div className="text-[10px] text-[#B5C7DE]">ATTACK</div>
+          <div className="text-[10px] text-[#B19C80]">ATTACK</div>
           <div className="font-bold">⚔️ {fmt(attackPower(state, home))}</div>
         </div>
         <div>
-          <div className="text-[10px] text-[#B5C7DE]">DEFENSE</div>
+          <div className="text-[10px] text-[#B19C80]">DEFENSE</div>
           <div className="font-bold">🛡️ {fmt(defensePower(state))}</div>
         </div>
         <div>
-          <div className="text-[10px] text-[#B5C7DE]">UPKEEP</div>
-          <div className="font-bold text-[#F72214]">-{fmt(rates.troopUpkeep)}/h</div>
+          <div className="text-[10px] text-[#B19C80]">UPKEEP</div>
+          <div className="font-bold text-[#F08A6C]">{rates.troopUpkeep ? `-${fmt(rates.troopUpkeep)}` : 0}/h</div>
         </div>
       </Card>
 
@@ -118,7 +118,7 @@ export const ArmyTab = () => {
                 <span>
                   {unit.icon} {unit.name} {fmt(t.done)}/{fmt(t.count)}
                 </span>
-                <span className="text-[#B5C7DE]">
+                <span className="text-[#B19C80]">
                   {started ? `${formatDuration(end - now)} left` : `starts in ${formatDuration(t.startsAt - now)}`}
                 </span>
               </div>
@@ -135,7 +135,7 @@ export const ArmyTab = () => {
               <span className="truncate">
                 From {m.target}: <ArmyLine army={m.units} />
               </span>
-              <span className="text-[#B5C7DE] shrink-0">{formatDuration(m.returnsAt - now)}</span>
+              <span className="text-[#B19C80] shrink-0">{formatDuration(m.returnsAt - now)}</span>
             </div>
           ))}
         </Card>

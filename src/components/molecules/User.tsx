@@ -7,20 +7,20 @@ import { useGame } from "@/context";
 
 export const User = () => {
   const { me } = useGame();
-  const name = me.username || me.firstName || "Player";
+  const name = me.firstName || me.username || "Player";
 
   return (
-    <Link className="flex gap-1 items-center" href="/leaderboard">
+    <Link className="flex gap-2 items-center min-w-0" href="/leaderboard">
       {me.photoUrl ? (
         // Telegram avatars are remote; a plain img avoids next/image domain config.
         // eslint-disable-next-line @next/next/no-img-element
-        <img alt="avatar" className="rounded h-7 w-7 object-cover" src={me.photoUrl} />
+        <img alt="" className="rounded-lg h-9 w-9 object-cover border-2 border-gold" src={me.photoUrl} />
       ) : (
-        <Image alt="avatar" className="rounded h-7 w-7" src={avatar} />
+        <Image alt="" className="rounded-lg h-9 w-9 border-2 border-gold" src={avatar} />
       )}
-      <div className="flex flex-col">
-        <div className="text-white text-[12px] font-bold max-w-[72px] truncate">{name}</div>
-        <div className="text-[#019AF0] text-[10px]">Rank {me.rank.toLocaleString("en-US")} ›</div>
+      <div className="flex flex-col min-w-0 leading-tight">
+        <span className="text-parch text-sm font-extrabold truncate max-w-[150px]">{name}</span>
+        <span className="text-goldtext text-xs font-bold">Rank #{me.rank.toLocaleString("en-US")} ›</span>
       </div>
     </Link>
   );

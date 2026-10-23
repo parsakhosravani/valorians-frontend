@@ -1,54 +1,68 @@
 "use client";
-import { Route } from "next";
-import {
-  FriendsIcon,
-  IconSvgProps,
-  QuestIcon,
-  ResourcesIcon,
-  TribeIcon,
-  BattleIcon,
-  Col,
-  Text,
-  Row,
-} from "@/components";
-import { usePathname } from "next/navigation";
 import React from "react";
-import clsx from "clsx";
-import { useTelegramContext } from "@/context";
 import Link from "next/link";
+import clsx from "clsx";
+import { usePathname } from "next/navigation";
+import { Route } from "next";
 
-type TNavbarItems = {
-  icon: React.ReactElement<IconSvgProps>;
-  link: Route;
-  name: string;
+import { useTelegramContext } from "@/context";
+
+const Svg = ({ children }: { children: React.ReactNode }) => (
+  <svg
+    aria-hidden="true"
+    fill="none"
+    height="24"
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth="2"
+    viewBox="0 0 24 24"
+    width="24"
+  >
+    {children}
+  </svg>
+);
+
+export const NAV_ICONS = {
+  hall: (
+    <Svg>
+      <path d="M3 21h18M5 21V10l7-6 7 6v11" />
+      <path d="M9 21v-6h6v6M3 11l9-8 9 8" />
+    </Svg>
+  ),
+  build: (
+    <Svg>
+      <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
+      <path d="M17.6 6.4 20 4M14 4l6 6-4 4-6-6z" />
+    </Svg>
+  ),
+  war: (
+    <Svg>
+      <path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2" />
+      <path d="M9.5 17.5 21 6V3h-3L6.5 14.5M11 19l-6-6M8 16l-4 4M5 21l-2-2" />
+    </Svg>
+  ),
+  friends: (
+    <Svg>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6" />
+      <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.4.6 4 2.8 4 6" />
+    </Svg>
+  ),
+  mine: (
+    <Svg>
+      <path d="M14 4c3 0 6 2 7 5M3 21l9-9M10 4c-3 0-6 2-7 5" />
+      <path d="M14 4 10 4l2 8z" />
+    </Svg>
+  ),
 };
 
-const navbarItems: TNavbarItems[] = [
-  {
-    icon: <ResourcesIcon />,
-    name: "Resources",
-    link: "/resources",
-  },
-  {
-    icon: <TribeIcon />,
-    name: "Tribe",
-    link: "/tribe",
-  },
-  {
-    icon: <BattleIcon />,
-    name: "Battle",
-    link: "/battle",
-  },
-  {
-    icon: <FriendsIcon />,
-    name: "Friends",
-    link: "/friends",
-  },
-  {
-    icon: <QuestIcon />,
-    name: "Quest",
-    link: "/quest",
-  },
+const items: { icon: React.ReactNode; name: string; link: Route }[] = [
+  { icon: NAV_ICONS.hall, name: "Hall", link: "/hall" as Route },
+  { icon: NAV_ICONS.build, name: "Build", link: "/tribe" },
+  { icon: NAV_ICONS.war, name: "War", link: "/battle" },
+  { icon: NAV_ICONS.friends, name: "Friends", link: "/friends" },
+  { icon: NAV_ICONS.mine, name: "Mine", link: "/resources" },
 ];
 
 export const Navbar = () => {
@@ -56,27 +70,29 @@ export const Navbar = () => {
   const { telegram } = useTelegramContext();
 
   return (
-    <Row
+    <nav
       className={clsx(
-        "max-w-[450px] border-t-2 border-[#019AF0] px-6 justify-between bg-[#191F27] w-full pt-3 rounded-t-3xl fixed bottom-0",
-        telegram?.WebApp.platform === "ios" ? "pb-5" : "pb-0"
+        "max-w-md w-full grid grid-cols-5 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
+        telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-3"
       )}
     >
-      {navbarItems.map((item) => (
-        <Link className="w-[50px] h-[50px]" key={item.name} href={item.link}>
-          <Col className=" items-center gap-1 text-[#8C8F93]">
-            {React.cloneElement(item.icon, {
-              fill: item.link === pathname ? "#FFF" : "#8C8F93",
-            })}
-            <Text
-              size="tiny"
-              color={item.link === pathname ? "white" : "primary"}
-            >
-              {item.name}
-            </Text>
-          </Col>
-        </Link>
-      ))}
-    </Row>
+      {items.map((item) => {
+        const active = item.link === pathname;
+
+        return (
+          <Link
+            key={item.name}
+            className={clsx(
+              "flex flex-col items-center gap-0.5 text-[11px]",
+              active ? "text-goldtext font-extrabold" : "text-muted font-bold"
+            )}
+            href={item.link}
+          >
+            {item.icon}
+            {item.name}
+          </Link>
+        );
+      })}
+    </nav>
   );
 };

@@ -49,7 +49,7 @@ export const Drawer: React.FC<DrawerProps> = ({
       {isOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40" />}
       <div
         ref={drawerRef}
-        className={`fixed bg-[#191F27] max-w-md mx-auto w-full shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
+        className={`fixed bg-[#1E1610] max-w-md mx-auto w-full shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
           positionClasses[position]
         } ${
           isOpen
@@ -61,9 +61,9 @@ export const Drawer: React.FC<DrawerProps> = ({
             : "transform -translate-x-full"
         }`}
       >
-        <div className="p-4 relative border-t-2 border-[#019AF0] rounded-t-3xl max-h-[85svh] overflow-y-auto scrollable">
+        <div className="p-4 pb-8 relative border-t-2 border-gold rounded-t-3xl max-h-[85svh] overflow-y-auto scrollable">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">{title}</h2>
+            <h2 className="font-display text-xl font-bold">{title}</h2>
             <CloseIcon onClick={onClose} />
           </div>
           {children}

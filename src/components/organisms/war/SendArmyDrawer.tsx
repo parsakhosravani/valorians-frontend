@@ -63,13 +63,13 @@ export const SendArmyDrawer = ({
     <Drawer isOpen={!!target} position="bottom" title={target?.title} onClose={onClose}>
       {target && d && (
         <div className="flex flex-col gap-3 pt-2">
-          {target.note && <p className="text-xs text-[#FCA234]">{target.note}</p>}
+          {target.note && <p className="text-xs text-[#E3A948]">{target.note}</p>}
           {UNITS.map((u) => (
             <div key={u.id} className="flex items-center gap-2">
               <UnitBadge size={32} unit={u.id} />
               <div className="flex-1 text-sm">
                 <div className="font-bold">{u.name}</div>
-                <div className="text-[10px] text-[#B5C7DE]">{fmt(state.army[u.id])} at home</div>
+                <div className="text-[10px] text-[#B19C80]">{fmt(state.army[u.id])} at home</div>
               </div>
               <Stepper
                 max={state.army[u.id]}
@@ -79,17 +79,17 @@ export const SendArmyDrawer = ({
             </div>
           ))}
 
-          <div className="grid grid-cols-3 text-center bg-[#212F42] rounded p-2 text-sm">
+          <div className="grid grid-cols-3 text-center bg-[#1E1610] rounded p-2 text-sm">
             <div>
-              <div className="text-[10px] text-[#B5C7DE]">YOUR ATTACK</div>
+              <div className="text-[10px] text-[#B19C80]">YOUR ATTACK</div>
               <b>⚔️ {fmt(power)}</b>
             </div>
             <div>
-              <div className="text-[10px] text-[#B5C7DE]">THEIR DEFENSE</div>
+              <div className="text-[10px] text-[#B19C80]">THEIR DEFENSE</div>
               <b>🛡️ {d.exact ? fmt(d.min) : `${fmt(d.min)}–${fmt(d.max)}`}</b>
             </div>
             <div>
-              <div className="text-[10px] text-[#B5C7DE]">CAN CARRY</div>
+              <div className="text-[10px] text-[#B19C80]">CAN CARRY</div>
               <b>🎒 {fmt(carry)}</b>
             </div>
           </div>
@@ -97,10 +97,10 @@ export const SendArmyDrawer = ({
             <p
               className={
                 verdict === "Likely victory"
-                  ? "text-center text-sm font-bold text-green-400"
+                  ? "text-center text-sm font-bold text-good"
                   : verdict === "Likely defeat"
-                  ? "text-center text-sm font-bold text-[#F72214]"
-                  : "text-center text-sm font-bold text-[#FCA234]"
+                  ? "text-center text-sm font-bold text-[#F08A6C]"
+                  : "text-center text-sm font-bold text-[#E3A948]"
               }
             >
               {verdict} · luck can swing it ±10%

@@ -22,9 +22,9 @@ export const Tribe: FunctionComponent = () => {
 
   return (
     <>
-      <Col className="m-2 my-0 w-full">
+      <Col className="px-3 pt-1 w-full">
         <Builder />
-        <div className="gap-2.5 space-y-2 w-full overflow-y-auto scrollable max-h-[70svh] pb-32">
+        <div className="space-y-2.5 w-full pb-4">
           {sorted.map((item) => (
             <Building key={item.id} building={item} />
           ))}
@@ -34,7 +34,7 @@ export const Tribe: FunctionComponent = () => {
       <Image
         priority
         alt={"tribe"}
-        className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
+        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-25"
         src={bg}
       />
     </>

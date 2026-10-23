@@ -17,7 +17,7 @@ export const CampsTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) 
 
   return (
     <div className="flex flex-col gap-2">
-      <Card className="text-xs text-[#B5C7DE]">
+      <Card className="text-xs text-[#B19C80]">
         Barbarian camps don&apos;t fight back between battles. Beat each camp for a big first-time reward, unlock the
         next one, and raid beaten camps again every hour for a smaller haul.
       </Card>
@@ -31,7 +31,7 @@ export const CampsTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) 
             <div className="text-3xl">{st.state === "locked" ? "🔒" : level <= state.camps.cleared ? "🏳️" : "🏕️"}</div>
             <div className="flex-1 min-w-0">
               <div className="font-bold">Barbarian camp {level}</div>
-              <div className="text-xs text-[#B5C7DE] flex flex-wrap gap-x-2">
+              <div className="text-xs text-[#B19C80] flex flex-wrap gap-x-2">
                 <span>🛡️ {fmt(def)}</span>
                 <span>
                   🎁 {fmt(reward.resources)} each + 🪙 {fmt(reward.coins)}
@@ -40,7 +40,7 @@ export const CampsTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) 
               </div>
             </div>
             {st.state === "cooldown" ? (
-              <span className="text-xs text-[#B5C7DE] text-right">{formatDuration(st.readyAt - now)}</span>
+              <span className="text-xs text-[#B19C80] text-right">{formatDuration(st.readyAt - now)}</span>
             ) : (
               <Button
                 disabled={st.state === "locked"}
