@@ -1,19 +1,23 @@
 import { Text } from "@/components";
+import { FULL_ENERGY_PER_DAY } from "@/lib/game/config";
+import { formatDuration } from "@/lib/format";
 
 interface FullEnergyDrawerContentProps {
-  availableFullEnergy: number;
+  remaining: number;
+  waitMs: number;
 }
 
-export const FullEnergyDrawerContent: React.FC<
-  FullEnergyDrawerContentProps
-> = ({ availableFullEnergy }) => {
+export const FullEnergyDrawerContent: React.FC<FullEnergyDrawerContentProps> = ({ remaining, waitMs }) => {
   return (
     <>
       <Text color="gray" size="small">
-        You can use this feature for free once every 24 hours, with an interval
-        of one hour each time, to recharge your energy
+        Refill your energy for free {FULL_ENERGY_PER_DAY} times a day, at most once per hour. Uses reset at
+        midnight UTC.
       </Text>
-      <Text size="large">{availableFullEnergy}/3 available</Text>
+      <Text size="large">
+        {remaining}/{FULL_ENERGY_PER_DAY} available
+      </Text>
+      {remaining > 0 && waitMs > 0 && <Text color="gray">Ready again in {formatDuration(waitMs)}</Text>}
     </>
   );
 };

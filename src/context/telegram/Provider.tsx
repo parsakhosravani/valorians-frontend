@@ -1,6 +1,6 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import { TelegramContextType } from "./types";
-import TelegramContext, { initialUserProfileData } from "./Context";
+import TelegramContext from "./Context";
 import useDisableZoom from "@/hooks/useDisableZoom";
 import useDisableScroll from "@/hooks/useDisableScroll";
 import useMobilePlatform from "@/hooks/useMobilePlatform";
@@ -16,7 +16,6 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
 }) => {
   const [telegram, setTelegram] = useState<Telegram>();
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(initialUserProfileData);
   const [progressBarStart, setProgressBarStart] = useState(0);
 
   // Start app
@@ -24,6 +23,8 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
     if (typeof window !== "undefined" && "Telegram" in window) {
       const telegram = (window as any).Telegram;
       const miniApp = (window as any).Telegram.WebApp;
+
+      if (!miniApp.initData) return; // opened in a normal browser
 
       // configs
       miniApp.ready();
@@ -54,7 +55,6 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   const value: TelegramContextType = {
     telegram,
     user,
-    userProfile,
     isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile,
     progressBarStart,
     setProgressBarStart,

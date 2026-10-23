@@ -1,105 +1,130 @@
-import { TextImage } from "@/components/molecules";
-import iron from "~/images/resources/iron.webp";
-import wood from "~/images/resources/wood.webp";
-import clay from "~/images/resources/clay.webp";
-import crop from "~/images/resources/crop.webp";
-import time from "~/images/resources/time.webp";
+"use client";
+import { useState } from "react";
+import Image from "next/image";
+import clsx from "clsx";
 
+import time from "~/images/resources/time.webp";
 import population from "~/images/resources/population.webp";
 
-import { StaticImageData } from "next/image";
-import { Chip, Col, Row, Text, TBuilding } from "@/components";
+import { TextImage } from "@/components/molecules";
+import { Button, Chip, Col, Row, Text } from "@/components";
+import { RESOURCES, useGame } from "@/context";
+import {
+  BuildingDef,
+  CROP_UPKEEP_PER_BUILDING_LEVEL,
+  GROWTH_PER_BUILDING_LEVEL,
+  buildingImage,
+} from "@/lib/game/config";
+import { buildingUpgradeInfo, getRates } from "@/lib/game/engine";
+import { compact, formatDuration } from "@/lib/format";
 
 interface BuildingProps {
-  buidling: TBuilding;
+  building: BuildingDef;
 }
-type TBuildingCost = {
-  resource: StaticImageData;
-  value: string;
-};
-const buildingCost: TBuildingCost[] = [
-  {
-    resource: wood,
-    value: "100",
-  },
-  {
-    resource: crop,
-    value: "100",
-  },
-  {
-    resource: iron,
-    value: "100",
-  },
-  {
-    resource: clay,
-    value: "100",
-  },
-  {
-    resource: crop,
-    value: "-1 Per Hour",
-  },
-  {
-    resource: population,
-    value: "1",
-  },
-];
 
-export const Building: React.FC<BuildingProps> = ({ buidling }) => {
+export const Building: React.FC<BuildingProps> = ({ building }) => {
+  const { state, now, upgradeBuilding } = useGame();
+  const [busy, setBusy] = useState(false);
+
+  const level = state.buildings[building.id] ?? 0;
+  const inQueue = state.queue.find((q) => q.building === building.id);
+  const info = buildingUpgradeInfo(state, building.id);
+  const freeBuilder = state.queue.length < getRates(state).builders;
+  const missing = RESOURCES.filter((r) => state.resources[r.id] < info.cost);
+
+  const onUpgrade = async () => {
+    setBusy(true);
+    await upgradeBuilding(building.id);
+    setBusy(false);
+  };
+
+  let label = "Upgrade";
+  let disabled = busy;
+
+  if (info.maxed) [label, disabled] = ["Max level", true];
+  else if (!freeBuilder) [label, disabled] = ["No free builder", true];
+  else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name).join(", ")}`, true];
+
   return (
-    <Col className="bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] p-2 items-center">
-      <Row className="relative">
-        <Row className="-top-2 left-0 absolute">
-          <Chip color="primary" label="1" />
+    <Col className="bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] p-2">
+      <Row className="relative gap-3">
+        <Row className="-top-2 left-0 absolute z-[1]">
+          <Chip color="primary" label={String(level)} />
         </Row>
-        <TextImage
-          direction="row"
-          imgSrc={buidling.src}
-          imgAlt="building"
-          size="extraLarge"
-          gap={20}
-        >
-          <Col className="justify-center gap-2">
-            <Row className="justify-between items-center">
-              <h2 className="text-lg font-bold">{buidling.name}</h2>
-              <TextImage
-                imgSrc={time}
-                imgAlt={"time cost"}
-                title={"10s"}
-                size="small"
-              />
-            </Row>
-            <Col>
-              <Text color="gray" size="tiny">
-                Upgrade Expenses
+        <Image
+          alt={building.name}
+          className="h-[110px] w-[110px] object-contain shrink-0"
+          height={110}
+          src={buildingImage(building)}
+          width={110}
+        />
+        <Col className="justify-center gap-2 flex-1 min-w-0">
+          <Row className="justify-between items-center gap-2">
+            <h2 className="text-lg font-bold leading-tight">{building.name}</h2>
+            {!info.maxed && !inQueue && (
+              <TextImage imgAlt="time cost" imgSrc={time} size="small" title={formatDuration(info.seconds * 1000)} />
+            )}
+          </Row>
+          <Text color="gray" size="small">
+            {building.description}
+          </Text>
+
+          {inQueue ? (
+            <Col className="gap-1">
+              <Text size="small">
+                Upgrading to level {inQueue.toLevel} · {formatDuration(inQueue.endsAt - now)} left
               </Text>
-              <Row className="justify-between">
-                <TextImage
-                  imgSrc={population}
-                  imgAlt="populationPerHour"
-                  title="+2 growth per hour"
-                  size="small"
+              <div className="h-1.5 w-full bg-white/20 rounded">
+                <div
+                  className="h-full bg-[#00A3FF] rounded transition-all"
+                  style={{
+                    width: `${Math.min(100, ((now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) * 100)}%`,
+                  }}
                 />
-              </Row>
+              </div>
             </Col>
-            <Col>
-              <Text color="gray" size="tiny">
-                upgrade Impact on population growth
-              </Text>
-              <Row className="flex-wrap gap-1">
-                {buildingCost.map((item, index) => (
+          ) : (
+            !info.maxed && (
+              <Col className="gap-1">
+                <Text color="gray" size="tiny">
+                  Upgrade cost (level {info.from} → {info.from + 1})
+                </Text>
+                <Row className="flex-wrap gap-x-2 gap-y-1">
+                  {RESOURCES.map((r) => (
+                    <span
+                      key={r.id}
+                      className={clsx(state.resources[r.id] < info.cost && "text-[#F72214]")}
+                    >
+                      <TextImage imgAlt={r.name} imgSrc={r.img} size="small" title={compact(info.cost)} />
+                    </span>
+                  ))}
                   <TextImage
-                    key={index}
-                    imgSrc={item.resource}
-                    imgAlt={item.value}
-                    title={item.value}
+                    imgAlt="population growth"
+                    imgSrc={population}
                     size="small"
+                    title={`+${GROWTH_PER_BUILDING_LEVEL}/h`}
                   />
-                ))}
-              </Row>
-            </Col>
-          </Col>
-        </TextImage>
+                  <span className="text-[#F72214]">
+                    <TextImage
+                      imgAlt="crop upkeep"
+                      imgSrc={RESOURCES[3].img}
+                      size="small"
+                      title={`-${CROP_UPKEEP_PER_BUILDING_LEVEL}/h`}
+                    />
+                  </span>
+                </Row>
+              </Col>
+            )
+          )}
+        </Col>
       </Row>
+      {!inQueue && (
+        <div className="mt-2">
+          <Button isFull disabled={disabled} size="small" onClick={onUpgrade}>
+            {label}
+          </Button>
+        </div>
+      )}
     </Col>
   );
 };

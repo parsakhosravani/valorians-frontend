@@ -4,22 +4,16 @@ import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
-import {
-  Coin,
-  QuestDrawer,
-  QuestDrawerContent,
-  socialLinks,
-  TextImage,
-} from "@/components";
+import { ACTIVE_QUESTS, Coin, QUEST_ICONS, QuestDrawer, TextImage } from "@/components";
+import { useGame } from "@/context";
+import { QuestId } from "@/lib/game/config";
+import { questStatus } from "@/lib/game/engine";
 
 interface QuestPropsType {}
 
 export const Quest: FunctionComponent<QuestPropsType> = () => {
-  const [openDrawer, setOpenDrawer] = useState<QuestDrawerContent | null>(null);
-
-  const handleDrawerOpen = (type: QuestDrawerContent) => {
-    setOpenDrawer(type);
-  };
+  const { state, now } = useGame();
+  const [openDrawer, setOpenDrawer] = useState<QuestId | null>(null);
 
   return (
     <>
@@ -49,40 +43,43 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
             Task List:
           </div>
           <div className="grid gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
-            {socialLinks.map((item) => (
-              <div
-                key={item.title}
-                className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md"
-              >
-                <Image src={item.icon} width={34} height={34} alt="social" />
-                <div
-                  onClick={() =>
-                    handleDrawerOpen(item.title as QuestDrawerContent)
-                  }
-                  className="flex flex-col justify-start gap-[5px]"
+            {ACTIVE_QUESTS.length === 0 && (
+              <p className="text-sm text-[#B5C7DE]">No tasks right now. Check back soon!</p>
+            )}
+            {ACTIVE_QUESTS.map((item) => {
+              const done = questStatus(state, item.id, now).state === "claimed";
+
+              return (
+                <button
+                  key={item.id}
+                  className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md text-left"
+                  onClick={() => setOpenDrawer(item.id)}
                 >
-                  <div className="leading-none font-bold">{item.title}</div>
-                  <div className="flex gap-3">
-                    <Coin amount={1000} />
-                    <b className="text-xs">and</b>
-                    <TextImage
-                      direction="row"
-                      imgSrc={population}
-                      imgAlt="population"
-                      title="+10"
-                      size="small"
-                    />
-                    <TextImage
-                      direction="row"
-                      imgSrc={population}
-                      imgAlt="populationPerHour"
-                      title="+4"
-                      size="small"
-                    />
+                  <Image alt="social" height={34} src={QUEST_ICONS[item.id]} width={34} />
+                  <div className="flex flex-col justify-start gap-[5px] flex-1">
+                    <div className="leading-none font-bold">{item.title}</div>
+                    <div className="flex gap-3">
+                      <Coin amount={item.reward.coins} />
+                      <TextImage
+                        direction="row"
+                        imgAlt="population"
+                        imgSrc={population}
+                        size="small"
+                        title={`+${item.reward.population}`}
+                      />
+                      <TextImage
+                        direction="row"
+                        imgAlt="populationPerHour"
+                        imgSrc={population}
+                        size="small"
+                        title={`+${item.reward.growth}/h`}
+                      />
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                  <span className="text-lg pr-1">{done ? "✅" : "›"}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

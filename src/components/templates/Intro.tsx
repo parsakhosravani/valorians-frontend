@@ -6,24 +6,33 @@ import x from "~/images/social/x.webp";
 import bg from "~/images/background/intro.webp";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { useTelegramContext } from "@/context";
+import { useEffect, useState } from "react";
+
+import { useResourceContext, useTelegramContext } from "@/context";
+import { questLink } from "@/components/organisms/quest/QuestDrawer";
 
 export const Intro = () => {
   const { progressBarStart, setProgressBarStart } = useTelegramContext();
+  const { status, error, retry } = useResourceContext();
+  const [introDone, setIntroDone] = useState(false);
   const router = useRouter();
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setProgressBarStart(100);
     }, 300);
-    const redirect = setTimeout(() => {
-      router.push("/resources");
-    }, 3300 + 100);
+    const done = setTimeout(() => setIntroDone(true), 3300 + 100);
+
     return () => {
       clearTimeout(timer);
-      clearTimeout(redirect);
+      clearTimeout(done);
     };
   }, []);
+
+  // Enter the game once the intro has played AND the player has loaded.
+  useEffect(() => {
+    if (introDone && status === "ready") router.replace("/resources");
+  }, [introDone, status]);
   return (
     <>
       <div className="h-screen flex w-full items-end justify-center">
@@ -42,38 +51,56 @@ export const Intro = () => {
             </div>
           </div>
 
-          <div className="flex text-white w-full flex-col items-center justify-center gap-y-1">
-            <div className="text-[17px] font-extrabold leading-none">
-              Stay tuned
+          {status === "error" ? (
+            <div className="flex text-white w-full flex-col items-center justify-center gap-y-1">
+              <div className="text-[15px] font-bold text-center">{error}</div>
+              <button
+                className="text-[#019AF0] font-bold underline"
+                onClick={retry}
+              >
+                Try again
+              </button>
             </div>
-            <div className="text-center">More info in official channels</div>
-          </div>
+          ) : (
+            <div className="flex text-white w-full flex-col items-center justify-center gap-y-1">
+              <div className="text-[17px] font-extrabold leading-none">
+                Stay tuned
+              </div>
+              <div className="text-center">More info in official channels</div>
+            </div>
+          )}
 
           <div className="flex w-full items-center justify-center space-x-2">
-            <Image
-              width={16}
-              height={16}
-              priority
-              alt={"telegram"}
-              src={telegram}
-              className="hxs:h-[42px] hxs:w-[42px]"
-            />
-            <Image
-              width={16}
-              height={16}
-              priority
-              alt={"youtube"}
-              src={youtube}
-              className="hxs:h-[42px] hxs:w-[42px]"
-            />
-            <Image
-              width={16}
-              height={16}
-              priority
-              alt={"x"}
-              src={x}
-              className="hxs:h-[42px] hxs:w-[42px]"
-            />
+            <a href={questLink("telegram") ?? "#"} rel="noreferrer" target="_blank">
+              <Image
+                width={16}
+                height={16}
+                priority
+                alt={"telegram"}
+                src={telegram}
+                className="hxs:h-[42px] hxs:w-[42px]"
+              />
+            </a>
+            <a href={questLink("youtube") ?? "#"} rel="noreferrer" target="_blank">
+              <Image
+                width={16}
+                height={16}
+                priority
+                alt={"youtube"}
+                src={youtube}
+                className="hxs:h-[42px] hxs:w-[42px]"
+              />
+            </a>
+            <a href={questLink("x") ?? "#"} rel="noreferrer" target="_blank">
+              <Image
+                width={16}
+                height={16}
+                priority
+                alt={"x"}
+                src={x}
+                className="hxs:h-[42px] hxs:w-[42px]"
+              />
+            </a>
           </div>
         </div>
         <div className="absolute bottom-2 left-2 text-xs">v0.1.0</div>

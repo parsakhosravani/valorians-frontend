@@ -3,6 +3,7 @@
 @import "tailwindcss/utilities";
 
 body {
+  font-family: "Roboto", system-ui, sans-serif;
   touch-action: pan-y;
   touch-action: none;
   overflow: hidden;

@@ -1,27 +1,35 @@
 import { Text, Coin } from "@/components";
+import { MAX_SKILL_LEVEL, energyCapacityForLevel, skillUpgradeCost } from "@/lib/game/config";
 
 interface EnergyCapacityDrawerContentProps {
-  energyCapacity: number;
+  level: number;
 }
 
-export const EnergyCapacityDrawerContent: React.FC<
-  EnergyCapacityDrawerContentProps
-> = ({ energyCapacity }) => {
+export const EnergyCapacityDrawerContent: React.FC<EnergyCapacityDrawerContentProps> = ({ level }) => {
+  const maxed = level >= MAX_SKILL_LEVEL;
+  const fmt = (n: number) => n.toLocaleString("en-US");
+
   return (
     <>
       <Text color="gray" size="small">
-        As you level up, you will earn more iron per tap
+        More energy capacity lets you tap longer. Energy refills completely in one hour.
       </Text>
       <Text>
-        <b>Level 1:</b> Energy capacity {energyCapacity} (current Level)
+        <b>Level {level}:</b> Energy capacity {fmt(energyCapacityForLevel(level))} (current level)
       </Text>
-      <Text>
-        <b>Level 2:</b> Energy capacity {energyCapacity * 1.2} (next Level)
-      </Text>
-      <Text className="flex items-center space-x-1">
-        <b>Upgrade cost: </b>
-        <Coin amount={100} />
-      </Text>
+      {maxed ? (
+        <Text>Max level reached</Text>
+      ) : (
+        <>
+          <Text>
+            <b>Level {level + 1}:</b> Energy capacity {fmt(energyCapacityForLevel(level + 1))} (next level)
+          </Text>
+          <Text className="flex items-center space-x-1">
+            <b>Upgrade cost: </b>
+            <Coin amount={skillUpgradeCost(level)} />
+          </Text>
+        </>
+      )}
     </>
   );
 };

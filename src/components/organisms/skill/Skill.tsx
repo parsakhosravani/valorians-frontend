@@ -1,18 +1,16 @@
-import { useResourceContext } from "@/context";
+import { useGame } from "@/context";
 import { EnergyIcon, Row, SkillDrawer, Capacity } from "@/components";
 
-interface SkillProps {}
+export const Skill: React.FC = () => {
+  const { state, rates } = useGame();
 
-export const Skill: React.FC<SkillProps> = () => {
-  const { energyCapacity, availableEnergy, mineLevel, setMineLevel } =
-    useResourceContext();
   return (
     <Row className="justify-between px-2 my-4">
       <Row className="items-center gap-2">
         <EnergyIcon />
-        <Capacity value={availableEnergy} totalValue={energyCapacity} />
+        <Capacity totalValue={rates.energyCapacity} value={Math.floor(state.energy)} />
       </Row>
-      <SkillDrawer mineLevel={mineLevel} setMineLevel={setMineLevel} />
+      <SkillDrawer />
     </Row>
   );
 };
