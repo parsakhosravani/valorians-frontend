@@ -1,0 +1,5 @@
+import { Leaderboard } from "@/components";
+
+export default function Page() {
+  return <Leaderboard />;
+}

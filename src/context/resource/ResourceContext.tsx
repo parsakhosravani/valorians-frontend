@@ -22,8 +22,10 @@ import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
 
 import { ApiError, PlayerView, apiRequest, resolveAuthHeader } from "@/lib/api";
-import { RESOURCE_IDS, RESOURCE_NAMES, ResourceId, QuestId } from "@/lib/game/config";
+import { RESOURCE_IDS, RESOURCE_NAMES, ResourceId, QuestId, UnitId } from "@/lib/game/config";
+import type { RaidReport } from "@/lib/game/war";
 import {
+  Army,
   GameState,
   Rates,
   SkillId,
@@ -67,8 +69,13 @@ interface GameContextType {
   upgradeBuilding: (id: string) => Promise<boolean>;
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
+  train: (unit: UnitId, count: number) => Promise<boolean>;
+  /** Attack a player (target = id) or a barbarian camp (camp = level). */
+  attack: (to: { target?: number; camp?: number }, units: Army) => Promise<BattleReport | null>;
   authHeader: string | null;
 }
+
+export type BattleReport = RaidReport & { attackerName: string; defenderName: string };
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
@@ -217,24 +224,29 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     [flush]
   );
 
-  const act = useCallback(
-    async (path: string, body: object, success?: string) => {
-      if (!authHeader) return false;
+  const send = useCallback(
+    async <T extends PlayerView>(path: string, body: object, success?: string): Promise<T | null> => {
+      if (!authHeader) return null;
       try {
         await flush();
-        accept(await apiRequest(authHeader, path, body));
+        const res = await apiRequest<T>(authHeader, path, body);
+
+        accept(res);
         if (success) {
           toast.dismiss();
           toast.success(success);
         }
-        return true;
+
+        return res;
       } catch (e) {
         showError(e);
-        return false;
+
+        return null;
       }
     },
     [authHeader, flush, accept]
   );
+  const act = async (path: string, body: object, success?: string) => !!(await send(path, body, success));
 
   const now = serverNow();
   const state = useMemo(() => (base ? advance(base, now) : null), [base, tick]);
@@ -256,6 +268,15 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     upgradeBuilding: (building) => act("buildings/upgrade", { building }, "Construction started"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
+    train: (unit, count) => act("war/train", { unit, count }, "Training started"),
+    attack: async (to, units) => {
+      const res = await send<PlayerView & { report: BattleReport }>(
+        to.camp ? "war/camp" : "war/raid",
+        to.camp ? { level: to.camp, units } : { target: to.target, units }
+      );
+
+      return res?.report ?? null;
+    },
     authHeader,
   };
 

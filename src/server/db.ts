@@ -53,6 +53,31 @@ async function init(): Promise<Client> {
     );
     CREATE INDEX IF NOT EXISTS users_population ON users(population DESC);
     CREATE INDEX IF NOT EXISTS users_referred_by ON users(referred_by);
+
+    CREATE TABLE IF NOT EXISTS battles (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      attacker_id   INTEGER NOT NULL,
+      defender_id   INTEGER,                       -- null for barbarian camps
+      camp_level    INTEGER,
+      attacker_won  INTEGER NOT NULL,
+      report        TEXT NOT NULL,                 -- JSON RaidReport + names
+      created_at    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS battles_attacker ON battles(attacker_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS battles_defender ON battles(defender_id, created_at DESC);
+  `);
+
+  // Columns added after launch. ADD COLUMN fails if it already exists; that's fine.
+  for (const col of [
+    "power REAL NOT NULL DEFAULT 0",
+    "wins INTEGER NOT NULL DEFAULT 0",
+    "shield_until INTEGER NOT NULL DEFAULT 0",
+  ]) {
+    await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
+  }
+  await client.executeMultiple(`
+    CREATE INDEX IF NOT EXISTS users_power ON users(power DESC);
+    CREATE INDEX IF NOT EXISTS users_wins ON users(wins DESC);
   `);
   return client;
 }

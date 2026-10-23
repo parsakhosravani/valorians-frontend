@@ -31,7 +31,45 @@ import {
   energyCapacityForLevel,
   skillUpgradeCost,
   tapPowerForLevel,
+  UNITS,
+  UNIT_IDS,
+  UnitId,
+  NEW_PLAYER_SHIELD_MS,
+  hiddenResources,
 } from "./config";
+
+export type Army = Record<UnitId, number>;
+
+export const emptyArmy = (): Army => ({ spearman: 0, archer: 0, cavalry: 0, ram: 0 });
+
+/** A batch of troops in training. Units finish one after another. */
+export type TrainItem = {
+  unit: UnitId;
+  count: number;
+  /** When the first unit started (later than enqueue time if others were ahead). */
+  startsAt: number;
+  perUnitMs: number;
+  /** Units already moved into the army. */
+  done: number;
+};
+
+/** An army away on a raid, coming home with what it took. */
+export type March = {
+  id: string;
+  target: string;
+  units: Army;
+  loot: Record<ResourceId, number>;
+  coins: number;
+  returnsAt: number;
+};
+
+export type WarStats = {
+  attacksWon: number;
+  attacksLost: number;
+  defensesWon: number;
+  defensesLost: number;
+  resourcesLooted: number;
+};
 
 export type QueueItem = {
   building: BuildingId;
@@ -59,6 +97,15 @@ export type GameState = {
   bonusGrowth: number;
   /** When taps were last accepted (anti-cheat rate limit). */
   lastTapAt: number;
+  /** Troops at home. */
+  army: Army;
+  training: TrainItem[];
+  marches: March[];
+  /** Can't be raided by other players until this time. */
+  shieldUntil: number;
+  /** Highest barbarian camp cleared, and when each was last raided. */
+  camps: { cleared: number; lastRaid: Record<string, number> };
+  war: WarStats;
 };
 
 export type Rates = {
@@ -71,6 +118,17 @@ export type Rates = {
   growthPerHour: number;
   builders: number;
   buildSpeedMultiplier: number;
+  /** Crop eaten per hour by all troops (already subtracted from crop production). */
+  troopUpkeep: number;
+  trainSpeedMultiplier: number;
+  attackBonus: number;
+  defenseBonus: number;
+  wallBonus: number;
+  flatDefense: number;
+  hidden: number;
+  marchMultiplier: number;
+  canScout: boolean;
+  healShare: number;
 };
 
 export class GameError extends Error {
@@ -101,6 +159,12 @@ export function createInitialState(now: number): GameState {
     quests: {},
     bonusGrowth: 0,
     lastTapAt: now,
+    army: emptyArmy(),
+    training: [],
+    marches: [],
+    shieldUntil: now + NEW_PLAYER_SHIELD_MS,
+    camps: { cleared: 0, lastRaid: {} },
+    war: { attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, resourcesLooted: 0 },
   };
 }
 
@@ -116,7 +180,21 @@ export function normalizeState(s: GameState): GameState {
     buildings: { ...fresh.buildings, ...s.buildings },
     queue: s.queue ?? [],
     quests: s.quests ?? {},
+    army: { ...fresh.army, ...s.army },
+    training: s.training ?? [],
+    marches: s.marches ?? [],
+    // Players who existed before war was added don't get a new-player shield.
+    shieldUntil: s.shieldUntil ?? 0,
+    camps: { ...fresh.camps, ...s.camps, lastRaid: { ...(s.camps?.lastRaid ?? {}) } },
+    war: { ...fresh.war, ...s.war },
   };
+}
+
+/** Units at home + away on raids. */
+export function totalArmy(s: GameState): Army {
+  const a = { ...s.army };
+  for (const m of s.marches) for (const u of UNIT_IDS) a[u] += m.units[u] ?? 0;
+  return a;
 }
 
 const level = (s: GameState, id: BuildingId) => s.buildings[id] ?? 0;
@@ -129,6 +207,7 @@ export function getRates(s: GameState): Rates {
   let growth = BASE_POPULATION_GROWTH + s.bonusGrowth;
   let tapBoost = 0;
   let totalLevels = 0;
+  const mil = { trainSpeed: 0, attack: 0, defense: 0, wall: 0, flatDefense: 0, march: 0, heal: 0 };
   const production: Record<ResourceId, number> = {
     iron: BASE_PRODUCTION_PER_HOUR,
     wood: BASE_PRODUCTION_PER_HOUR,
@@ -164,11 +243,16 @@ export function getRates(s: GameState): Rates {
         tapBoost += (e.percentPerLevel * l) / 100;
         break;
       case "military":
+        if (e.stat in mil) mil[e.stat as keyof typeof mil] += e.perLevel * l;
         break;
     }
   }
 
-  production.crop = production.crop * (1 + cropBoost) - CROP_UPKEEP_PER_BUILDING_LEVEL * totalLevels;
+  const army = totalArmy(s);
+  const troopUpkeep = UNITS.reduce((sum, u) => sum + u.upkeep * army[u.id], 0);
+
+  production.crop =
+    production.crop * (1 + cropBoost) - CROP_UPKEEP_PER_BUILDING_LEVEL * totalLevels - troopUpkeep;
   growth += GROWTH_PER_BUILDING_LEVEL * totalLevels;
 
   const energyCapacity = energyCapacityForLevel(s.skills.energy);
@@ -183,6 +267,16 @@ export function getRates(s: GameState): Rates {
     growthPerHour: growth,
     builders: 1 + Math.floor(townHall / 5),
     buildSpeedMultiplier: Math.max(0.2, 1 - TOWN_HALL_SPEEDUP_PER_LEVEL * townHall),
+    troopUpkeep,
+    trainSpeedMultiplier: Math.max(0.25, 1 - mil.trainSpeed / 100),
+    attackBonus: mil.attack / 100,
+    defenseBonus: mil.defense / 100,
+    wallBonus: mil.wall / 100,
+    flatDefense: mil.flatDefense,
+    hidden: hiddenResources(level(s, "hideout")),
+    marchMultiplier: Math.max(0.3, 1 - mil.march / 100),
+    canScout: level(s, "exploration-center") >= 1,
+    healShare: Math.min(0.5, mil.heal / 100),
   };
 }
 
@@ -218,20 +312,60 @@ export function advance(state: GameState, now: number): GameState {
   const s = structuredCloneState(state);
   if (now <= s.updatedAt) return s;
 
-  const queue = [...s.queue].sort((a, b) => a.endsAt - b.endsAt);
-  while (queue.length && queue[0].endsAt <= now) {
-    const item = queue.shift()!;
-    flow(s, Math.max(s.updatedAt, item.endsAt));
-    s.buildings[item.building] = Math.max(level(s, item.building), item.toLevel);
+  // Buildings finishing and armies returning change rates, so handle them in
+  // time order and let production flow between them.
+  type Ev = { at: number; run: () => void };
+  const events: Ev[] = [];
+  for (const item of s.queue) {
+    if (item.endsAt <= now) {
+      events.push({
+        at: item.endsAt,
+        run: () => (s.buildings[item.building] = Math.max(level(s, item.building), item.toLevel)),
+      });
+    }
   }
-  s.queue = queue;
+  for (const m of s.marches) {
+    if (m.returnsAt <= now) events.push({ at: m.returnsAt, run: () => returnMarch(s, m) });
+  }
+  events.sort((a, b) => a.at - b.at);
+  for (const ev of events) {
+    flow(s, Math.max(s.updatedAt, ev.at));
+    ev.run();
+  }
+  s.queue = s.queue.filter((q) => q.endsAt > now);
+  s.marches = s.marches.filter((m) => m.returnsAt > now);
   flow(s, now);
+  finishTraining(s, now);
 
   if (s.fullEnergy.day !== utcDay(now)) {
     s.fullEnergy = { ...s.fullEnergy, day: utcDay(now), used: 0 };
   }
   return s;
 }
+
+function returnMarch(s: GameState, m: March) {
+  for (const u of UNIT_IDS) s.army[u] += m.units[u] ?? 0;
+  const cap = getRates(s).capacity;
+  for (const r of RESOURCE_IDS) {
+    const add = m.loot[r] ?? 0;
+    if (add > 0) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + add));
+  }
+  s.coins += m.coins;
+}
+
+/** Moves every unit whose training has finished into the army. */
+function finishTraining(s: GameState, now: number) {
+  for (const t of s.training) {
+    const finished = Math.min(t.count, Math.max(0, Math.floor((now - t.startsAt) / t.perUnitMs)));
+    if (finished > t.done) {
+      s.army[t.unit] += finished - t.done;
+      t.done = finished;
+    }
+  }
+  s.training = s.training.filter((t) => t.done < t.count);
+}
+
+export const trainingEndsAt = (t: TrainItem) => t.startsAt + t.count * t.perUnitMs;
 
 function structuredCloneState(s: GameState): GameState {
   return {
@@ -242,8 +376,15 @@ function structuredCloneState(s: GameState): GameState {
     buildings: { ...s.buildings },
     queue: s.queue.map((q) => ({ ...q })),
     quests: Object.fromEntries(Object.entries(s.quests).map(([k, v]) => [k, { ...v }])),
+    army: { ...s.army },
+    training: s.training.map((t) => ({ ...t })),
+    marches: s.marches.map((m) => ({ ...m, units: { ...m.units }, loot: { ...m.loot } })),
+    camps: { ...s.camps, lastRaid: { ...s.camps.lastRaid } },
+    war: { ...s.war },
   };
 }
+
+export const cloneState = structuredCloneState;
 
 // ─── Actions (state must already be advanced to `now`) ───────────────────────
 
