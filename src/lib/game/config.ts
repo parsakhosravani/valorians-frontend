@@ -69,7 +69,20 @@ export type BuildingEffect =
   | { kind: "coins"; perLevel: number }
   | { kind: "population"; perLevel: number }
   | { kind: "tapBoost"; percentPerLevel: number }
-  | { kind: "military" };
+  | { kind: "military"; stat: MilitaryStat; perLevel: number };
+
+/** What a military building improves, per level. */
+export type MilitaryStat =
+  | "unlock" // unlocks unit types (see UNITS[].requires)
+  | "trainSpeed" // % faster training
+  | "attack" // % more attack
+  | "defense" // % more defense
+  | "wall" // % defense bonus (rams can break it)
+  | "flatDefense" // fixed defense points
+  | "protect" // resources hidden from raiders (see hiddenResources)
+  | "march" // % faster army return
+  | "scout" // reveals exact enemy defense
+  | "heal"; // % of lost troops recovered
 
 export type BuildingDef = {
   id: string;
@@ -108,20 +121,20 @@ export const BUILDINGS: BuildingDef[] = [
   def("Treasury", 300, { kind: "coins", perLevel: 40 }, "+40 coins per hour per level."),
   def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour per level."),
   def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per tap per level."),
-  def("Hospital", 250, { kind: "population", perLevel: 5 }, "+5 extra population growth per hour per level."),
   def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
-  def("City Gate", 200, { kind: "military" }, "Defends your tribe in the coming war."),
-  def("Watchtower", 200, { kind: "military" }, "Spots enemies before they strike."),
-  def("Barracks", 250, { kind: "military" }, "Trains infantry for the coming war."),
-  def("Stable", 250, { kind: "military" }, "Trains cavalry for the coming war."),
-  def("Armory", 250, { kind: "military" }, "Forges armour for your warriors."),
-  def("Arsenal", 300, { kind: "military" }, "Stores weapons for your army."),
-  def("Siege Workshop", 350, { kind: "military" }, "Builds siege engines."),
-  def("Trapmaker", 200, { kind: "military" }, "Lays traps around your tribe."),
-  def("Hideout", 200, { kind: "military" }, "Hides your people when enemies attack."),
-  def("War hall", 350, { kind: "military" }, "Plans your battles."),
-  def("Military Command", 400, { kind: "military" }, "Commands your army."),
-  def("Exploration Center", 300, { kind: "military" }, "Scouts the lands around your tribe."),
+  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1) and Archers (level 3)."),
+  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Cavalry (level 1)."),
+  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break enemy walls."),
+  def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 5 }, "Troops train 5% faster per level."),
+  def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 5 }, "+5% attack for all troops per level."),
+  def("Armory", 250, { kind: "military", stat: "defense", perLevel: 5 }, "+5% defense for all troops per level."),
+  def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 6 }, "+6% defense per level. Enemy rams can break it."),
+  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home."),
+  def("Trapmaker", 200, { kind: "military", stat: "defense", perLevel: 4 }, "+4% defense per level."),
+  def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
+  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Saves 4% of troops lost in battle per level (max 50%)."),
+  def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
+  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
 ];
 
 export type BuildingId = string;
@@ -186,3 +199,94 @@ export const REFERRAL_REWARD = {
   /** Population the inviter gains for each friend. */
   population: 100,
 };
+
+// ─── War ─────────────────────────────────────────────────────────────────────
+
+export const UNIT_IDS = ["spearman", "archer", "cavalry", "ram"] as const;
+export type UnitId = (typeof UNIT_IDS)[number];
+
+export type UnitDef = {
+  id: UnitId;
+  name: string;
+  icon: string;
+  attack: number;
+  defense: number;
+  /** Resources one unit can carry home. */
+  carry: number;
+  cost: Record<ResourceId, number>;
+  /** Seconds to train one unit. */
+  time: number;
+  /** Crop eaten per hour per unit. */
+  upkeep: number;
+  requires: { building: string; level: number };
+  description: string;
+};
+
+export const UNITS: UnitDef[] = [
+  {
+    id: "spearman", name: "Spearman", icon: "🛡️", attack: 12, defense: 18, carry: 25,
+    cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1,
+    requires: { building: "barracks", level: 1 },
+    description: "Cheap, sturdy defender.",
+  },
+  {
+    id: "archer", name: "Archer", icon: "🏹", attack: 22, defense: 10, carry: 15,
+    cost: { iron: 35, wood: 55, clay: 15, crop: 20 }, time: 20, upkeep: 1,
+    requires: { building: "barracks", level: 3 },
+    description: "Strong attack, weak in defense.",
+  },
+  {
+    id: "cavalry", name: "Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
+    cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3,
+    requires: { building: "stable", level: 1 },
+    description: "Hits hard and carries the most loot.",
+  },
+  {
+    id: "ram", name: "Battering Ram", icon: "🪵", attack: 30, defense: 5, carry: 0,
+    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 4,
+    requires: { building: "siege-workshop", level: 1 },
+    description: "Each ram breaks 2% of the enemy's City Gate bonus.",
+  },
+];
+
+export const UNIT_BY_ID = Object.fromEntries(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
+
+/** Wall bonus removed per ram (fraction of the bonus). */
+export const RAM_WALL_BREAK = 0.02;
+/** Most training batches a player can queue. */
+export const MAX_TRAIN_BATCHES = 5;
+/** Most units in one batch. */
+export const MAX_BATCH = 500;
+
+/** Every tribe has some militia even with no troops. */
+export const militiaDefense = (population: number) => Math.round(50 + population * 0.1);
+
+/** Resources of each type a Hideout keeps safe from raiders. */
+export const hiddenResources = (hideoutLevel: number) => Math.round(500 * Math.pow(1.4, hideoutLevel));
+
+/** Raiders can take at most this share of what isn't hidden. */
+export const MAX_LOOT_SHARE = 0.5;
+
+/** Seconds an army is away on a raid before it comes home with loot. */
+export const RAID_TRAVEL_SECONDS = 90;
+export const CAMP_TRAVEL_SECONDS = 45;
+
+/** New players can't be attacked for this long. */
+export const NEW_PLAYER_SHIELD_MS = 72 * 3600 * 1000;
+/** After being raided, a tribe can't be raided again for this long. */
+export const RAIDED_SHIELD_MS = 2 * 3600 * 1000;
+
+/** Luck swings each battle by up to ±10%. */
+export const LUCK = 0.1;
+
+// Barbarian camps (PvE)
+export const MAX_CAMP_LEVEL = 30;
+export const campDefense = (level: number) => Math.round(80 * Math.pow(1.35, level - 1));
+/** Reward for clearing a camp level the first time (each resource + coins). */
+export const campFirstReward = (level: number) => ({
+  resources: Math.round(400 * Math.pow(1.3, level - 1)),
+  coins: 100 * level,
+});
+/** Cleared camps can be raided again for a smaller haul after this cooldown. */
+export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
+export const CAMP_REPEAT_SHARE = 0.3;

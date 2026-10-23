@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import avatar from "~/images/avatar.webp";
 
@@ -9,7 +10,7 @@ export const User = () => {
   const name = me.username || me.firstName || "Player";
 
   return (
-    <div className="flex gap-1 items-center">
+    <Link className="flex gap-1 items-center" href="/leaderboard">
       {me.photoUrl ? (
         // Telegram avatars are remote; a plain img avoids next/image domain config.
         // eslint-disable-next-line @next/next/no-img-element
@@ -19,8 +20,8 @@ export const User = () => {
       )}
       <div className="flex flex-col">
         <div className="text-white text-[12px] font-bold max-w-[72px] truncate">{name}</div>
-        <div className="text-neutral-400 text-[10px]">Rank {me.rank.toLocaleString("en-US")}</div>
+        <div className="text-[#019AF0] text-[10px]">Rank {me.rank.toLocaleString("en-US")} ›</div>
       </div>
-    </div>
+    </Link>
   );
 };

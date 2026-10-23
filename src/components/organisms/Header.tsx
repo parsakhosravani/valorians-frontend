@@ -9,7 +9,7 @@ import { RESOURCES, useGame } from "@/context";
 export const Header: React.FC = () => {
   const { state, rates, activeResource, setActiveResource } = useGame();
   const pathname = usePathname();
-  const showResources = pathname === "/resources" || pathname === "/tribe";
+  const showResources = pathname === "/resources" || pathname === "/tribe" || pathname === "/battle";
 
   return (
     <header className="w-full flex gap-2 flex-col p-2">

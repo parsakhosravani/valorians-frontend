@@ -8,6 +8,15 @@ import type { AuthResult, TelegramAuthUser } from "./auth";
 
 import { REFERRAL_REWARD } from "@/lib/game/config";
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
+import { powerScore } from "@/lib/game/war";
+
+/** Columns copied out of the state so they can be sorted and filtered in SQL. */
+const stateColumns = (s: GameState) => [
+  s.population,
+  powerScore(s),
+  s.war.attacksWon + s.war.defensesWon,
+  s.shieldUntil,
+];
 
 export type Player = {
   id: number;
@@ -37,7 +46,7 @@ const toPlayer = (r: Row): Player => ({
   state: normalizeState(JSON.parse(String(r.state))),
 });
 
-async function findById(id: number) {
+export async function findById(id: number) {
   const db = await getDb();
   const rs = await db.execute({ sql: "SELECT * FROM users WHERE id = ?", args: [id] });
   return rs.rows[0] ? toPlayer(rs.rows[0]) : null;
@@ -100,14 +109,15 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
   for (let attempt = 0; attempt < 5; attempt++) {
     const insert: InStatement = {
       sql: `INSERT INTO users (username, first_name, last_name, photo_url, language_code, is_premium,
-              id, referral_code, referred_by, population, state, version, created_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+              id, referral_code, referred_by, population, power, wins, shield_until, state, version,
+              created_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       args: [
         ...profileArgs(auth.user),
         auth.user.id,
         newReferralCode(),
         referredBy,
-        state.population,
+        ...stateColumns(state),
         JSON.stringify(state),
         now,
         now,
@@ -145,8 +155,9 @@ export async function mutatePlayer(
     if (!player) throw new Error("Player not found");
     const next = fn(advance(player.state, now));
     const rs = await db.execute({
-      sql: "UPDATE users SET state = ?, population = ?, version = version + 1 WHERE id = ? AND version = ?",
-      args: [JSON.stringify(next), next.population, id, player.version],
+      sql: `UPDATE users SET state = ?, population = ?, power = ?, wins = ?, shield_until = ?,
+              version = version + 1 WHERE id = ? AND version = ?`,
+      args: [JSON.stringify(next), ...stateColumns(next), id, player.version],
     });
     if (rs.rowsAffected === 1) return { ...player, version: player.version + 1, state: next };
   }

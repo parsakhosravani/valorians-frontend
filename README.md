@@ -22,6 +22,17 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 - **Referrals:** each player gets an invite link `https://t.me/<bot>/<app>?startapp=<code>`. When a new player opens it, both get coins (more if the friend has Telegram Premium) and the inviter gets population.
 - **Quests:** the Telegram quest checks real channel membership via the Bot API when `TELEGRAM_CHANNEL_ID` is set and the bot is an admin there. YouTube and X can't be verified by any bot, so they unlock after the player opens the link and waits a few seconds.
 
+### War
+
+- **Troops:** Spearmen and Archers (Barracks), Cavalry (Stable), Battering Rams (Siege Workshop). Each has attack, defense, carry capacity, training time and a crop upkeep. Training runs as a queue (up to 5 batches); Military Command speeds it up.
+- **Raids on players:** the Raid tab lists unshielded tribes close to your power. Attack power vs defense (troops at home + Watchtower + militia, boosted by Armory, Trapmaker and City Gate; rams break the gate bonus), ±10% luck. The loser's army is wiped out; the winner loses (loser/winner)^1.5 of theirs. Hospital saves part of the losses.
+- **Loot:** winners carry home up to half of what the defender has above their Hideout's protected amount, limited by carry capacity. Armies take time to come home (War hall shortens it); loot arrives with them.
+- **Protection:** new players get a 72h shield (attacking a player ends it), and a raided tribe gets a 2h shield.
+- **Barbarian camps:** 30 levels of PvE. First win gives a big reward and unlocks the next camp; beaten camps can be raided again hourly for 30%.
+- **Reports and leaderboard:** every battle is saved for both sides; the leaderboard ranks tribes by population, power and victories (tap your rank in the header).
+
+All numbers are in `src/lib/game/config.ts`; the rules are in `src/lib/game/war.ts` (tests in `war.test.ts`).
+
 ### API
 
 All routes need the `Authorization` header and return `{ serverTime, me, state }` unless noted.
@@ -36,6 +47,12 @@ All routes need the `Authorization` header and return `{ serverTime, me, state }
 | POST | `/api/quests/start` | `{ quest: "telegram" \| "youtube" \| "x" }` |
 | POST | `/api/quests/claim` | `{ quest }` |
 | GET | `/api/friends` | — returns `{ total, friends[] }` |
+| POST | `/api/war/train` | `{ unit: "spearman" \| "archer" \| "cavalry" \| "ram", count }` |
+| GET | `/api/war/targets` | — tribes you can raid now |
+| POST | `/api/war/raid` | `{ target: playerId, units }` — also returns `report` |
+| POST | `/api/war/camp` | `{ level, units }` — also returns `report` |
+| GET | `/api/war/reports` | — your last 30 battles |
+| GET | `/api/leaderboard?by=population\|power\|wins` | — top 50 and your rank |
 
 Errors come back as `{ error, code }` with status 400 (game rule) or 401 (sign-in).
 
@@ -98,4 +115,3 @@ Back up `/data/valorians.db` regularly.
 
 All balance numbers live in `src/lib/game/config.ts`: starting resources, production per hour, tap power and energy curves, building costs and times, quest rewards, referral bonuses. The server and client both read it, so a change there applies everywhere.
 
-The Battle tab is a "coming soon" screen; military buildings already level up and add population so they'll matter once battles exist.

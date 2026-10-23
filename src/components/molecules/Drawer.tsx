@@ -61,7 +61,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             : "transform -translate-x-full"
         }`}
       >
-        <div className="p-4 relative border-t-2 border-[#019AF0] rounded-t-3xl">
+        <div className="p-4 relative border-t-2 border-[#019AF0] rounded-t-3xl max-h-[85svh] overflow-y-auto scrollable">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">{title}</h2>
             <CloseIcon onClick={onClose} />
