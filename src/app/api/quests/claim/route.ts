@@ -11,5 +11,5 @@ export const POST = handler(async ({ body, player, now }) => {
       throw new GameError("Join the channel first, then claim", "not_member");
     }
   }
-  return playerView(mutatePlayer(player.id, now, (s) => claimQuest(s, body.quest, now)), now);
+  return playerView(await mutatePlayer(player.id, now, (s) => claimQuest(s, body.quest, now)), now);
 });
