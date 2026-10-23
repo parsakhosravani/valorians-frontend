@@ -6,10 +6,7 @@ import { verifyInitData } from "../../server/auth";
 const T0 = Date.UTC(2026, 9, 23, 10);
 test("energy regen and production", () => {
   let s = E.createInitialState(T0);
-  s.energy = 0;
   s = E.advance(s, T0 + 30 * 60e3);
-  const r = E.getRates(s);
-  expect(Math.round(s.energy)).toBe(Math.round(r.energyCapacity / 2));
   expect(Math.round(s.resources.iron)).toBe(2050);
   expect(Math.round(s.coins)).toBe(1005);
 });
@@ -17,7 +14,7 @@ test("taps rate limited, energy limited, capacity limited", () => {
   let s = E.createInitialState(T0);
   const r1 = E.applyTaps(s, "iron", 1000, T0 + 1000);
   expect(r1.accepted).toBe(60); // 20/s *1 + 40 burst
-  expect(r1.state.resources.iron).toBe(2000 + 600);
+  expect(r1.state.resources.iron).toBe(2000 + 1800);
   s = r1.state; s.resources.iron = 14995;
   const r2 = E.applyTaps(s, "iron", 5, T0 + 10000);
   expect(r2.accepted).toBe(1); expect(r2.state.resources.iron).toBe(15000);
@@ -35,17 +32,52 @@ test("building upgrade completes and changes rates mid-interval", () => {
   // ~1h at 160/h after the 10s build
   expect(Math.round(s.resources.iron)).toBe(Math.round(1850 + 100 * 10/3600 + 160));
 });
-test("full energy limits", () => {
-  let s = E.createInitialState(T0); s.energy = 0;
-  s = E.refillEnergy(s, T0);
-  s.energy = 0;
-  expect(() => E.refillEnergy(s, T0 + 1000)).toThrow("cooling down");
-  s = E.refillEnergy(s, T0 + 3600e3); s.energy = 0;
-  s = E.refillEnergy(s, T0 + 7200e3); s.energy = 0;
-  expect(() => E.refillEnergy(s, T0 + 3 * 3600e3)).toThrow("No full energy");
-  s = E.advance(s, T0 + 24 * 3600e3); s.energy = 0;
-  s = E.refillEnergy(s, T0 + 24 * 3600e3);
+test("stamina is daily: no regen, refills at UTC midnight", () => {
+  let s = E.createInitialState(T0);
+  const cap = E.getRates(s).energyCapacity;
+  expect(cap).toBe(1500);
+  s.energy = 100;
+  s = E.advance(s, T0 + 3600e3);
+  expect(s.energy).toBe(100);
+  s = E.advance(s, Date.UTC(2026, 9, 24, 0, 1));
+  expect(s.energy).toBe(cap);
 });
+
+test("combo, crits and frenzy are capped server-side", () => {
+  const s = E.createInitialState(T0);
+  // Claims 40 taps, all crits, ×5 combo, all frenzy: server trims it.
+  const r = E.applyTaps(s, "wood", { taps: 40, crits: 40, comboSum: 200, frenzyTaps: 40 }, T0 + 1000);
+  expect(r.accepted).toBe(40);
+  // crits capped at 40% (16), combo at ×2, frenzy not allowed (meter empty)
+  expect(r.gained).toBe(Math.round(30 * 2 * (40 + 16 * 2)));
+  expect(r.state.energy).toBe(1500 - 40 * 10);
+});
+
+test("filling the meter starts Frenzy: double, free taps", () => {
+  let s = E.createInitialState(T0);
+  s.frenzy.meter = 95;
+  s = E.applyTaps(s, "iron", { taps: 5 }, T0 + 1000).state;
+  expect(E.frenzyActive(s, T0 + 2000)).toBe(true);
+  const before = s.energy;
+  const r = E.applyTaps(s, "iron", { taps: 10, frenzyTaps: 10, comboSum: 10 }, T0 + 3000);
+  expect(r.gained).toBe(30 * 10 * 2);
+  expect(r.state.energy).toBe(before);
+});
+
+test("streak: claim once a day, grows, resets after a missed day, loops after 7", () => {
+  let s = E.createInitialState(T0);
+  s = E.claimStreak(s, T0);
+  expect(s.streak.count).toBe(1);
+  expect(s.coins).toBe(1000 + 200);
+  expect(() => E.claimStreak(s, T0 + 3600e3)).toThrow("tomorrow");
+  for (let d = 1; d < 7; d++) s = E.claimStreak(s, T0 + d * 86400e3);
+  expect(s.streak.count).toBe(7);
+  s = E.claimStreak(s, T0 + 7 * 86400e3);
+  expect(s.streak.count).toBe(1);
+  s = E.claimStreak(s, T0 + 9 * 86400e3); // missed a day
+  expect(s.streak.count).toBe(1);
+});
+
 test("quests", () => {
   let s = E.createInitialState(T0);
   expect(() => E.claimQuest(s, "x", T0)).toThrow();

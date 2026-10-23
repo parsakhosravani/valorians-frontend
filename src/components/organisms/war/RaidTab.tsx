@@ -22,7 +22,7 @@ type Target = {
   defense: { min: number; max: number; exact: boolean };
 };
 
-export const RaidTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) => {
+export const RaidTab = ({ onAttack, revenge }: { onAttack: (t: AttackTarget) => void; revenge?: number }) => {
   const { state, now, authHeader, rates } = useGame();
   const [targets, setTargets] = useState<Target[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,16 +32,16 @@ export const RaidTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) =
     if (!authHeader) return;
     setTargets(null);
     setError(null);
-    apiRequest<{ targets: Target[] }>(authHeader, "war/targets")
+    apiRequest<{ targets: Target[] }>(authHeader, revenge ? `war/targets?include=${revenge}` : "war/targets")
       .then((r) => setTargets(r.targets))
       .catch((e) => setError(e.message));
-  }, [authHeader]);
+  }, [authHeader, revenge]);
 
   useEffect(load, [load]);
 
   return (
     <div className="flex flex-col gap-2">
-      <Card className="text-xs text-[#B5C7DE] flex flex-col gap-1">
+      <Card className="text-xs text-[#B19C80] flex flex-col gap-1">
         <p>
           Raid other tribes to steal resources. Win and your survivors carry loot home; lose and your army falls.
           {!rates.canScout && " Build an Exploration Center to see enemies' exact defense."}
@@ -51,7 +51,7 @@ export const RaidTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) =
           resource safe.
         </p>
         {shielded && (
-          <p className="text-[#FCA234] font-bold">
+          <p className="text-[#E3A948] font-bold">
             🛡️ You&apos;re shielded for {formatDuration(state.shieldUntil - now)}. Attacking a player ends your shield.
           </p>
         )}
@@ -64,16 +64,16 @@ export const RaidTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) =
         </Button>
       </div>
 
-      {error && <p className="text-sm text-[#F72214]">{error}</p>}
-      {!targets && !error && <p className="text-sm text-[#B5C7DE]">Scouting…</p>}
+      {error && <p className="text-sm text-[#F08A6C]">{error}</p>}
+      {!targets && !error && <p className="text-sm text-[#B19C80]">Scouting…</p>}
       {targets?.length === 0 && (
-        <p className="text-sm text-[#B5C7DE]">
+        <p className="text-sm text-[#B19C80]">
           No tribes can be attacked right now — everyone nearby is shielded. Try the barbarian camps, or check back
           later.
         </p>
       )}
       {targets?.map((t) => (
-        <Card key={t.id} className="flex items-center gap-2">
+        <Card key={t.id} className={t.id === revenge ? "flex items-center gap-2 !border-ember" : "flex items-center gap-2"}>
           {t.photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img alt="" className="h-10 w-10 rounded object-cover" src={t.photoUrl} />
@@ -82,7 +82,7 @@ export const RaidTab = ({ onAttack }: { onAttack: (t: AttackTarget) => void }) =
           )}
           <div className="flex-1 min-w-0">
             <div className="font-bold truncate">{t.name}</div>
-            <div className="text-xs text-[#B5C7DE] flex gap-2 flex-wrap">
+            <div className="text-xs text-[#B19C80] flex gap-2 flex-wrap">
               <span>👥 {fmt(t.population)}</span>
               <span>💪 {fmt(t.power)}</span>
               <span>🛡️ {t.defense.exact ? fmt(t.defense.min) : `${fmt(t.defense.min)}–${fmt(t.defense.max)}`}</span>

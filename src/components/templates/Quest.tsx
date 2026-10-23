@@ -17,8 +17,8 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
 
   return (
     <>
-      <div className="relative flex flex-col justify-start max-w-[95%] m-auto w-full h-[100vh] mt-7">
-        <div className="bg-buildingBg backdrop-blur-xs min-h-[100px] w-full flex justify-end rounded-[5px]">
+      <div className="relative flex flex-col w-full px-3 pt-8 pb-4">
+        <div className="bg-buildingBg border border-line min-h-[100px] w-full flex justify-end rounded-2xl">
           <div className="w-2/6 flex flex-col justify-start relative">
             <Image
               src={viking}
@@ -27,10 +27,10 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
             />
           </div>
           <div className="w-4/6 flex flex-col justify-between pl-3 py-2.5">
-            <div className="text-left text-white text-base font-bold">
-              Complete your tasks!
+            <div className="text-left font-display text-parch text-lg font-bold">
+              Sagas
             </div>
-            <div className="text-[#b0d7ec] text-xs font-normal">
+            <div className="text-[#D8C9AE] text-xs font-normal">
               By completing tasks, you earn rewards that help you develop your
               tribe faster. Use these rewards to enhance your tribe's growth and
               strength!
@@ -39,12 +39,12 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
         </div>
 
         <div className="flex flex-col w-full items-start mt-4">
-          <div className="text-center text-white text-lg font-bold">
-            Task List:
+          <div className="font-display text-parch text-lg font-bold">
+            Tasks
           </div>
-          <div className="grid gap-2.5 w-full overflow-y-auto scrollable max-h-[50svh] pb-10">
+          <div className="grid gap-2.5 w-full pb-4">
             {ACTIVE_QUESTS.length === 0 && (
-              <p className="text-sm text-[#B5C7DE]">No tasks right now. Check back soon!</p>
+              <p className="text-sm text-[#B19C80]">No tasks right now. Check back soon!</p>
             )}
             {ACTIVE_QUESTS.map((item) => {
               const done = questStatus(state, item.id, now).state === "claimed";
@@ -52,7 +52,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
               return (
                 <button
                   key={item.id}
-                  className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg backdrop-blur-xs rounded-md text-left"
+                  className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg border border-line rounded-xl text-left"
                   onClick={() => setOpenDrawer(item.id)}
                 >
                   <Image alt="social" height={34} src={QUEST_ICONS[item.id]} width={34} />
@@ -89,7 +89,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
         priority
         src={bg}
         alt={"intro"}
-        className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
+        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-25"
       />
     </>
   );

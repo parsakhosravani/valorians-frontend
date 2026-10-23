@@ -12,9 +12,6 @@ import {
   BUILDING_BY_ID,
   BuildingId,
   CROP_UPKEEP_PER_BUILDING_LEVEL,
-  ENERGY_FULL_REFILL_SECONDS,
-  FULL_ENERGY_COOLDOWN_MS,
-  FULL_ENERGY_PER_DAY,
   GROWTH_PER_BUILDING_LEVEL,
   MAX_BUILDING_LEVEL,
   MAX_SKILL_LEVEL,
@@ -29,6 +26,16 @@ import {
   buildingUpgradeBaseSeconds,
   buildingUpgradeCost,
   energyCapacityForLevel,
+  STAMINA_PER_TAP,
+  CRIT_MULTIPLIER,
+  MAX_CRIT_SHARE,
+  MAX_COMBO_MULTIPLIER,
+  FRENZY_METER_MAX,
+  FRENZY_PER_TAP,
+  FRENZY_PER_CRIT,
+  FRENZY_MS,
+  FRENZY_GRACE_MS,
+  STREAK_REWARDS,
   skillUpgradeCost,
   tapPowerForLevel,
   UNITS,
@@ -97,6 +104,10 @@ export type GameState = {
   bonusGrowth: number;
   /** When taps were last accepted (anti-cheat rate limit). */
   lastTapAt: number;
+  /** Frenzy meter (0–100) and when the current Frenzy ends. */
+  frenzy: { meter: number; until: number };
+  /** Daily login streak: last UTC day claimed and the day number (1–7) it was. */
+  streak: { lastDay: string | null; count: number };
   /** Troops at home. */
   army: Army;
   training: TrainItem[];
@@ -159,6 +170,8 @@ export function createInitialState(now: number): GameState {
     quests: {},
     bonusGrowth: 0,
     lastTapAt: now,
+    frenzy: { meter: 0, until: 0 },
+    streak: { lastDay: null, count: 0 },
     army: emptyArmy(),
     training: [],
     marches: [],
@@ -187,6 +200,8 @@ export function normalizeState(s: GameState): GameState {
     shieldUntil: s.shieldUntil ?? 0,
     camps: { ...fresh.camps, ...s.camps, lastRaid: { ...(s.camps?.lastRaid ?? {}) } },
     war: { ...fresh.war, ...s.war },
+    frenzy: { ...fresh.frenzy, ...s.frenzy },
+    streak: { ...fresh.streak, ...s.streak },
   };
 }
 
@@ -261,7 +276,7 @@ export function getRates(s: GameState): Rates {
     productionPerHour: production,
     capacity: Math.round(BASE_WAREHOUSE_CAPACITY * warehouseMult),
     energyCapacity,
-    energyPerSecond: energyCapacity / ENERGY_FULL_REFILL_SECONDS,
+    energyPerSecond: 0, // stamina refills once a day, see advance()
     tapPower: Math.round(tapPowerForLevel(s.skills.tap) * (1 + tapBoost)),
     coinsPerHour: coins,
     growthPerHour: growth,
@@ -337,9 +352,13 @@ export function advance(state: GameState, now: number): GameState {
   flow(s, now);
   finishTraining(s, now);
 
+  const cap = getRates(s).energyCapacity;
   if (s.fullEnergy.day !== utcDay(now)) {
+    // A new day: stamina refills completely.
     s.fullEnergy = { ...s.fullEnergy, day: utcDay(now), used: 0 };
+    s.energy = cap;
   }
+  s.energy = Math.min(s.energy, cap);
   return s;
 }
 
@@ -381,6 +400,8 @@ function structuredCloneState(s: GameState): GameState {
     marches: s.marches.map((m) => ({ ...m, units: { ...m.units }, loot: { ...m.loot } })),
     camps: { ...s.camps, lastRaid: { ...s.camps.lastRaid } },
     war: { ...s.war },
+    frenzy: { ...s.frenzy },
+    streak: { ...s.streak },
   };
 }
 
@@ -390,35 +411,104 @@ export const cloneState = structuredCloneState;
 
 export type TapResult = { state: GameState; accepted: number; gained: number };
 
+/** What the client reports for a burst of taps on one resource. */
+export type TapBatch = {
+  taps: number;
+  /** How many of those hit the weak spot. */
+  crits?: number;
+  /** Sum of the combo multiplier at each tap (taps × average multiplier). */
+  comboSum?: number;
+  /** How many taps happened during Frenzy. */
+  frenzyTaps?: number;
+};
+
+export const frenzyActive = (s: GameState, now: number) => now < s.frenzy.until;
+
 /**
- * Applies `taps` taps on `resource`. Taps are trimmed to what energy, storage
- * and (on the server) a human tapping speed allow.
+ * Applies a batch of taps. The server can't see each tap, so it caps
+ * everything the client claims: tap speed, weak-spot share, combo multiplier,
+ * and Frenzy (which only counts once the meter really filled). Stamina,
+ * storage space and the daily limit do the rest.
  */
 export function applyTaps(
   s0: GameState,
   resource: ResourceId,
-  taps: number,
+  batch: TapBatch | number,
   now: number,
   opts: { rateLimit: boolean } = { rateLimit: true }
 ): TapResult {
   if (!RESOURCE_IDS.includes(resource)) throw new GameError("Unknown resource");
+  const b: TapBatch = typeof batch === "number" ? { taps: batch } : batch;
   const s = structuredCloneState(s0);
   const r = getRates(s);
-  let allowed = Math.max(0, Math.floor(taps));
+  const n = (v: unknown) => Math.max(0, Math.floor(Number(v) || 0));
 
+  let taps = n(b.taps);
   if (opts.rateLimit) {
     const elapsed = Math.max(0, now - s.lastTapAt) / 1000;
-    allowed = Math.min(allowed, Math.floor(elapsed * MAX_TAPS_PER_SECOND) + TAP_BURST);
+    taps = Math.min(taps, Math.floor(elapsed * MAX_TAPS_PER_SECOND) + TAP_BURST);
   }
-  allowed = Math.min(allowed, Math.floor(s.energy / r.tapPower));
-  const room = Math.max(0, r.capacity - s.resources[resource]);
-  allowed = Math.min(allowed, Math.ceil(room / r.tapPower));
+  let crits = Math.min(n(b.crits), Math.ceil(taps * MAX_CRIT_SHARE));
+  let frenzyTaps = Math.min(n(b.frenzyTaps), taps);
 
-  const gained = Math.min(room, allowed * r.tapPower);
+  // Frenzy taps only count if Frenzy is (or just was) running, or if this
+  // batch's normal taps fill the meter.
+  const meterAfter = s.frenzy.meter + (taps - frenzyTaps) * FRENZY_PER_TAP + crits * FRENZY_PER_CRIT;
+  const inFrenzy = now <= s.frenzy.until + FRENZY_GRACE_MS;
+  if (frenzyTaps > 0 && !inFrenzy && meterAfter < FRENZY_METER_MAX) frenzyTaps = 0;
+
+  let normal = taps - frenzyTaps;
+  normal = Math.min(normal, Math.floor(s.energy / STAMINA_PER_TAP));
+  const room = Math.max(0, r.capacity - s.resources[resource]);
+  // Don't burn stamina on taps the warehouse has no room for.
+  normal = Math.min(normal, Math.ceil(room / r.tapPower));
+  frenzyTaps = Math.min(frenzyTaps, Math.ceil(room / r.tapPower));
+  taps = normal + frenzyTaps;
+  crits = Math.min(crits, taps);
+
+  const comboAvg = taps ? Math.min(MAX_COMBO_MULTIPLIER, Math.max(1, (Number(b.comboSum) || taps) / taps)) : 1;
+  const units = normal + frenzyTaps * 2 + crits * (CRIT_MULTIPLIER - 1);
+  const gained = Math.min(room, Math.round(r.tapPower * comboAvg * units));
+
   s.resources[resource] += gained;
-  s.energy -= allowed * r.tapPower;
-  if (allowed > 0) s.lastTapAt = now;
-  return { state: s, accepted: allowed, gained };
+  s.energy -= normal * STAMINA_PER_TAP;
+  if (taps > 0) s.lastTapAt = now;
+
+  // Meter: Frenzy taps don't fill it.
+  if (!frenzyActive(s, now)) {
+    s.frenzy.meter += normal * FRENZY_PER_TAP + Math.min(crits, normal) * FRENZY_PER_CRIT;
+    if (s.frenzy.meter >= FRENZY_METER_MAX) {
+      s.frenzy = { meter: 0, until: now + FRENZY_MS };
+    }
+  }
+  return { state: s, accepted: taps, gained };
+}
+
+// ─── Daily streak ────────────────────────────────────────────────────────────
+
+export function streakStatus(s: GameState, now: number) {
+  const today = utcDay(now);
+  const yesterday = utcDay(now - 86_400_000);
+  const claimedToday = s.streak.lastDay === today;
+  const continues = s.streak.lastDay === yesterday || claimedToday;
+  const current = continues ? s.streak.count : 0;
+  // Day number the next claim gives (1–7).
+  const next = claimedToday ? (current % 7) + 1 : continues ? (current % 7) + 1 : 1;
+  return { claimable: !claimedToday, current, next, today: claimedToday ? current : next };
+}
+
+export function claimStreak(s0: GameState, now: number): GameState {
+  const st = streakStatus(s0, now);
+  if (!st.claimable) throw new GameError("Come back tomorrow for your next reward", "claimed");
+  const s = structuredCloneState(s0);
+  const reward = STREAK_REWARDS[st.next - 1];
+  s.coins += reward.coins;
+  if (reward.resources) {
+    const cap = getRates(s).capacity;
+    for (const res of RESOURCE_IDS) s.resources[res] = Math.max(s.resources[res], Math.min(cap, s.resources[res] + reward.resources));
+  }
+  s.streak = { lastDay: utcDay(now), count: st.next };
+  return s;
 }
 
 export type SkillId = "tap" | "energy";
@@ -432,25 +522,6 @@ export function upgradeSkill(s0: GameState, skill: SkillId): GameState {
   if (s.coins < cost) throw new GameError("Not enough coins", "not_enough_coins");
   s.coins -= cost;
   s.skills[skill] = lvl + 1;
-  return s;
-}
-
-export function fullEnergyStatus(s: GameState, now: number) {
-  const usedToday = s.fullEnergy.day === utcDay(now) ? s.fullEnergy.used : 0;
-  const remaining = Math.max(0, FULL_ENERGY_PER_DAY - usedToday);
-  const readyAt = s.fullEnergy.lastUsedAt + FULL_ENERGY_COOLDOWN_MS;
-  return { remaining, readyAt, ready: remaining > 0 && now >= readyAt };
-}
-
-export function refillEnergy(s0: GameState, now: number): GameState {
-  const s = structuredCloneState(s0);
-  const st = fullEnergyStatus(s, now);
-  if (st.remaining <= 0) throw new GameError("No full energy left today", "none_left");
-  if (!st.ready) throw new GameError("Full energy is cooling down", "cooldown");
-  const cap = getRates(s).energyCapacity;
-  if (s.energy >= cap) throw new GameError("Energy is already full", "already_full");
-  s.energy = cap;
-  s.fullEnergy = { day: utcDay(now), used: s.fullEnergy.used + 1, lastUsedAt: now };
   return s;
 }
 

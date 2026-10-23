@@ -1,15 +1,15 @@
+import "@fontsource/cinzel/700.css";
+import "@fontsource/cinzel/900.css";
+import "@fontsource/alegreya-sans/400.css";
+import "@fontsource/alegreya-sans/500.css";
+import "@fontsource/alegreya-sans/700.css";
+import "@fontsource/alegreya-sans/800.css";
 import "@/styles/globals.css";
 import type { Metadata } from "next";
 import { Main } from "@/components";
 import { Providers } from "../providers";
 import { ResourceProvider } from "@/context/resource/ResourceContext";
 import { Toaster } from "react-hot-toast";
-import "@fontsource/roboto/100.css";
-import "@fontsource/roboto/300.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
-import "@fontsource/roboto/900.css";
 
 import GoogleScript from "@/scripts/GoogleScript";
 import TelegramScript from "@/scripts/TelegramScript";
@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html suppressHydrationWarning lang="en">
-      <body className="bg-black text-white mx-auto flex justify-center">
+      <body className="bg-ground text-parch mx-auto flex justify-center">
         <Toaster toastOptions={{ duration: 2000 }} position="top-center" />
 
         <Providers>

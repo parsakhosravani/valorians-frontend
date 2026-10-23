@@ -25,9 +25,14 @@ export const displayName = (p: { username: string | null; firstName: string }) =
   p.firstName || (p.username ? `@${p.username}` : "Player");
 
 /** Up to 6 tribes the player can attack right now, near their own strength. */
-export async function findTargets(me: Player, now: number) {
+export async function findTargets(me: Player, now: number, includeId?: number) {
   const db = await getDb();
   const myPower = Math.max(50, powerScore(me.state));
+  const ids: number[] = [];
+  if (includeId && includeId !== me.id) {
+    const r = await db.execute({ sql: "SELECT id FROM users WHERE id = ? AND shield_until <= ?", args: [includeId, now] });
+    if (r.rows[0]) ids.push(includeId);
+  }
   const rs = await db.execute({
     sql: `SELECT id FROM users
           WHERE id != ? AND shield_until <= ?
@@ -35,9 +40,10 @@ export async function findTargets(me: Player, now: number) {
           LIMIT 6`,
     args: [me.id, now, myPower],
   });
+  for (const row of rs.rows) if (!ids.includes(Number(row.id))) ids.push(Number(row.id));
   const targets = [];
-  for (const row of rs.rows) {
-    const p = await findById(Number(row.id));
+  for (const id of ids.slice(0, 6)) {
+    const p = await findById(id);
     if (!p) continue;
     const s = advance(p.state, now);
     targets.push({
@@ -138,6 +144,7 @@ export async function listReports(me: Player) {
       role: asAttacker ? ("attacker" as const) : ("defender" as const),
       won: asAttacker ? report.attackerWon : !report.attackerWon,
       opponent: asAttacker ? report.defenderName : report.attackerName,
+      opponentId: asAttacker ? (r.defender_id == null ? null : Number(r.defender_id)) : Number(r.attacker_id),
       campLevel: r.camp_level == null ? null : Number(r.camp_level),
       report,
     };

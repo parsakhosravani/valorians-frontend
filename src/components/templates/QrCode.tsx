@@ -6,12 +6,12 @@ import bg from "~/images/background/intro.webp";
 export const QrCode = () => {
 
     return (
-        <div className="px-4 text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center bg-[#191F27]">
+        <div className="px-4 text-parch mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center bg-[#1E1610]">
             <main className="w-full flex-1 flex justify-center items-end pb-[84px]">
 
                 <div className="w-full h-full flex justify-center items-center absolute top-0 left-0 overflow-hidden z-50">
                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col justify-center items-center gap-2">
-                        <p className="text-primary-800 text-lg font-semibold leading-7">
+                        <p className="text-goldtext text-lg font-semibold leading-7">
                             Play on your mobile
                         </p>
                         <a href={`https://t.me/${process.env.NEXT_PUBLIC_BOT_ADDRESS}`}>
@@ -24,7 +24,7 @@ export const QrCode = () => {
                             />
                         </a>
                         <a href={`https://t.me/${process.env.NEXT_PUBLIC_BOT_ADDRESS}`}>
-                            <p className="text-primary-800 text-lg font-semibold leading-7">
+                            <p className="text-goldtext text-lg font-semibold leading-7">
                                 @{process.env.NEXT_PUBLIC_BOT_ADDRESS?.toUpperCase()}
                             </p>
                         </a>

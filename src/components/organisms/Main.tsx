@@ -6,7 +6,7 @@ import { useResourceContext, useTelegramContext } from "@/context";
 import { Button, Header, Navbar, QrCode } from "@/components";
 
 const Shell = ({ children }: { children: React.ReactNode }) => (
-  <div className="text-white mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center">
+  <div className="text-parch mx-auto overflow-hidden h-svh max-w-md fixed inset-x-0 w-full flex flex-col items-center bg-ground">
     {children}
   </div>
 );
@@ -36,13 +36,13 @@ export const Main = ({
   if (status !== "ready") {
     return (
       <Shell>
-        <main className="w-full flex-1 flex flex-col gap-4 justify-center items-center min-h-svh px-6 text-center">
+        <main className="w-full flex-1 flex flex-col gap-4 justify-center items-center px-6 text-center">
           {status === "loading" ? (
-            <div className="h-10 w-10 rounded-full border-4 border-[#019AF0] border-t-transparent animate-spin" />
+            <div className="h-10 w-10 rounded-full border-4 border-gold border-t-transparent animate-spin" />
           ) : (
             <>
-              <p className="text-lg font-bold">Couldn&apos;t load your tribe</p>
-              <p className="text-sm text-[#B5C7DE]">{error}</p>
+              <p className="font-display text-xl font-bold">Couldn&apos;t reach your hall</p>
+              <p className="text-sm text-muted">{error}</p>
               <Button onClick={retry}>Try again</Button>
             </>
           )}
@@ -54,7 +54,7 @@ export const Main = ({
   return (
     <Shell>
       <Header />
-      <main className="w-full flex-1 flex justify-center items-center pb-[84px]">{children}</main>
+      <main className="relative w-full flex-1 overflow-y-auto overflow-x-hidden scrollable pb-24">{children}</main>
       <Navbar />
     </Shell>
   );
