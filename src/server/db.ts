@@ -7,16 +7,22 @@ import path from "path";
 /**
  * Turso (hosted libSQL) in production: set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN.
  * Without them we fall back to a local SQLite file, which is fine on a server
- * with a disk but NOT on Vercel (its file system is temporary).
+ * with a disk. On Vercel that file has to live in /tmp, which gets wiped, so it
+ * only keeps the game running until Turso is configured.
  */
 function makeClient(): Client {
   const url = process.env.TURSO_DATABASE_URL;
   if (url) return createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
 
-  if (process.env.VERCEL) {
-    throw new Error("TURSO_DATABASE_URL is not set. Vercel can't keep a local database file.");
+  let file = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "valorians.db");
+
+  if (process.env.VERCEL && !process.env.DATABASE_PATH) {
+    // Vercel only allows writing to /tmp, which is wiped whenever the server
+    // restarts. The game runs, but progress can reset until Turso is set up.
+    file = "/tmp/valorians.db";
+    // eslint-disable-next-line no-console
+    console.warn("TURSO_DATABASE_URL is not set: using temporary storage, progress may reset.");
   }
-  const file = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "valorians.db");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   return createClient({ url: `file:${file}` });
 }

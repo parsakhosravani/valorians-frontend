@@ -78,6 +78,8 @@ Add `?dev_user=2` to the URL to play as a different test player, and `?startapp=
 
 Node.js 24 is required (pinned in `package.json`).
 
+**Without Turso** the game still runs on Vercel, but it can only store players in `/tmp`, which Vercel wipes whenever it restarts the server — so progress can reset. Add the two Turso variables to make it permanent; no code change needed.
+
 ### Hosting on your own server instead
 
 Leave the Turso variables empty and the game uses a local SQLite file at `DATABASE_PATH`, which needs a persistent disk. With Docker:

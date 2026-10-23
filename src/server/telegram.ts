@@ -6,7 +6,7 @@ import "server-only";
  * quest falls back to the timed check instead of blocking players.
  */
 export async function isChannelMember(userId: number): Promise<boolean | null> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const token = process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
   const chat = process.env.TELEGRAM_CHANNEL_ID;
   if (!token || !chat) return null;
   try {
