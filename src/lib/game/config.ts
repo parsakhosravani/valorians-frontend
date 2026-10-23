@@ -31,26 +31,60 @@ export const BASE_COINS_PER_HOUR = 10;
 /** Population growth per hour without any buildings. */
 export const BASE_POPULATION_GROWTH = 10;
 
-// ─── Tapping & energy ────────────────────────────────────────────────────────
+// ─── Daily Mine (tapping) ─────────────────────────────────────────────────────
+//
+// Mining is a short daily boost, not the main game: stamina refills once a
+// day (UTC midnight) and each tap spends a fixed amount of it.
 
 export const MAX_SKILL_LEVEL = 20;
 
-/** Resource gained (and energy spent) per tap at a given "Earn more" level. */
+/** Base resource gained per tap at a given "Earn more" level. */
 export const tapPowerForLevel = (level: number) =>
-  Math.round(10 * Math.pow(1.2, level - 1));
+  Math.round(30 * Math.pow(1.2, level - 1));
 
+/** Daily stamina at a given "Stamina" level. */
 export const energyCapacityForLevel = (level: number) =>
-  Math.round(15000 * Math.pow(1.15, level - 1));
+  Math.round(1500 * Math.pow(1.15, level - 1));
 
-/** Energy refills completely in this many seconds. */
-export const ENERGY_FULL_REFILL_SECONDS = 60 * 60;
+/** Stamina spent per normal tap (Frenzy taps are free). */
+export const STAMINA_PER_TAP = 10;
 
 /** Coin price to go from `level` to `level + 1` for either skill. */
 export const skillUpgradeCost = (level: number) =>
   Math.round(100 * Math.pow(1.8, level - 1));
 
-export const FULL_ENERGY_PER_DAY = 3;
-export const FULL_ENERGY_COOLDOWN_MS = 60 * 60 * 1000;
+/** Taps closer together than this keep the combo going. */
+export const COMBO_WINDOW_MS = 1200;
+/** Every 10 combo adds +0.1, up to ×2. */
+export const comboMultiplier = (combo: number) => 1 + Math.min(10, Math.floor(combo / 10)) * 0.1;
+export const MAX_COMBO_MULTIPLIER = 2;
+
+/** A weak-spot hit is worth this many normal taps. */
+export const CRIT_MULTIPLIER = 3;
+/** Anti-cheat: at most this share of taps can be weak-spot hits. */
+export const MAX_CRIT_SHARE = 0.4;
+
+/** Frenzy meter fills by 2 per tap and 6 more per weak-spot hit; at 100 Frenzy starts. */
+export const FRENZY_METER_MAX = 100;
+export const FRENZY_PER_TAP = 2;
+export const FRENZY_PER_CRIT = 6;
+/** Frenzy: double rewards, no stamina, for this long. */
+export const FRENZY_MS = 8000;
+/** Server leeway for Frenzy taps that arrive in a late batch. */
+export const FRENZY_GRACE_MS = 3000;
+
+// ─── Daily streak ────────────────────────────────────────────────────────────
+
+/** Reward for each day of a 7-day login streak (it restarts after day 7). */
+export const STREAK_REWARDS: { coins: number; resources?: number }[] = [
+  { coins: 200 },
+  { coins: 300 },
+  { coins: 400 },
+  { coins: 500 },
+  { coins: 800 },
+  { coins: 1200 },
+  { coins: 2000, resources: 1000 },
+];
 
 /** Anti-cheat: the most taps a human can plausibly make per second. */
 export const MAX_TAPS_PER_SECOND = 20;

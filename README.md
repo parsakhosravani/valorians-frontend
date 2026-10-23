@@ -1,6 +1,6 @@
 # Valorians Legend
 
-A Telegram Mini App game: tap to mine iron, wood, clay and crop, upgrade 24 buildings to grow your tribe, complete social quests and invite friends for bonuses.
+A Telegram Mini App strategy game: grow your tribe, build 24 buildings, train an army, raid other players and barbarian camps, and climb the leaderboard. A short Daily Mine (tapping with combos, weak spots and Frenzy) gives a daily boost, and a 7-day login streak rewards coming back.
 
 This repo is the whole game — the Next.js frontend **and** its backend (API routes + a SQLite/Turso database). The server is authoritative: every tap, upgrade and reward is checked and saved on the server, so progress survives reloads and devices and can't be faked from the browser.
 
@@ -22,6 +22,13 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 - **Referrals:** each player gets an invite link `https://t.me/<bot>/<app>?startapp=<code>`. When a new player opens it, both get coins (more if the friend has Telegram Premium) and the inviter gets population.
 - **Quests:** the Telegram quest checks real channel membership via the Bot API when `TELEGRAM_CHANNEL_ID` is set and the bot is an admin there. YouTube and X can't be verified by any bot, so they unlock after the player opens the link and waits a few seconds.
 
+### Daily Mine and streak
+
+- **Stamina** refills once a day at UTC midnight (1,500 at level 1, 10 per strike) — about two minutes of mining.
+- **Weak spot:** hitting the glowing rune is worth ×3. **Combo:** tapping in rhythm (under 1.2s apart) adds +0.1 every 10 hits, up to ×2. **Frenzy:** the meter fills from strikes and weak-spot hits; when full, 8 seconds of double rewards that cost no stamina.
+- The client sends batches `{ taps, crits, comboSum, frenzyTaps }`; the server caps tap speed, weak-spot share (40%), combo (×2) and only allows Frenzy once the meter really filled.
+- **Streak:** claim once a UTC day for 200 → 2,000 coins over 7 days (day 7 adds 1,000 of each resource); missing a day restarts it.
+
 ### War
 
 - **Troops:** Spearmen and Archers (Barracks), Cavalry (Stable), Battering Rams (Siege Workshop). Each has attack, defense, carry capacity, training time and a crop upkeep. Training runs as a queue (up to 5 batches); Military Command speeds it up.
@@ -40,9 +47,9 @@ All routes need the `Authorization` header and return `{ serverTime, me, state }
 | Method | Route | Body |
 | --- | --- | --- |
 | GET | `/api/me` | — signs in, creating the player on first visit |
-| POST | `/api/tap` | `{ resource: "iron" \| "wood" \| "clay" \| "crop", taps }` |
+| POST | `/api/tap` | `{ resource, taps, crits?, comboSum?, frenzyTaps? }` |
 | POST | `/api/skills/upgrade` | `{ skill: "tap" \| "energy" }` |
-| POST | `/api/skills/full-energy` | — |
+| POST | `/api/streak` | — claims today's streak reward |
 | POST | `/api/buildings/upgrade` | `{ building: "iron-mine" }` (ids in `config.ts`) |
 | POST | `/api/quests/start` | `{ quest: "telegram" \| "youtube" \| "x" }` |
 | POST | `/api/quests/claim` | `{ quest }` |

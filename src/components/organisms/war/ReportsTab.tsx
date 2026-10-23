@@ -33,8 +33,8 @@ export const ReportsTab = () => {
 
   return (
     <div className="flex flex-col gap-2">
-      {!items && <p className="text-sm text-[#B5C7DE]">Loading…</p>}
-      {items?.length === 0 && <p className="text-sm text-[#B5C7DE]">No battles yet.</p>}
+      {!items && <p className="text-sm text-[#B19C80]">Loading…</p>}
+      {items?.length === 0 && <p className="text-sm text-[#B19C80]">No battles yet.</p>}
       {items?.map((it) => {
         const loot = RESOURCES.reduce((s, r) => s + (it.report.loot[r.id] ?? 0), 0);
 
@@ -46,12 +46,12 @@ export const ReportsTab = () => {
                 <div className="font-bold truncate">
                   {it.role === "attacker" ? `You attacked ${it.opponent}` : `${it.opponent} attacked you`}
                 </div>
-                <div className="text-xs text-[#B5C7DE]">
+                <div className="text-xs text-[#B19C80]">
                   {formatDuration(now - it.at)} ago
                   {loot > 0 && ` · ${it.role === "attacker" ? "+" : "−"}${fmt(loot)} resources`}
                 </div>
               </div>
-              <span className={it.won ? "text-green-400 font-bold text-sm" : "text-[#F72214] font-bold text-sm"}>
+              <span className={it.won ? "text-good font-bold text-sm" : "text-[#F08A6C] font-bold text-sm"}>
                 {it.won ? "Won" : "Lost"}
               </span>
             </Card>

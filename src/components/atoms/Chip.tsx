@@ -5,22 +5,9 @@ interface ChipProps {
   color?: "primary" | "secondary" | "success" | "warning" | "error";
 }
 
-export const Chip: React.FC<ChipProps> = ({ label, color = "primary" }) => {
-  const baseClasses = "inline-flex items-center px-2 w";
-
-  const colorClasses = {
-    primary: "bg-[#374D6A] text-white",
-    secondary: "bg-[#212F42] text-white",
-    success: "bg-green-500 text-white",
-    warning: "bg-yellow-500 text-white",
-    error: "bg-[#F72214] text-white",
-  };
-
-  return (
-    <div
-      className={`text-xs w-4 h-5 text-center justify-center text-[#B5C7DE] rounded-b-lg font-bold ${baseClasses} ${colorClasses[color]}`}
-    >
-      {label}
-    </div>
-  );
-};
+/** Level badge: a round gold coin with the number. */
+export const Chip: React.FC<ChipProps> = ({ label }) => (
+  <div className="min-w-7 h-7 px-1.5 rounded-full bg-gold text-[#1A120B] font-display font-black text-sm flex items-center justify-center shadow">
+    {label}
+  </div>
+);

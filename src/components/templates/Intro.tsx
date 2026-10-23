@@ -31,20 +31,20 @@ export const Intro = () => {
 
   // Enter the game once the intro has played AND the player has loaded.
   useEffect(() => {
-    if (introDone && status === "ready") router.replace("/resources");
+    if (introDone && status === "ready") router.replace("/hall" as any);
   }, [introDone, status]);
   return (
     <>
-      <div className="h-screen flex w-full items-end justify-center">
-        <div className="text-[#B1D7ED] bottom-0 flex h-52 flex-col justify-between rounded-tl-3xl rounded-tr-3xl px-[57px] pb-[33px] pt-[26px]">
-          <div className="text-4xl font-[900] leading-none text-center whitespace-nowrap">
+      <div className="h-svh flex w-full items-end justify-center">
+        <div className="text-[#2A1F16] bottom-0 flex h-52 flex-col justify-between rounded-tl-3xl rounded-tr-3xl px-[57px] pb-[33px] pt-[26px]">
+          <div className="font-display text-4xl font-black leading-none text-center whitespace-nowrap">
             Valorians Legend
           </div>
           <div className="flex justify-center">
-            <div className="relative w-32 text-center flex items-center justify-left overflow-hidden rounded-full bg-white transition-all delay-100">
+            <div className="relative w-32 text-center flex items-center justify-left overflow-hidden rounded-full bg-panel2 transition-all delay-100">
               <div
                 className={clsx(
-                  "h-[7px] w-0 rounded bg-[#0695E5] transition-all duration-[3s] ease-in-out hxs:left-[1.5%] hxs:top-[50%] z-20",
+                  "h-[7px] w-0 rounded bg-[#E3A948] transition-all duration-[3s] ease-in-out hxs:left-[1.5%] hxs:top-[50%] z-20",
                   progressBarStart === 100 && "w-[100%]"
                 )}
               />
@@ -52,17 +52,17 @@ export const Intro = () => {
           </div>
 
           {status === "error" ? (
-            <div className="flex text-white w-full flex-col items-center justify-center gap-y-1">
+            <div className="flex text-parch w-full flex-col items-center justify-center gap-y-1">
               <div className="text-[15px] font-bold text-center">{error}</div>
               <button
-                className="text-[#019AF0] font-bold underline"
+                className="text-[#E3A948] font-bold underline"
                 onClick={retry}
               >
                 Try again
               </button>
             </div>
           ) : (
-            <div className="flex text-white w-full flex-col items-center justify-center gap-y-1">
+            <div className="flex text-parch w-full flex-col items-center justify-center gap-y-1">
               <div className="text-[17px] font-extrabold leading-none">
                 Stay tuned
               </div>

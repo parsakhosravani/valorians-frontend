@@ -35,8 +35,8 @@ export const Leaderboard = () => {
 
   return (
     <>
-      <div className="w-full flex flex-col gap-2 px-2 self-start">
-        <h1 className="text-2xl font-black text-center">Leaderboard</h1>
+      <div className="w-full flex flex-col gap-2 px-3 pt-1">
+        <h1 className="font-display text-2xl font-black text-center">Leaderboard</h1>
         <Tabs
           tabs={[
             { id: "population", label: "Population" },
@@ -47,22 +47,22 @@ export const Leaderboard = () => {
           onChange={setMetric}
         />
         {data && (
-          <div className="bg-[#019AF0] rounded-md px-3 py-2 flex justify-between font-bold">
+          <div className="bg-gold text-[#1A120B] rounded-xl px-3 py-2 flex justify-between font-extrabold">
             <span>Your rank: #{data.me.rank.toLocaleString("en-US")}</span>
             <span>
               {LABEL[metric]} {data.me.value.toLocaleString("en-US")}
             </span>
           </div>
         )}
-        {error && <p className="text-sm text-[#F72214]">{error}</p>}
-        {!data && !error && <p className="text-sm text-[#B5C7DE]">Loading…</p>}
-        <div className="flex flex-col gap-1.5 overflow-y-auto scrollable max-h-[58svh] pb-28">
+        {error && <p className="text-sm text-[#F08A6C]">{error}</p>}
+        {!data && !error && <p className="text-sm text-[#B19C80]">Loading…</p>}
+        <div className="flex flex-col gap-1.5 pb-4">
           {data?.top.map((r) => (
             <div
               key={r.id}
               className={clsx(
-                "flex items-center gap-2 rounded-md px-2 py-1.5 bg-buildingBg backdrop-blur-xs",
-                r.isMe && "border border-[#019AF0]"
+                "flex items-center gap-2 rounded-xl px-2 py-2 bg-buildingBg border border-line",
+                r.isMe && "!border-gold"
               )}
             >
               <span className="w-8 text-center font-bold">{MEDAL[r.rank - 1] ?? r.rank}</span>
@@ -83,7 +83,7 @@ export const Leaderboard = () => {
           ))}
         </div>
       </div>
-      <Image priority alt="" className="absolute h-full top-0 left-0 w-full -z-10 object-cover opacity-40" src={bg} />
+      <Image priority alt="" className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-25" src={bg} />
     </>
   );
 };

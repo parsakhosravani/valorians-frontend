@@ -46,21 +46,21 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
   else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name).join(", ")}`, true];
 
   return (
-    <Col className="bg-buildingBg backdrop-blur-xs rounded-[4px] border border-[#374961] p-2">
+    <Col className="bg-buildingBg rounded-2xl border border-line p-3">
       <Row className="relative gap-3">
-        <Row className="-top-2 left-0 absolute z-[1]">
+        <Row className="-top-1.5 -left-1.5 absolute z-[1]">
           <Chip color="primary" label={String(level)} />
         </Row>
         <Image
           alt={building.name}
-          className="h-[110px] w-[110px] object-contain shrink-0"
+          className="h-[96px] w-[96px] object-contain shrink-0 bg-panel2 rounded-xl"
           height={110}
           src={buildingImage(building)}
           width={110}
         />
         <Col className="justify-center gap-2 flex-1 min-w-0">
           <Row className="justify-between items-center gap-2">
-            <h2 className="text-lg font-bold leading-tight">{building.name}</h2>
+            <h2 className="font-display text-[17px] font-bold leading-tight">{building.name}</h2>
             {!info.maxed && !inQueue && (
               <TextImage imgAlt="time cost" imgSrc={time} size="small" title={formatDuration(info.seconds * 1000)} />
             )}
@@ -74,9 +74,9 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
               <Text size="small">
                 Upgrading to level {inQueue.toLevel} · {formatDuration(inQueue.endsAt - now)} left
               </Text>
-              <div className="h-1.5 w-full bg-white/20 rounded">
+              <div className="h-2 w-full bg-panel2 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-[#00A3FF] rounded transition-all"
+                  className="h-full bg-gradient-to-r from-gold to-ember rounded-full transition-all"
                   style={{
                     width: `${Math.min(100, ((now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) * 100)}%`,
                   }}
@@ -93,7 +93,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
                   {RESOURCES.map((r) => (
                     <span
                       key={r.id}
-                      className={clsx(state.resources[r.id] < info.cost && "text-[#F72214]")}
+                      className={clsx(state.resources[r.id] < info.cost && "text-[#F08A6C]")}
                     >
                       <TextImage imgAlt={r.name} imgSrc={r.img} size="small" title={compact(info.cost)} />
                     </span>
@@ -104,7 +104,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
                     size="small"
                     title={`+${GROWTH_PER_BUILDING_LEVEL}/h`}
                   />
-                  <span className="text-[#F72214]">
+                  <span className="text-[#F08A6C]">
                     <TextImage
                       imgAlt="crop upkeep"
                       imgSrc={RESOURCES[3].img}

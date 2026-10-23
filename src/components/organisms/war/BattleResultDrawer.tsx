@@ -16,52 +16,52 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
     <div className="flex flex-col gap-3">
       <div className="text-center">
         <div className="text-5xl">{won ? "🏆" : "💀"}</div>
-        <div className={won ? "text-2xl font-black text-green-400" : "text-2xl font-black text-[#F72214]"}>
+        <div className={won ? "text-2xl font-black text-good" : "text-2xl font-black text-[#F08A6C]"}>
           {won ? "Victory!" : "Defeat"}
         </div>
-        <div className="text-sm text-[#B5C7DE]">
+        <div className="text-sm text-[#B19C80]">
           {report.attackerName} ⚔️ {report.defenderName}
         </div>
       </div>
-      <div className="grid grid-cols-3 text-center bg-[#212F42] rounded p-2 text-sm">
+      <div className="grid grid-cols-3 text-center bg-[#1E1610] rounded p-2 text-sm">
         <div>
-          <div className="text-[10px] text-[#B5C7DE]">ATTACK</div>
+          <div className="text-[10px] text-[#B19C80]">ATTACK</div>
           <b>{fmt(report.attack)}</b>
         </div>
         <div>
-          <div className="text-[10px] text-[#B5C7DE]">DEFENSE</div>
+          <div className="text-[10px] text-[#B19C80]">DEFENSE</div>
           <b>{fmt(report.defense)}</b>
         </div>
         <div>
-          <div className="text-[10px] text-[#B5C7DE]">LUCK</div>
+          <div className="text-[10px] text-[#B19C80]">LUCK</div>
           <b>{report.luck >= 1 ? "+" : ""}{Math.round((report.luck - 1) * 100)}%</b>
         </div>
       </div>
       <div className="text-sm flex flex-col gap-1">
         <div>
-          <span className="text-[#B5C7DE]">Attackers sent: </span>
+          <span className="text-[#B19C80]">Attackers sent: </span>
           <ArmyLine army={report.sent} />
         </div>
         <div>
-          <span className="text-[#B5C7DE]">Attackers lost: </span>
+          <span className="text-[#B19C80]">Attackers lost: </span>
           <ArmyLine army={report.attackerLosses} />
         </div>
         {armySize(report.attackerHealed) > 0 && (
           <div>
-            <span className="text-[#B5C7DE]">Saved by hospital: </span>
+            <span className="text-[#B19C80]">Saved by hospital: </span>
             <ArmyLine army={report.attackerHealed} />
           </div>
         )}
         {armySize(report.defenders) > 0 && (
           <div>
-            <span className="text-[#B5C7DE]">Defenders lost: </span>
+            <span className="text-[#B19C80]">Defenders lost: </span>
             <ArmyLine army={report.defenderLosses} />
           </div>
         )}
       </div>
       {lootTotal > 0 || report.coins > 0 ? (
-        <div className="bg-[#212F42] rounded p-2">
-          <div className="text-[10px] text-[#B5C7DE] mb-1">{asDefender ? "STOLEN FROM YOU" : "LOOT"}</div>
+        <div className="bg-[#1E1610] rounded p-2">
+          <div className="text-[10px] text-[#B19C80] mb-1">{asDefender ? "STOLEN FROM YOU" : "LOOT"}</div>
           <div className="flex flex-wrap gap-x-3 text-sm">
             {RESOURCES.map((r) => (
               <span key={r.id} className="flex items-center gap-1">
@@ -87,7 +87,7 @@ export const BattleResultDrawer = ({ report, onClose }: { report: BattleReport |
         <div className="flex flex-col gap-3">
           <BattleSummary report={report} />
           {home && (
-            <p className="text-center text-sm text-[#B5C7DE]">
+            <p className="text-center text-sm text-[#B19C80]">
               Your army returns in {formatDuration(report.returnsAt - now)}
               {report.attackerWon ? " with the loot" : ""}.
             </p>

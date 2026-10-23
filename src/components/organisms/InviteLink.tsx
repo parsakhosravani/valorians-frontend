@@ -39,7 +39,7 @@ export const InviteLink: React.FC<InviteLinkProps> = ({ className }) => {
   return (
     <div className={clsx("flex w-full gap-x-2", className)}>
       <a
-        className="bg-[#00A3FF] justify-center h-[44px] w-full rounded-[5px] gap-x-2 flex items-center"
+        className="bg-[#E3A948] justify-center h-[44px] w-full rounded-[5px] gap-x-2 flex items-center"
         href={shareUrl}
         id="telegram_share"
         rel="noreferrer"
@@ -47,7 +47,7 @@ export const InviteLink: React.FC<InviteLinkProps> = ({ className }) => {
         title="inviteFriends"
         onClick={onShare}
       >
-        <span className="text-white text-base font-bold">Invite a Friend</span>
+        <span className="text-[#1A120B] font-display text-base font-black">Invite a Friend</span>
       </a>
 
       <CopyToClipboard
@@ -57,8 +57,8 @@ export const InviteLink: React.FC<InviteLinkProps> = ({ className }) => {
           toast.dismiss();
           toast.custom(
             () => (
-              <div className="w-[85%] h-11 px-1.5 py-2 bg-[#6393D439] rounded-[5px] justify-center items-center gap-1 inline-flex">
-                <div className="text-white text-base font-bold leading-7">Copied Successfully</div>
+              <div className="w-[85%] h-11 px-1.5 py-2 bg-[#2A1F16] rounded-[5px] justify-center items-center gap-1 inline-flex">
+                <div className="text-parch text-base font-bold leading-7">Copied Successfully</div>
               </div>
             ),
             {
@@ -67,7 +67,7 @@ export const InviteLink: React.FC<InviteLinkProps> = ({ className }) => {
           );
         }}
       >
-        <button className="w-full bg-[#00A3FF] max-w-[44px] h-[44px] flex items-center rounded-[5px] justify-center">
+        <button className="w-full bg-[#E3A948] max-w-[44px] h-[44px] flex items-center rounded-[5px] justify-center">
           <CopyIcon />
         </button>
       </CopyToClipboard>

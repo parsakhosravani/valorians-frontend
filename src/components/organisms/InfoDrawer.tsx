@@ -28,7 +28,7 @@ export const InfoDrawer: React.FC<InfoDrawerProps> = ({ title, content }) => {
             imgAlt="info"
           >
             <p className="text-2xl font-black">{title}</p>
-            <p className="text-[#B5C7DE]">{content}</p>
+            <p className="text-[#B19C80]">{content}</p>
           </TextImage>
           <Button isFull onClick={() => setIsOpen(false)}>
             Got it

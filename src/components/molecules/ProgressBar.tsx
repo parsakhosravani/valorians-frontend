@@ -18,12 +18,12 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
     value < totalValue ? Math.floor((value * 100) / totalValue) + "%" : "100%";
   return (
     <div className={`relative ${sizeClasses[size]}`}>
-      <div className="h-full bg-white rounded-[10px] shadow-inner relative" />
+      <div className="h-full bg-panel2 rounded-[10px] relative" />
       <div
         style={{
           width: percentage,
         }}
-        className="h-full rounded-[10px] top-0 absolute bg-[#00A3FF] flex items-center justify-center"
+        className="h-full rounded-[10px] top-0 absolute bg-[#E3A948] flex items-center justify-center"
       >
         <p className="text-[8px] font-bold text-center">
           {size == "medium" && percentage}

@@ -10,7 +10,7 @@ export default function useBackButton() {
     const app = telegram?.WebApp;
 
     if (!app) return;
-    const onBack = () => navigateTo("/resources", "off");
+    const onBack = () => navigateTo("/hall", "off");
 
     app.BackButton.show();
     app.onEvent("backButtonClicked", onBack);

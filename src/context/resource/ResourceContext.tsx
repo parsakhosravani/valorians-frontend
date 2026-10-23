@@ -22,7 +22,15 @@ import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
 
 import { ApiError, PlayerView, apiRequest, resolveAuthHeader } from "@/lib/api";
-import { RESOURCE_IDS, RESOURCE_NAMES, ResourceId, QuestId, UnitId } from "@/lib/game/config";
+import {
+  COMBO_WINDOW_MS,
+  RESOURCE_IDS,
+  RESOURCE_NAMES,
+  ResourceId,
+  QuestId,
+  UnitId,
+  comboMultiplier,
+} from "@/lib/game/config";
 import type { RaidReport } from "@/lib/game/war";
 import {
   Army,
@@ -31,6 +39,8 @@ import {
   SkillId,
   advance,
   applyTaps,
+  frenzyActive,
+  TapBatch,
   getRates,
 } from "@/lib/game/engine";
 
@@ -62,10 +72,12 @@ interface GameContextType {
   now: number;
   activeResource: TResource;
   setActiveResource: (r: TResource) => void;
-  /** Registers one tap; returns how much was gained (0 if blocked). */
-  tap: (resource: ResourceId) => number;
+  /** Registers one tap (crit = hit the weak spot); returns how much was gained (0 if blocked). */
+  tap: (resource: ResourceId, crit?: boolean) => number;
+  /** Current combo count and multiplier (resets after a pause). */
+  combo: { count: number; multiplier: number };
+  claimStreak: () => Promise<boolean>;
   upgradeSkill: (skill: SkillId) => Promise<boolean>;
-  refillEnergy: () => Promise<boolean>;
   upgradeBuilding: (id: string) => Promise<boolean>;
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
@@ -82,8 +94,9 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 const FLUSH_DELAY_MS = 700;
 const RESYNC_MS = 60_000;
 
-type Pending = Record<ResourceId, number>;
-const noPending = (): Pending => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
+type Pending = Record<ResourceId, Required<TapBatch>>;
+const emptyBatch = (): Required<TapBatch> => ({ taps: 0, crits: 0, comboSum: 0, frenzyTaps: 0 });
+const noPending = (): Pending => ({ iron: emptyBatch(), wood: emptyBatch(), clay: emptyBatch(), crop: emptyBatch() });
 
 export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<GameStatus>("loading");
@@ -115,7 +128,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     let s = view.state;
     const t = serverNow();
     for (const id of RESOURCE_IDS) {
-      if (pendingRef.current[id] > 0) {
+      if (pendingRef.current[id].taps > 0) {
         s = applyTaps(advance(s, t), id, pendingRef.current[id], t, { rateLimit: false }).state;
       }
     }
@@ -138,19 +151,24 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!auth) return;
 
     const batch = pendingRef.current;
-    if (RESOURCE_IDS.every((id) => batch[id] === 0)) return;
+    if (RESOURCE_IDS.every((id) => batch[id].taps === 0)) return;
     pendingRef.current = noPending();
 
     const run = (async () => {
       let last: PlayerView | null = null;
       for (const id of RESOURCE_IDS) {
-        if (!batch[id]) continue;
+        if (!batch[id].taps) continue;
         try {
-          last = await apiRequest(auth, "tap", { resource: id, taps: batch[id] });
+          last = await apiRequest(auth, "tap", { resource: id, ...batch[id] });
         } catch (e) {
           if (!(e instanceof ApiError)) {
             // Network hiccup: keep the taps and try again later.
-            pendingRef.current[id] += batch[id];
+            const p = pendingRef.current[id];
+
+            p.taps += batch[id].taps;
+            p.crits += batch[id].crits;
+            p.comboSum += batch[id].comboSum;
+            p.frenzyTaps += batch[id].frenzyTaps;
           }
         }
       }
@@ -204,14 +222,49 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     };
   }, [status, flush, load]);
 
+  const comboRef = useRef({ count: 0, last: 0 });
+  const [combo, setCombo] = useState({ count: 0, multiplier: 1 });
+
+  // The combo breaks if you pause too long.
+  useEffect(() => {
+    if (!combo.count) return;
+    const t = setTimeout(() => {
+      if (Date.now() - comboRef.current.last >= COMBO_WINDOW_MS) {
+        comboRef.current.count = 0;
+        setCombo({ count: 0, multiplier: 1 });
+      }
+    }, COMBO_WINDOW_MS + 50);
+
+    return () => clearTimeout(t);
+  }, [combo.count]);
+
   const tap = useCallback(
-    (resource: ResourceId) => {
+    (resource: ResourceId, crit = false) => {
       const cur = baseRef.current;
       if (!cur) return 0;
       const t = serverNow();
-      const res = applyTaps(advance(cur, t), resource, 1, t, { rateLimit: false });
+      const c = comboRef.current;
+      const nowMs = Date.now();
+      const count = nowMs - c.last <= COMBO_WINDOW_MS ? c.count + 1 : 1;
+      const multiplier = comboMultiplier(count);
+      const advanced = advance(cur, t);
+      const one: Required<TapBatch> = {
+        taps: 1,
+        crits: crit ? 1 : 0,
+        comboSum: multiplier,
+        frenzyTaps: frenzyActive(advanced, t) ? 1 : 0,
+      };
+      const res = applyTaps(advanced, resource, one, t, { rateLimit: false });
       if (!res.accepted) return 0;
-      pendingRef.current[resource] += 1;
+
+      comboRef.current = { count, last: nowMs };
+      setCombo({ count, multiplier });
+      const p = pendingRef.current[resource];
+
+      p.taps += 1;
+      p.crits += one.crits;
+      p.comboSum += one.comboSum;
+      p.frenzyTaps += one.frenzyTaps;
       setBoth(res.state);
       if (!flushTimer.current) {
         flushTimer.current = setTimeout(() => {
@@ -219,6 +272,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
           flush();
         }, FLUSH_DELAY_MS);
       }
+
       return res.gained;
     },
     [flush]
@@ -264,7 +318,8 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     setActiveResource,
     tap,
     upgradeSkill: (skill) => act("skills/upgrade", { skill }, "Upgraded!"),
-    refillEnergy: () => act("skills/full-energy", {}, "Energy refilled"),
+    claimStreak: () => act("streak", {}, "Reward claimed!"),
+    combo,
     upgradeBuilding: (building) => act("buildings/upgrade", { building }, "Construction started"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),

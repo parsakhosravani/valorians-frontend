@@ -9,7 +9,7 @@ export const Coin: React.FC<CoinProps> = ({ amount }) => {
   return (
     <div className="flex items-center gap-1">
       <Image className={"w-4 h-4"} src={coin} alt="coin" />
-      <div className=" text-white text-xs font-bold ">
+      <div className=" text-parch text-xs font-extrabold ">
         {amount.toLocaleString("en-US")}
       </div>
     </div>
