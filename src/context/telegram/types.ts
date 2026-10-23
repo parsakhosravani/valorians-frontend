@@ -7,16 +7,9 @@ export type TelegramUser = {
     photo_url: string
 } | null;
 
-export type TelegramUserProfile = {
-    user: {
-        referral_code: string
-    }
-}
-
 export interface TelegramContextType {
     telegram: any;
     user: TelegramUser;
-    userProfile: TelegramUserProfile;
     isMobile: boolean,
     progressBarStart: number,
     setProgressBarStart: any,

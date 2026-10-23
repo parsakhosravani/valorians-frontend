@@ -1,18 +1,21 @@
-import { InfoDrawer, Row, TextImage } from "@/components";
 import builder from "~/images/resources/builder.webp";
 
-interface BuilderProps {}
+import { InfoDrawer, Row, TextImage } from "@/components";
+import { useGame } from "@/context";
 
-export const Builder: React.FC<BuilderProps> = () => {
+export const Builder: React.FC = () => {
+  const { state, rates } = useGame();
+  const free = rates.builders - state.queue.length;
+
   return (
-    <Row className="bg-[#212F42] justify-between mb-2 text-[#B5C7DE] p-1 rounded-sm flex-1 h-full">
+    <Row className="bg-[#212F42] justify-between mb-2 text-[#B5C7DE] p-1 rounded-sm">
       <TextImage
-        imgSrc={builder}
         imgAlt="builder"
-        title="1 Builders are available to upgrade buildings"
+        imgSrc={builder}
+        title={`${free} of ${rates.builders} builder${rates.builders === 1 ? "" : "s"} available`}
       />
       <InfoDrawer
-        content={"You can upgrade at least 3 buildings at the same time"}
+        content="Each builder upgrades one building at a time. Level up your Town Hall to get an extra builder at levels 5, 10 and 15, and to build faster."
         title="Builders"
       />
     </Row>

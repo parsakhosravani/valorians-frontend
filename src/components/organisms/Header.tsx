@@ -1,50 +1,37 @@
 "use client";
 
 import React from "react";
-import { Coin, Population, Resource, Row, User } from "@/components";
 import { usePathname } from "next/navigation";
-import { useResourceContext } from "@/context";
+
+import { Coin, Population, Resource, Row, User } from "@/components";
+import { RESOURCES, useGame } from "@/context";
 
 export const Header: React.FC = () => {
-  const {
-    resources,
-    activeResource,
-    resourceCapacity,
-    coin,
-    setActiveResource,
-  } = useResourceContext();
-
+  const { state, rates, activeResource, setActiveResource } = useGame();
   const pathname = usePathname();
+  const showResources = pathname === "/resources" || pathname === "/tribe";
+
   return (
     <header className="w-full flex gap-2 flex-col p-2">
       <Row className="gap-1 h-[30px]">
         <User />
         <Population />
         <Row className="bg-[#212F42] rounded p-1 h-full">
-          <Coin amount={coin} />
+          <Coin amount={Math.floor(state.coins)} />
         </Row>
       </Row>
 
-      {pathname === "/resources" && (
+      {showResources && (
         <Row className="gap-2">
-          {resources.map((item) => (
+          {RESOURCES.map((item) => (
             <Resource
               key={item.id}
+              count={state.resources[item.id]}
+              isActive={pathname === "/resources" && activeResource.id === item.id}
+              perHour={rates.productionPerHour[item.id]}
+              resourceCapacity={rates.capacity}
               resourceData={item}
-              resourceCapacity={resourceCapacity}
-              isActive={activeResource.id === item.id}
-              onChangeResource={() => setActiveResource(item)}
-            />
-          ))}
-        </Row>
-      )}
-      {pathname === "/tribe" && (
-        <Row className="gap-2">
-          {resources.map((item) => (
-            <Resource
-              key={item.id}
-              resourceData={item}
-              resourceCapacity={resourceCapacity}
+              onChangeResource={pathname === "/resources" ? () => setActiveResource(item) : undefined}
             />
           ))}
         </Row>

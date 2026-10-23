@@ -1,33 +1,41 @@
+"use client";
+
 import React, { FunctionComponent } from "react";
-import { Builder, Building, Col } from "@/components";
+import Image from "next/image";
+
 import bg from "~/images/background/tribe.webp";
-import Image, { StaticImageData } from "next/image";
 
-export type TBuilding = {
-  name: string;
-  src: StaticImageData;
-};
-interface TribePropsType {
-  buildings: TBuilding[];
-}
+import { Builder, Building, Col } from "@/components";
+import { BUILDINGS } from "@/lib/game/config";
+import { useGame } from "@/context";
 
-export const Tribe: FunctionComponent<TribePropsType> = ({ buildings }) => {
+export const Tribe: FunctionComponent = () => {
+  const { state } = useGame();
+
+  // Buildings under construction float to the top.
+  const sorted = [...BUILDINGS].sort((a, b) => {
+    const qa = state.queue.some((q) => q.building === a.id) ? 1 : 0;
+    const qb = state.queue.some((q) => q.building === b.id) ? 1 : 0;
+
+    return qb - qa;
+  });
+
   return (
     <>
-      <Col className="m-2 my-0">
+      <Col className="m-2 my-0 w-full">
         <Builder />
-        <div className="gap-2.5 space-y-2 w-full overflow-y-auto scrollable max-h-[85svh] pb-32">
-          {buildings.map((item, index) => (
-            <Building key={index} buidling={item} />
+        <div className="gap-2.5 space-y-2 w-full overflow-y-auto scrollable max-h-[70svh] pb-32">
+          {sorted.map((item) => (
+            <Building key={item.id} building={item} />
           ))}
         </div>
       </Col>
 
       <Image
         priority
-        src={bg}
-        alt={"intro"}
+        alt={"tribe"}
         className="absolute h-full top-0 left-0 w-full -z-10 object-cover"
+        src={bg}
       />
     </>
   );

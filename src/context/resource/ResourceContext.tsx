@@ -1,5 +1,17 @@
 "use client";
-import React, { createContext, useState, useContext, ReactNode } from "react";
+import React, {
+  ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import toast from "react-hot-toast";
+import { StaticImageData } from "next/image";
+
 import iron from "~/images/resources/iron.webp";
 import wood from "~/images/resources/wood.webp";
 import clay from "~/images/resources/clay.webp";
@@ -8,110 +20,258 @@ import ironBg from "~/images/background/iron.webp";
 import woodBg from "~/images/background/wood.webp";
 import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
-export type TResource = (typeof initialResources)[number];
 
-const initialResources = [
-  {
-    id: 1,
-    img: iron,
-    bg: ironBg,
-    color: "bg-zinc-600",
-    name: "Iron",
-    count: 10000,
-  },
-  {
-    id: 2,
-    img: wood,
-    bg: woodBg,
-    color: "bg-orange-300",
-    name: "Wood",
-    count: 10000,
-  },
-  {
-    id: 3,
-    img: clay,
-    bg: clayBg,
-    color: "bg-amber-700",
-    name: "Clay",
-    count: 10000,
-  },
-  {
-    id: 4,
-    img: crop,
-    bg: cropBg,
-    color: "bg-yellow-500",
-    name: "Crop",
-    count: 10000,
-  },
+import { ApiError, PlayerView, apiRequest, resolveAuthHeader } from "@/lib/api";
+import { RESOURCE_IDS, RESOURCE_NAMES, ResourceId, QuestId } from "@/lib/game/config";
+import {
+  GameState,
+  Rates,
+  SkillId,
+  advance,
+  applyTaps,
+  getRates,
+} from "@/lib/game/engine";
+
+export type TResource = {
+  id: ResourceId;
+  name: string;
+  img: StaticImageData;
+  bg: StaticImageData;
+};
+
+export const RESOURCES: TResource[] = [
+  { id: "iron", name: RESOURCE_NAMES.iron, img: iron, bg: ironBg },
+  { id: "wood", name: RESOURCE_NAMES.wood, img: wood, bg: woodBg },
+  { id: "clay", name: RESOURCE_NAMES.clay, img: clay, bg: clayBg },
+  { id: "crop", name: RESOURCE_NAMES.crop, img: crop, bg: cropBg },
 ];
 
-interface ResourceContextType {
-  resources: TResource[];
-  setResources: React.Dispatch<React.SetStateAction<TResource[]>>;
+export type GameStatus = "loading" | "ready" | "error" | "no-auth";
+
+interface GameContextType {
+  status: GameStatus;
+  error: string | null;
+  retry: () => void;
+  me: PlayerView["me"] | null;
+  /** Live state, projected to the current second. */
+  state: GameState | null;
+  rates: Rates | null;
+  /** Current time on the server's clock (ms). */
+  now: number;
   activeResource: TResource;
-  setActiveResource: React.Dispatch<React.SetStateAction<TResource>>;
-  resourceCapacity: number;
-  setResourceCapacity: React.Dispatch<React.SetStateAction<number>>;
-  energyCapacity: number;
-  setEnergyCapacity: React.Dispatch<React.SetStateAction<number>>;
-  availableEnergy: number;
-  setAvailableEnergy: React.Dispatch<React.SetStateAction<number>>;
-  availableFullEnergy: number;
-  setAvailableFullEnergy: React.Dispatch<React.SetStateAction<number>>;
-  coin: number;
-  setCoin: React.Dispatch<React.SetStateAction<number>>;
-  mineLevel: number;
-  setMineLevel: React.Dispatch<React.SetStateAction<number>>;
+  setActiveResource: (r: TResource) => void;
+  /** Registers one tap; returns how much was gained (0 if blocked). */
+  tap: (resource: ResourceId) => number;
+  upgradeSkill: (skill: SkillId) => Promise<boolean>;
+  refillEnergy: () => Promise<boolean>;
+  upgradeBuilding: (id: string) => Promise<boolean>;
+  startQuest: (id: QuestId) => Promise<boolean>;
+  claimQuest: (id: QuestId) => Promise<boolean>;
+  authHeader: string | null;
 }
 
-const ResourceContext = createContext<ResourceContextType | undefined>(
-  undefined
-);
+const GameContext = createContext<GameContextType | undefined>(undefined);
 
-export const ResourceProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
-  const [resources, setResources] = useState<TResource[]>(initialResources);
-  const [activeResource, setActiveResource] = useState<TResource>(resources[0]);
-  const [resourceCapacity, setResourceCapacity] = useState(15000);
-  const [coin, setCoin] = useState(1000);
-  const [energyCapacity, setEnergyCapacity] = useState(15000);
-  const [availableEnergy, setAvailableEnergy] = useState(12000);
-  const [mineLevel, setMineLevel] = useState(10);
-  const [availableFullEnergy, setAvailableFullEnergy] = useState(3);
+const FLUSH_DELAY_MS = 700;
+const RESYNC_MS = 60_000;
 
-  return (
-    <ResourceContext.Provider
-      value={{
-        resources,
-        setResources,
-        activeResource,
-        setActiveResource,
-        resourceCapacity,
-        setResourceCapacity,
-        energyCapacity,
-        setEnergyCapacity,
-        availableEnergy,
-        setAvailableEnergy,
-        availableFullEnergy,
-        setAvailableFullEnergy,
-        mineLevel,
-        setMineLevel,
-        coin,
-        setCoin,
-      }}
-    >
-      {children}
-    </ResourceContext.Provider>
+type Pending = Record<ResourceId, number>;
+const noPending = (): Pending => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
+
+export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [status, setStatus] = useState<GameStatus>("loading");
+  const [error, setError] = useState<string | null>(null);
+  const [me, setMe] = useState<PlayerView["me"] | null>(null);
+  const [base, setBase] = useState<GameState | null>(null);
+  const [activeResource, setActiveResource] = useState<TResource>(RESOURCES[0]);
+  const [tick, setTick] = useState(0);
+  const [authHeader, setAuthHeader] = useState<string | null>(null);
+
+  // Refs mirror state so tap handlers can run many times per render.
+  const baseRef = useRef<GameState | null>(null);
+  const offsetRef = useRef(0); // serverTime - Date.now()
+  const pendingRef = useRef<Pending>(noPending());
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const serverNow = () => Date.now() + offsetRef.current;
+
+  const setBoth = (s: GameState) => {
+    baseRef.current = s;
+    setBase(s);
+  };
+
+  /** Applies a fresh server view, re-applying taps the server hasn't seen yet. */
+  const accept = useCallback((view: PlayerView) => {
+    offsetRef.current = view.serverTime - Date.now();
+    setMe(view.me);
+    let s = view.state;
+    const t = serverNow();
+    for (const id of RESOURCE_IDS) {
+      if (pendingRef.current[id] > 0) {
+        s = applyTaps(advance(s, t), id, pendingRef.current[id], t, { rateLimit: false }).state;
+      }
+    }
+    setBoth(s);
+  }, []);
+
+  const showError = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : "Something went wrong";
+    toast.dismiss();
+    toast.error(msg);
+  };
+
+  const flush = useCallback(async (): Promise<void> => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    if (inFlightRef.current) await inFlightRef.current;
+    const auth = authHeader;
+    if (!auth) return;
+
+    const batch = pendingRef.current;
+    if (RESOURCE_IDS.every((id) => batch[id] === 0)) return;
+    pendingRef.current = noPending();
+
+    const run = (async () => {
+      let last: PlayerView | null = null;
+      for (const id of RESOURCE_IDS) {
+        if (!batch[id]) continue;
+        try {
+          last = await apiRequest(auth, "tap", { resource: id, taps: batch[id] });
+        } catch (e) {
+          if (!(e instanceof ApiError)) {
+            // Network hiccup: keep the taps and try again later.
+            pendingRef.current[id] += batch[id];
+          }
+        }
+      }
+      if (last) accept(last);
+    })();
+    inFlightRef.current = run;
+    await run;
+    inFlightRef.current = null;
+  }, [authHeader, accept]);
+
+  const load = useCallback(async () => {
+    const auth = resolveAuthHeader();
+    setAuthHeader(auth);
+    if (!auth) {
+      setStatus("no-auth");
+      return;
+    }
+    setStatus((s) => (s === "ready" ? s : "loading"));
+    try {
+      accept(await apiRequest(auth, "me"));
+      setStatus("ready");
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not reach the server");
+      setStatus((s) => (s === "ready" ? s : "error"));
+    }
+  }, [accept]);
+
+  useEffect(() => {
+    // Telegram's script loads before hydration, but give it a tick to be safe.
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  // Redraw counters every second, resync periodically, flush when hidden.
+  useEffect(() => {
+    if (status !== "ready") return;
+    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    const r = setInterval(() => {
+      flush().then(load);
+    }, RESYNC_MS);
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flush();
+      else load();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      clearInterval(t);
+      clearInterval(r);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [status, flush, load]);
+
+  const tap = useCallback(
+    (resource: ResourceId) => {
+      const cur = baseRef.current;
+      if (!cur) return 0;
+      const t = serverNow();
+      const res = applyTaps(advance(cur, t), resource, 1, t, { rateLimit: false });
+      if (!res.accepted) return 0;
+      pendingRef.current[resource] += 1;
+      setBoth(res.state);
+      if (!flushTimer.current) {
+        flushTimer.current = setTimeout(() => {
+          flushTimer.current = null;
+          flush();
+        }, FLUSH_DELAY_MS);
+      }
+      return res.gained;
+    },
+    [flush]
   );
+
+  const act = useCallback(
+    async (path: string, body: object, success?: string) => {
+      if (!authHeader) return false;
+      try {
+        await flush();
+        accept(await apiRequest(authHeader, path, body));
+        if (success) {
+          toast.dismiss();
+          toast.success(success);
+        }
+        return true;
+      } catch (e) {
+        showError(e);
+        return false;
+      }
+    },
+    [authHeader, flush, accept]
+  );
+
+  const now = serverNow();
+  const state = useMemo(() => (base ? advance(base, now) : null), [base, tick]);
+  const rates = useMemo(() => (state ? getRates(state) : null), [state]);
+
+  const value: GameContextType = {
+    status,
+    error,
+    retry: load,
+    me,
+    state,
+    rates,
+    now,
+    activeResource,
+    setActiveResource,
+    tap,
+    upgradeSkill: (skill) => act("skills/upgrade", { skill }, "Upgraded!"),
+    refillEnergy: () => act("skills/full-energy", {}, "Energy refilled"),
+    upgradeBuilding: (building) => act("buildings/upgrade", { building }, "Construction started"),
+    startQuest: (quest) => act("quests/start", { quest }),
+    claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
+    authHeader,
+  };
+
+  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 };
 
 export const useResourceContext = () => {
-  const context = useContext(ResourceContext);
+  const context = useContext(GameContext);
   if (context === undefined) {
-    throw new Error(
-      "useResourceContext must be used within a ResourceProvider"
-    );
+    throw new Error("useResourceContext must be used within a ResourceProvider");
   }
   return context;
+};
+
+/** Same as useResourceContext, for components that only render once ready. */
+export const useGame = () => {
+  const ctx = useResourceContext();
+  return ctx as GameContextType & { state: GameState; rates: Rates; me: PlayerView["me"] };
 };

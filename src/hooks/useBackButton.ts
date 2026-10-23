@@ -1,15 +1,22 @@
-import { useTelegramContext } from "@/context";
 import { useEffect } from "react";
 
+import { useTelegramContext } from "@/context";
+
+/** Shows Telegram's back button, which returns to the resources screen. */
 export default function useBackButton() {
   const { telegram, navigateTo } = useTelegramContext();
 
   useEffect(() => {
-    telegram?.WebApp.onEvent("backButtonClicked", () =>
-      navigateTo("/resources", "off")
-    );
+    const app = telegram?.WebApp;
+
+    if (!app) return;
+    const onBack = () => navigateTo("/resources", "off");
+
+    app.BackButton.show();
+    app.onEvent("backButtonClicked", onBack);
+
     return () => {
-      telegram?.WebApp.offEvent("backButtonClicked", () => null);
+      app.offEvent("backButtonClicked", onBack);
     };
-  }, []);
+  }, [telegram]);
 }
