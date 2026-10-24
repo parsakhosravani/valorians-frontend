@@ -5,6 +5,14 @@ const config: Config = {
   theme: {
     extend: {
       keyframes: {
+        float: {
+          "0%, 100%": { transform: "translate(-50%, 0)" },
+          "50%": { transform: "translate(-50%, -5px)" },
+        },
+        flame: {
+          "0%": { transform: "scale(1, 1)" },
+          "100%": { transform: "scale(0.9, 1.15)" },
+        },
         kenburns: {
           "0%": { transform: "scale(1.05) translateY(0)" },
           "100%": { transform: "scale(1.15) translateY(-2%)" },
@@ -24,6 +32,8 @@ const config: Config = {
         },
       },
       animation: {
+        float: "float 2.2s ease-in-out infinite",
+        flame: "flame 0.9s ease-in-out infinite alternate",
         kenburns: "kenburns 24s ease-in-out infinite alternate",
         ember: "ember 8s linear infinite",
         "touch-animation": "scale .2s linear infinite",
