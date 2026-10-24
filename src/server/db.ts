@@ -12,7 +12,16 @@ import path from "path";
  */
 function makeClient(): Client {
   const url = process.env.TURSO_DATABASE_URL;
-  if (url) return createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+  if (url) {
+    return createClient({
+      url,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+      // Next.js caches fetch() calls made while rendering GET routes. Turso talks
+      // over HTTP, so without this a repeated SELECT can get a stale cached
+      // answer (e.g. "player not found" right after creating them).
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: "no-store" }),
+    });
+  }
 
   let file = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "valorians.db");
 
