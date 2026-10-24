@@ -10,287 +10,697 @@ import { formatDuration } from "@/lib/format";
 
 // ─── Layout ──────────────────────────────────────────────────────────────────
 //
-// A 6×6 isometric island. (col, row): col runs to the lower right, row to the
-// lower left; (0,0) is the back corner, (5,5) the front where the gate is.
+// An 11×11 isometric stretch of land seen from above, Stronghold style: a
+// walled castle in the middle (cells 3–7), farms and workshops outside, forest
+// all around. Grid coordinates (c, r): c runs to the lower right, r to the
+// lower left. Whole numbers are tile corners; tile (c, r) spans c..c+1, r..r+1.
 
-const N = 6;
-const TW = 112; // tile width on screen
-const TH = 56; // tile height on screen
-const CLIFF = 74;
-const PAD_X = 50;
-const TOP = 150; // room above the back row for tall buildings
+const N = 11;
+const TW = 100; // tile width on screen
+const TH = 50; // tile height on screen
+const PAD_X = 60;
+const TOP = 140; // room above the back corner for tall art
 const BOARD_W = N * TW + PAD_X * 2;
-const BOARD_H = TOP + N * TH + CLIFF + 60;
-const OX = BOARD_W / 2; // screen x of the back corner
+const BOARD_H = TOP + N * TH + 70;
+const OX = BOARD_W / 2;
 const OY = TOP;
 
-type Decor = "pines" | "rocks" | "field" | "fire" | "hay";
+/** The castle walls run along these grid lines. */
+const W0 = 3;
+const W1 = 8;
 
-type Cell = { col: number; row: number; building?: string; decor?: Decor; span?: 2 };
+/** Screen point of a grid position, optionally raised by h pixels. */
+const P = (c: number, r: number, h = 0) => ({ x: OX + (c - r) * (TW / 2), y: OY + (c + r) * (TH / 2) - h });
+const pts = (...list: { x: number; y: number }[]) => list.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
 
-const CELLS: Cell[] = [
-  { col: 0, row: 0, building: "exploration-center" },
-  { col: 1, row: 0, building: "watchtower" },
-  { col: 2, row: 0, decor: "pines" },
-  { col: 3, row: 0, building: "military-command" },
-  { col: 4, row: 0, building: "war-hall" },
-  { col: 5, row: 0, building: "iron-mine" },
-  { col: 0, row: 1, building: "siege-workshop" },
-  { col: 1, row: 1, building: "barracks" },
-  { col: 2, row: 1, building: "stable" },
-  { col: 3, row: 1, building: "armory" },
-  { col: 4, row: 1, building: "arsenal" },
-  { col: 5, row: 1, building: "sawmill" },
-  { col: 0, row: 2, building: "trapmaker" },
-  { col: 1, row: 2, building: "treasury" },
-  { col: 2, row: 2, building: "town-hall", span: 2 },
-  { col: 4, row: 2, building: "academy" },
-  { col: 5, row: 2, building: "brickyard" },
-  { col: 0, row: 3, building: "hideout" },
-  { col: 1, row: 3, building: "embassy" },
-  { col: 4, row: 3, building: "hospital" },
-  { col: 5, row: 3, decor: "pines" },
-  { col: 0, row: 4, building: "windmill" },
-  { col: 1, row: 4, building: "fertilizer-workshop" },
-  { col: 2, row: 4, building: "resource-warehouse" },
-  { col: 3, row: 4, building: "trading-post" },
-  { col: 4, row: 4, decor: "fire" },
-  { col: 5, row: 4, decor: "rocks" },
-  { col: 0, row: 5, decor: "field" },
-  { col: 1, row: 5, decor: "hay" },
-  { col: 2, row: 5, decor: "pines" },
-  { col: 3, row: 5, decor: "rocks" },
-  { col: 4, row: 5, decor: "pines" },
-  { col: 5, row: 5, building: "city-gate" },
-];
-
-/** Screen position of a tile's top corner. */
-const tileTop = (col: number, row: number) => ({ x: OX + (col - row) * (TW / 2), y: OY + (col + row) * (TH / 2) });
-
-/** Screen centre of a cell (or of a 2×2 block). */
-const cellCenter = (c: Cell) => {
-  const k = c.span ?? 1;
-  const t = tileTop(c.col, c.row);
-
-  return { x: t.x, y: t.y + (k * TH) / 2 };
-};
-
-const diamond = (cx: number, cy: number, w: number, h: number) =>
-  `${cx},${cy - h / 2} ${cx + w / 2},${cy} ${cx},${cy + h / 2} ${cx - w / 2},${cy}`;
-
-/** Deterministic noise so tiles keep their colours. */
+/** Deterministic noise so the land looks the same every time. */
 const noise = (a: number, b: number) => {
   const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
 
   return s - Math.floor(s);
 };
 
-// ─── The island ──────────────────────────────────────────────────────────────
+const inside = (c: number, r: number) => c >= W0 && c < W1 && r >= W0 && r < W1;
 
-const Island = ({ selected }: { selected?: Cell }) => {
-  const T = tileTop(0, 0);
-  const R = tileTop(N, 0);
-  const B = tileTop(N, N);
-  const L = tileTop(0, N);
-  const pt = (p: { x: number; y: number }, dy = 0) => `${p.x},${p.y + dy}`;
-  const occupied = new Set<string>();
+type Raised = "forest" | "grove" | "rocks" | "well" | "dummies" | "hay" | "stall" | "fire" | "sheep";
+type Flat = "wheat" | "crops" | "pond" | "clay";
 
-  CELLS.forEach((c) => {
-    const k = c.span ?? 1;
+type Cell = {
+  col: number;
+  row: number;
+  building?: string;
+  span?: 2;
+  /** Sits on a tile corner (the gate and the corner tower), not a tile centre. */
+  corner?: boolean;
+  raised?: Raised;
+  flat?: Flat;
+};
 
-    for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) occupied.add(`${c.col + i},${c.row + j}`);
-  });
+const CELLS: Cell[] = [
+  // Inside the walls
+  { col: 3, row: 3, building: "exploration-center" },
+  { col: 4, row: 3, building: "war-hall" },
+  { col: 5, row: 3, building: "military-command" },
+  { col: 6, row: 3, building: "academy" },
+  { col: 7, row: 3, building: "embassy" },
+  { col: 3, row: 4, building: "arsenal" },
+  { col: 4, row: 4, building: "town-hall", span: 2 },
+  { col: 6, row: 4, building: "treasury" },
+  { col: 7, row: 4, building: "hospital" },
+  { col: 3, row: 5, building: "armory" },
+  { col: 6, row: 5, raised: "dummies" },
+  { col: 7, row: 5, building: "stable" },
+  { col: 3, row: 6, building: "barracks" },
+  { col: 4, row: 6, raised: "hay" },
+  { col: 5, row: 6, raised: "well" },
+  { col: 7, row: 6, building: "trapmaker" },
+  { col: 3, row: 7, building: "hideout" },
+  { col: 4, row: 7, raised: "stall" },
+  { col: 5, row: 7, raised: "fire" },
+  { col: 6, row: 7, building: "siege-workshop" },
+  // On the walls
+  { col: W1, row: W1, building: "city-gate", corner: true },
+  { col: W0, row: W1, building: "watchtower", corner: true },
+  // Farms along the left road
+  { col: 0, row: 10, flat: "crops" },
+  { col: 1, row: 10, flat: "wheat" },
+  { col: 2, row: 10, building: "windmill" },
+  { col: 3, row: 10, flat: "wheat" },
+  { col: 4, row: 10, building: "fertilizer-workshop" },
+  { col: 5, row: 10, flat: "crops" },
+  { col: 6, row: 10, building: "resource-warehouse" },
+  { col: 8, row: 10, building: "trading-post" },
+  { col: 9, row: 10, raised: "sheep" },
+  { col: 0, row: 8, flat: "wheat" },
+  { col: 1, row: 8, flat: "wheat" },
+  { col: 0, row: 7, flat: "crops" },
+  { col: 1, row: 6, flat: "pond" },
+  { col: 0, row: 5, flat: "wheat" },
+  { col: 1, row: 5, flat: "crops" },
+  // Industry along the right road
+  { col: 10, row: 0, raised: "forest" },
+  { col: 10, row: 1, building: "sawmill" },
+  { col: 10, row: 2, raised: "forest" },
+  { col: 10, row: 3, raised: "rocks" },
+  { col: 10, row: 4, building: "iron-mine" },
+  { col: 10, row: 5, raised: "rocks" },
+  { col: 10, row: 6, building: "brickyard" },
+  { col: 10, row: 7, flat: "clay" },
+  { col: 10, row: 8, raised: "grove" },
+  { col: 8, row: 0, raised: "forest" },
+  { col: 8, row: 1, raised: "grove" },
+  { col: 7, row: 0, raised: "forest" },
+];
+
+// Fill the rest of the back with woods and the odd thicket.
+for (let c = 0; c < N; c++) {
+  for (let r = 0; r < N; r++) {
+    if (CELLS.some((x) => x.col === c && x.row === r)) continue;
+    const back = r < 2 || c < 2;
+
+    if (back && noise(c, r) > 0.35) CELLS.push({ col: c, row: r, raised: noise(r, c) > 0.5 ? "forest" : "grove" });
+  }
+}
+
+/** Screen position where a cell's art stands, and its draw order. */
+const anchor = (c: Cell) => {
+  if (c.corner) return { ...P(c.col, c.row), z: (c.col + c.row) * 10 + 9 };
+  const k = c.span ?? 1;
+
+  return { ...P(c.col + k / 2, c.row + k / 2), z: (c.col + c.row + k) * 10 + 5 };
+};
+
+// ─── The walls ───────────────────────────────────────────────────────────────
+
+type Tier = "planned" | "palisade" | "stone" | "fortress";
+
+/** The City Gate's level decides what the walls are made of. */
+const wallTier = (gate: number): Tier => (gate <= 0 ? "planned" : gate < 5 ? "palisade" : gate < 12 ? "stone" : "fortress");
+const WALL_H: Record<Tier, number> = { planned: 0, palisade: 24, stone: 30, fortress: 38 };
+const THICK = 0.16;
+
+/** One tile-long wall piece along a grid line. Its visible face points down-left (row line) or down-right (col line). */
+const WallSegment = ({ line, axis, from, tier }: { line: number; axis: "row" | "col"; from: number; tier: Tier }) => {
+  const H = WALL_H[tier];
+  // Map (along, across, height) to the screen.
+  const q = (a: number, x: number, h = 0) => (axis === "row" ? P(a, x, h) : P(x, a, h));
+  const a0 = from;
+  const a1 = from + 1;
+  const face = axis === "row" ? "#B4AA95" : "#8F8675";
+  const top = "#CFC6B2";
+  const z = (from + line) * 10 + 8;
+  const svg = (children: React.ReactNode) => (
+    <svg
+      aria-hidden="true"
+      className="absolute left-0 top-0 pointer-events-none"
+      height={BOARD_H}
+      overflow="visible"
+      style={{ zIndex: z }}
+      viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
+      width={BOARD_W}
+    >
+      {children}
+    </svg>
+  );
+
+  if (tier === "palisade") {
+    const logs = 7;
+
+    return svg(
+      <g stroke="#3A2717" strokeLinejoin="round" strokeWidth="0.8">
+        {Array.from({ length: logs }, (_, i) => {
+          const s = a0 + i / logs;
+          const e = s + 1 / logs;
+          const m = (s + e) / 2;
+          const h = H - 2 + noise(i, from + line) * 4;
+
+          return (
+            <polygon
+              key={i}
+              fill={i % 2 ? "#7B5634" : axis === "row" ? "#8C6540" : "#6E4C2E"}
+              points={pts(q(s, line), q(e, line), q(e, line, h), q(m, line, h + 6), q(s, line, h))}
+            />
+          );
+        })}
+        <polyline fill="none" points={pts(q(a0, line, 7), q(a1, line, 7))} stroke="#4A3220" strokeWidth="2" />
+      </g>
+    );
+  }
+
+  const courses = Math.floor(H / 7);
+  const merlons = 5;
+
+  return svg(
+    <g>
+      {/* Walkway on top, then the face */}
+      <polygon fill={top} points={pts(q(a0, line - THICK, H), q(a1, line - THICK, H), q(a1, line, H), q(a0, line, H))} />
+      <polygon fill={face} points={pts(q(a0, line), q(a1, line), q(a1, line, H), q(a0, line, H))} />
+      <g opacity="0.45" stroke="#5E5748" strokeWidth="0.8">
+        {Array.from({ length: courses }, (_, k) => (
+          <g key={k}>
+            <line x1={q(a0, line, (k + 1) * 7).x} x2={q(a1, line, (k + 1) * 7).x} y1={q(a0, line, (k + 1) * 7).y} y2={q(a1, line, (k + 1) * 7).y} />
+            {Array.from({ length: 5 }, (_, j) => {
+              const a = a0 + (j + (k % 2) * 0.5) / 5;
+
+              return a < a1 ? <line key={j} x1={q(a, line, k * 7).x} x2={q(a, line, (k + 1) * 7).x} y1={q(a, line, k * 7).y} y2={q(a, line, (k + 1) * 7).y} /> : null;
+            })}
+          </g>
+        ))}
+      </g>
+      {/* Grime at the foot of the wall */}
+      <polygon fill="#3A3426" opacity="0.35" points={pts(q(a0, line), q(a1, line), q(a1, line, 5), q(a0, line, 5))} />
+      {/* Battlements */}
+      {Array.from({ length: merlons }, (_, j) => {
+        const s = a0 + (j + 0.15) / merlons;
+        const e = s + 0.5 / merlons;
+        const mh = tier === "fortress" ? 8 : 6;
+
+        return (
+          <g key={j}>
+            <polygon fill={top} points={pts(q(s, line - THICK * 0.5, H + mh), q(e, line - THICK * 0.5, H + mh), q(e, line, H + mh), q(s, line, H + mh))} />
+            <polygon fill={face} points={pts(q(s, line, H), q(e, line, H), q(e, line, H + mh), q(s, line, H + mh))} />
+          </g>
+        );
+      })}
+    </g>
+  );
+};
+
+/** A corner tower: wood with a pointed roof, or stone with battlements and a banner. */
+const Tower = ({ c, r, tier }: { c: number; r: number; tier: Tier }) => {
+  const s = tier === "palisade" ? 0.22 : 0.3;
+  const H = WALL_H[tier] + (tier === "palisade" ? 22 : 26);
+  const z = (c + r) * 10 + 9;
+  const front = pts(P(c - s, r + s), P(c + s, r + s), P(c + s, r + s, H), P(c - s, r + s, H));
+  const side = pts(P(c + s, r - s), P(c + s, r + s), P(c + s, r + s, H), P(c + s, r - s, H));
+  const top = pts(P(c - s, r - s, H), P(c + s, r - s, H), P(c + s, r + s, H), P(c - s, r + s, H));
+  const peak = P(c, r, H + 30);
+  const flagBase = tier === "palisade" ? peak : P(c, r, H + 6);
 
   return (
-    <svg aria-hidden="true" className="absolute inset-0" height={BOARD_H} viewBox={`0 0 ${BOARD_W} ${BOARD_H}`} width={BOARD_W}>
-      <defs>
-        <linearGradient id="dio-left" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor="#7A5634" />
-          <stop offset="1" stopColor="#3E2A1A" />
-        </linearGradient>
-        <linearGradient id="dio-right" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stopColor="#5E4128" />
-          <stop offset="1" stopColor="#2C1E13" />
-        </linearGradient>
-        <radialGradient id="dio-light" cx="0.35" cy="0.3" r="0.8">
-          <stop offset="0" stopColor="#FFF3C8" stopOpacity="0.28" />
-          <stop offset="1" stopColor="#FFF3C8" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      {/* Shadow on the sea and a ring of foam */}
-      <ellipse cx={B.x} cy={B.y + CLIFF + 14} fill="#0B1A1F" opacity="0.55" rx={N * TW * 0.46} ry="30" />
-      <polygon
-        fill="none"
-        opacity="0.35"
-        points={`${pt(T, CLIFF + 26)} ${R.x + 26},${R.y + CLIFF} ${pt(B, CLIFF + 26)} ${L.x - 26},${L.y + CLIFF}`}
-        stroke="#CFE7EA"
-        strokeDasharray="2 10"
-        strokeLinecap="round"
-        strokeWidth="3"
-      />
-
-      {/* Cliffs with layered earth and stone */}
-      <polygon fill="url(#dio-left)" points={`${pt(L)} ${pt(B)} ${pt(B, CLIFF)} ${pt(L, CLIFF)}`} />
-      <polygon fill="url(#dio-right)" points={`${pt(B)} ${pt(R)} ${pt(R, CLIFF)} ${pt(B, CLIFF)}`} />
-      {[0.32, 0.58, 0.8].map((f, i) => (
-        <g key={i} opacity={0.35 - i * 0.07} stroke="#1E140C" strokeWidth="2">
-          <line x1={L.x} x2={B.x} y1={L.y + CLIFF * f} y2={B.y + CLIFF * f} />
-          <line x1={B.x} x2={R.x} y1={B.y + CLIFF * f} y2={R.y + CLIFF * f} />
+    <svg
+      aria-hidden="true"
+      className="absolute left-0 top-0 pointer-events-none"
+      height={BOARD_H}
+      overflow="visible"
+      style={{ zIndex: z }}
+      viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
+      width={BOARD_W}
+    >
+      <ellipse cx={P(c, r).x + 14} cy={P(c, r).y + 6} fill="#1C2410" opacity="0.35" rx="34" ry="12" />
+      {tier === "palisade" ? (
+        <g stroke="#3A2717" strokeWidth="0.8">
+          <polygon fill="#8C6540" points={front} />
+          <polygon fill="#6A4A2C" points={side} />
+          <polygon fill="#A07A4C" points={pts(P(c - s - 0.06, r + s + 0.06, H), P(c + s + 0.06, r + s + 0.06, H), peak)} />
+          <polygon fill="#7A5634" points={pts(P(c + s + 0.06, r - s - 0.06, H), P(c + s + 0.06, r + s + 0.06, H), peak)} />
         </g>
-      ))}
-      {Array.from({ length: 16 }, (_, i) => {
-        const left = i < 8;
-        const f = ((i % 8) + 0.5) / 8;
-        const a = left ? L : B;
-        const b = left ? B : R;
-        const x = a.x + (b.x - a.x) * f;
-        const y = a.y + (b.y - a.y) * f + CLIFF * (0.4 + noise(i, 3) * 0.4);
-
-        return <ellipse key={i} cx={x} cy={y} fill={left ? "#8C8172" : "#6E655A"} rx={7 + noise(i, 1) * 6} ry={4 + noise(i, 2) * 3} />;
-      })}
-      {/* Grass lip hanging over the edge */}
-      <polyline
-        fill="none"
-        points={`${pt(L, 3)} ${pt(B, 3)} ${pt(R, 3)}`}
-        stroke="#4F7A2C"
-        strokeLinejoin="round"
-        strokeWidth="9"
-      />
-
-      {/* Grass tiles */}
-      {Array.from({ length: N * N }, (_, k) => {
-        const col = k % N;
-        const row = Math.floor(k / N);
-        const t = tileTop(col, row);
-        const n = noise(col, row);
-        const fill = n > 0.66 ? "#7FA647" : n > 0.33 ? "#77A042" : "#729A3E";
-
-        return (
-          <polygon
-            key={k}
-            fill={fill}
-            points={diamond(t.x, t.y + TH / 2, TW, TH)}
-            stroke="#5F8635"
-            strokeOpacity="0.35"
-            strokeWidth="1"
+      ) : (
+        <g>
+          <polygon fill="#B4AA95" points={front} />
+          <polygon fill="#8F8675" points={side} />
+          <polygon fill="#CFC6B2" points={top} />
+          <polygon fill="#2A251C" opacity="0.8" points={pts(P(c - 0.04, r + s, H - 18), P(c + 0.04, r + s, H - 18), P(c + 0.04, r + s, H - 8), P(c - 0.04, r + s, H - 8))} />
+          {[-s, -s / 3, s / 3].map((o, i) => (
+            <g key={i}>
+              <polygon fill="#B4AA95" points={pts(P(c + o, r + s, H), P(c + o + s / 3, r + s, H), P(c + o + s / 3, r + s, H + 8), P(c + o, r + s, H + 8))} />
+              <polygon fill="#8F8675" points={pts(P(c + s, r + o, H), P(c + s, r + o + s / 3, H), P(c + s, r + o + s / 3, H + 8), P(c + s, r + o, H + 8))} />
+            </g>
+          ))}
+        </g>
+      )}
+      {tier !== "planned" && (
+        <g>
+          <line stroke="#3A2717" strokeWidth="1.5" x1={flagBase.x} x2={flagBase.x} y1={flagBase.y} y2={flagBase.y - 22} />
+          <path
+            className="motion-safe:animate-[pulse_3s_ease-in-out_infinite]"
+            d={`M ${flagBase.x} ${flagBase.y - 22} q 8 -3 16 1 q -3 4 0 8 q -8 -3 -16 0 z`}
+            fill={tier === "fortress" ? "#E3A948" : "#B8432A"}
           />
-        );
-      })}
-
-      {/* Stone paths between the plots */}
-      {Array.from({ length: N + 1 }, (_, i) => {
-        const a = tileTop(i, 0);
-        const b = tileTop(i, N);
-        const c = tileTop(0, i);
-        const d = tileTop(N, i);
-
-        return (
-          <g key={i} opacity="0.55" stroke="#C9B48A" strokeDasharray="10 6" strokeWidth="3">
-            <line x1={a.x} x2={b.x} y1={a.y} y2={b.y} />
-            <line x1={c.x} x2={d.x} y1={c.y} y2={d.y} />
-          </g>
-        );
-      })}
-
-      {/* Plots under buildings */}
-      {CELLS.filter((c) => c.building).map((c) => {
-        const k = c.span ?? 1;
-        const ctr = cellCenter(c);
-        const isSel = selected === c;
-
-        return (
-          <g key={c.building}>
-            <polygon fill="#B79E73" points={diamond(ctr.x, ctr.y, TW * k * 0.86, TH * k * 0.86)} />
-            <polygon fill="#9C8460" points={diamond(ctr.x, ctr.y + 2, TW * k * 0.7, TH * k * 0.7)} />
-            {isSel && (
-              <polygon
-                className="animate-pulse"
-                fill="none"
-                points={diamond(ctr.x, ctr.y, TW * k * 0.96, TH * k * 0.96)}
-                stroke="#F2C66D"
-                strokeWidth="4"
-              />
-            )}
-          </g>
-        );
-      })}
-
-      {/* Warm light over the island */}
-      <polygon fill="url(#dio-light)" points={`${pt(T)} ${pt(R)} ${pt(B)} ${pt(L)}`} />
+        </g>
+      )}
     </svg>
   );
 };
 
-// ─── Decorations ─────────────────────────────────────────────────────────────
+/** Walls and towers around the castle, skipping the pieces the gate and watchtower stand on. */
+const Walls = ({ tier }: { tier: Tier }) => {
+  if (tier === "planned") return null;
+  const segs: { line: number; axis: "row" | "col"; from: number }[] = [];
+
+  for (let a = W0; a < W1; a++) {
+    segs.push({ line: W0, axis: "row", from: a }); // back right
+    segs.push({ line: W0, axis: "col", from: a }); // back left
+    if (a !== W1 - 1) segs.push({ line: W1, axis: "col", from: a }); // front right (gate gap)
+    if (a !== W1 - 1 && a !== W0) segs.push({ line: W1, axis: "row", from: a }); // front left (gate + watchtower gaps)
+  }
+
+  return (
+    <>
+      {segs.map((s) => (
+        <WallSegment key={`${s.axis}${s.line}-${s.from}`} {...s} tier={tier} />
+      ))}
+      <Tower c={W0} r={W0} tier={tier} />
+      <Tower c={W1} r={W0} tier={tier} />
+    </>
+  );
+};
+
+// ─── The land ────────────────────────────────────────────────────────────────
+
+const tilePoly = (c: number, r: number, inset = 0) =>
+  pts(P(c + inset, r + inset), P(c + 1 - inset, r + inset), P(c + 1 - inset, r + 1 - inset), P(c + inset, r + 1 - inset));
+
+const FlatArt = ({ c, r, kind }: { c: number; r: number; kind: Flat }) => {
+  if (kind === "pond") {
+    const m = P(c + 0.5, r + 0.5);
+
+    return (
+      <g>
+        <ellipse cx={m.x} cy={m.y} fill="#3D5F45" rx={TW * 0.4} ry={TH * 0.38} />
+        <ellipse cx={m.x} cy={m.y} fill="#4E7D84" rx={TW * 0.34} ry={TH * 0.31} />
+        <path d={`M ${m.x - 18} ${m.y - 2} q 8 -4 16 0 M ${m.x + 2} ${m.y + 6} q 8 -4 16 0`} fill="none" opacity="0.5" stroke="#CFE2E0" strokeWidth="1.2" />
+      </g>
+    );
+  }
+  if (kind === "clay") {
+    return (
+      <g>
+        <polygon fill="#7A5236" points={tilePoly(c, r, 0.12)} />
+        <polygon fill="#94603D" points={tilePoly(c, r, 0.24)} />
+        <polygon fill="#6A4430" points={tilePoly(c, r, 0.4)} />
+      </g>
+    );
+  }
+  const rows = 7;
+  const gold = kind === "wheat";
+
+  return (
+    <g>
+      <polygon fill={gold ? "#A88A3E" : "#5C6E30"} points={tilePoly(c, r, 0.05)} />
+      {Array.from({ length: rows }, (_, i) => {
+        const t = 0.1 + (i / (rows - 1)) * 0.8;
+        const a = P(c + 0.08, r + t);
+        const b = P(c + 0.92, r + t);
+
+        return <line key={i} stroke={gold ? "#D2B45E" : "#7D9443"} strokeLinecap="round" strokeWidth="3.2" x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
+      })}
+    </g>
+  );
+};
+
+type Road = { x: number; y: number }[];
+
+const ROADS: { path: Road; inner?: boolean }[] = [
+  { path: [P(N + 0.6, N + 0.6), P(W1, W1)] }, // out of the gate to the edge of the map
+  { path: [P(9.5, 9.5), P(-0.6, 9.5)] }, // farms
+  { path: [P(9.5, 9.5), P(9.5, -0.6)] }, // workshops
+  { path: [P(W1, W1), P(6, 6)], inner: true }, // up to the keep
+];
+
+const roadD = (p: Road) => p.map((q, i) => `${i ? "L" : "M"} ${q.x} ${q.y}`).join(" ");
+
+const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
+  const T = P(0, 0);
+  const R = P(N, 0);
+  const B = P(N, N);
+  const L = P(0, N);
+  const ring = (o: number) =>
+    // The ditch/moat: the castle square grown by o, minus the square itself.
+    `M ${pts(P(W0 - o, W0 - o), P(W1 + o, W0 - o), P(W1 + o, W1 + o), P(W0 - o, W1 + o)).replace(/ /g, " L ")} Z ` +
+    `M ${pts(P(W0, W0), P(W0, W1), P(W1, W1), P(W1, W0)).replace(/ /g, " L ")} Z`;
+
+  return (
+    <svg aria-hidden="true" className="absolute inset-0" height={BOARD_H} viewBox={`0 0 ${BOARD_W} ${BOARD_H}`} width={BOARD_W}>
+      <defs>
+        <pattern height="46" id="dio-wood" patternUnits="userSpaceOnUse" width="54">
+          <rect fill="#24301A" height="46" width="54" />
+          <circle cx="12" cy="12" fill="#2F3F20" r="13" />
+          <circle cx="40" cy="20" fill="#2B3A1D" r="15" />
+          <circle cx="24" cy="38" fill="#33452A" r="12" />
+          <circle cx="8" cy="10" fill="#3A4E27" r="5" />
+          <circle cx="36" cy="16" fill="#3A4E27" r="5" />
+        </pattern>
+        <radialGradient id="dio-sun" cx="0.38" cy="0.32" r="0.75">
+          <stop offset="0" stopColor="#FFE9B0" stopOpacity="0.16" />
+          <stop offset="1" stopColor="#FFE9B0" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {/* Woods all around */}
+      <rect fill="url(#dio-wood)" height={BOARD_H} width={BOARD_W} />
+
+      {/* Meadow and the packed earth of the bailey */}
+      {Array.from({ length: N * N }, (_, k) => {
+        const c = k % N;
+        const r = Math.floor(k / N);
+        const n = noise(c, r);
+        const fill = inside(c, r)
+          ? ["#9A845E", "#A08A63", "#957F59"][Math.floor(n * 3)]
+          : ["#6C873C", "#70893F", "#68823A", "#748D44"][Math.floor(n * 4)];
+
+        return <polygon key={k} fill={fill} points={tilePoly(c, r, -0.01)} />;
+      })}
+      {/* Soft edge where the meadow meets the woods */}
+      <polygon fill="none" opacity="0.7" points={pts(T, R, B, L)} stroke="#2F3F20" strokeLinejoin="round" strokeWidth="22" />
+
+      {/* Bare patches and tufts */}
+      {Array.from({ length: 70 }, (_, i) => {
+        const c = noise(i, 7) * N;
+        const r = noise(7, i) * N;
+        const p = P(c, r);
+        const inBailey = c > W0 && c < W1 && r > W0 && r < W1;
+
+        return noise(i, i) > 0.5 ? (
+          <ellipse key={i} cx={p.x} cy={p.y} fill={inBailey ? "#B49D72" : "#8A8C4A"} opacity="0.35" rx={10 + noise(i, 3) * 16} ry={5 + noise(i, 4) * 6} />
+        ) : (
+          <path
+            key={i}
+            d={`M ${p.x - 3} ${p.y} l 2 -5 M ${p.x} ${p.y} l 0 -6 M ${p.x + 3} ${p.y} l -1 -5`}
+            opacity="0.6"
+            stroke={inBailey ? "#7B6A48" : "#4F6A2B"}
+            strokeLinecap="round"
+            strokeWidth="1.3"
+          />
+        );
+      })}
+
+      {/* Ditch or moat outside the walls */}
+      {tier === "palisade" && <path d={ring(0.28)} fill="#5A4429" fillRule="evenodd" opacity="0.75" />}
+      {(tier === "stone" || tier === "fortress") && (
+        <g>
+          <path d={ring(0.36)} fill="#4D3A25" fillRule="evenodd" />
+          <path d={ring(0.3)} fill="#3F6870" fillRule="evenodd" />
+          <path d={ring(0.3)} fill="none" opacity="0.35" stroke="#CFE2E0" strokeDasharray="6 14" strokeWidth="1.2" />
+          {/* Bridge at the gate */}
+          <polygon fill="#7A5634" points={pts(P(W1 - 0.05, W1 - 0.2), P(W1 + 0.45, W1 + 0.3), P(W1 + 0.3, W1 + 0.45), P(W1 - 0.2, W1 - 0.05))} />
+        </g>
+      )}
+      {tier === "planned" && (
+        <g opacity="0.8">
+          <polygon fill="none" points={pts(P(W0, W0), P(W1, W0), P(W1, W1), P(W0, W1))} stroke="#E8D9B4" strokeDasharray="8 8" strokeWidth="2" />
+          {[P(W0, W0), P(W1, W0), P(W0, W1), P(W1, W1)].map((p, i) => (
+            <rect key={i} fill="#6B4A2B" height="14" width="4" x={p.x - 2} y={p.y - 12} />
+          ))}
+        </g>
+      )}
+
+      {/* Roads with wheel ruts */}
+      {ROADS.map((rd, i) => (
+        <g key={i} fill="none" strokeLinecap="round" strokeLinejoin="round">
+          <path d={roadD(rd.path)} opacity="0.55" stroke="#6E5A3A" strokeWidth={rd.inner ? 20 : 24} />
+          <path d={roadD(rd.path)} stroke={rd.inner ? "#B9A47C" : "#A88D60"} strokeWidth={rd.inner ? 15 : 18} />
+          <path d={roadD(rd.path)} opacity="0.35" stroke="#6E5A3A" strokeDasharray="14 10" strokeWidth="9" />
+          <path d={roadD(rd.path)} stroke={rd.inner ? "#B9A47C" : "#A88D60"} strokeWidth="5" />
+        </g>
+      ))}
+
+      {/* Fields, ponds and pits */}
+      {CELLS.filter((x) => x.flat).map((x) => (
+        <FlatArt key={`${x.col},${x.row}`} c={x.col} kind={x.flat!} r={x.row} />
+      ))}
+
+      {/* Foundations under buildings */}
+      {CELLS.filter((x) => x.building && !x.corner).map((x) => {
+        const k = x.span ?? 1;
+
+        return (
+          <polygon
+            key={x.building}
+            fill="#5E4B33"
+            opacity="0.4"
+            points={pts(P(x.col + 0.1, x.row + 0.1), P(x.col + k - 0.1, x.row + 0.1), P(x.col + k - 0.1, x.row + k - 0.1), P(x.col + 0.1, x.row + k - 0.1))}
+          />
+        );
+      })}
+
+      {selected && (
+        <polygon
+          className="animate-pulse"
+          fill="#F2C66D"
+          fillOpacity="0.18"
+          points={
+            selected.corner
+              ? pts(P(selected.col - 0.6, selected.row - 0.6), P(selected.col + 0.6, selected.row - 0.6), P(selected.col + 0.6, selected.row + 0.6), P(selected.col - 0.6, selected.row + 0.6))
+              : pts(
+                  P(selected.col, selected.row),
+                  P(selected.col + (selected.span ?? 1), selected.row),
+                  P(selected.col + (selected.span ?? 1), selected.row + (selected.span ?? 1)),
+                  P(selected.col, selected.row + (selected.span ?? 1))
+                )
+          }
+          stroke="#F2C66D"
+          strokeWidth="3"
+        />
+      )}
+
+      <rect fill="url(#dio-sun)" height={BOARD_H} width={BOARD_W} />
+    </svg>
+  );
+};
+
+// ─── People on the roads ─────────────────────────────────────────────────────
+
+const WALKERS = [
+  { path: ROADS[0].path, dur: 34, delay: 0, coat: "#5B6E8C" },
+  { path: ROADS[0].path, dur: 41, delay: -18, coat: "#8C5B3A" },
+  { path: ROADS[1].path, dur: 46, delay: -6, coat: "#7A7F3E" },
+  { path: ROADS[1].path, dur: 52, delay: -30, coat: "#9A4A36" },
+  { path: ROADS[2].path, dur: 44, delay: -12, coat: "#6A5A8C" },
+  { path: ROADS[2].path, dur: 50, delay: -35, coat: "#5B6E8C" },
+  { path: ROADS[3].path, dur: 18, delay: -4, coat: "#B8432A" },
+];
+
+const Walkers = () => {
+  const [still, setStill] = useState(true);
+
+  useEffect(() => setStill(window.matchMedia("(prefers-reduced-motion: reduce)").matches), []);
+  if (still) return null;
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="absolute inset-0 pointer-events-none"
+      height={BOARD_H}
+      style={{ zIndex: 2 }}
+      viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
+      width={BOARD_W}
+    >
+      {WALKERS.map((w, i) => {
+        const there = w.path.map((q, j) => `${j ? "L" : "M"} ${q.x} ${q.y}`).join(" ");
+        const back = [...w.path]
+          .reverse()
+          .slice(1)
+          .map((q) => `L ${q.x} ${q.y}`)
+          .join(" ");
+
+        return (
+          <g key={i}>
+            <animateMotion begin={`${w.delay}s`} dur={`${w.dur}s`} path={`${there} ${back}`} repeatCount="indefinite" />
+            <ellipse cx="1.5" cy="0.5" fill="#1C2410" opacity="0.35" rx="4.5" ry="1.8" />
+            <rect fill={w.coat} height="7" rx="1.5" width="5" x="-2.5" y="-8" />
+            <circle cx="0" cy="-10" fill="#E2BE96" r="2.3" />
+          </g>
+        );
+      })}
+      {/* An ox cart heading for the farms */}
+      <g>
+        <animateMotion
+          begin="-10s"
+          dur="70s"
+          path={`${roadD([P(N + 0.6, N + 0.6), P(9.5, 9.5), P(1, 9.5)])} ${roadD([P(1, 9.5), P(9.5, 9.5), P(N + 0.6, N + 0.6)]).replace("M", "L")}`}
+          repeatCount="indefinite"
+        />
+        <ellipse cx="2" cy="1" fill="#1C2410" opacity="0.35" rx="13" ry="3.5" />
+        <rect fill="#7A5634" height="7" rx="1" width="12" x="-12" y="-9" />
+        <rect fill="#D2B45E" height="4" rx="2" width="10" x="-11" y="-12" />
+        <circle cx="-6" cy="-2" fill="#3A2717" r="2.6" />
+        <rect fill="#6A4A33" height="6" rx="2.5" width="9" x="2" y="-8" />
+        <circle cx="11" cy="-7" fill="#5A3D29" r="2.4" />
+      </g>
+    </svg>
+  );
+};
+
+// ─── Trees, rocks and yard clutter ───────────────────────────────────────────
 
 const Pine = ({ x, y, s = 1 }: { x: number; y: number; s?: number }) => (
   <g transform={`translate(${x} ${y}) scale(${s})`}>
-    <ellipse cx="3" cy="2" fill="#2D3F1A" opacity="0.5" rx="14" ry="6" />
-    <rect fill="#5A3A22" height="12" width="5" x="-2.5" y="-10" />
+    <ellipse cx="9" cy="3" fill="#1C2410" opacity="0.4" rx="15" ry="5" />
+    <rect fill="#4A3220" height="9" width="4" x="-2" y="-8" />
     {[0, 1, 2].map((i) => (
-      <g key={i} transform={`translate(0 ${-14 - i * 13}) scale(${1 - i * 0.22})`}>
-        <polygon fill="#2F5A2A" points="0,-24 -16,4 16,4" />
-        <polygon fill="#24481F" points="0,-24 16,4 0,4" />
+      <g key={i} transform={`translate(0 ${-12 - i * 11}) scale(${1 - i * 0.22})`}>
+        <polygon fill="#33502A" points="0,-22 -14,4 14,4" />
+        <polygon fill="#263F20" points="0,-22 14,4 0,4" />
       </g>
     ))}
   </g>
 );
 
-const DecorArt = ({ kind }: { kind: Decor }) => {
+const Oak = ({ x, y, s = 1 }: { x: number; y: number; s?: number }) => (
+  <g transform={`translate(${x} ${y}) scale(${s})`}>
+    <ellipse cx="10" cy="3" fill="#1C2410" opacity="0.4" rx="18" ry="6" />
+    <rect fill="#4A3220" height="14" width="5" x="-2.5" y="-12" />
+    <circle cx="-7" cy="-20" fill="#45622A" r="11" />
+    <circle cx="7" cy="-22" fill="#3E5A26" r="12" />
+    <circle cx="0" cy="-31" fill="#4F6E30" r="11" />
+    <circle cx="-4" cy="-30" fill="#61813A" r="5" />
+  </g>
+);
+
+const RaisedArt = ({ kind, seed }: { kind: Raised; seed: number }) => {
   const w = TW;
   const h = 110;
+  const j = (k: number) => (noise(seed, k) - 0.5) * 10;
 
   return (
     <svg aria-hidden="true" height={h} overflow="visible" viewBox={`${-w / 2} ${-h + TH / 2} ${w} ${h}`} width={w}>
-      {kind === "pines" && (
+      {kind === "forest" && (
         <>
-          <Pine s={1.05} x={-18} y={-4} />
-          <Pine s={0.8} x={20} y={-10} />
-          <Pine s={0.9} x={6} y={10} />
+          <Pine s={1.05} x={-22 + j(1)} y={-6} />
+          <Oak s={0.9} x={18 + j(2)} y={-10} />
+          <Pine s={0.9} x={4 + j(3)} y={-16} />
+          <Pine s={1.1} x={-4 + j(4)} y={10} />
+          <Oak s={0.8} x={26 + j(5)} y={8} />
+        </>
+      )}
+      {kind === "grove" && (
+        <>
+          <Oak s={1} x={-14 + j(1)} y={-2} />
+          <Oak s={0.8} x={18 + j(2)} y={6} />
         </>
       )}
       {kind === "rocks" && (
         <g>
-          <ellipse cx="2" cy="10" fill="#3E5A24" opacity="0.5" rx="34" ry="10" />
-          <polygon fill="#8E8A80" points="-26,8 -18,-14 -2,-18 6,4" />
-          <polygon fill="#6E6A62" points="-2,-18 6,4 -6,10" />
-          <polygon fill="#9E9A90" points="4,10 12,-6 26,-2 30,12" />
-          <polygon fill="#7A766D" points="26,-2 30,12 20,14" />
+          <ellipse cx="8" cy="10" fill="#1C2410" opacity="0.35" rx="34" ry="10" />
+          <polygon fill="#8E887C" points="-28,8 -20,-14 -4,-20 6,4" />
+          <polygon fill="#6C675E" points="-4,-20 6,4 -6,10" />
+          <polygon fill="#9C968A" points="4,12 12,-6 26,-2 30,12" />
+          <polygon fill="#77726A" points="26,-2 30,12 20,14" />
+          <polygon fill="#857F73" points="-14,16 -10,6 0,8 0,18" />
         </g>
       )}
-      {kind === "field" && (
+      {kind === "well" && (
         <g>
-          <clipPath id="dio-field">
-            <polygon points={diamond(0, 0, TW * 0.86, TH * 0.86)} />
-          </clipPath>
-          <g clipPath="url(#dio-field)">
-            {Array.from({ length: 9 }, (_, i) => (
-              <line key={i} stroke={i % 2 ? "#C9A649" : "#A88A39"} strokeWidth="7" x1={-60 + i * 14} x2={-20 + i * 14} y1={-40} y2={40} />
-            ))}
-          </g>
+          <ellipse cx="6" cy="6" fill="#2A2015" opacity="0.35" rx="20" ry="7" />
+          <ellipse cx="0" cy="0" fill="#8F8675" rx="14" ry="7" />
+          <rect fill="#8F8675" height="10" width="28" x="-14" y="-10" />
+          <ellipse cx="0" cy="-10" fill="#B4AA95" rx="14" ry="7" />
+          <ellipse cx="0" cy="-10" fill="#2D4A4F" rx="9" ry="4.5" />
+          <rect fill="#5A3D29" height="26" width="3" x="-13" y="-34" />
+          <rect fill="#5A3D29" height="26" width="3" x="10" y="-34" />
+          <polygon fill="#7B5634" points="-17,-32 17,-32 10,-42 -10,-42" />
+        </g>
+      )}
+      {kind === "dummies" && (
+        <g stroke="#3A2717" strokeWidth="0.8">
+          {[
+            [-18, -2],
+            [4, 6],
+            [22, -4],
+          ].map(([x, y], i) => (
+            <g key={i} transform={`translate(${x} ${y})`}>
+              <ellipse cx="4" cy="2" fill="#2A2015" opacity="0.35" rx="7" ry="2.5" stroke="none" />
+              <rect fill="#6A4A2C" height="22" width="2.5" x="-1.25" y="-20" />
+              <rect fill="#C9A86A" height="8" rx="3" width="9" x="-4.5" y="-18" />
+              <rect fill="#6A4A2C" height="2.5" width="16" x="-8" y="-16" />
+              <circle cx="0" cy="-22" fill="#C9A86A" r="3.5" />
+            </g>
+          ))}
         </g>
       )}
       {kind === "hay" && (
         <g>
-          <ellipse cx="0" cy="8" fill="#3E5A24" opacity="0.5" rx="30" ry="9" />
-          <path d="M -24 6 Q -24 -22 -6 -26 Q 10 -22 10 6 Z" fill="#D9B45A" />
-          <path d="M -6 -26 Q 10 -22 10 6 L 0 6 Q 2 -16 -6 -26 Z" fill="#B8923F" />
-          <path d="M 6 8 Q 6 -12 18 -14 Q 30 -12 30 8 Z" fill="#CFA94F" />
+          <ellipse cx="6" cy="8" fill="#2A2015" opacity="0.35" rx="30" ry="9" />
+          <path d="M -24 6 Q -24 -20 -6 -24 Q 10 -20 10 6 Z" fill="#CFAE5A" />
+          <path d="M -6 -24 Q 10 -20 10 6 L 0 6 Q 2 -14 -6 -24 Z" fill="#AE8F45" />
+          <path d="M 8 10 Q 8 -8 19 -10 Q 30 -8 30 10 Z" fill="#C4A352" />
+        </g>
+      )}
+      {kind === "stall" && (
+        <g stroke="#3A2717" strokeWidth="0.8">
+          <ellipse cx="6" cy="8" fill="#2A2015" opacity="0.35" rx="26" ry="8" stroke="none" />
+          <rect fill="#7B5634" height="10" width="34" x="-17" y="-6" />
+          <rect fill="#5A3D29" height="20" width="2" x="-17" y="-26" />
+          <rect fill="#5A3D29" height="20" width="2" x="15" y="-26" />
+          <path d="M -21 -24 L 21 -24 L 17 -34 L -17 -34 Z" fill="#B8432A" />
+          <path d="M -21 -24 L -14 -24 L -11 -34 L -17 -34 Z M -7 -24 L 0 -24 L 0 -34 L -6 -34 Z M 7 -24 L 14 -24 L 11 -34 L 6 -34 Z" fill="#E8D9B4" />
+          <circle cx="-9" cy="-8" fill="#D2B45E" r="3" stroke="none" />
+          <circle cx="-2" cy="-8" fill="#9A4A36" r="3" stroke="none" />
+          <circle cx="6" cy="-8" fill="#7D9443" r="3" stroke="none" />
         </g>
       )}
       {kind === "fire" && (
         <g>
-          <ellipse cx="0" cy="4" fill="#FF8A3D" opacity="0.25" rx="40" ry="16" />
+          <ellipse cx="0" cy="4" fill="#FF8A3D" opacity="0.22" rx="38" ry="15" />
           {Array.from({ length: 8 }, (_, i) => {
             const a = (i / 8) * Math.PI * 2;
 
-            return <ellipse key={i} cx={Math.cos(a) * 16} cy={Math.sin(a) * 7} fill="#7E776C" rx="5" ry="3.5" />;
+            return <ellipse key={i} cx={Math.cos(a) * 15} cy={Math.sin(a) * 6.5} fill="#7E776C" rx="4.5" ry="3" />;
           })}
           <g className="origin-bottom animate-flame" style={{ transformBox: "fill-box" }}>
-            <path d="M 0 2 C -12 -6 -8 -20 0 -32 C 8 -20 12 -6 0 2 Z" fill="#E8612C" />
-            <path d="M 0 2 C -6 -4 -4 -14 0 -22 C 4 -14 6 -4 0 2 Z" fill="#FFC56B" />
+            <path d="M 0 2 C -11 -6 -7 -19 0 -30 C 7 -19 11 -6 0 2 Z" fill="#E8612C" />
+            <path d="M 0 2 C -5 -4 -4 -13 0 -20 C 4 -13 5 -4 0 2 Z" fill="#FFC56B" />
           </g>
+        </g>
+      )}
+      {kind === "sheep" && (
+        <g>
+          <g fill="none" stroke="#6A4A2C" strokeWidth="2">
+            <polygon points={`0,${-TH * 0.36} ${TW * 0.36},0 0,${TH * 0.36} ${-TW * 0.36},0`} />
+          </g>
+          {[
+            [-14, -2],
+            [6, -8],
+            [12, 6],
+            [-4, 8],
+          ].map(([x, y], i) => (
+            <g key={i} transform={`translate(${x} ${y})`}>
+              <ellipse cx="2" cy="2" fill="#2A2015" opacity="0.3" rx="6" ry="2" />
+              <ellipse cx="0" cy="-3" fill="#EDE6D6" rx="6" ry="4" />
+              <circle cx={i % 2 ? -5 : 5} cy="-5" fill="#3A2F27" r="2" />
+            </g>
+          ))}
         </g>
       )}
     </svg>
@@ -312,6 +722,9 @@ const Bubble = ({ tone, children }: { tone: "good" | "work"; children: React.Rea
   </span>
 );
 
+const sizeFor = (cell: Cell) =>
+  cell.span === 2 ? TW * 2.05 : cell.building === "city-gate" ? TW * 1.55 : cell.corner ? TW * 1.15 : TW * 1.12;
+
 const BuildingOnPlot = ({
   b,
   cell,
@@ -327,9 +740,8 @@ const BuildingOnPlot = ({
   interactive: boolean;
   onOpen?: () => void;
 }) => {
-  const k = cell.span ?? 1;
-  const ctr = cellCenter(cell);
-  const size = k === 2 ? TW * 1.9 : TW * 1.08;
+  const at = anchor(cell);
+  const size = sizeFor(cell);
   const unbuilt = st.level === 0 && !st.job;
   const Tag = interactive ? "button" : "div";
 
@@ -337,40 +749,34 @@ const BuildingOnPlot = ({
     <Tag
       aria-label={interactive ? `${b.name}, level ${st.level}` : undefined}
       className={clsx("absolute", interactive && "group")}
-      style={{
-        left: ctr.x - size / 2,
-        top: ctr.y - size * 0.86,
-        width: size,
-        height: size,
-        zIndex: (cell.col + cell.row + k) * 10 + 5,
-      }}
+      style={{ left: at.x - size / 2, top: at.y - size * 0.86, width: size, height: size, zIndex: at.z }}
       onClick={interactive ? onOpen : undefined}
     >
       {unbuilt ? (
         <>
-          {/* Construction site: stakes, rope and a faint sketch of what goes here */}
+          {/* Building site: scaffold poles, a rope line and a faint plan of what goes here */}
           <svg aria-hidden="true" className="absolute inset-0" overflow="visible" viewBox={`0 0 ${size} ${size}`}>
             {[
-              [0.5, 0.66],
-              [0.84, 0.82],
+              [0.5, 0.7],
+              [0.82, 0.84],
               [0.5, 0.98],
-              [0.16, 0.82],
+              [0.18, 0.84],
             ].map(([x, y], i) => (
-              <g key={i}>
-                <rect fill="#6B4A2B" height="16" rx="1.5" width="4" x={size * x - 2} y={size * y - 14} />
-              </g>
+              <rect key={i} fill="#6B4A2B" height="22" rx="1.5" width="4" x={size * x - 2} y={size * y - 20} />
             ))}
             <polygon
               fill="none"
-              points={`${size * 0.5},${size * 0.66 - 9} ${size * 0.84},${size * 0.82 - 9} ${size * 0.5},${size * 0.98 - 9} ${size * 0.16},${size * 0.82 - 9}`}
+              points={`${size * 0.5},${size * 0.7 - 14} ${size * 0.82},${size * 0.84 - 14} ${size * 0.5},${size * 0.98 - 14} ${size * 0.18},${size * 0.84 - 14}`}
               stroke="#D9C49A"
               strokeWidth="1.5"
             />
+            <rect fill="#8C6540" height="6" rx="1" transform={`rotate(-14 ${size * 0.62} ${size * 0.9})`} width={size * 0.22} x={size * 0.52} y={size * 0.88} />
+            <rect fill="#9E9584" height="7" rx="1" width={size * 0.12} x={size * 0.3} y={size * 0.86} />
           </svg>
           <Image
             draggable={false}
             alt=""
-            className="absolute left-1/2 -translate-x-1/2 bottom-[16%] w-[62%] h-[62%] object-contain opacity-40 sepia grayscale"
+            className="absolute left-1/2 -translate-x-1/2 bottom-[18%] w-[62%] h-[62%] object-contain opacity-35 sepia grayscale"
             height={size}
             src={buildingImage(b)}
             width={size}
@@ -381,7 +787,7 @@ const BuildingOnPlot = ({
           draggable={false}
           alt=""
           className={clsx(
-            "w-full h-full object-contain drop-shadow-[0_10px_8px_rgba(20,30,10,0.45)] transition-transform",
+            "w-full h-full object-contain saturate-[0.82] brightness-[0.97] drop-shadow-[7px_8px_5px_rgba(20,26,10,0.5)] transition-transform",
             interactive && "group-active:scale-95"
           )}
           height={size}
@@ -459,24 +865,28 @@ const Board = ({
   selectedId?: string;
   onOpen?: (b: BuildingDef) => void;
 }) => {
-  const { now } = useGame();
+  const { now, state } = useGame();
   const statuses = useStatuses();
   const selected = CELLS.find((c) => c.building === selectedId);
+  const tier = wallTier(state.buildings["city-gate"] ?? 0);
 
   return (
     <div className="relative" style={{ width: BOARD_W, height: BOARD_H }}>
-      <Island selected={selected} />
+      <Ground selected={selected} tier={tier} />
+      <Walkers />
+      <Walls tier={tier} />
       {CELLS.map((c) => {
-        const ctr = cellCenter(c);
+        const at = anchor(c);
 
-        if (c.decor) {
+        if (c.flat) return null;
+        if (c.raised) {
           return (
             <div
               key={`${c.col},${c.row}`}
               className="absolute pointer-events-none"
-              style={{ left: ctr.x - TW / 2, top: ctr.y - 110 + TH / 2, zIndex: (c.col + c.row + 1) * 10 }}
+              style={{ left: at.x - TW / 2, top: at.y - 110 + TH / 2, zIndex: at.z - 1 }}
             >
-              <DecorArt kind={c.decor} />
+              <RaisedArt kind={c.raised} seed={c.col * 31 + c.row} />
             </div>
           );
         }
@@ -500,31 +910,41 @@ const Board = ({
   );
 };
 
-const SeaBackground = () => (
-  <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,#2D5966_0%,#1B3A44_45%,#11252C_100%)]">
-    <svg className="absolute inset-0 w-full h-full opacity-[0.12]">
+/** Dark woods beyond the edge of the map, so the land never ends in a hard line. */
+const Woods = () => (
+  <div aria-hidden="true" className="absolute inset-0 bg-[#24301A]">
+    <svg className="absolute inset-0 w-full h-full">
       <defs>
-        <pattern height="40" id="dio-waves" patternUnits="userSpaceOnUse" width="80">
-          <path d="M0 20 Q 10 14 20 20 T 40 20 T 60 20 T 80 20" fill="none" stroke="#E6F4F5" strokeWidth="1.5" />
+        <pattern height="46" id="dio-woods-bg" patternUnits="userSpaceOnUse" width="54">
+          <circle cx="12" cy="12" fill="#2F3F20" r="13" />
+          <circle cx="40" cy="20" fill="#2B3A1D" r="15" />
+          <circle cx="24" cy="38" fill="#33452A" r="12" />
         </pattern>
       </defs>
-      <rect fill="url(#dio-waves)" height="100%" width="100%" />
+      <rect fill="url(#dio-woods-bg)" height="100%" width="100%" />
     </svg>
   </div>
 );
 
+const Vignette = () => (
+  <div
+    aria-hidden="true"
+    className="absolute inset-0 pointer-events-none z-[5] bg-[radial-gradient(ellipse_at_50%_45%,transparent_55%,rgba(12,9,5,0.55)_100%)]"
+  />
+);
+
 // ─── Public components ───────────────────────────────────────────────────────
 
-/** A non-interactive picture of the player's island (for the Hall banner). */
-export const IslandPreview = ({ height }: { height: number }) => {
+/** A still picture of the player's castle, cropped to the walls (for the Hall banner). */
+export const CastlePreview = ({ height }: { height: number }) => {
   const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.45);
+  const [width, setWidth] = useState(390);
 
   useEffect(() => {
     const el = ref.current;
 
     if (!el) return;
-    const fit = () => setScale(Math.min((el.clientWidth + 40) / BOARD_W, (height + 50) / BOARD_H));
+    const fit = () => setWidth(el.clientWidth);
 
     fit();
     const ro = new ResizeObserver(fit);
@@ -532,30 +952,42 @@ export const IslandPreview = ({ height }: { height: number }) => {
     ro.observe(el);
 
     return () => ro.disconnect();
-  }, [height]);
+  }, []);
+
+  // Fit the walls plus a little land on each side.
+  const left = P(W0 - 0.8, W1 + 0.8).x;
+  const right = P(W1 + 0.8, W0 - 0.8).x;
+  const s = width / (right - left);
+  const focus = P((W0 + W1) / 2, (W0 + W1) / 2);
 
   return (
     <div ref={ref} className="relative w-full overflow-hidden" style={{ height }}>
-      <SeaBackground />
+      <Woods />
       <div
-        className="absolute left-1/2 top-0 origin-top"
-        style={{ width: BOARD_W, height: BOARD_H, transform: `translateX(-50%) scale(${scale})`, marginTop: -40 * scale }}
+        className="absolute left-0 top-0 origin-top-left"
+        style={{
+          width: BOARD_W,
+          height: BOARD_H,
+          transform: `translate(${width / 2 - focus.x * s}px, ${height * 0.55 - focus.y * s}px) scale(${s})`,
+        }}
       >
         <Board interactive={false} />
       </div>
+      <Vignette />
     </div>
   );
 };
 
-const ZOOMS = [0.45, 0.6, 0.8, 1, 1.2];
-/** Sea margin around the island inside the scroll area. */
-const MX = 60;
-const MY = 40;
+const ZOOMS = [0.4, 0.55, 0.7, 0.85, 1, 1.2];
+/** Margin of woods around the map inside the scroll area. */
+const MX = 40;
+const MY = 30;
+const START_ZOOM = 0.7;
 
-/** The Build screen's village: pan, pinch or +/− to zoom, tap a building. */
+/** The Build screen's castle: pan, pinch or +/− to zoom, tap a building. */
 export const Diorama = ({ onOpen, selectedId }: { onOpen: (b: BuildingDef) => void; selectedId?: string }) => {
   const ref = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(0.8);
+  const [zoom, setZoom] = useState(START_ZOOM);
   const zoomRef = useRef(zoom);
   const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
 
@@ -579,19 +1011,18 @@ export const Diorama = ({ onOpen, selectedId }: { onOpen: (b: BuildingDef) => vo
     });
   };
 
-  // Start centred on the Town Hall, sized to the phone.
+  // Start centred on the keep.
   useEffect(() => {
     const el = ref.current;
 
     if (!el) return;
-    const z = 0.8;
-    const th = cellCenter(CELLS.find((c) => c.building === "town-hall")!);
+    const keep = P(5.5, 5.5);
 
-    zoomRef.current = z;
-    setZoom(z);
+    zoomRef.current = START_ZOOM;
+    setZoom(START_ZOOM);
     requestAnimationFrame(() => {
-      el.scrollLeft = th.x * z + MX - el.clientWidth / 2;
-      el.scrollTop = (th.y - 30) * z + MY - el.clientHeight / 2;
+      el.scrollLeft = keep.x * START_ZOOM + MX - el.clientWidth / 2;
+      el.scrollTop = (keep.y - 20) * START_ZOOM + MY - el.clientHeight / 2;
     });
   }, []);
 
@@ -655,7 +1086,7 @@ export const Diorama = ({ onOpen, selectedId }: { onOpen: (b: BuildingDef) => vo
 
   return (
     <div className="absolute inset-0">
-      <SeaBackground />
+      <Woods />
       <div
         ref={ref}
         className="absolute inset-0 overflow-auto scrollable overscroll-contain select-none cursor-grab active:cursor-grabbing"
@@ -677,6 +1108,7 @@ export const Diorama = ({ onOpen, selectedId }: { onOpen: (b: BuildingDef) => vo
           </div>
         </div>
       </div>
+      <Vignette />
 
       <div className="absolute right-2 bottom-2 flex flex-col gap-1.5 z-10">
         <button

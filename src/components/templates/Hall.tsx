@@ -11,7 +11,7 @@ import { BUILDINGS, RESOURCE_IDS, STAMINA_PER_TAP, STREAK_REWARDS } from "@/lib/
 import { buildingUpgradeInfo, getRates, streakStatus } from "@/lib/game/engine";
 import { campStatus, powerScore } from "@/lib/game/war";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { IslandPreview } from "@/components/organisms/tribe/Diorama";
+import { CastlePreview } from "@/components/organisms/tribe/Diorama";
 
 type ReportItem = {
   id: number;
@@ -167,7 +167,7 @@ export const Hall = () => {
     <div className="flex flex-col gap-3 pb-2">
       {/* Hero: your own island */}
       <section className="relative">
-        <IslandPreview height={260} />
+        <CastlePreview height={260} />
         <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ground via-ground/80 to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 px-4 pb-1 flex items-end justify-between gap-3">
           <div className="min-w-0">
