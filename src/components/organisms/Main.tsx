@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 
 import { useResourceContext, useTelegramContext } from "@/context";
-import { Button, Header, Navbar, QrCode } from "@/components";
+import { Header, LoadingScreen, Navbar, QrCode } from "@/components";
 
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <div className="text-parch mx-auto overflow-hidden h-svh max-w-md fixed inset-x-0 w-full flex flex-col items-center bg-ground">
@@ -33,22 +33,9 @@ export const Main = ({
     );
   }
 
+  // Deep links (e.g. /battle) show the same loading screen until the tribe is in.
   if (status !== "ready") {
-    return (
-      <Shell>
-        <main className="w-full flex-1 flex flex-col gap-4 justify-center items-center px-6 text-center">
-          {status === "loading" ? (
-            <div className="h-10 w-10 rounded-full border-4 border-gold border-t-transparent animate-spin" />
-          ) : (
-            <>
-              <p className="font-display text-xl font-bold">Couldn&apos;t reach your hall</p>
-              <p className="text-sm text-muted">{error}</p>
-              <Button onClick={retry}>Try again</Button>
-            </>
-          )}
-        </main>
-      </Shell>
-    );
+    return <LoadingScreen />;
   }
 
   return (

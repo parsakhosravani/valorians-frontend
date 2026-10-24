@@ -1,45 +1,35 @@
 import Image from "next/image";
+
 import rqcode from "~/images/qr/qr-code.png";
-import bg from "~/images/background/intro.webp";
+import bg from "~/images/background/battle.webp";
 
-
+/** Shown outside Telegram's mobile app: the game is played on a phone. */
 export const QrCode = () => {
+  const bot = process.env.NEXT_PUBLIC_BOT_ADDRESS;
 
-    return (
-        <div className="px-4 text-parch mx-auto overflow-hidden min-h-svh max-w-md fixed w-full flex flex-col items-center bg-[#1E1610]">
-            <main className="w-full flex-1 flex justify-center items-end pb-[84px]">
-
-                <div className="w-full h-full flex justify-center items-center absolute top-0 left-0 overflow-hidden z-50">
-                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col justify-center items-center gap-2">
-                        <p className="text-goldtext text-lg font-semibold leading-7">
-                            Play on your mobile
-                        </p>
-                        <a href={`https://t.me/${process.env.NEXT_PUBLIC_BOT_ADDRESS}`}>
-                            <Image
-                                className="w-[167px] h-[167px] qr-gradient rounded-[16px] border"
-                                src={rqcode}
-                                width={167}
-                                height={167}
-                                alt="qr-code"
-                            />
-                        </a>
-                        <a href={`https://t.me/${process.env.NEXT_PUBLIC_BOT_ADDRESS}`}>
-                            <p className="text-goldtext text-lg font-semibold leading-7">
-                                @{process.env.NEXT_PUBLIC_BOT_ADDRESS?.toUpperCase()}
-                            </p>
-                        </a>
-                    </div>
-                </div>
-
-                <Image
-                    priority
-                    src={bg}
-                    alt={'qrcode'}
-                    className="absolute h-full top-0 left-0 w-full -z-10 object-cover opacity-[0.10]"
-                />
-
-            </main>
-        </div>
-    );
+  return (
+    <div className="fixed inset-0 max-w-md mx-auto overflow-hidden bg-ground text-parch flex flex-col items-center justify-center px-6 text-center">
+      <Image priority alt="" className="absolute inset-0 w-full h-full object-cover opacity-25" src={bg} />
+      <div className="absolute inset-0 bg-gradient-to-b from-ground/40 to-ground" />
+      <div className="relative flex flex-col items-center gap-3">
+        <h1 className="font-display font-black text-3xl tracking-[0.06em] text-goldtext">VALORIANS LEGEND</h1>
+        <p className="text-sub">Play on your phone in Telegram</p>
+        <a className="mt-2" href={`https://t.me/${bot}`}>
+          <Image
+            alt={`Open @${bot} in Telegram`}
+            className="w-[180px] h-[180px] rounded-2xl border-2 border-gold bg-white p-2"
+            height={180}
+            src={rqcode}
+            width={180}
+          />
+        </a>
+        <a className="font-extrabold text-goldtext text-lg" href={`https://t.me/${bot}`}>
+          @{bot}
+        </a>
+        <p className="text-xs text-muted mt-4">
+          v{process.env.NEXT_PUBLIC_APP_VERSION} · build {process.env.NEXT_PUBLIC_BUILD_ID}
+        </p>
+      </div>
+    </div>
+  );
 };
-
