@@ -4,17 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
 
-import bg from "~/images/background/tribe.webp";
-
-import { RESOURCES, useGame } from "@/context";
+import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { STREAK_REWARDS } from "@/lib/game/config";
-import { buildingUpgradeInfo, getRates, questStatus, streakStatus } from "@/lib/game/engine";
-import { BUILDINGS, RESOURCE_IDS } from "@/lib/game/config";
+import { BUILDINGS, RESOURCE_IDS, STAMINA_PER_TAP, STREAK_REWARDS } from "@/lib/game/config";
+import { buildingUpgradeInfo, getRates, streakStatus } from "@/lib/game/engine";
+import { campStatus, powerScore } from "@/lib/game/war";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { Button } from "@/components";
-import { ACTIVE_QUESTS } from "@/components/organisms/quest/QuestDrawer";
+import { IslandPreview } from "@/components/organisms/tribe/Diorama";
 
 type ReportItem = {
   id: number;
@@ -26,250 +23,267 @@ type ReportItem = {
   report: { loot: Record<string, number> };
 };
 
-const Icon = ({ d, className }: { d: string; className?: string }) => (
+const Svg = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <svg
     aria-hidden="true"
     className={className}
     fill="none"
-    height="22"
+    height="30"
     stroke="currentColor"
     strokeLinecap="round"
     strokeLinejoin="round"
     strokeWidth="2"
     viewBox="0 0 24 24"
-    width="22"
+    width="30"
   >
-    <path d={d} />
+    {children}
   </svg>
 );
 
-const ICON = {
-  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
-  arrow: "M5 12h14M13 6l6 6-6 6",
-  swords: "M14.5 17.5 3 6V3h3l11.5 11.5M9.5 17.5 21 6V3h-3L6.5 14.5",
-  hammer: "m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9M17.6 6.4 20 4M14 4l6 6-4 4-6-6z",
-  scroll: "M8 3h11v15a3 3 0 0 1-3 3H6M8 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3M11 8h5M11 12h5",
+const ICONS = {
+  claim: (
+    <Svg>
+      <rect height="12" rx="1.5" width="18" x="3" y="9" />
+      <path d="M3 13h18M12 9v12M12 9c-1.5-3-6-4-6-1s4 1 6 1zM12 9c1.5-3 6-4 6-1s-4 1-6 1z" />
+    </Svg>
+  ),
+  mine: (
+    <Svg>
+      <path d="M14 4c3 0 6 2 7 5M3 21l9-9M10 4c-3 0-6 2-7 5" />
+      <path d="M14 4 10 4l2 8z" />
+    </Svg>
+  ),
+  build: (
+    <Svg>
+      <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
+      <path d="M17.6 6.4 20 4M14 4l6 6-4 4-6-6z" />
+    </Svg>
+  ),
+  raid: (
+    <Svg>
+      <path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2" />
+      <path d="M9.5 17.5 21 6V3h-3L6.5 14.5M11 19l-6-6M8 16l-4 4M5 21l-2-2" />
+    </Svg>
+  ),
 };
 
-const FeedRow = ({
-  href,
-  icon,
-  tone = "normal",
-  title,
-  sub,
-  action,
-}: {
-  href: string;
-  icon: string;
-  tone?: "normal" | "alert";
+type TileProps = {
+  icon: React.ReactNode;
   title: string;
   sub: string;
-  action?: string;
-}) => (
-  <Link
-    className={clsx(
-      "flex items-center gap-3 rounded-2xl p-3 border",
-      tone === "alert" ? "bg-[#2A140E] border-[#8A3B23]" : "bg-panel border-line"
-    )}
-    href={href as any}
-  >
-    <Icon className={tone === "alert" ? "text-bad shrink-0" : "text-goldtext shrink-0"} d={icon} />
-    <div className="flex-1 min-w-0 flex flex-col">
-      <span className="font-extrabold text-sm leading-snug">{title}</span>
-      <span className="text-xs text-sub">{sub}</span>
-    </div>
-    {action && <span className="font-extrabold text-sm text-[#FFB27A] shrink-0">{action}</span>}
-  </Link>
-);
+  hot?: boolean;
+  badge?: string;
+  href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+};
+
+/** One of the four big actions. "Hot" ones glow so the next step is obvious. */
+const Tile = ({ icon, title, sub, hot, badge, href, onClick, disabled }: TileProps) => {
+  const body = (
+    <>
+      <span
+        className={clsx(
+          "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2",
+          hot ? "bg-gold text-[#1A120B] border-[#FBE3A6]" : "bg-panel2 text-goldtext border-line"
+        )}
+      >
+        {icon}
+      </span>
+      <span className="flex flex-col min-w-0 text-left">
+        <span className="font-display font-black text-[17px] leading-tight">{title}</span>
+        <span className={clsx("text-[13px] font-bold leading-snug", hot ? "text-goldtext" : "text-sub")}>{sub}</span>
+      </span>
+      {badge && (
+        <span className="absolute -top-2 -right-1 min-w-6 h-6 px-1.5 rounded-full bg-ember text-[#FFF4EA] text-xs font-black flex items-center justify-center border-2 border-ground">
+          {badge}
+        </span>
+      )}
+    </>
+  );
+  const cls = clsx(
+    "relative flex items-center gap-3 p-3 rounded-2xl border transition-transform active:scale-[0.97]",
+    hot
+      ? "bg-gradient-to-br from-[#3A2915] to-panel border-gold shadow-[0_0_22px_rgba(227,169,72,0.22)]"
+      : "bg-panel border-line",
+    disabled && "opacity-60"
+  );
+
+  return href ? (
+    <Link className={cls} href={href as any}>
+      {body}
+    </Link>
+  ) : (
+    <button className={cls} disabled={disabled} onClick={onClick}>
+      {body}
+    </button>
+  );
+};
 
 export const Hall = () => {
   useBackButtonReset();
+  const { telegram } = useTelegramContext();
   const { state, rates, now, me, authHeader, claimStreak } = useGame();
-  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [news, setNews] = useState<ReportItem | null>(null);
   const [claiming, setClaiming] = useState(false);
-  const streak = streakStatus(state, now);
 
   useEffect(() => {
     if (!authHeader) return;
     apiRequest<{ reports: ReportItem[] }>(authHeader, "war/reports")
-      .then((r) => setReports(r.reports.slice(0, 3)))
+      .then((r) => setNews(r.reports.find((x) => x.role === "defender" && now - x.at < 24 * 3600e3) ?? null))
       .catch(() => {});
   }, [authHeader]);
 
+  const streak = streakStatus(state, now);
+  const reward = STREAK_REWARDS[streak.next - 1];
+  const strikes = Math.floor(state.energy / STAMINA_PER_TAP);
   const freeBuilders = rates.builders - state.queue.length;
-  const affordable = BUILDINGS.filter((b) => {
+  const ready = BUILDINGS.filter((b) => {
     const info = buildingUpgradeInfo(state, b.id);
 
-    return !info.maxed && !state.queue.some((q) => q.building === b.id) && RESOURCE_IDS.every((r) => state.resources[r] >= info.cost);
-  });
-  const questsLeft = ACTIVE_QUESTS.filter((q) => questStatus(state, q.id, now).state !== "claimed").length;
-  const staminaTaps = Math.floor(state.energy / 10);
+    return (
+      (state.buildings[b.id] ?? 0) > 0 &&
+      !info.maxed &&
+      !state.queue.some((q) => q.building === b.id) &&
+      RESOURCE_IDS.every((r) => state.resources[r] >= info.cost)
+    );
+  }).length;
+  const nextJob = [...state.queue].sort((a, b) => a.endsAt - b.endsAt)[0];
+  const campReady = campStatus(state, state.camps.cleared + 1, now).state === "new";
+  const armyHome = Object.values(state.army).reduce((a, b) => a + b, 0);
+  const shielded = state.shieldUntil > now;
 
   const onClaim = async () => {
     setClaiming(true);
-    await claimStreak();
+    const ok = await claimStreak();
+
     setClaiming(false);
+    if (ok) telegram?.WebApp.HapticFeedback.notificationOccurred("success");
   };
 
+  const loot = news ? Object.values(news.report.loot ?? {}).reduce((a, b) => a + b, 0) : 0;
+
   return (
-    <>
-      <Image
-        priority
-        alt=""
-        className="absolute left-0 top-0 w-full h-[300px] object-cover opacity-60 -z-10"
-        src={bg}
-      />
-      <div className="absolute left-0 top-0 w-full h-[300px] bg-gradient-to-b from-ground/10 via-ground/60 to-ground -z-10" />
-
-      <div className="flex flex-col gap-3 px-4 pt-16">
-        <div>
-          <h1 className="font-display font-black text-3xl leading-tight">Hall of {me.firstName || "your tribe"}</h1>
-          <p className="text-sub font-bold text-sm">Your tribe grows while you&apos;re away.</p>
-        </div>
-
-        <div className="grid grid-cols-4 gap-1.5">
-          {RESOURCES.map((r) => {
-            const perHour = rates.productionPerHour[r.id];
-
-            return (
-              <div key={r.id} className="bg-panel border border-line rounded-xl py-2 flex flex-col items-center">
-                <Image alt={r.name} className="w-6 h-6" src={r.img} />
-                <span className="font-extrabold text-sm">{compact(state.resources[r.id])}</span>
-                <span className={clsx("text-[11px] font-bold", perHour < 0 ? "text-bad" : "text-good")}>
-                  {perHour >= 0 ? "+" : ""}
-                  {Math.round(perHour)}/h
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Daily streak */}
-        <section className="bg-panel border border-gold rounded-2xl p-3 flex flex-col gap-2.5">
-          <div className="flex justify-between items-center gap-2">
-            <div className="flex flex-col">
-              <span className="font-display font-bold">
-                {streak.claimable ? `Day ${streak.next} reward` : `Day ${streak.current} claimed`}
-              </span>
-              <span className="text-xs text-sub">
-                {streak.claimable ? "Come back daily — miss a day and it starts over." : "Come back tomorrow for the next one."}
-              </span>
-            </div>
-            <Button disabled={!streak.claimable || claiming} size="small" onClick={onClaim}>
-              {streak.claimable ? "Claim" : "Claimed"}
-            </Button>
+    <div className="flex flex-col gap-3 pb-2">
+      {/* Hero: your own island */}
+      <section className="relative">
+        <IslandPreview height={260} />
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ground via-ground/80 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 px-4 pb-1 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="font-display font-black text-[28px] leading-none truncate [text-shadow:0_2px_6px_#000]">
+              {me.firstName || "Your tribe"}
+            </h1>
+            <p className="mt-1 text-sm font-extrabold text-goldtext [text-shadow:0_1px_3px_#000]">
+              Power {compact(powerScore(state))} · Pop. {compact(state.population)}
+            </p>
           </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-extrabold">
-            {STREAK_REWARDS.map((rw, i) => {
-              const day = i + 1;
-              const done = streak.claimable ? day < streak.next : day <= streak.current;
-              const today = streak.claimable && day === streak.next;
+          <Link
+            className="shrink-0 flex flex-col items-center px-3 py-1.5 rounded-xl bg-panel/90 border border-gold"
+            href="/leaderboard"
+          >
+            <span className="text-[10px] font-extrabold tracking-[0.12em] text-muted">RANK</span>
+            <span className="font-display font-black text-lg leading-none text-goldtext">#{me.rank}</span>
+          </Link>
+        </div>
+      </section>
 
-              return (
-                <div
-                  key={day}
-                  className={clsx(
-                    "rounded-lg py-1.5 leading-tight",
-                    done && "bg-[#3B2A1A] text-muted",
-                    today && "bg-gold text-[#1A120B]",
-                    !done && !today && "bg-panel2",
-                    day === 7 && !done && !today && "border border-ember text-[#FFB27A]"
-                  )}
-                >
-                  {day}
-                  <br />
-                  {done ? "✓" : day === 7 ? "Chest" : compact(rw.coins)}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* What happened */}
-        <h2 className="text-xs tracking-[0.14em] font-extrabold text-muted mt-1">YOUR TRIBE NOW</h2>
-        {reports.map((r) => {
-          const loot = Object.values(r.report.loot ?? {}).reduce((a, b) => a + b, 0);
-          const ago = `${formatDuration(now - r.at)} ago`;
-
-          if (r.role === "defender") {
-            return (
-              <FeedRow
-                key={r.id}
-                action={!r.won && r.opponentId ? "Revenge" : undefined}
-                href={r.opponentId && !r.won ? `/battle?revenge=${r.opponentId}` : "/battle"}
-                icon={ICON.shield}
-                sub={`${r.won ? "Your defenders held" : "Build walls and train spearmen"} · ${ago}`}
-                title={r.won ? `${r.opponent} attacked and failed` : `${r.opponent} raided you and took ${compact(loot)}`}
-                tone={r.won ? "normal" : "alert"}
-              />
-            );
-          }
+      {/* Stock at a glance */}
+      <div className="grid grid-cols-4 gap-1.5 px-4">
+        {RESOURCES.map((r) => {
+          const perHour = rates.productionPerHour[r.id];
 
           return (
-            <FeedRow
-              key={r.id}
-              href="/battle"
-              icon={ICON.swords}
-              sub={ago}
-              title={r.won ? `You beat ${r.opponent}${loot ? ` and took ${compact(loot)}` : ""}` : `Your attack on ${r.opponent} failed`}
-            />
+            <div key={r.id} className="flex items-center gap-1.5 bg-panel border border-line rounded-xl px-2 py-1.5">
+              <Image alt={r.name} className="w-5 h-5 shrink-0" src={r.img} />
+              <div className="flex flex-col leading-none min-w-0">
+                <span className="text-[13px] font-extrabold">{compact(state.resources[r.id])}</span>
+                <span className={clsx("text-[10px] font-bold", perHour < 0 ? "text-bad" : "text-good")}>
+                  {perHour >= 0 ? "+" : ""}
+                  {compact(perHour)}/h
+                </span>
+              </div>
+            </div>
           );
         })}
-        {state.marches.map((m) => (
-          <FeedRow
-            key={m.id}
-            href="/battle"
-            icon={ICON.arrow}
-            sub={`Home in ${formatDuration(m.returnsAt - now)}`}
-            title={`Army returning from ${m.target}`}
-          />
-        ))}
-        {state.queue.map((q) => (
-          <FeedRow
-            key={q.building}
-            href="/tribe"
-            icon={ICON.hammer}
-            sub={`${formatDuration(q.endsAt - now)} left`}
-            title={`${BUILDINGS.find((b) => b.id === q.building)?.name} → level ${q.toLevel}`}
-          />
-        ))}
-        {freeBuilders > 0 && (
-          <FeedRow
-            action="Build"
-            href="/tribe"
-            icon={ICON.hammer}
-            sub={affordable.length ? `${affordable[0].name} is affordable now` : "Gather more resources to upgrade"}
-            title={`${freeBuilders} builder${freeBuilders > 1 ? "s" : ""} idle`}
-          />
-        )}
-        {questsLeft > 0 && (
-          <FeedRow
-            href="/quest"
-            icon={ICON.scroll}
-            sub="Each one pays coins and population"
-            title={`${questsLeft} saga task${questsLeft > 1 ? "s" : ""} to complete`}
-          />
-        )}
-
-        <div className="grid grid-cols-2 gap-2 mt-1">
-          <Link className="rounded-2xl p-3 bg-panel2 border border-gold flex flex-col" href="/resources">
-            <span className="font-display font-black text-goldtext">Daily Mine</span>
-            <span className="text-xs text-sub">
-              {staminaTaps > 0 ? `${staminaTaps} strikes left today` : "Rested — back at dawn (UTC)"}
-            </span>
-          </Link>
-          <Link className="rounded-2xl p-3 bg-panel2 border border-line flex flex-col" href="/battle">
-            <span className="font-display font-black">War</span>
-            <span className="text-xs text-sub">
-              {state.shieldUntil > now ? `Shielded ${formatDuration(state.shieldUntil - now)}` : "Raid a tribe or a camp"}
-            </span>
-          </Link>
-        </div>
-        <p className="text-[11px] text-muted text-center pb-2">
-          Population {compact(state.population)} · +{Math.round(rates.growthPerHour)}/h · Coins +
-          {compact(getRates(state).coinsPerHour)}/h
-        </p>
       </div>
-    </>
+
+      {/* The four things to do */}
+      <div className="grid grid-cols-1 gap-2.5 px-4">
+        <Tile
+          disabled={!streak.claimable || claiming}
+          hot={streak.claimable}
+          icon={ICONS.claim}
+          sub={
+            streak.claimable
+              ? `Day ${streak.next} · ${compact(reward.coins)} coins${reward.resources ? " + chest" : ""}`
+              : `Day ${streak.current} done · back tomorrow`
+          }
+          title={streak.claimable ? "Claim daily reward" : "Reward claimed"}
+          onClick={onClaim}
+        />
+        <Tile
+          hot={strikes > 0}
+          href="/resources"
+          icon={ICONS.mine}
+          sub={strikes > 0 ? `${strikes} strikes left today` : "Miners rest until dawn (UTC)"}
+          title="Daily Mine"
+        />
+        <Tile
+          badge={ready ? String(ready) : undefined}
+          hot={freeBuilders > 0 && ready > 0}
+          href="/tribe"
+          icon={ICONS.build}
+          sub={
+            freeBuilders > 0
+              ? ready
+                ? `${ready} upgrade${ready > 1 ? "s" : ""} ready · ${freeBuilders} builder${freeBuilders > 1 ? "s" : ""} free`
+                : `${freeBuilders} builder${freeBuilders > 1 ? "s" : ""} free`
+              : `All builders busy · ${formatDuration(nextJob.endsAt - now)}`
+          }
+          title="Build"
+        />
+        <Tile
+          hot={armyHome > 0 && (campReady || !shielded)}
+          href={news && !news.won && news.opponentId ? `/battle?revenge=${news.opponentId}` : "/battle"}
+          icon={ICONS.raid}
+          sub={
+            armyHome === 0
+              ? "Train an army first"
+              : campReady
+              ? `Barbarian camp ${state.camps.cleared + 1} awaits`
+              : "Raid a tribe for loot"
+          }
+          title="Raid"
+        />
+      </div>
+
+      {/* One line of news */}
+      {news && (
+        <Link
+          className={clsx(
+            "mx-4 flex items-center gap-2 rounded-xl px-3 py-2.5 border text-sm font-bold",
+            news.won ? "bg-panel border-line" : "bg-[#2A140E] border-[#8A3B23]"
+          )}
+          href={news.won || !news.opponentId ? "/battle" : (`/battle?revenge=${news.opponentId}` as any)}
+        >
+          <span className="flex-1 min-w-0 truncate">
+            {news.won
+              ? `${news.opponent} attacked you and lost`
+              : `${news.opponent} raided you and took ${compact(loot)}`}
+          </span>
+          <span className={clsx("shrink-0 font-black", news.won ? "text-muted" : "text-[#FFB27A]")}>
+            {news.won ? formatDuration(now - news.at) + " ago" : "Revenge ›"}
+          </span>
+        </Link>
+      )}
+
+      {shielded && (
+        <p className="text-center text-xs font-bold text-muted">
+          Protected by a shield for {formatDuration(state.shieldUntil - now)}
+        </p>
+      )}
+      <p className="sr-only">Coins per hour: {compact(getRates(state).coinsPerHour)}</p>
+    </div>
   );
 };
