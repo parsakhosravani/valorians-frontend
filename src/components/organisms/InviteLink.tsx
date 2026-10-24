@@ -4,7 +4,7 @@ import React from "react";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
-import { CopyIcon } from "@/components";
+import { Button, Icon, IconButton } from "@/components/ui";
 import { useGame, useTelegramContext } from "@/context";
 
 interface InviteLinkProps {
@@ -33,23 +33,16 @@ export const InviteLink: React.FC<InviteLinkProps> = ({ className }) => {
     if (telegram?.WebApp?.openTelegramLink) {
       e.preventDefault();
       telegram.WebApp.openTelegramLink(shareUrl);
+    } else {
+      window.open(shareUrl, "_blank", "noopener");
     }
   };
 
   return (
-    <div className={clsx("flex w-full gap-x-2", className)}>
-      <a
-        className="bg-[#E3A948] justify-center h-[44px] w-full rounded-[5px] gap-x-2 flex items-center"
-        href={shareUrl}
-        id="telegram_share"
-        rel="noreferrer"
-        target="_blank"
-        title="inviteFriends"
-        onClick={onShare}
-      >
-        <span className="text-[#1A120B] font-display text-base font-black">Invite a Friend</span>
-      </a>
-
+    <div className={clsx("flex w-full gap-2", className)}>
+      <Button full icon="share" size="lg" onClick={onShare}>
+        Invite a friend
+      </Button>
       <CopyToClipboard
         text={link}
         onCopy={() => {
@@ -57,19 +50,16 @@ export const InviteLink: React.FC<InviteLinkProps> = ({ className }) => {
           toast.dismiss();
           toast.custom(
             () => (
-              <div className="w-[85%] h-11 px-1.5 py-2 bg-[#2A1F16] rounded-[5px] justify-center items-center gap-1 inline-flex">
-                <div className="text-parch text-base font-bold leading-7">Copied Successfully</div>
+              <div className="flex items-center gap-2 h-11 px-4 rounded-2xl bg-ink-700 border border-ink-400 shadow-raised text-parch font-bold">
+                <Icon className="text-moss-400" name="check" size={18} />
+                Invite link copied
               </div>
             ),
-            {
-              duration: 2000,
-            }
+            { duration: 2000 }
           );
         }}
       >
-        <button className="w-full bg-[#E3A948] max-w-[44px] h-[44px] flex items-center rounded-[5px] justify-center">
-          <CopyIcon />
-        </button>
+        <IconButton className="!w-[52px] !h-[52px] !rounded-2xl" label="Copy invite link" name="copy" />
       </CopyToClipboard>
     </div>
   );

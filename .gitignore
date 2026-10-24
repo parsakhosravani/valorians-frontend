@@ -36,3 +36,5 @@ next-env.d.ts
 
 # game database
 /data/
+.art-preview/
+art-sheet.html

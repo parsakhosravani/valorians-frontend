@@ -31,9 +31,9 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       miniApp.expand();
       // Let players pan the village map without swiping the app closed.
       miniApp.disableVerticalSwipes?.();
-      miniApp.setHeaderColor("#120D09");
-      miniApp.setBackgroundColor("#120D09");
-      miniApp.setBottomBarColor?.("#1E1610");
+      miniApp.setHeaderColor("#15110D");
+      miniApp.setBackgroundColor("#15110D");
+      miniApp.setBottomBarColor?.("#15110D");
 
       // initial data
       setTelegram(telegram);

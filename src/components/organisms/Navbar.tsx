@@ -5,64 +5,15 @@ import clsx from "clsx";
 import { usePathname } from "next/navigation";
 import { Route } from "next";
 
+import { Icon, IconName } from "@/components/ui";
 import { useTelegramContext } from "@/context";
 
-const Svg = ({ children }: { children: React.ReactNode }) => (
-  <svg
-    aria-hidden="true"
-    fill="none"
-    height="24"
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    strokeWidth="2"
-    viewBox="0 0 24 24"
-    width="24"
-  >
-    {children}
-  </svg>
-);
-
-export const NAV_ICONS = {
-  hall: (
-    <Svg>
-      <path d="M3 21h18M5 21V10l7-6 7 6v11" />
-      <path d="M9 21v-6h6v6M3 11l9-8 9 8" />
-    </Svg>
-  ),
-  build: (
-    <Svg>
-      <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
-      <path d="M17.6 6.4 20 4M14 4l6 6-4 4-6-6z" />
-    </Svg>
-  ),
-  war: (
-    <Svg>
-      <path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2" />
-      <path d="M9.5 17.5 21 6V3h-3L6.5 14.5M11 19l-6-6M8 16l-4 4M5 21l-2-2" />
-    </Svg>
-  ),
-  friends: (
-    <Svg>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6" />
-      <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.4.6 4 2.8 4 6" />
-    </Svg>
-  ),
-  mine: (
-    <Svg>
-      <path d="M14 4c3 0 6 2 7 5M3 21l9-9M10 4c-3 0-6 2-7 5" />
-      <path d="M14 4 10 4l2 8z" />
-    </Svg>
-  ),
-};
-
-const items: { icon: React.ReactNode; name: string; link: Route }[] = [
-  { icon: NAV_ICONS.hall, name: "Hall", link: "/hall" as Route },
-  { icon: NAV_ICONS.build, name: "Build", link: "/tribe" },
-  { icon: NAV_ICONS.war, name: "War", link: "/battle" },
-  { icon: NAV_ICONS.friends, name: "Friends", link: "/friends" },
-  { icon: NAV_ICONS.mine, name: "Mine", link: "/resources" },
+const items: { icon: IconName; name: string; link: Route }[] = [
+  { icon: "hall", name: "Hall", link: "/hall" as Route },
+  { icon: "build", name: "Build", link: "/tribe" },
+  { icon: "war", name: "War", link: "/battle" },
+  { icon: "friends", name: "Friends", link: "/friends" },
+  { icon: "mine", name: "Mine", link: "/resources" },
 ];
 
 export const Navbar = () => {
@@ -72,27 +23,34 @@ export const Navbar = () => {
   return (
     <nav
       className={clsx(
-        "max-w-md w-full grid grid-cols-5 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
-        telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-3"
+        "max-w-md w-full fixed bottom-0 z-30 px-2 pt-1.5 bg-ink-900/95 backdrop-blur border-t border-ink-500",
+        telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-2.5"
       )}
     >
-      {items.map((item) => {
-        const active = item.link === pathname;
+      <div className="grid grid-cols-5">
+        {items.map((item) => {
+          const active = item.link === pathname;
 
-        return (
-          <Link
-            key={item.name}
-            className={clsx(
-              "flex flex-col items-center gap-0.5 text-[11px]",
-              active ? "text-goldtext font-extrabold" : "text-muted font-bold"
-            )}
-            href={item.link}
-          >
-            {item.icon}
-            {item.name}
-          </Link>
-        );
-      })}
+          return (
+            <Link
+              key={item.name}
+              aria-current={active ? "page" : undefined}
+              className={clsx("relative flex flex-col items-center gap-0.5 pt-1.5 text-caption", active ? "text-gold-300 font-extrabold" : "text-parch-500 font-bold")}
+              href={item.link}
+            >
+              <span
+                className={clsx(
+                  "w-12 h-8 rounded-xl flex items-center justify-center transition-colors",
+                  active && "bg-gradient-to-b from-gold-400/25 to-gold-400/5 border border-gold-500/50"
+                )}
+              >
+                <Icon name={item.icon} size={22} />
+              </span>
+              {item.name}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 };

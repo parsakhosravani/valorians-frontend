@@ -1,12 +1,9 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
-
-import bg from "~/images/background/battle.webp";
 
 import { ArmyTab, BattleResultDrawer, CampsTab, RaidTab, ReportsTab, SendArmyDrawer } from "@/components/organisms/war";
 import type { AttackTarget } from "@/components/organisms/war";
-import { Tabs } from "@/components/organisms/war/shared";
+import { Backdrop, Segmented } from "@/components/ui";
 import { BattleReport, useGame } from "@/context";
 
 type Tab = "army" | "raid" | "camps" | "reports";
@@ -30,9 +27,9 @@ export const Battle = () => {
 
   return (
     <>
-      <div className="w-full flex flex-col gap-2 px-3 pt-1">
-        <Tabs
-          tabs={[
+      <div className="w-full flex flex-col gap-2.5 px-3 pt-1">
+        <Segmented
+          options={[
             { id: "army", label: "Army", badge: state.training.length || undefined },
             { id: "raid", label: "Raid" },
             { id: "camps", label: "Camps" },
@@ -59,12 +56,7 @@ export const Battle = () => {
       />
       <BattleResultDrawer report={result} onClose={() => setResult(null)} />
 
-      <Image
-        priority
-        alt={"battle"}
-        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-20"
-        src={bg}
-      />
+      <Backdrop scene="battle" />
     </>
   );
 };
