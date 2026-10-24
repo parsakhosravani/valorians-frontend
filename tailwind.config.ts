@@ -5,6 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       keyframes: {
+        kenburns: {
+          "0%": { transform: "scale(1.05) translateY(0)" },
+          "100%": { transform: "scale(1.15) translateY(-2%)" },
+        },
+        ember: {
+          "0%": { transform: "translateY(0) translateX(0)", opacity: "0" },
+          "10%": { opacity: "0.9" },
+          "100%": { transform: "translateY(-95vh) translateX(20px)", opacity: "0" },
+        },
         moveUpAndFade: {
           "0%": { transform: "translateY(0)", opacity: "1" },
           "100%": { transform: "translateY(-70px)", opacity: "0" },
@@ -15,6 +24,8 @@ const config: Config = {
         },
       },
       animation: {
+        kenburns: "kenburns 24s ease-in-out infinite alternate",
+        ember: "ember 8s linear infinite",
         "touch-animation": "scale .2s linear infinite",
         "mine-animation": "moveUpAndFade 0.6s forwards ease-out",
       },

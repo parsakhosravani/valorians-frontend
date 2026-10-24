@@ -5,7 +5,7 @@ import "@fontsource/alegreya-sans/500.css";
 import "@fontsource/alegreya-sans/700.css";
 import "@fontsource/alegreya-sans/800.css";
 import "@/styles/globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Main } from "@/components";
 import { Providers } from "../providers";
 import { ResourceProvider } from "@/context/resource/ResourceContext";
@@ -16,7 +16,19 @@ import TelegramScript from "@/scripts/TelegramScript";
 
 export const metadata: Metadata = {
   title: "Valorians Legend",
-  description: "Valorians legend is a mini game",
+  description:
+    "Build your Viking tribe, train an army and raid rival clans in this Telegram strategy game.",
+  applicationName: "Valorians Legend",
+  robots: { index: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#120D09",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

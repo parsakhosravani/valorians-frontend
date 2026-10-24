@@ -7,3 +7,4 @@ export * from "./Tribe";
 export * from "./QrCode";
 export * from "./Leaderboard";
 export * from "./Hall";
+export * from "./LoadingScreen";

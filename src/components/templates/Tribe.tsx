@@ -1,18 +1,34 @@
 "use client";
 
-import React, { FunctionComponent } from "react";
-import Image from "next/image";
+import React, { FunctionComponent, useEffect, useState } from "react";
 
-import bg from "~/images/background/tribe.webp";
-
-import { Builder, Building, Col } from "@/components";
-import { BUILDINGS } from "@/lib/game/config";
+import { Builder, Building, Drawer, VillageMap } from "@/components";
+import { Tabs } from "@/components/organisms/war/shared";
+import { BUILDINGS, BuildingDef } from "@/lib/game/config";
 import { useGame } from "@/context";
+
+type View = "map" | "list";
+const VIEW_KEY = "valorians:build-view";
 
 export const Tribe: FunctionComponent = () => {
   const { state } = useGame();
+  const [view, setView] = useState<View>("map");
+  const [open, setOpen] = useState<BuildingDef | null>(null);
 
-  // Buildings under construction float to the top.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VIEW_KEY) === "list") setView("list");
+    } catch {}
+  }, []);
+
+  const changeView = (v: View) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {}
+  };
+
+  // In the list, buildings under construction float to the top.
   const sorted = [...BUILDINGS].sort((a, b) => {
     const qa = state.queue.some((q) => q.building === a.id) ? 1 : 0;
     const qb = state.queue.some((q) => q.building === b.id) ? 1 : 0;
@@ -21,22 +37,38 @@ export const Tribe: FunctionComponent = () => {
   });
 
   return (
-    <>
-      <Col className="px-3 pt-1 w-full">
+    <div className="h-full flex flex-col">
+      <div className="px-3 pt-1 flex flex-col gap-2">
         <Builder />
-        <div className="space-y-2.5 w-full pb-4">
+        <Tabs
+          tabs={[
+            { id: "map", label: "Village" },
+            { id: "list", label: "List" },
+          ]}
+          value={view}
+          onChange={changeView}
+        />
+      </div>
+
+      {view === "map" ? (
+        <div className="flex-1 min-h-0 flex flex-col mt-2 mx-3 rounded-2xl overflow-hidden border border-line">
+          <VillageMap onOpen={setOpen} />
+        </div>
+      ) : (
+        <div className="space-y-2.5 w-full px-3 pt-2 pb-4">
           {sorted.map((item) => (
             <Building key={item.id} building={item} />
           ))}
         </div>
-      </Col>
+      )}
 
-      <Image
-        priority
-        alt={"tribe"}
-        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-25"
-        src={bg}
-      />
-    </>
+      <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
+        {open && (
+          <div className="pt-1">
+            <Building building={open} />
+          </div>
+        )}
+      </Drawer>
+    </div>
   );
 };
