@@ -1,10 +1,13 @@
 "use client";
 
 import React from "react";
-import Image from "next/image";
+import clsx from "clsx";
 import { usePathname } from "next/navigation";
 
-import { Coin, User } from "@/components";
+import { User } from "./User";
+
+import { Amount } from "@/components/ui";
+import { GameIcon } from "@/art";
 import { RESOURCES, useGame } from "@/context";
 import { compact } from "@/lib/format";
 
@@ -15,12 +18,12 @@ export const Header: React.FC = () => {
   const showResources = pathname === "/tribe" || pathname === "/battle";
 
   return (
-    <header className="w-full flex flex-col gap-2 px-3 pt-3 pb-2 z-20 bg-ground/80 backdrop-blur-sm">
+    <header className="w-full flex flex-col gap-2 px-3 pt-3 pb-2 z-20 bg-gradient-to-b from-ink-900 via-ink-900/95 to-ink-900/80 backdrop-blur-sm">
       <div className="flex items-center gap-2">
         <User />
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5 bg-panel border border-line rounded-full pl-1.5 pr-3 h-8">
-          <Coin amount={Math.floor(state.coins)} />
+        <div className="flex items-center h-9 pl-1.5 pr-3 rounded-full bg-ink-800 border border-ink-500 shadow-card">
+          <Amount icon="coin" raw size="sm" value={Math.floor(state.coins)} />
         </div>
       </div>
 
@@ -31,15 +34,13 @@ export const Header: React.FC = () => {
             const perHour = rates.productionPerHour[r.id];
 
             return (
-              <div key={r.id} className="bg-panel border border-line rounded-lg py-1 px-1 flex items-center gap-1 justify-center">
-                <Image alt={r.name} className="w-4 h-4" src={r.img} />
-                <div className="flex flex-col leading-none">
-                  <span className={full ? "text-bad text-xs font-extrabold" : "text-xs font-extrabold"}>
-                    {compact(state.resources[r.id])}
-                  </span>
-                  <span className={perHour < 0 ? "text-bad text-[10px] font-bold" : "text-good text-[10px] font-bold"}>
+              <div key={r.id} className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-ink-800 border border-ink-500/70">
+                <GameIcon id={r.id} size={20} title={r.name} />
+                <div className="flex flex-col leading-none min-w-0">
+                  <span className={clsx("text-small font-extrabold", full && "text-blood-400")}>{compact(state.resources[r.id])}</span>
+                  <span className={clsx("text-[10px] font-bold", perHour < 0 ? "text-blood-400" : "text-moss-400")}>
                     {perHour >= 0 ? "+" : ""}
-                    {Math.round(perHour)}/h
+                    {compact(perHour)}/h
                   </span>
                 </div>
               </div>

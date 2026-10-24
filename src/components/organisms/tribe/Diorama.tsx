@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import clsx from "clsx";
 
 import { useGame } from "@/context";
-import { BUILDINGS, BuildingDef, RESOURCE_IDS, buildingImage } from "@/lib/game/config";
+import { BUILDINGS, BuildingDef, RESOURCE_IDS } from "@/lib/game/config";
+import { BuildingArt } from "@/art";
+import { LevelShield } from "@/components/ui";
 import { buildingUpgradeInfo, getRates } from "@/lib/game/engine";
 import { formatDuration } from "@/lib/format";
 
@@ -146,13 +147,13 @@ const WallSegment = ({ line, axis, from, tier }: { line: number; axis: "row" | "
   const q = (a: number, x: number, h = 0) => (axis === "row" ? P(a, x, h) : P(x, a, h));
   const a0 = from;
   const a1 = from + 1;
-  const face = axis === "row" ? "#B4AA95" : "#8F8675";
-  const top = "#CFC6B2";
+  const face = axis === "row" ? "#BCB09A" : "#978B76";
+  const top = "#DDD3C0";
   const z = (from + line) * 10 + 8;
   const svg = (children: React.ReactNode) => (
     <svg
       aria-hidden="true"
-      className="absolute left-0 top-0 pointer-events-none"
+      className="dio-ink absolute left-0 top-0 pointer-events-none"
       height={BOARD_H}
       overflow="visible"
       style={{ zIndex: z }}
@@ -167,7 +168,7 @@ const WallSegment = ({ line, axis, from, tier }: { line: number; axis: "row" | "
     const logs = 7;
 
     return svg(
-      <g stroke="#3A2717" strokeLinejoin="round" strokeWidth="0.8">
+      <g stroke="#2B1F15" strokeLinejoin="round" strokeWidth="0.8">
         {Array.from({ length: logs }, (_, i) => {
           const s = a0 + i / logs;
           const e = s + 1 / logs;
@@ -177,12 +178,12 @@ const WallSegment = ({ line, axis, from, tier }: { line: number; axis: "row" | "
           return (
             <polygon
               key={i}
-              fill={i % 2 ? "#7B5634" : axis === "row" ? "#8C6540" : "#6E4C2E"}
+              fill={i % 2 ? "#A87A47" : axis === "row" ? "#A87A47" : "#835C33"}
               points={pts(q(s, line), q(e, line), q(e, line, h), q(m, line, h + 6), q(s, line, h))}
             />
           );
         })}
-        <polyline fill="none" points={pts(q(a0, line, 7), q(a1, line, 7))} stroke="#4A3220" strokeWidth="2" />
+        <polyline fill="none" points={pts(q(a0, line, 7), q(a1, line, 7))} stroke="#6C4B30" strokeWidth="2" />
       </g>
     );
   }
@@ -195,7 +196,7 @@ const WallSegment = ({ line, axis, from, tier }: { line: number; axis: "row" | "
       {/* Walkway on top, then the face */}
       <polygon fill={top} points={pts(q(a0, line - THICK, H), q(a1, line - THICK, H), q(a1, line, H), q(a0, line, H))} />
       <polygon fill={face} points={pts(q(a0, line), q(a1, line), q(a1, line, H), q(a0, line, H))} />
-      <g opacity="0.45" stroke="#5E5748" strokeWidth="0.8">
+      <g opacity="0.45" stroke="#7A6E5C" strokeWidth="0.8">
         {Array.from({ length: courses }, (_, k) => (
           <g key={k}>
             <line x1={q(a0, line, (k + 1) * 7).x} x2={q(a1, line, (k + 1) * 7).x} y1={q(a0, line, (k + 1) * 7).y} y2={q(a1, line, (k + 1) * 7).y} />
@@ -240,7 +241,7 @@ const Tower = ({ c, r, tier }: { c: number; r: number; tier: Tier }) => {
   return (
     <svg
       aria-hidden="true"
-      className="absolute left-0 top-0 pointer-events-none"
+      className="dio-ink absolute left-0 top-0 pointer-events-none"
       height={BOARD_H}
       overflow="visible"
       style={{ zIndex: z }}
@@ -249,33 +250,33 @@ const Tower = ({ c, r, tier }: { c: number; r: number; tier: Tier }) => {
     >
       <ellipse cx={P(c, r).x + 14} cy={P(c, r).y + 6} fill="#1C2410" opacity="0.35" rx="34" ry="12" />
       {tier === "palisade" ? (
-        <g stroke="#3A2717" strokeWidth="0.8">
-          <polygon fill="#8C6540" points={front} />
-          <polygon fill="#6A4A2C" points={side} />
-          <polygon fill="#A07A4C" points={pts(P(c - s - 0.06, r + s + 0.06, H), P(c + s + 0.06, r + s + 0.06, H), peak)} />
-          <polygon fill="#7A5634" points={pts(P(c + s + 0.06, r - s - 0.06, H), P(c + s + 0.06, r + s + 0.06, H), peak)} />
+        <g stroke="#2B1F15" strokeWidth="0.8">
+          <polygon fill="#A87A47" points={front} />
+          <polygon fill="#835C33" points={side} />
+          <polygon fill="#C99A63" points={pts(P(c - s - 0.06, r + s + 0.06, H), P(c + s + 0.06, r + s + 0.06, H), peak)} />
+          <polygon fill="#A87A47" points={pts(P(c + s + 0.06, r - s - 0.06, H), P(c + s + 0.06, r + s + 0.06, H), peak)} />
         </g>
       ) : (
         <g>
-          <polygon fill="#B4AA95" points={front} />
-          <polygon fill="#8F8675" points={side} />
-          <polygon fill="#CFC6B2" points={top} />
+          <polygon fill="#BCB09A" points={front} />
+          <polygon fill="#978B76" points={side} />
+          <polygon fill="#DDD3C0" points={top} />
           <polygon fill="#2A251C" opacity="0.8" points={pts(P(c - 0.04, r + s, H - 18), P(c + 0.04, r + s, H - 18), P(c + 0.04, r + s, H - 8), P(c - 0.04, r + s, H - 8))} />
           {[-s, -s / 3, s / 3].map((o, i) => (
             <g key={i}>
-              <polygon fill="#B4AA95" points={pts(P(c + o, r + s, H), P(c + o + s / 3, r + s, H), P(c + o + s / 3, r + s, H + 8), P(c + o, r + s, H + 8))} />
-              <polygon fill="#8F8675" points={pts(P(c + s, r + o, H), P(c + s, r + o + s / 3, H), P(c + s, r + o + s / 3, H + 8), P(c + s, r + o, H + 8))} />
+              <polygon fill="#BCB09A" points={pts(P(c + o, r + s, H), P(c + o + s / 3, r + s, H), P(c + o + s / 3, r + s, H + 8), P(c + o, r + s, H + 8))} />
+              <polygon fill="#978B76" points={pts(P(c + s, r + o, H), P(c + s, r + o + s / 3, H), P(c + s, r + o + s / 3, H + 8), P(c + s, r + o, H + 8))} />
             </g>
           ))}
         </g>
       )}
       {tier !== "planned" && (
         <g>
-          <line stroke="#3A2717" strokeWidth="1.5" x1={flagBase.x} x2={flagBase.x} y1={flagBase.y} y2={flagBase.y - 22} />
+          <line stroke="#2B1F15" strokeWidth="1.5" x1={flagBase.x} x2={flagBase.x} y1={flagBase.y} y2={flagBase.y - 22} />
           <path
             className="motion-safe:animate-[pulse_3s_ease-in-out_infinite]"
             d={`M ${flagBase.x} ${flagBase.y - 22} q 8 -3 16 1 q -3 4 0 8 q -8 -3 -16 0 z`}
-            fill={tier === "fortress" ? "#E3A948" : "#B8432A"}
+            fill={tier === "fortress" ? "#F0BE5A" : "#C94B32"}
           />
         </g>
       )}
@@ -317,8 +318,8 @@ const FlatArt = ({ c, r, kind }: { c: number; r: number; kind: Flat }) => {
 
     return (
       <g>
-        <ellipse cx={m.x} cy={m.y} fill="#3D5F45" rx={TW * 0.4} ry={TH * 0.38} />
-        <ellipse cx={m.x} cy={m.y} fill="#4E7D84" rx={TW * 0.34} ry={TH * 0.31} />
+        <ellipse cx={m.x} cy={m.y} fill="#577734" rx={TW * 0.4} ry={TH * 0.38} />
+        <ellipse cx={m.x} cy={m.y} fill="#6FA9C2" rx={TW * 0.34} ry={TH * 0.31} />
         <path d={`M ${m.x - 18} ${m.y - 2} q 8 -4 16 0 M ${m.x + 2} ${m.y + 6} q 8 -4 16 0`} fill="none" opacity="0.5" stroke="#CFE2E0" strokeWidth="1.2" />
       </g>
     );
@@ -326,9 +327,9 @@ const FlatArt = ({ c, r, kind }: { c: number; r: number; kind: Flat }) => {
   if (kind === "clay") {
     return (
       <g>
-        <polygon fill="#7A5236" points={tilePoly(c, r, 0.12)} />
-        <polygon fill="#94603D" points={tilePoly(c, r, 0.24)} />
-        <polygon fill="#6A4430" points={tilePoly(c, r, 0.4)} />
+        <polygon fill="#B9603C" points={tilePoly(c, r, 0.12)} />
+        <polygon fill="#D9825C" points={tilePoly(c, r, 0.24)} />
+        <polygon fill="#924A2D" points={tilePoly(c, r, 0.4)} />
       </g>
     );
   }
@@ -337,13 +338,13 @@ const FlatArt = ({ c, r, kind }: { c: number; r: number; kind: Flat }) => {
 
   return (
     <g>
-      <polygon fill={gold ? "#A88A3E" : "#5C6E30"} points={tilePoly(c, r, 0.05)} />
+      <polygon fill={gold ? "#CFAE45" : "#6F9543"} points={tilePoly(c, r, 0.05)} />
       {Array.from({ length: rows }, (_, i) => {
         const t = 0.1 + (i / (rows - 1)) * 0.8;
         const a = P(c + 0.08, r + t);
         const b = P(c + 0.92, r + t);
 
-        return <line key={i} stroke={gold ? "#D2B45E" : "#7D9443"} strokeLinecap="round" strokeWidth="3.2" x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
+        return <line key={i} stroke={gold ? "#E9CC62" : "#9CC66A"} strokeLinecap="round" strokeWidth="3.2" x1={a.x} x2={b.x} y1={a.y} y2={b.y} />;
       })}
     </g>
   );
@@ -374,12 +375,12 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
     <svg aria-hidden="true" className="absolute inset-0" height={BOARD_H} viewBox={`0 0 ${BOARD_W} ${BOARD_H}`} width={BOARD_W}>
       <defs>
         <pattern height="46" id="dio-wood" patternUnits="userSpaceOnUse" width="54">
-          <rect fill="#24301A" height="46" width="54" />
-          <circle cx="12" cy="12" fill="#2F3F20" r="13" />
-          <circle cx="40" cy="20" fill="#2B3A1D" r="15" />
-          <circle cx="24" cy="38" fill="#33452A" r="12" />
-          <circle cx="8" cy="10" fill="#3A4E27" r="5" />
-          <circle cx="36" cy="16" fill="#3A4E27" r="5" />
+          <rect fill="#2C5430" height="46" width="54" />
+          <circle cx="12" cy="12" fill="#3A6B3C" r="13" />
+          <circle cx="40" cy="20" fill="#346238" r="15" />
+          <circle cx="24" cy="38" fill="#41763F" r="12" />
+          <circle cx="8" cy="10" fill="#4F8A4A" r="5" />
+          <circle cx="36" cy="16" fill="#4F8A4A" r="5" />
         </pattern>
         <radialGradient id="dio-sun" cx="0.38" cy="0.32" r="0.75">
           <stop offset="0" stopColor="#FFE9B0" stopOpacity="0.16" />
@@ -396,13 +397,13 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
         const r = Math.floor(k / N);
         const n = noise(c, r);
         const fill = inside(c, r)
-          ? ["#9A845E", "#A08A63", "#957F59"][Math.floor(n * 3)]
-          : ["#6C873C", "#70893F", "#68823A", "#748D44"][Math.floor(n * 4)];
+          ? ["#CFAF7B", "#D4B47F", "#C9A975"][Math.floor(n * 3)]
+          : ["#8AB055", "#90B65A", "#86AC52", "#95BA5E"][Math.floor(n * 4)];
 
         return <polygon key={k} fill={fill} points={tilePoly(c, r, -0.01)} />;
       })}
       {/* Soft edge where the meadow meets the woods */}
-      <polygon fill="none" opacity="0.7" points={pts(T, R, B, L)} stroke="#2F3F20" strokeLinejoin="round" strokeWidth="22" />
+      <polygon fill="none" opacity="0.7" points={pts(T, R, B, L)} stroke="#3A6B3C" strokeLinejoin="round" strokeWidth="22" />
 
       {/* Bare patches and tufts */}
       {Array.from({ length: 70 }, (_, i) => {
@@ -412,13 +413,13 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
         const inBailey = c > W0 && c < W1 && r > W0 && r < W1;
 
         return noise(i, i) > 0.5 ? (
-          <ellipse key={i} cx={p.x} cy={p.y} fill={inBailey ? "#B49D72" : "#8A8C4A"} opacity="0.35" rx={10 + noise(i, 3) * 16} ry={5 + noise(i, 4) * 6} />
+          <ellipse key={i} cx={p.x} cy={p.y} fill={inBailey ? "#E0C590" : "#A7BF6A"} opacity="0.35" rx={10 + noise(i, 3) * 16} ry={5 + noise(i, 4) * 6} />
         ) : (
           <path
             key={i}
             d={`M ${p.x - 3} ${p.y} l 2 -5 M ${p.x} ${p.y} l 0 -6 M ${p.x + 3} ${p.y} l -1 -5`}
             opacity="0.6"
-            stroke={inBailey ? "#7B6A48" : "#4F6A2B"}
+            stroke={inBailey ? "#9C8256" : "#5F8A3A"}
             strokeLinecap="round"
             strokeWidth="1.3"
           />
@@ -426,19 +427,19 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
       })}
 
       {/* Ditch or moat outside the walls */}
-      {tier === "palisade" && <path d={ring(0.28)} fill="#5A4429" fillRule="evenodd" opacity="0.75" />}
+      {tier === "palisade" && <path d={ring(0.28)} fill="#8E7146" fillRule="evenodd" opacity="0.75" />}
       {(tier === "stone" || tier === "fortress") && (
         <g>
-          <path d={ring(0.36)} fill="#4D3A25" fillRule="evenodd" />
-          <path d={ring(0.3)} fill="#3F6870" fillRule="evenodd" />
+          <path d={ring(0.36)} fill="#8E7146" fillRule="evenodd" />
+          <path d={ring(0.3)} fill="#4F879F" fillRule="evenodd" />
           <path d={ring(0.3)} fill="none" opacity="0.35" stroke="#CFE2E0" strokeDasharray="6 14" strokeWidth="1.2" />
           {/* Bridge at the gate */}
-          <polygon fill="#7A5634" points={pts(P(W1 - 0.05, W1 - 0.2), P(W1 + 0.45, W1 + 0.3), P(W1 + 0.3, W1 + 0.45), P(W1 - 0.2, W1 - 0.05))} />
+          <polygon fill="#A87A47" points={pts(P(W1 - 0.05, W1 - 0.2), P(W1 + 0.45, W1 + 0.3), P(W1 + 0.3, W1 + 0.45), P(W1 - 0.2, W1 - 0.05))} />
         </g>
       )}
       {tier === "planned" && (
         <g opacity="0.8">
-          <polygon fill="none" points={pts(P(W0, W0), P(W1, W0), P(W1, W1), P(W0, W1))} stroke="#E8D9B4" strokeDasharray="8 8" strokeWidth="2" />
+          <polygon fill="none" points={pts(P(W0, W0), P(W1, W0), P(W1, W1), P(W0, W1))} stroke="#F7EEDC" strokeDasharray="8 8" strokeWidth="2" />
           {[P(W0, W0), P(W1, W0), P(W0, W1), P(W1, W1)].map((p, i) => (
             <rect key={i} fill="#6B4A2B" height="14" width="4" x={p.x - 2} y={p.y - 12} />
           ))}
@@ -448,10 +449,10 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
       {/* Roads with wheel ruts */}
       {ROADS.map((rd, i) => (
         <g key={i} fill="none" strokeLinecap="round" strokeLinejoin="round">
-          <path d={roadD(rd.path)} opacity="0.55" stroke="#6E5A3A" strokeWidth={rd.inner ? 20 : 24} />
-          <path d={roadD(rd.path)} stroke={rd.inner ? "#B9A47C" : "#A88D60"} strokeWidth={rd.inner ? 15 : 18} />
-          <path d={roadD(rd.path)} opacity="0.35" stroke="#6E5A3A" strokeDasharray="14 10" strokeWidth="9" />
-          <path d={roadD(rd.path)} stroke={rd.inner ? "#B9A47C" : "#A88D60"} strokeWidth="5" />
+          <path d={roadD(rd.path)} opacity="0.55" stroke="#8E7146" strokeWidth={rd.inner ? 20 : 24} />
+          <path d={roadD(rd.path)} stroke={rd.inner ? "#E3CBA0" : "#D9BC88"} strokeWidth={rd.inner ? 15 : 18} />
+          <path d={roadD(rd.path)} opacity="0.35" stroke="#8E7146" strokeDasharray="14 10" strokeWidth="9" />
+          <path d={roadD(rd.path)} stroke={rd.inner ? "#E3CBA0" : "#D9BC88"} strokeWidth="5" />
         </g>
       ))}
 
@@ -477,7 +478,7 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
       {selected && (
         <polygon
           className="animate-pulse"
-          fill="#F2C66D"
+          fill="#F7D58A"
           fillOpacity="0.18"
           points={
             selected.corner
@@ -489,7 +490,7 @@ const Ground = ({ tier, selected }: { tier: Tier; selected?: Cell }) => {
                   P(selected.col, selected.row + (selected.span ?? 1))
                 )
           }
-          stroke="#F2C66D"
+          stroke="#F7D58A"
           strokeWidth="3"
         />
       )}
@@ -505,10 +506,10 @@ const WALKERS = [
   { path: ROADS[0].path, dur: 34, delay: 0, coat: "#5B6E8C" },
   { path: ROADS[0].path, dur: 41, delay: -18, coat: "#8C5B3A" },
   { path: ROADS[1].path, dur: 46, delay: -6, coat: "#7A7F3E" },
-  { path: ROADS[1].path, dur: 52, delay: -30, coat: "#9A4A36" },
+  { path: ROADS[1].path, dur: 52, delay: -30, coat: "#C94B32" },
   { path: ROADS[2].path, dur: 44, delay: -12, coat: "#6A5A8C" },
   { path: ROADS[2].path, dur: 50, delay: -35, coat: "#5B6E8C" },
-  { path: ROADS[3].path, dur: 18, delay: -4, coat: "#B8432A" },
+  { path: ROADS[3].path, dur: 18, delay: -4, coat: "#C94B32" },
 ];
 
 const Walkers = () => {
@@ -552,11 +553,11 @@ const Walkers = () => {
           repeatCount="indefinite"
         />
         <ellipse cx="2" cy="1" fill="#1C2410" opacity="0.35" rx="13" ry="3.5" />
-        <rect fill="#7A5634" height="7" rx="1" width="12" x="-12" y="-9" />
-        <rect fill="#D2B45E" height="4" rx="2" width="10" x="-11" y="-12" />
-        <circle cx="-6" cy="-2" fill="#3A2717" r="2.6" />
+        <rect fill="#A87A47" height="7" rx="1" width="12" x="-12" y="-9" />
+        <rect fill="#E9CC62" height="4" rx="2" width="10" x="-11" y="-12" />
+        <circle cx="-6" cy="-2" fill="#2B1F15" r="2.6" />
         <rect fill="#6A4A33" height="6" rx="2.5" width="9" x="2" y="-8" />
-        <circle cx="11" cy="-7" fill="#5A3D29" r="2.4" />
+        <circle cx="11" cy="-7" fill="#6C4B30" r="2.4" />
       </g>
     </svg>
   );
@@ -567,11 +568,11 @@ const Walkers = () => {
 const Pine = ({ x, y, s = 1 }: { x: number; y: number; s?: number }) => (
   <g transform={`translate(${x} ${y}) scale(${s})`}>
     <ellipse cx="9" cy="3" fill="#1C2410" opacity="0.4" rx="15" ry="5" />
-    <rect fill="#4A3220" height="9" width="4" x="-2" y="-8" />
+    <rect fill="#6C4B30" height="9" width="4" x="-2" y="-8" />
     {[0, 1, 2].map((i) => (
       <g key={i} transform={`translate(0 ${-12 - i * 11}) scale(${1 - i * 0.22})`}>
-        <polygon fill="#33502A" points="0,-22 -14,4 14,4" />
-        <polygon fill="#263F20" points="0,-22 14,4 0,4" />
+        <polygon fill="#3F7340" points="0,-22 -14,4 14,4" />
+        <polygon fill="#2E5932" points="0,-22 14,4 0,4" />
       </g>
     ))}
   </g>
@@ -580,11 +581,11 @@ const Pine = ({ x, y, s = 1 }: { x: number; y: number; s?: number }) => (
 const Oak = ({ x, y, s = 1 }: { x: number; y: number; s?: number }) => (
   <g transform={`translate(${x} ${y}) scale(${s})`}>
     <ellipse cx="10" cy="3" fill="#1C2410" opacity="0.4" rx="18" ry="6" />
-    <rect fill="#4A3220" height="14" width="5" x="-2.5" y="-12" />
-    <circle cx="-7" cy="-20" fill="#45622A" r="11" />
-    <circle cx="7" cy="-22" fill="#3E5A26" r="12" />
-    <circle cx="0" cy="-31" fill="#4F6E30" r="11" />
-    <circle cx="-4" cy="-30" fill="#61813A" r="5" />
+    <rect fill="#6C4B30" height="14" width="5" x="-2.5" y="-12" />
+    <circle cx="-7" cy="-20" fill="#6FA04A" r="11" />
+    <circle cx="7" cy="-22" fill="#4F7F36" r="12" />
+    <circle cx="0" cy="-31" fill="#7FB052" r="11" />
+    <circle cx="-4" cy="-30" fill="#9CC66A" r="5" />
   </g>
 );
 
@@ -594,7 +595,7 @@ const RaisedArt = ({ kind, seed }: { kind: Raised; seed: number }) => {
   const j = (k: number) => (noise(seed, k) - 0.5) * 10;
 
   return (
-    <svg aria-hidden="true" height={h} overflow="visible" viewBox={`${-w / 2} ${-h + TH / 2} ${w} ${h}`} width={w}>
+    <svg aria-hidden="true" className="dio-ink" height={h} overflow="visible" viewBox={`${-w / 2} ${-h + TH / 2} ${w} ${h}`} width={w}>
       {kind === "forest" && (
         <>
           <Pine s={1.05} x={-22 + j(1)} y={-6} />
@@ -613,27 +614,27 @@ const RaisedArt = ({ kind, seed }: { kind: Raised; seed: number }) => {
       {kind === "rocks" && (
         <g>
           <ellipse cx="8" cy="10" fill="#1C2410" opacity="0.35" rx="34" ry="10" />
-          <polygon fill="#8E887C" points="-28,8 -20,-14 -4,-20 6,4" />
-          <polygon fill="#6C675E" points="-4,-20 6,4 -6,10" />
-          <polygon fill="#9C968A" points="4,12 12,-6 26,-2 30,12" />
-          <polygon fill="#77726A" points="26,-2 30,12 20,14" />
-          <polygon fill="#857F73" points="-14,16 -10,6 0,8 0,18" />
+          <polygon fill="#B3ADA3" points="-28,8 -20,-14 -4,-20 6,4" />
+          <polygon fill="#8F897F" points="-4,-20 6,4 -6,10" />
+          <polygon fill="#C2BCB2" points="4,12 12,-6 26,-2 30,12" />
+          <polygon fill="#6E6962" points="26,-2 30,12 20,14" />
+          <polygon fill="#A39D93" points="-14,16 -10,6 0,8 0,18" />
         </g>
       )}
       {kind === "well" && (
         <g>
           <ellipse cx="6" cy="6" fill="#2A2015" opacity="0.35" rx="20" ry="7" />
-          <ellipse cx="0" cy="0" fill="#8F8675" rx="14" ry="7" />
-          <rect fill="#8F8675" height="10" width="28" x="-14" y="-10" />
-          <ellipse cx="0" cy="-10" fill="#B4AA95" rx="14" ry="7" />
-          <ellipse cx="0" cy="-10" fill="#2D4A4F" rx="9" ry="4.5" />
-          <rect fill="#5A3D29" height="26" width="3" x="-13" y="-34" />
-          <rect fill="#5A3D29" height="26" width="3" x="10" y="-34" />
-          <polygon fill="#7B5634" points="-17,-32 17,-32 10,-42 -10,-42" />
+          <ellipse cx="0" cy="0" fill="#978B76" rx="14" ry="7" />
+          <rect fill="#978B76" height="10" width="28" x="-14" y="-10" />
+          <ellipse cx="0" cy="-10" fill="#BCB09A" rx="14" ry="7" />
+          <ellipse cx="0" cy="-10" fill="#4F879F" rx="9" ry="4.5" />
+          <rect fill="#6C4B30" height="26" width="3" x="-13" y="-34" />
+          <rect fill="#6C4B30" height="26" width="3" x="10" y="-34" />
+          <polygon fill="#A87A47" points="-17,-32 17,-32 10,-42 -10,-42" />
         </g>
       )}
       {kind === "dummies" && (
-        <g stroke="#3A2717" strokeWidth="0.8">
+        <g stroke="#2B1F15" strokeWidth="0.8">
           {[
             [-18, -2],
             [4, 6],
@@ -641,10 +642,10 @@ const RaisedArt = ({ kind, seed }: { kind: Raised; seed: number }) => {
           ].map(([x, y], i) => (
             <g key={i} transform={`translate(${x} ${y})`}>
               <ellipse cx="4" cy="2" fill="#2A2015" opacity="0.35" rx="7" ry="2.5" stroke="none" />
-              <rect fill="#6A4A2C" height="22" width="2.5" x="-1.25" y="-20" />
-              <rect fill="#C9A86A" height="8" rx="3" width="9" x="-4.5" y="-18" />
-              <rect fill="#6A4A2C" height="2.5" width="16" x="-8" y="-16" />
-              <circle cx="0" cy="-22" fill="#C9A86A" r="3.5" />
+              <rect fill="#835C33" height="22" width="2.5" x="-1.25" y="-20" />
+              <rect fill="#E0BE7A" height="8" rx="3" width="9" x="-4.5" y="-18" />
+              <rect fill="#835C33" height="2.5" width="16" x="-8" y="-16" />
+              <circle cx="0" cy="-22" fill="#E0BE7A" r="3.5" />
             </g>
           ))}
         </g>
@@ -652,22 +653,22 @@ const RaisedArt = ({ kind, seed }: { kind: Raised; seed: number }) => {
       {kind === "hay" && (
         <g>
           <ellipse cx="6" cy="8" fill="#2A2015" opacity="0.35" rx="30" ry="9" />
-          <path d="M -24 6 Q -24 -20 -6 -24 Q 10 -20 10 6 Z" fill="#CFAE5A" />
-          <path d="M -6 -24 Q 10 -20 10 6 L 0 6 Q 2 -14 -6 -24 Z" fill="#AE8F45" />
-          <path d="M 8 10 Q 8 -8 19 -10 Q 30 -8 30 10 Z" fill="#C4A352" />
+          <path d="M -24 6 Q -24 -20 -6 -24 Q 10 -20 10 6 Z" fill="#F0D27A" />
+          <path d="M -6 -24 Q 10 -20 10 6 L 0 6 Q 2 -14 -6 -24 Z" fill="#D9B556" />
+          <path d="M 8 10 Q 8 -8 19 -10 Q 30 -8 30 10 Z" fill="#E6C66A" />
         </g>
       )}
       {kind === "stall" && (
-        <g stroke="#3A2717" strokeWidth="0.8">
+        <g stroke="#2B1F15" strokeWidth="0.8">
           <ellipse cx="6" cy="8" fill="#2A2015" opacity="0.35" rx="26" ry="8" stroke="none" />
-          <rect fill="#7B5634" height="10" width="34" x="-17" y="-6" />
-          <rect fill="#5A3D29" height="20" width="2" x="-17" y="-26" />
-          <rect fill="#5A3D29" height="20" width="2" x="15" y="-26" />
-          <path d="M -21 -24 L 21 -24 L 17 -34 L -17 -34 Z" fill="#B8432A" />
-          <path d="M -21 -24 L -14 -24 L -11 -34 L -17 -34 Z M -7 -24 L 0 -24 L 0 -34 L -6 -34 Z M 7 -24 L 14 -24 L 11 -34 L 6 -34 Z" fill="#E8D9B4" />
-          <circle cx="-9" cy="-8" fill="#D2B45E" r="3" stroke="none" />
-          <circle cx="-2" cy="-8" fill="#9A4A36" r="3" stroke="none" />
-          <circle cx="6" cy="-8" fill="#7D9443" r="3" stroke="none" />
+          <rect fill="#A87A47" height="10" width="34" x="-17" y="-6" />
+          <rect fill="#6C4B30" height="20" width="2" x="-17" y="-26" />
+          <rect fill="#6C4B30" height="20" width="2" x="15" y="-26" />
+          <path d="M -21 -24 L 21 -24 L 17 -34 L -17 -34 Z" fill="#C94B32" />
+          <path d="M -21 -24 L -14 -24 L -11 -34 L -17 -34 Z M -7 -24 L 0 -24 L 0 -34 L -6 -34 Z M 7 -24 L 14 -24 L 11 -34 L 6 -34 Z" fill="#F7EEDC" />
+          <circle cx="-9" cy="-8" fill="#E9CC62" r="3" stroke="none" />
+          <circle cx="-2" cy="-8" fill="#C94B32" r="3" stroke="none" />
+          <circle cx="6" cy="-8" fill="#9CC66A" r="3" stroke="none" />
         </g>
       )}
       {kind === "fire" && (
@@ -686,7 +687,7 @@ const RaisedArt = ({ kind, seed }: { kind: Raised; seed: number }) => {
       )}
       {kind === "sheep" && (
         <g>
-          <g fill="none" stroke="#6A4A2C" strokeWidth="2">
+          <g fill="none" stroke="#835C33" strokeWidth="2">
             <polygon points={`0,${-TH * 0.36} ${TW * 0.36},0 0,${TH * 0.36} ${-TW * 0.36},0`} />
           </g>
           {[
@@ -715,15 +716,18 @@ const Bubble = ({ tone, children }: { tone: "good" | "work"; children: React.Rea
   <span
     className={clsx(
       "flex items-center justify-center gap-1 h-7 min-w-7 px-1.5 rounded-full text-[11px] font-black shadow-[0_2px_6px_rgba(0,0,0,0.5)] border-2",
-      tone === "good" ? "bg-good text-[#1A120B] border-[#E6F5D9]" : "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
+      tone === "good" ? "bg-good text-[#0E0B08] border-[#E6F5D9]" : "bg-ember text-[#FBF6EC] border-[#FFD2B0]"
     )}
   >
     {children}
   </span>
 );
 
+/** Where the ground sits inside a piece of building art (fraction of its height). */
+const ART_FOOT = 98 / 128;
+
 const sizeFor = (cell: Cell) =>
-  cell.span === 2 ? TW * 2.05 : cell.building === "city-gate" ? TW * 1.55 : cell.corner ? TW * 1.15 : TW * 1.12;
+  cell.span === 2 ? TW * 2.15 : cell.building === "city-gate" ? TW * 1.5 : cell.corner ? TW * 1.2 : TW * 1.1;
 
 const BuildingOnPlot = ({
   b,
@@ -742,70 +746,22 @@ const BuildingOnPlot = ({
 }) => {
   const at = anchor(cell);
   const size = sizeFor(cell);
-  const unbuilt = st.level === 0 && !st.job;
   const Tag = interactive ? "button" : "div";
 
   return (
     <Tag
       aria-label={interactive ? `${b.name}, level ${st.level}` : undefined}
       className={clsx("absolute", interactive && "group")}
-      style={{ left: at.x - size / 2, top: at.y - size * 0.86, width: size, height: size, zIndex: at.z }}
+      style={{ left: at.x - size / 2, top: at.y - size * ART_FOOT, width: size, height: size, zIndex: at.z }}
       onClick={interactive ? onOpen : undefined}
     >
-      {unbuilt ? (
-        <>
-          {/* Building site: scaffold poles, a rope line and a faint plan of what goes here */}
-          <svg aria-hidden="true" className="absolute inset-0" overflow="visible" viewBox={`0 0 ${size} ${size}`}>
-            {[
-              [0.5, 0.7],
-              [0.82, 0.84],
-              [0.5, 0.98],
-              [0.18, 0.84],
-            ].map(([x, y], i) => (
-              <rect key={i} fill="#6B4A2B" height="22" rx="1.5" width="4" x={size * x - 2} y={size * y - 20} />
-            ))}
-            <polygon
-              fill="none"
-              points={`${size * 0.5},${size * 0.7 - 14} ${size * 0.82},${size * 0.84 - 14} ${size * 0.5},${size * 0.98 - 14} ${size * 0.18},${size * 0.84 - 14}`}
-              stroke="#D9C49A"
-              strokeWidth="1.5"
-            />
-            <rect fill="#8C6540" height="6" rx="1" transform={`rotate(-14 ${size * 0.62} ${size * 0.9})`} width={size * 0.22} x={size * 0.52} y={size * 0.88} />
-            <rect fill="#9E9584" height="7" rx="1" width={size * 0.12} x={size * 0.3} y={size * 0.86} />
-          </svg>
-          <Image
-            draggable={false}
-            alt=""
-            className="absolute left-1/2 -translate-x-1/2 bottom-[18%] w-[62%] h-[62%] object-contain opacity-35 sepia grayscale"
-            height={size}
-            src={buildingImage(b)}
-            width={size}
-          />
-        </>
-      ) : (
-        <Image
-          draggable={false}
-          alt=""
-          className={clsx(
-            "w-full h-full object-contain saturate-[0.82] brightness-[0.97] drop-shadow-[7px_8px_5px_rgba(20,26,10,0.5)] transition-transform",
-            interactive && "group-active:scale-95"
-          )}
-          height={size}
-          sizes={`${Math.round(size)}px`}
-          src={buildingImage(b)}
-          width={size}
-        />
-      )}
-
+      <BuildingArt
+        className={clsx("w-full h-full drop-shadow-[5px_6px_4px_rgba(20,30,10,0.35)] transition-transform", interactive && "group-active:scale-95")}
+        id={b.id}
+        level={st.job && st.level === 0 ? 1 : st.level}
+      />
       {/* Level shield */}
-      {st.level > 0 && (
-        <span className="absolute left-[14%] bottom-[8%] w-7 h-8 flex items-center justify-center font-display font-black text-[13px] text-[#1A120B] drop-shadow-[0_2px_2px_rgba(0,0,0,0.6)]">
-          <svg aria-hidden="true" className="absolute inset-0" viewBox="0 0 28 32">
-            <path d="M14 1 26 5v10c0 8-5 13-12 16C7 28 2 23 2 15V5z" fill="#E3A948" stroke="#7A5420" strokeWidth="2" />
-          </svg>
-          <span className="relative">{st.level}</span>
-        </span>
-      )}
+      {st.level > 0 && <LevelShield className="absolute left-[12%] bottom-[10%]" level={st.level} />}
 
       {/* Status bubble above the roof */}
       {interactive && (st.job || st.canUpgrade) && (
@@ -912,13 +868,13 @@ const Board = ({
 
 /** Dark woods beyond the edge of the map, so the land never ends in a hard line. */
 const Woods = () => (
-  <div aria-hidden="true" className="absolute inset-0 bg-[#24301A]">
+  <div aria-hidden="true" className="absolute inset-0 bg-[#2C5430]">
     <svg className="absolute inset-0 w-full h-full">
       <defs>
         <pattern height="46" id="dio-woods-bg" patternUnits="userSpaceOnUse" width="54">
-          <circle cx="12" cy="12" fill="#2F3F20" r="13" />
-          <circle cx="40" cy="20" fill="#2B3A1D" r="15" />
-          <circle cx="24" cy="38" fill="#33452A" r="12" />
+          <circle cx="12" cy="12" fill="#3A6B3C" r="13" />
+          <circle cx="40" cy="20" fill="#346238" r="15" />
+          <circle cx="24" cy="38" fill="#41763F" r="12" />
         </pattern>
       </defs>
       <rect fill="url(#dio-woods-bg)" height="100%" width="100%" />
@@ -982,7 +938,7 @@ const ZOOMS = [0.4, 0.55, 0.7, 0.85, 1, 1.2];
 /** Margin of woods around the map inside the scroll area. */
 const MX = 40;
 const MY = 30;
-const START_ZOOM = 0.7;
+const START_ZOOM = 0.85;
 
 /** The Build screen's castle: pan, pinch or +/− to zoom, tap a building. */
 export const Diorama = ({ onOpen, selectedId }: { onOpen: (b: BuildingDef) => void; selectedId?: string }) => {
