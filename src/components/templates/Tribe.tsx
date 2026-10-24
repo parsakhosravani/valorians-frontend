@@ -1,11 +1,22 @@
 "use client";
 
 import React, { FunctionComponent, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 
-import { Builder, Building, Drawer, VillageMap } from "@/components";
+import { Builder, Building, Drawer } from "@/components";
 import { Tabs } from "@/components/organisms/war/shared";
 import { BUILDINGS, BuildingDef } from "@/lib/game/config";
 import { useGame } from "@/context";
+
+// Three.js only loads when the village is shown.
+const Village3D = dynamic(() => import("@/components/organisms/tribe/Village3D"), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex items-center justify-center bg-ground">
+      <div className="h-10 w-10 rounded-full border-4 border-gold border-t-transparent animate-spin" />
+    </div>
+  ),
+});
 
 type View = "map" | "list";
 const VIEW_KEY = "valorians:build-view";
@@ -51,8 +62,8 @@ export const Tribe: FunctionComponent = () => {
       </div>
 
       {view === "map" ? (
-        <div className="flex-1 min-h-0 flex flex-col mt-2 mx-3 rounded-2xl overflow-hidden border border-line">
-          <VillageMap onOpen={setOpen} />
+        <div className="relative flex-1 min-h-0 mt-2 mx-3 rounded-2xl overflow-hidden border border-line">
+          <Village3D onOpen={setOpen} onUnsupported={() => changeView("list")} />
         </div>
       ) : (
         <div className="space-y-2.5 w-full px-3 pt-2 pb-4">
