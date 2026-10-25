@@ -207,34 +207,31 @@ test("defenders earn XP too, and raid attackers get theirs when the report arriv
   expect(atkAfter.troops.spearman.xp).toBeGreaterThan(0);
 });
 
-test("Arsenal upgrades: need the Arsenal and rank, cost resources, finish over time", () => {
-  let s = withBarracks();
-  expect(() => W.upgradeTroop(s, "spearman", T0)).toThrow("Build the Arsenal");
-  s.buildings.arsenal = 1;
-  s = W.upgradeTroop(s, "spearman", T0);
-  expect(s.resources.iron).toBe(14000 - 500);
-  expect(() => W.upgradeTroop(s, "spearman", T0)).toThrow("already forging");
-  const ends = s.forge!.endsAt;
-  expect(E.advance(s, ends - 1).troops.spearman.level).toBe(0);
-  s = E.advance(s, ends);
-  expect(s.troops.spearman.level).toBe(1);
-  expect(s.forge).toBeNull();
-  expect(E.unitMultiplier(s, "spearman")).toBeCloseTo(1.05);
-
-  // A Recruit regiment stops at level 2
-  s.troops.spearman.level = 2;
-  expect(() => W.upgradeTroop(s, "spearman", T0)).toThrow("more battle experience");
-  s.troops.spearman.xp = 100; // Soldier → cap 4
-  expect(() => W.upgradeTroop(s, "spearman", T0)).not.toThrow();
-});
 
 test("states saved before ranks existed still work everywhere", () => {
   const old = E.createInitialState(T0) as any;
   delete old.troops;
-  delete old.forge;
   old.army.spearman = 10;
   const s = E.advance(old, T0 + 1000);
   expect(W.powerScore(s)).toBeGreaterThan(0);
   expect(W.defensePower(s)).toBeGreaterThan(0);
-  expect(E.normalizeState(old).troops.spearman).toEqual({ xp: 0, level: 0 });
+  expect(E.normalizeState(old).troops.spearman).toEqual({ xp: 0 });
+});
+
+test("only the troop types that fought gain rank", () => {
+  const s = withBarracks(3);
+  s.army = { ...E.emptyArmy(), spearman: 50, archer: 50 };
+  const { state } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 50 }, T0, 0.5);
+  expect(state.troops.spearman.xp).toBeGreaterThan(0);
+  expect(state.troops.archer.xp).toBe(0);
+});
+
+test("old saves with Arsenal upgrades load without them", () => {
+  const old = E.createInitialState(T0) as any;
+  old.troops.spearman = { xp: 500, level: 4 };
+  old.forge = { unit: "archer", toLevel: 1, startedAt: T0, endsAt: T0 + 1000 };
+  const s = E.normalizeState(old) as any;
+  expect(s.forge).toBeUndefined();
+  expect(s.troops.spearman).toEqual({ xp: 500 });
+  expect(E.unitMultiplier(s, "spearman")).toBeCloseTo(1.08); // Veteran, no upgrade bonus
 });

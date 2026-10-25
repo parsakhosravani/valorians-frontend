@@ -3,106 +3,64 @@ import { useState } from "react";
 import clsx from "clsx";
 import Image from "next/image";
 
-import { ArmyLine, Card, Stepper, UnitBadge, fmt } from "./shared";
+import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
 
 import { Button } from "@/components";
 import { RESOURCES, useGame } from "@/context";
-import {
-  BUILDING_BY_ID,
-  MAX_BATCH,
-  RESOURCE_IDS,
-  UNITS,
-  UPGRADE_BONUS,
-  UPGRADE_BUILDING,
-  UnitDef,
-} from "@/lib/game/config";
+import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef } from "@/lib/game/config";
 import { trainingEndsAt } from "@/lib/game/engine";
-import {
-  attackPower,
-  defensePower,
-  troopInfo,
-  troopUpgradeInfo,
-  unitAttack,
-  unitDefense,
-  unitUnlocked,
-} from "@/lib/game/war";
+import { attackPower, defensePower, troopInfo, unitAttack, unitDefense, unitUnlocked } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
 
-/** Rank name, XP to the next rank and the upgrade from the Arsenal. */
-const RankRow = ({ unit }: { unit: UnitDef }) => {
-  const { state, now, upgradeTroop } = useGame();
-  const [busy, setBusy] = useState(false);
-  const t = troopInfo(state, unit.id);
-  const up = troopUpgradeInfo(state, unit.id);
-  const hasArsenal = (state.buildings[UPGRADE_BUILDING.building] ?? 0) >= UPGRADE_BUILDING.level;
-  const forging = state.forge?.unit === unit.id ? state.forge : null;
-  const canPay = RESOURCE_IDS.every((r) => state.resources[r] >= up.cost[r]);
+type Group = "all" | "infantry" | "cavalry" | "siege";
 
-  const onUpgrade = async () => {
-    setBusy(true);
-    await upgradeTroop(unit.id);
-    setBusy(false);
-  };
+const GROUP_OF: Record<string, Exclude<Group, "all">> = {
+  barracks: "infantry",
+  stable: "cavalry",
+  "siege-workshop": "siege",
+};
+
+const GROUPS: { id: Group; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "infantry", label: "Infantry" },
+  { id: "cavalry", label: "Cavalry" },
+  { id: "siege", label: "Siege" },
+];
+
+/** Rank name, XP bar and how to earn the next rank. */
+const RankBar = ({ unit }: { unit: UnitDef }) => {
+  const { state } = useGame();
+  const t = troopInfo(state, unit.id);
 
   return (
-    <div className="mt-2 flex flex-col gap-1">
+    <div className="flex flex-col gap-1">
       <div className="flex justify-between text-xs">
         <span>
           🎖️ <b className="text-[#E3A948]">{t.rankName}</b>
-          {t.rank > 0 && <span className="text-good"> +{t.rank * 4}%</span>}
+          {t.rank > 0 && <span className="text-good"> +{Math.round(t.rank * RANK_BONUS * 100)}% attack &amp; defense</span>}
         </span>
         <span className="text-[#B19C80]">
-          {t.nextRank ? `${fmt(t.xp)} / ${fmt(t.nextRank.xp)} XP to ${t.nextRank.name}` : `${fmt(t.xp)} XP · top rank`}
+          {t.nextRank ? `${fmt(t.xp)} / ${fmt(t.nextRank.xp)} XP` : `${fmt(t.xp)} XP · top rank`}
         </span>
       </div>
-      <div className="h-1 rounded-full bg-[#1E1610] overflow-hidden">
-        <div className="h-full bg-[#E3A948]" style={{ width: `${Math.max(2, t.progress * 100)}%` }} />
+      <div className="h-1.5 rounded-full bg-[#120D09] overflow-hidden">
+        <div className="h-full rounded-full bg-[#E3A948]" style={{ width: `${Math.max(2, t.progress * 100)}%` }} />
       </div>
-      {hasArsenal && (
-        <div className="flex items-center justify-between gap-2 text-xs mt-1">
-          <span>
-            ⚒️ Upgrade <b>{up.level}</b>/{t.cap}
-            {up.level > 0 && <span className="text-good"> +{Math.round(up.level * UPGRADE_BONUS * 100)}%</span>}
-            {forging ? (
-              <span className="text-[#B19C80]"> · forging, {formatDuration(forging.endsAt - now)} left</span>
-            ) : up.maxed ? (
-              <span className="text-[#B19C80]"> · max</span>
-            ) : up.rankLocked ? (
-              <span className="text-[#B19C80]"> · win battles to rank up</span>
-            ) : null}
-          </span>
-          {!forging && !up.maxed && !up.rankLocked && (
-            <Button disabled={busy || !canPay || !!state.forge} size="small" variant="outline" onClick={onUpgrade}>
-              Upgrade
-            </Button>
-          )}
-        </div>
-      )}
-      {hasArsenal && !forging && !up.maxed && !up.rankLocked && (
-        <div className="flex flex-wrap gap-x-3 text-[11px] text-[#B19C80]">
-          {RESOURCES.map((r) => (
-            <span key={r.id} className={clsx("flex items-center gap-1", state.resources[r.id] < up.cost[r.id] && "text-[#F08A6C]")}>
-              <Image alt={r.name} className="h-3 w-3" src={r.img} />
-              {fmt(up.cost[r.id])}
-            </span>
-          ))}
-          <span>⏱ {formatDuration(up.seconds * 1000)}</span>
-        </div>
+      {t.nextRank && (
+        <p className="text-[11px] text-[#B19C80]">
+          Win battles with these troops to reach <b className="text-sub">{t.nextRank.name}</b>. Only troops that fight
+          gain rank.
+        </p>
       )}
     </div>
   );
 };
 
-const UnitCard = ({ unit }: { unit: UnitDef }) => {
+const TrainPanel = ({ unit }: { unit: UnitDef }) => {
   const { state, rates, train } = useGame();
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
-  const unlocked = unitUnlocked(state, unit.id);
-  const away = state.marches.reduce((n, m) => n + (m.units[unit.id] ?? 0), 0);
-  const affordable = Math.min(
-    MAX_BATCH,
-    ...RESOURCE_IDS.map((r) => Math.floor(state.resources[r] / unit.cost[r]))
-  );
+  const affordable = Math.min(MAX_BATCH, ...RESOURCE_IDS.map((r) => Math.floor(state.resources[r] / unit.cost[r])));
   const seconds = unit.time * rates.trainSpeedMultiplier * count;
 
   const onTrain = async () => {
@@ -114,62 +72,98 @@ const UnitCard = ({ unit }: { unit: UnitDef }) => {
   };
 
   return (
-    <Card className={clsx(!unlocked && "opacity-60")}>
-      <div className="flex gap-2.5 items-start">
-        <UnitBadge size={44} unit={unit.id} />
+    <div className="flex flex-col gap-2 bg-[#120D09]/60 rounded-xl p-2.5">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+        {RESOURCES.map((r) => (
+          <span
+            key={r.id}
+            className={clsx("flex items-center gap-1", state.resources[r.id] < unit.cost[r.id] * count && "text-[#F08A6C]")}
+          >
+            <Image alt={r.name} className="h-3.5 w-3.5" src={r.img} />
+            {fmt(unit.cost[r.id] * count)}
+          </span>
+        ))}
+        <span className="text-[#B19C80]">⏱ {formatDuration(seconds * 1000)}</span>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <Stepper max={Math.max(1, affordable)} value={count} onChange={(n) => setCount(Math.max(1, n))} />
+        <Button disabled={busy || affordable < count || count < 1} size="small" onClick={onTrain}>
+          Train
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onToggle: () => void }) => {
+  const { state } = useGame();
+  const t = troopInfo(state, unit.id);
+  const away = state.marches.reduce((n, m) => n + (m.units[unit.id] ?? 0), 0);
+  const training = state.training.filter((x) => x.unit === unit.id).reduce((n, x) => n + x.count - x.done, 0);
+
+  return (
+    <Card className={clsx("!p-0 overflow-hidden transition-colors", open && "border-[#E3A948]/60")}>
+      <button className="w-full flex items-center gap-3 p-3 text-left" onClick={onToggle}>
+        <UnitBadge rank={t.rank} size={46} unit={unit.id} />
         <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-baseline">
-            <h3 className="font-bold">{unit.name}</h3>
-            <span className="text-sm">
-              <b>{fmt(state.army[unit.id])}</b>
-              <span className="text-[#B19C80]"> home{away ? ` · ${fmt(away)} away` : ""}</span>
-            </span>
+          <div className="flex items-center gap-1.5">
+            <h3 className="font-bold truncate">{unit.name}</h3>
+            {t.rank > 0 && (
+              <span className="text-[10px] font-bold px-1.5 rounded bg-[#E3A948]/15 text-[#E3A948] shrink-0">{t.rankName}</span>
+            )}
           </div>
-          <p className="text-xs text-[#B19C80]">{unit.description}</p>
-          <div className="flex gap-3 text-xs mt-1">
+          <div className="flex gap-2.5 text-xs text-sub mt-0.5">
             <span>⚔️ {fmt(unitAttack(state, unit.id))}</span>
             <span>🛡️ {fmt(unitDefense(state, unit.id))}</span>
             <span>🎒 {unit.carry}</span>
-            <span className="text-[#F08A6C]">-{unit.upkeep} crop/h</span>
+            <span className="text-[#B19C80]">⏱ {unit.speed}s/tile</span>
           </div>
         </div>
-      </div>
-
-      {unlocked && <RankRow unit={unit} />}
-
-      {unlocked ? (
-        <div className="mt-2 flex flex-col gap-2">
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {RESOURCES.map((r) => (
-              <span
-                key={r.id}
-                className={clsx("flex items-center gap-1", state.resources[r.id] < unit.cost[r.id] * count && "text-[#F08A6C]")}
-              >
-                <Image alt={r.name} className="h-3.5 w-3.5" src={r.img} />
-                {fmt(unit.cost[r.id] * count)}
-              </span>
-            ))}
-            <span className="text-[#B19C80]">⏱ {formatDuration(seconds * 1000)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <Stepper max={Math.max(1, affordable)} value={count} onChange={(n) => setCount(Math.max(1, n))} />
-            <Button disabled={busy || affordable < count || count < 1} size="small" onClick={onTrain}>
-              Train
-            </Button>
+        <div className="text-right shrink-0">
+          <div className="font-bold text-lg leading-none">{fmt(state.army[unit.id])}</div>
+          <div className="text-[10px] text-[#B19C80] mt-0.5">
+            {away ? `+${fmt(away)} away` : training ? `+${fmt(training)} training` : "at home"}
           </div>
         </div>
-      ) : (
-        <p className="mt-2 text-xs text-[#E3A948]">
-          🔒 Build {BUILDING_BY_ID[unit.requires.building].name} to level {unit.requires.level} to unlock
-        </p>
+        <span className={clsx("text-[#B19C80] text-xs transition-transform", open && "rotate-180")}>▼</span>
+      </button>
+
+      {open && (
+        <div className="flex flex-col gap-3 px-3 pb-3">
+          <p className="text-xs text-[#B19C80]">
+            {unit.description} <span className="text-[#F08A6C]">Eats {unit.upkeep} crop/h.</span>
+          </p>
+          <RankBar unit={unit} />
+          <TrainPanel unit={unit} />
+        </div>
       )}
     </Card>
   );
 };
 
+/** One line for a troop that isn't unlocked yet. */
+const LockedRow = ({ unit }: { unit: UnitDef }) => (
+  <div className="flex items-center gap-3 px-3 py-2 rounded-xl border border-dashed border-line opacity-70">
+    <span className="text-xl grayscale">
+      <UnitEmoji unit={unit.id} />
+    </span>
+    <span className="flex-1 text-sm font-bold">{unit.name}</span>
+    <span className="text-[11px] text-[#E3A948]">
+      🔒 {BUILDING_BY_ID[unit.requires.building].name} {unit.requires.level}
+    </span>
+  </div>
+);
+
 export const ArmyTab = () => {
   const { state, rates, now } = useGame();
+  const [group, setGroup] = useState<Group>("all");
+  const [open, setOpen] = useState<string | null>(null);
   const home = state.army;
+  const inGroup = UNITS.filter((u) => group === "all" || GROUP_OF[u.requires.building] === group);
+  const unlocked = inGroup.filter((u) => unitUnlocked(state, u.id));
+  const locked = inGroup.filter((u) => !unitUnlocked(state, u.id));
+  const countIn = (g: Group) =>
+    UNITS.filter((u) => g === "all" || GROUP_OF[u.requires.building] === g).reduce((n, u) => n + home[u.id], 0);
 
   return (
     <div className="flex flex-col gap-2">
@@ -189,21 +183,27 @@ export const ArmyTab = () => {
       </Card>
 
       {state.training.length > 0 && (
-        <Card>
-          <h3 className="font-bold text-sm mb-1">Training</h3>
+        <Card className="flex flex-col gap-2">
+          <h3 className="font-bold text-sm">Training</h3>
           {state.training.map((t, i) => {
             const unit = UNITS.find((u) => u.id === t.unit)!;
             const end = trainingEndsAt(t);
             const started = now >= t.startsAt;
+            const progress = started ? (now - t.startsAt) / Math.max(1, end - t.startsAt) : 0;
 
             return (
-              <div key={i} className="flex justify-between text-sm">
-                <span>
-                  {unit.icon} {unit.name} {fmt(t.done)}/{fmt(t.count)}
-                </span>
-                <span className="text-[#B19C80]">
-                  {started ? `${formatDuration(end - now)} left` : `starts in ${formatDuration(t.startsAt - now)}`}
-                </span>
+              <div key={i} className="flex flex-col gap-1">
+                <div className="flex justify-between text-sm">
+                  <span>
+                    <UnitEmoji unit={unit.id} /> {unit.name} {fmt(t.done)}/{fmt(t.count)}
+                  </span>
+                  <span className="text-[#B19C80]">
+                    {started ? `${formatDuration(end - now)} left` : `starts in ${formatDuration(t.startsAt - now)}`}
+                  </span>
+                </div>
+                <div className="h-1 rounded-full bg-[#120D09] overflow-hidden">
+                  <div className="h-full bg-[#9DD07F]" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+                </div>
               </div>
             );
           })}
@@ -224,9 +224,32 @@ export const ArmyTab = () => {
         </Card>
       )}
 
-      {UNITS.map((u) => (
-        <UnitCard key={u.id} unit={u} />
+      <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        {GROUPS.map((g) => (
+          <button
+            key={g.id}
+            className={clsx(
+              "h-8 px-3 rounded-full text-xs font-bold border shrink-0",
+              group === g.id ? "bg-[#E3A948] text-[#1A120B] border-[#E3A948]" : "bg-panel border-line text-[#B19C80]"
+            )}
+            onClick={() => setGroup(g.id)}
+          >
+            {g.label} <span className="opacity-70">{fmt(countIn(g.id))}</span>
+          </button>
+        ))}
+      </div>
+
+      {unlocked.map((u) => (
+        <UnitRow key={u.id} open={open === u.id} unit={u} onToggle={() => setOpen(open === u.id ? null : u.id)} />
       ))}
+      {locked.length > 0 && (
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="text-[10px] tracking-wider text-[#B19C80] px-1">LOCKED</div>
+          {locked.map((u) => (
+            <LockedRow key={u.id} unit={u} />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
