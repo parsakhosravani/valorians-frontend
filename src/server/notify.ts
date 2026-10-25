@@ -13,12 +13,8 @@ import type { RaidReport } from "@/lib/game/war";
 
 const token = () => process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
 
-const appLink = (param?: string) => {
-  const bot = process.env.NEXT_PUBLIC_BOT_ADDRESS;
-  const app = process.env.NEXT_PUBLIC_APP_SHORT_NAME || "start";
-
-  return bot ? `https://t.me/${bot}/${app}${param ? `?startapp=${param}` : ""}` : null;
-};
+/** The game's address (the Mini App URL registered with BotFather). */
+const appUrl = () => (process.env.APP_URL || "https://valorians-legend.vercel.app").replace(/\/$/, "");
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
@@ -38,15 +34,19 @@ const inMinutes = (ms: number) => {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h ${m % 60}m`;
 };
 
-/** Sends one message. Resolves even on failure. */
-export async function sendToPlayer(userId: number, html: string, button = "⚔️ Open Valorians", param?: string) {
+/**
+ * Sends one message with a button that opens the game on `path` (e.g. the
+ * battle reports). It is a web_app button: in the bot's private chat it opens
+ * the Mini App directly. (t.me links back into the same bot often did nothing
+ * when tapped.) Resolves even on failure.
+ */
+export async function sendToPlayer(userId: number, html: string, button = "⚔️ Open Valorians", path = "/hall") {
   const t = token();
 
   if (!t || process.env.NOTIFICATIONS === "off") return;
-  const link = appLink(param);
 
   try {
-    await fetch(`https://api.telegram.org/bot${t}/sendMessage`, {
+    await fetch(`${process.env.TELEGRAM_API_BASE || "https://api.telegram.org"}/bot${t}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
@@ -55,8 +55,8 @@ export async function sendToPlayer(userId: number, html: string, button = "⚔�
         chat_id: userId,
         text: html,
         parse_mode: "HTML",
-        disable_web_page_preview: true,
-        ...(link ? { reply_markup: { inline_keyboard: [[{ text: button, url: link }]] } } : {}),
+        link_preview_options: { is_disabled: true },
+        reply_markup: { inline_keyboard: [[{ text: button, web_app: { url: `${appUrl()}${path}` } }]] },
       }),
     });
   } catch {
@@ -73,7 +73,8 @@ export const notify = {
       `🔥 <b>${esc(attacker)}</b> is marching on your tribe!\n\n` +
         `Army: ${armyText(units)}${units ? "" : " (build a Watchtower to see which troops)"}\n` +
         `Arrives in <b>${inMinutes(travelMs)}</b>. Train defenders or upgrade your walls now.`,
-      "🛡️ Prepare defenses"
+      "🛡️ Prepare defenses",
+      "/battle?tab=army"
     );
   },
 
@@ -83,17 +84,19 @@ export const notify = {
       `🛡️ <b>You held off ${esc(attacker)}!</b>\n\n` +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
         `They lost: ${armyText(r.attackerLosses)}\nYou lost: ${armyText(r.defenderLosses)}`,
-      "📜 See the report"
+      "📜 See the report",
+      "/battle?tab=reports"
     );
   },
 
-  raided(defenderId: number, attacker: string, r: RaidReport) {
+  raided(defenderId: number, attacker: string, r: RaidReport, attackerId?: number) {
     return sendToPlayer(
       defenderId,
       `💀 <b>${esc(attacker)} raided your tribe</b> and took ${fmt(lootTotal(r))} resources.\n\n` +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
         `You lost: ${armyText(r.defenderLosses)}\nYou're shielded for 2 hours. Time for revenge?`,
-      "⚔️ Take revenge"
+      "⚔️ Take revenge",
+      attackerId ? `/battle?revenge=${attackerId}` : "/battle?tab=reports"
     );
   },
 
@@ -106,14 +109,16 @@ export const notify = {
           `🏆 <b>Victory at ${esc(target)}!</b>\n\n` +
             `Loot: ${fmt(lootTotal(r))} resources${r.coins ? ` + ${fmt(r.coins)} coins` : ""}\n` +
             `Lost: ${armyText(r.attackerLosses)}\nYour army is home in ${inMinutes(home)}.`,
-          "📜 See the report"
+          "📜 See the report",
+          "/battle?tab=reports"
         )
       : sendToPlayer(
           attackerId,
           `💀 <b>Defeat at ${esc(target)}.</b>\n\n` +
             `Your attack ${fmt(r.attack)} vs their defense ${fmt(r.defense)}.\n` +
             `Lost: ${armyText(r.attackerLosses)}\nScout first and bring more troops next time.`,
-          "⚔️ Back to war"
+          "📜 See the report",
+          "/battle?tab=reports"
         );
   },
 
@@ -127,7 +132,8 @@ export const notify = {
       sellerId,
       `🤝 <b>${esc(buyer)}</b> took your offer: ${fmt(t.giveAmount)} ${t.give} for ${fmt(t.wantAmount)} ${t.want}.\n\n` +
         `Merchants arrive with your ${t.want} in <b>${inMinutes(travelMs)}</b>.`,
-      "🤝 Open the market"
+      "🤝 Open my trades",
+      "/market?tab=mine"
     );
   },
 
@@ -135,7 +141,8 @@ export const notify = {
     return sendToPlayer(
       attackerId,
       `🛡️ <b>${esc(target)}</b> was shielded when your army arrived, so it turned back home.`,
-      "⚔️ Find another target"
+      "🗺️ Find another target",
+      "/battle?tab=map"
     );
   },
 };
