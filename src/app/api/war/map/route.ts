@@ -3,7 +3,7 @@ import { homeOf, mapView } from "@/server/map";
 
 export const dynamic = "force-dynamic";
 
-/** The world map around your tribe (or ?x=&y=, or ?focus=<playerId>), with camps and armies on the move. */
+/** The world map around your tribe (or ?x=&y=, or ?focus=<playerId>; ?r= radius 8–30), with camps and armies on the move. */
 export const GET = handler(
   async ({ req, player, now }) => {
     const q = req.nextUrl.searchParams;
@@ -12,7 +12,7 @@ export const GET = handler(
     const focus = Number(q.get("focus")) || 0;
     const center = focus ? await homeOf(focus) : x != null && y != null ? { x: Number(x), y: Number(y) } : undefined;
 
-    return mapView(player, now, center);
+    return mapView(player, now, center, Number(q.get("r")) || undefined);
   },
   { resolveBattles: true }
 );
