@@ -1,17 +1,21 @@
 "use client";
-import { useEffect, useState } from "react";
-import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import Image, { StaticImageData } from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
 
+import coinImg from "~/images/resources/coin.webp";
+import timeImg from "~/images/resources/time.webp";
+
+import { ACTIVE_QUESTS, QUEST_ICONS } from "@/components/organisms/quest/QuestDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { BUILDINGS, RESOURCE_IDS, STAMINA_PER_TAP, STREAK_REWARDS } from "@/lib/game/config";
-import { buildingUpgradeInfo, getRates, streakStatus } from "@/lib/game/engine";
-import { campStatus, powerScore } from "@/lib/game/war";
+import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, buildingImage } from "@/lib/game/config";
+import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
+import { campReward, campStatus, powerScore } from "@/lib/game/war";
+import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { CastlePreview } from "@/components/organisms/tribe/Diorama";
 
 type ReportItem = {
   id: number;
@@ -23,267 +27,344 @@ type ReportItem = {
   report: { loot: Record<string, number> };
 };
 
-const Svg = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <svg
-    aria-hidden="true"
-    className={className}
-    fill="none"
-    height="30"
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    strokeWidth="2"
-    viewBox="0 0 24 24"
-    width="30"
-  >
-    {children}
-  </svg>
-);
-
-const ICONS = {
-  claim: (
-    <Svg>
-      <rect height="12" rx="1.5" width="18" x="3" y="9" />
-      <path d="M3 13h18M12 9v12M12 9c-1.5-3-6-4-6-1s4 1 6 1zM12 9c1.5-3 6-4 6-1s-4 1-6 1z" />
-    </Svg>
-  ),
-  mine: (
-    <Svg>
-      <path d="M14 4c3 0 6 2 7 5M3 21l9-9M10 4c-3 0-6 2-7 5" />
-      <path d="M14 4 10 4l2 8z" />
-    </Svg>
-  ),
-  build: (
-    <Svg>
-      <path d="m15 12-8.5 8.5a2.1 2.1 0 1 1-3-3L12 9" />
-      <path d="M17.6 6.4 20 4M14 4l6 6-4 4-6-6z" />
-    </Svg>
-  ),
-  raid: (
-    <Svg>
-      <path d="M14.5 17.5 3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2" />
-      <path d="M9.5 17.5 21 6V3h-3L6.5 14.5M11 19l-6-6M8 16l-4 4M5 21l-2-2" />
-    </Svg>
-  ),
-};
-
-type TileProps = {
-  icon: React.ReactNode;
+type Task = {
+  key: string;
+  img: StaticImageData | string;
   title: string;
-  sub: string;
-  hot?: boolean;
-  badge?: string;
-  href?: string;
-  onClick?: () => void;
-  disabled?: boolean;
+  sub?: string;
+  /** done = checked off; wait = in progress, nothing to do yet. */
+  state: "todo" | "done" | "wait";
+  tone?: "gold" | "danger";
+  action?: { label: string; href?: string; onClick?: () => void; busy?: boolean };
 };
 
-/** One of the four big actions. "Hot" ones glow so the next step is obvious. */
-const Tile = ({ icon, title, sub, hot, badge, href, onClick, disabled }: TileProps) => {
-  const body = (
-    <>
+const TaskRow = ({ t }: { t: Task }) => {
+  const done = t.state === "done";
+
+  return (
+    <li className={clsx("flex items-center gap-3 py-2.5", done && "opacity-55")}>
       <span
         className={clsx(
-          "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2",
-          hot ? "bg-gold text-[#1A120B] border-[#FBE3A6]" : "bg-panel2 text-goldtext border-line"
+          "w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-2",
+          done ? "bg-good border-good text-[#1A120B]" : t.state === "wait" ? "border-muted border-dashed" : "border-gold"
         )}
       >
-        {icon}
+        {done && (
+          <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5" viewBox="0 0 24 24" width="14">
+            <path d="m5 12.5 4.5 4.5L19 7" />
+          </svg>
+        )}
       </span>
-      <span className="flex flex-col min-w-0 text-left">
-        <span className="font-display font-black text-[17px] leading-tight">{title}</span>
-        <span className={clsx("text-[13px] font-bold leading-snug", hot ? "text-goldtext" : "text-sub")}>{sub}</span>
+      <Image alt="" className="w-9 h-9 object-contain shrink-0 rounded-lg" height={72} src={t.img} width={72} />
+      <span className="flex-1 min-w-0 flex flex-col">
+        <span className={clsx("font-bold leading-tight", done && "line-through decoration-muted")}>{t.title}</span>
+        {t.sub && <span className={clsx("text-xs font-bold", t.tone === "danger" ? "text-[#FFB27A]" : "text-muted")}>{t.sub}</span>}
       </span>
-      {badge && (
-        <span className="absolute -top-2 -right-1 min-w-6 h-6 px-1.5 rounded-full bg-ember text-[#FFF4EA] text-xs font-black flex items-center justify-center border-2 border-ground">
-          {badge}
-        </span>
-      )}
-    </>
-  );
-  const cls = clsx(
-    "relative flex items-center gap-3 p-3 rounded-2xl border transition-transform active:scale-[0.97]",
-    hot
-      ? "bg-gradient-to-br from-[#3A2915] to-panel border-gold shadow-[0_0_22px_rgba(227,169,72,0.22)]"
-      : "bg-panel border-line",
-    disabled && "opacity-60"
-  );
-
-  return href ? (
-    <Link className={cls} href={href as any}>
-      {body}
-    </Link>
-  ) : (
-    <button className={cls} disabled={disabled} onClick={onClick}>
-      {body}
-    </button>
+      {t.action &&
+        !done &&
+        (t.action.href ? (
+          <Link
+            className={clsx(
+              "shrink-0 h-9 px-3.5 rounded-[10px] font-display font-black text-sm flex items-center active:scale-95 transition-transform",
+              t.tone === "danger" ? "bg-ember text-[#FFF4EA]" : t.tone === "gold" ? "bg-gold text-[#1A120B]" : "bg-panel2 text-goldtext border border-line"
+            )}
+            href={t.action.href as any}
+          >
+            {t.action.label}
+          </Link>
+        ) : (
+          <button
+            className="shrink-0 h-9 px-3.5 rounded-[10px] font-display font-black text-sm bg-gold text-[#1A120B] active:scale-95 transition-transform disabled:opacity-60"
+            disabled={t.action.busy}
+            onClick={t.action.onClick}
+          >
+            {t.action.label}
+          </button>
+        ))}
+    </li>
   );
 };
 
 export const Hall = () => {
   useBackButtonReset();
   const { telegram } = useTelegramContext();
-  const { state, rates, now, me, authHeader, claimStreak } = useGame();
+  const { state, rates, now, me, authHeader, claimStreak, upgradeBuilding } = useGame();
   const [news, setNews] = useState<ReportItem | null>(null);
-  const [claiming, setClaiming] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     if (!authHeader) return;
     apiRequest<{ reports: ReportItem[] }>(authHeader, "war/reports")
-      .then((r) => setNews(r.reports.find((x) => x.role === "defender" && now - x.at < 24 * 3600e3) ?? null))
+      .then((r) => setNews(r.reports.find((x) => x.role === "defender" && !x.won && now - x.at < 24 * 3600e3) ?? null))
       .catch(() => {});
   }, [authHeader]);
 
-  const streak = streakStatus(state, now);
-  const reward = STREAK_REWARDS[streak.next - 1];
-  const strikes = Math.floor(state.energy / STAMINA_PER_TAP);
-  const freeBuilders = rates.builders - state.queue.length;
-  const ready = BUILDINGS.filter((b) => {
-    const info = buildingUpgradeInfo(state, b.id);
+  const run = async (key: string, fn: () => Promise<boolean>) => {
+    setBusy(key);
+    const ok = await fn();
 
-    return (
-      (state.buildings[b.id] ?? 0) > 0 &&
-      !info.maxed &&
-      !state.queue.some((q) => q.building === b.id) &&
-      RESOURCE_IDS.every((r) => state.resources[r] >= info.cost)
-    );
-  }).length;
-  const nextJob = [...state.queue].sort((a, b) => a.endsAt - b.endsAt)[0];
-  const campReady = campStatus(state, state.camps.cleared + 1, now).state === "new";
-  const armyHome = Object.values(state.army).reduce((a, b) => a + b, 0);
-  const shielded = state.shieldUntil > now;
-
-  const onClaim = async () => {
-    setClaiming(true);
-    const ok = await claimStreak();
-
-    setClaiming(false);
+    setBusy(null);
     if (ok) telegram?.WebApp.HapticFeedback.notificationOccurred("success");
   };
 
-  const loot = news ? Object.values(news.report.loot ?? {}).reduce((a, b) => a + b, 0) : 0;
+  const options = useMemo(() => upgradeOptions(state), [state]);
+  const tasks: Task[] = [];
+
+  // 1. Daily reward
+  const streak = streakStatus(state, now);
+  const reward = STREAK_REWARDS[streak.next - 1];
+
+  tasks.push(
+    streak.claimable
+      ? {
+          key: "streak",
+          img: coinImg,
+          title: `Claim day ${streak.next} reward`,
+          sub: `${compact(reward.coins)} coins${reward.resources ? " + resource chest" : ""}`,
+          state: "todo",
+          tone: "gold",
+          action: { label: "Claim", onClick: () => run("streak", claimStreak), busy: busy === "streak" },
+        }
+      : { key: "streak", img: coinImg, title: `Day ${streak.current} reward claimed`, sub: "Come back tomorrow", state: "done" }
+  );
+
+  // 2. Revenge
+  if (news?.opponentId) {
+    const lost = Object.values(news.report.loot ?? {}).reduce((a, b) => a + b, 0);
+
+    tasks.push({
+      key: "revenge",
+      img: buildingImage(BUILDING_BY_ID["war-hall"]),
+      title: `Take revenge on ${news.opponent}`,
+      sub: `Raided you ${formatDuration(now - news.at)} ago · took ${compact(lost)}`,
+      state: "todo",
+      tone: "danger",
+      action: { label: "Revenge", href: `/battle?revenge=${news.opponentId}` },
+    });
+  }
+
+  // 3. Build
+  const advice = recommendUpgrade(state, options);
+  const freeBuilders = rates.builders - state.queue.length;
+
+  if (advice) {
+    const o = options.find((x) => x.building.id === advice.id)!;
+
+    tasks.push({
+      key: "build",
+      img: buildingImage(o.building),
+      title: `${o.level === 0 ? "Build" : "Upgrade"} ${o.building.name} to ${o.toLevel}`,
+      sub: `${advice.reason} · ${compact(o.cost)} each`,
+      state: "todo",
+      tone: "gold",
+      action: { label: o.level === 0 ? "Build" : "Upgrade", onClick: () => run("build", () => upgradeBuilding(o.building.id)), busy: busy === "build" },
+    });
+  } else if (freeBuilders <= 0) {
+    const next = [...state.queue].sort((a, b) => a.endsAt - b.endsAt)[0];
+
+    tasks.push({
+      key: "build",
+      img: buildingImage(BUILDING_BY_ID[next.building]),
+      title: `${BUILDING_BY_ID[next.building].name} → ${next.toLevel} under way`,
+      sub: `Builders busy · next done in ${formatDuration(next.endsAt - now)}`,
+      state: "wait",
+      action: { label: "View", href: "/tribe" },
+    });
+  } else {
+    const soonest = options
+      .filter((o) => !o.maxed && !o.job && o.hoursToAfford !== null)
+      .sort((a, b) => (a.hoursToAfford ?? 0) - (b.hoursToAfford ?? 0))[0];
+
+    if (soonest) {
+      tasks.push({
+        key: "build",
+        img: buildingImage(soonest.building),
+        title: `Save up for ${soonest.building.name} ${soonest.toLevel}`,
+        sub: `Affordable in ~${formatDuration((soonest.hoursToAfford ?? 0) * 3600e3)} · or mine to speed it up`,
+        state: "wait",
+        action: { label: "View", href: "/tribe" },
+      });
+    }
+  }
+
+  // 4. Daily Mine
+  const strikes = Math.floor(state.energy / STAMINA_PER_TAP);
+
+  tasks.push(
+    strikes > 0
+      ? {
+          key: "mine",
+          img: RESOURCES[0].img,
+          title: "Strike in the Daily Mine",
+          sub: `${strikes} strikes left today`,
+          state: "todo",
+          action: { label: "Mine", href: "/resources" },
+        }
+      : { key: "mine", img: RESOURCES[0].img, title: "Mined today", sub: "Stamina refills at dawn (UTC)", state: "done" }
+  );
+
+  // 5. Army
+  const barracks = state.buildings["barracks"] ?? 0;
+  const armyHome = Object.values(state.army).reduce((a, b) => a + b, 0);
+
+  if (barracks === 0) {
+    tasks.push({
+      key: "army",
+      img: buildingImage(BUILDING_BY_ID["barracks"]),
+      title: "Build Barracks to train troops",
+      sub: "Troops raid camps and defend your tribe",
+      state: "todo",
+      action: { label: "Go", href: "/tribe" },
+    });
+  } else if (state.training.length) {
+    const end = Math.max(...state.training.map(trainingEndsAt));
+
+    tasks.push({
+      key: "army",
+      img: buildingImage(BUILDING_BY_ID["barracks"]),
+      title: "Troops in training",
+      sub: `All done in ${formatDuration(end - now)}`,
+      state: "wait",
+    });
+  } else {
+    tasks.push({
+      key: "army",
+      img: buildingImage(BUILDING_BY_ID["barracks"]),
+      title: "Train troops",
+      sub: armyHome ? `${compact(armyHome)} at home` : "Your tribe has no army yet",
+      state: "todo",
+      action: { label: "Train", href: "/battle?tab=army" },
+    });
+  }
+
+  // 6. Barbarian camp
+  const nextCamp = state.camps.cleared + 1;
+
+  if (armyHome > 0 && campStatus(state, nextCamp, now).state === "new") {
+    const r = campReward(state, nextCamp);
+
+    tasks.push({
+      key: "camp",
+      img: buildingImage(BUILDING_BY_ID["military-command"]),
+      title: `Raid barbarian camp ${nextCamp}`,
+      sub: `First win: ${compact(r.resources)} each + ${compact(r.coins)} coins`,
+      state: "todo",
+      action: { label: "Raid", href: "/battle?tab=camps" },
+    });
+  }
+
+  // 7. Social tasks
+  const openQuests = ACTIVE_QUESTS.filter((q) => questStatus(state, q.id, now).state !== "claimed");
+
+  if (openQuests.length) {
+    const coins = openQuests.reduce((s, q) => s + q.reward.coins, 0);
+
+    tasks.push({
+      key: "quests",
+      img: QUEST_ICONS[openQuests[0].id],
+      title: `${openQuests.length} saga task${openQuests.length > 1 ? "s" : ""} open`,
+      sub: `${compact(coins)} coins and more people`,
+      state: "todo",
+      action: { label: "Open", href: "/quest" },
+    });
+  }
+
+  // To-dos first, then in progress, then done.
+  const order = { todo: 0, wait: 1, done: 2 };
+
+  tasks.sort((a, b) => order[a.state] - order[b.state]);
+  const doneCount = tasks.filter((t) => t.state === "done").length;
+  const shielded = state.shieldUntil > now;
 
   return (
-    <div className="flex flex-col gap-3 pb-2">
-      {/* Hero: your own island */}
-      <section className="relative">
-        <CastlePreview height={260} />
-        <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ground via-ground/80 to-transparent pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 px-4 pb-1 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-display font-black text-[28px] leading-none truncate [text-shadow:0_2px_6px_#000]">
-              {me.firstName || "Your tribe"}
-            </h1>
-            <p className="mt-1 text-sm font-extrabold text-goldtext [text-shadow:0_1px_3px_#000]">
-              Power {compact(powerScore(state))} · Pop. {compact(state.population)}
-            </p>
-          </div>
-          <Link
-            className="shrink-0 flex flex-col items-center px-3 py-1.5 rounded-xl bg-panel/90 border border-gold"
-            href="/leaderboard"
-          >
-            <span className="text-[10px] font-extrabold tracking-[0.12em] text-muted">RANK</span>
-            <span className="font-display font-black text-lg leading-none text-goldtext">#{me.rank}</span>
-          </Link>
+    <div className="flex flex-col gap-3 px-3 pt-1 pb-4">
+      {/* Who you are */}
+      <section className="flex items-center gap-3 bg-panel border border-line rounded-2xl p-3">
+        <Image
+          alt=""
+          className="w-16 h-16 object-contain rounded-xl bg-panel2 shrink-0"
+          height={128}
+          src={buildingImage(BUILDING_BY_ID["town-hall"])}
+          width={128}
+        />
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display font-black text-[22px] leading-tight truncate">{me.firstName || "Your tribe"}</h1>
+          <p className="text-sm font-bold text-sub">
+            Town Hall {state.buildings["town-hall"] ?? 0} · Power {compact(powerScore(state))} · Pop. {compact(state.population)}
+          </p>
         </div>
+        <Link className="shrink-0 flex flex-col items-center px-3 py-1.5 rounded-xl bg-panel2 border border-gold" href="/leaderboard">
+          <span className="text-[10px] font-extrabold tracking-[0.12em] text-muted">RANK</span>
+          <span className="font-display font-black text-lg leading-none text-goldtext">#{me.rank}</span>
+        </Link>
       </section>
 
-      {/* Stock at a glance */}
-      <div className="grid grid-cols-4 gap-1.5 px-4">
+      {/* Today */}
+      <section className="bg-panel border border-line rounded-2xl px-3 pt-3 pb-1">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display font-bold text-lg">Today</h2>
+          <span className="text-xs font-extrabold text-muted">
+            {doneCount} of {tasks.length} done
+          </span>
+        </div>
+        <div className="h-1.5 mt-2 rounded-full bg-ground overflow-hidden">
+          <div className="h-full bg-good rounded-full transition-[width] duration-500" style={{ width: `${(doneCount / tasks.length) * 100}%` }} />
+        </div>
+        <ul className="divide-y divide-line/60">
+          {tasks.map((t) => (
+            <TaskRow key={t.key} t={t} />
+          ))}
+        </ul>
+      </section>
+
+      {/* Production at a glance */}
+      <section className="bg-panel border border-line rounded-2xl p-3 flex flex-col gap-2.5">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display font-bold text-lg">Production</h2>
+          <span className="flex items-center gap-1 text-xs font-extrabold text-goldtext">
+            <Image alt="" className="w-4 h-4" src={coinImg} />+{compact(rates.coinsPerHour)}/h
+          </span>
+        </div>
         {RESOURCES.map((r) => {
+          const have = state.resources[r.id];
           const perHour = rates.productionPerHour[r.id];
+          const full = have >= rates.capacity;
+          const hoursToFull = perHour > 0 && !full ? (rates.capacity - have) / perHour : null;
 
           return (
-            <div key={r.id} className="flex items-center gap-1.5 bg-panel border border-line rounded-xl px-2 py-1.5">
-              <Image alt={r.name} className="w-5 h-5 shrink-0" src={r.img} />
-              <div className="flex flex-col leading-none min-w-0">
-                <span className="text-[13px] font-extrabold">{compact(state.resources[r.id])}</span>
-                <span className={clsx("text-[10px] font-bold", perHour < 0 ? "text-bad" : "text-good")}>
-                  {perHour >= 0 ? "+" : ""}
-                  {compact(perHour)}/h
-                </span>
+            <div key={r.id} className="flex items-center gap-2.5">
+              <Image alt={r.name} className="w-6 h-6 shrink-0" src={r.img} />
+              <div className="flex-1 min-w-0 flex flex-col gap-1">
+                <div className="flex justify-between text-xs font-bold">
+                  <span>
+                    {compact(have)} <span className="text-muted">/ {compact(rates.capacity)}</span>
+                  </span>
+                  <span className={perHour < 0 ? "text-bad" : "text-good"}>
+                    {perHour >= 0 ? "+" : ""}
+                    {compact(perHour)}/h
+                    <span className="text-muted font-bold">
+                      {full ? " · full" : hoursToFull !== null && hoursToFull < 24 ? ` · full in ${formatDuration(hoursToFull * 3600e3)}` : ""}
+                    </span>
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-ground overflow-hidden">
+                  <div
+                    className={clsx("h-full rounded-full", full ? "bg-bad" : "bg-gold")}
+                    style={{ width: `${Math.min(100, (have / rates.capacity) * 100)}%` }}
+                  />
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
-
-      {/* The four things to do */}
-      <div className="grid grid-cols-1 gap-2.5 px-4">
-        <Tile
-          disabled={!streak.claimable || claiming}
-          hot={streak.claimable}
-          icon={ICONS.claim}
-          sub={
-            streak.claimable
-              ? `Day ${streak.next} · ${compact(reward.coins)} coins${reward.resources ? " + chest" : ""}`
-              : `Day ${streak.current} done · back tomorrow`
-          }
-          title={streak.claimable ? "Claim daily reward" : "Reward claimed"}
-          onClick={onClaim}
-        />
-        <Tile
-          hot={strikes > 0}
-          href="/resources"
-          icon={ICONS.mine}
-          sub={strikes > 0 ? `${strikes} strikes left today` : "Miners rest until dawn (UTC)"}
-          title="Daily Mine"
-        />
-        <Tile
-          badge={ready ? String(ready) : undefined}
-          hot={freeBuilders > 0 && ready > 0}
-          href="/tribe"
-          icon={ICONS.build}
-          sub={
-            freeBuilders > 0
-              ? ready
-                ? `${ready} upgrade${ready > 1 ? "s" : ""} ready · ${freeBuilders} builder${freeBuilders > 1 ? "s" : ""} free`
-                : `${freeBuilders} builder${freeBuilders > 1 ? "s" : ""} free`
-              : `All builders busy · ${formatDuration(nextJob.endsAt - now)}`
-          }
-          title="Build"
-        />
-        <Tile
-          hot={armyHome > 0 && (campReady || !shielded)}
-          href={news && !news.won && news.opponentId ? `/battle?revenge=${news.opponentId}` : "/battle"}
-          icon={ICONS.raid}
-          sub={
-            armyHome === 0
-              ? "Train an army first"
-              : campReady
-              ? `Barbarian camp ${state.camps.cleared + 1} awaits`
-              : "Raid a tribe for loot"
-          }
-          title="Raid"
-        />
-      </div>
-
-      {/* One line of news */}
-      {news && (
-        <Link
-          className={clsx(
-            "mx-4 flex items-center gap-2 rounded-xl px-3 py-2.5 border text-sm font-bold",
-            news.won ? "bg-panel border-line" : "bg-[#2A140E] border-[#8A3B23]"
-          )}
-          href={news.won || !news.opponentId ? "/battle" : (`/battle?revenge=${news.opponentId}` as any)}
-        >
-          <span className="flex-1 min-w-0 truncate">
-            {news.won
-              ? `${news.opponent} attacked you and lost`
-              : `${news.opponent} raided you and took ${compact(loot)}`}
-          </span>
-          <span className={clsx("shrink-0 font-black", news.won ? "text-muted" : "text-[#FFB27A]")}>
-            {news.won ? formatDuration(now - news.at) + " ago" : "Revenge ›"}
-          </span>
-        </Link>
-      )}
+      </section>
 
       {shielded && (
-        <p className="text-center text-xs font-bold text-muted">
+        <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-muted">
+          <Image alt="" className="w-4 h-4" src={timeImg} />
           Protected by a shield for {formatDuration(state.shieldUntil - now)}
         </p>
       )}
-      <p className="sr-only">Coins per hour: {compact(getRates(state).coinsPerHour)}</p>
     </div>
   );
 };
