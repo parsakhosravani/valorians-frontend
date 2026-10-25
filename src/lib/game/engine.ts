@@ -68,6 +68,8 @@ export type March = {
   loot: Record<ResourceId, number>;
   coins: number;
   returnsAt: number;
+  /** Map tile the army is walking home from (for drawing it on the map). */
+  from?: { x: number; y: number };
 };
 
 export type WarStats = {

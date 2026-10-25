@@ -83,11 +83,29 @@ interface GameContextType {
   claimQuest: (id: QuestId) => Promise<boolean>;
   train: (unit: UnitId, count: number) => Promise<boolean>;
   /** Attack a player (target = id) or a barbarian camp (camp = level). */
-  attack: (to: { target?: number; camp?: number }, units: Army) => Promise<BattleReport | null>;
+  /** Sends an army across the map; resolves to its arrival time, or null if it couldn't leave. */
+  attack: (to: { target?: number; camp?: number }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
+  recall: (marchId: number) => Promise<boolean>;
+  /** Quietly reloads the player's state (e.g. after a battle was fought on the server). */
+  refresh: () => Promise<void>;
+  scout: (target: number) => Promise<ScoutReport | null>;
   authHeader: string | null;
 }
 
 export type BattleReport = RaidReport & { attackerName: string; defenderName: string };
+
+export type ScoutReport = {
+  id: number;
+  name: string;
+  at: number;
+  cost: number;
+  terrain: string;
+  defense: number;
+  troops: Record<string, number>;
+  loot: Record<string, number>;
+  shieldUntil: number;
+  power: number;
+};
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
@@ -325,12 +343,24 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),
     attack: async (to, units) => {
-      const res = await send<PlayerView & { report: BattleReport }>(
-        to.camp ? "war/camp" : "war/raid",
-        to.camp ? { level: to.camp, units } : { target: to.target, units }
-      );
+      const res = await send<PlayerView & { march: { id: number; arrivesAt: number } }>("war/march", { ...to, units }, "Army on the march");
 
-      return res?.report ?? null;
+      return res?.march ?? null;
+    },
+    recall: (id) => act("war/recall", { id }, "Army turned back"),
+    refresh: async () => {
+      if (!authHeader) return;
+      try {
+        await flush();
+        accept(await apiRequest<PlayerView>(authHeader, "me"));
+      } catch {
+        // A missed refresh is fine; the next action brings the state up to date.
+      }
+    },
+    scout: async (target) => {
+      const res = await send<PlayerView & { scout: ScoutReport }>("war/scout", { target });
+
+      return res?.scout ?? null;
     },
     authHeader,
   };

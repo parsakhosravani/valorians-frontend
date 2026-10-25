@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { AuthError, AuthResult, authenticate } from "./auth";
 import { getOrCreatePlayer, mutatePlayer, Player, playerView } from "./players";
+import { resolveDueAttacks } from "./war";
 
 import { GameError, GameState } from "@/lib/game/engine";
 
@@ -14,12 +15,26 @@ const fail = (status: number, error: string, code: string) =>
 
 type Ctx = { req: NextRequest; auth: AuthResult; player: Player; now: number; body: any };
 
-/** Wraps a route: authenticates, loads the player, maps errors to JSON. */
-export function handler(fn: (ctx: Ctx) => Promise<Response | object> | Response | object) {
+/**
+ * Wraps a route: authenticates, loads the player, maps errors to JSON.
+ * `resolveBattles` first fights any battles whose armies have arrived, so the
+ * player's state includes their results.
+ */
+export function handler(
+  fn: (ctx: Ctx) => Promise<Response | object> | Response | object,
+  opts: { resolveBattles?: boolean } = {}
+) {
   return async (req: NextRequest) => {
     try {
       const auth = authenticate(req.headers.get("authorization"));
       const now = Date.now();
+
+      if (opts.resolveBattles) {
+        await resolveDueAttacks(now).catch((e) => {
+          // eslint-disable-next-line no-console
+          console.error("resolveDueAttacks", e);
+        });
+      }
       const player = await getOrCreatePlayer(auth, now);
       let body: any = {};
       if (req.method !== "GET") {

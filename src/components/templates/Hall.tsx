@@ -249,7 +249,7 @@ export const Hall = () => {
       title: `Raid barbarian camp ${nextCamp}`,
       sub: `First win: ${compact(r.resources)} each + ${compact(r.coins)} coins`,
       state: "todo",
-      action: { label: "Raid", href: "/battle?tab=camps" },
+      action: { label: "Raid", href: "/battle?tab=map" },
     });
   }
 

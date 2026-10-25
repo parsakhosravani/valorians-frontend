@@ -252,6 +252,8 @@ export type UnitDef = {
   time: number;
   /** Crop eaten per hour per unit. */
   upkeep: number;
+  /** Seconds to cross one map tile. An army moves at its slowest unit. */
+  speed: number;
   requires: { building: string; level: number };
   description: string;
 };
@@ -259,25 +261,25 @@ export type UnitDef = {
 export const UNITS: UnitDef[] = [
   {
     id: "spearman", name: "Spearman", icon: "🛡️", attack: 12, defense: 18, carry: 25,
-    cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1,
+    cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 1 },
-    description: "Cheap, sturdy defender.",
+    description: "Cheap, sturdy defender. Strong against cavalry.",
   },
   {
     id: "archer", name: "Archer", icon: "🏹", attack: 22, defense: 10, carry: 15,
-    cost: { iron: 35, wood: 55, clay: 15, crop: 20 }, time: 20, upkeep: 1,
+    cost: { iron: 35, wood: 55, clay: 15, crop: 20 }, time: 20, upkeep: 1, speed: 27,
     requires: { building: "barracks", level: 3 },
     description: "Strong attack, weak in defense.",
   },
   {
     id: "cavalry", name: "Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
-    cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3,
+    cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3, speed: 12,
     requires: { building: "stable", level: 1 },
-    description: "Hits hard and carries the most loot.",
+    description: "Fastest. Hits hard and carries the most loot, but weak in forests and against spears.",
   },
   {
     id: "ram", name: "Battering Ram", icon: "🪵", attack: 30, defense: 5, carry: 0,
-    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 4,
+    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 4, speed: 45,
     requires: { building: "siege-workshop", level: 1 },
     description: "Each ram breaks 2% of the enemy's City Gate bonus.",
   },
@@ -301,9 +303,25 @@ export const hiddenResources = (hideoutLevel: number) => Math.round(500 * Math.p
 /** Raiders can take at most this share of what isn't hidden. */
 export const MAX_LOOT_SHARE = 0.5;
 
-/** Seconds an army is away on a raid before it comes home with loot. */
+/** Seconds an army is away on a raid before it comes home with loot (used when no map distance is known). */
 export const RAID_TRAVEL_SECONDS = 90;
 export const CAMP_TRAVEL_SECONDS = 45;
+
+// ─── World map ───────────────────────────────────────────────────────────────
+
+/** The world is MAP_SIZE × MAP_SIZE tiles; (0,0) is the top-left corner. */
+export const MAP_SIZE = 120;
+/** Tiles between neighbouring tribes when new players are placed. */
+export const TRIBE_SPACING = 4;
+/** Shortest possible one-way march. */
+export const MIN_MARCH_SECONDS = 20;
+/** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
+export const SCOUT_COST_PER_TILE = 10;
+export const SCOUT_MIN_COST = 30;
+/** Spearmen defend this much better against the cavalry share of an attack. */
+export const SPEAR_VS_CAVALRY = 0.5;
+/** Cavalry loses this much attack when fighting in a forest. */
+export const FOREST_CAVALRY_PENALTY = 0.25;
 
 /** New players can't be attacked for this long. */
 export const NEW_PLAYER_SHIELD_MS = 72 * 3600 * 1000;

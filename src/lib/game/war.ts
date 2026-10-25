@@ -8,6 +8,7 @@ import {
   CAMP_REPEAT_COOLDOWN_MS,
   CAMP_REPEAT_SHARE,
   CAMP_TRAVEL_SECONDS,
+  FOREST_CAVALRY_PENALTY,
   LUCK,
   MAX_BATCH,
   MAX_CAMP_LEVEL,
@@ -18,6 +19,7 @@ import {
   RAM_WALL_BREAK,
   RESOURCE_IDS,
   ResourceId,
+  SPEAR_VS_CAVALRY,
   UNITS,
   UNIT_BY_ID,
   UNIT_IDS,
@@ -36,6 +38,7 @@ import {
   totalArmy,
   trainingEndsAt,
 } from "./engine";
+import { Point, TERRAIN, Terrain } from "./map";
 
 const emptyLoot = (): Record<ResourceId, number> => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
 
@@ -89,6 +92,42 @@ export function defensePower(s: GameState, rams = 0) {
   const troops = UNITS.reduce((sum, u) => sum + u.defense * s.army[u.id], 0);
   const wall = r.wallBonus * Math.max(0, 1 - rams * RAM_WALL_BREAK);
   return (troops + r.flatDefense + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
+}
+
+/**
+ * Attack and defense for one battle, with the strategy rules applied:
+ * - the defender's terrain adds defense (hills +20%, forest +10%)
+ * - cavalry fights 25% weaker in a forest
+ * - spearmen defend 50% better against the cavalry share of the attack
+ * `defender` is null for a barbarian camp, which uses `campDef`.
+ */
+export function battleNumbers(
+  attacker: GameState,
+  sent: Army,
+  defender: GameState | null,
+  terrain: Terrain = "plains",
+  campDef = 0
+) {
+  const bonus = 1 + getRates(attacker).attackBonus;
+  let cav = UNIT_BY_ID.cavalry.attack * (sent.cavalry ?? 0) * bonus;
+  const rest = attackPower(attacker, sent) - cav;
+
+  if (terrain === "forest") cav *= 1 - FOREST_CAVALRY_PENALTY;
+  const attack = rest + cav;
+  const cavShare = attack > 0 ? cav / attack : 0;
+  const ground = 1 + TERRAIN[terrain].defense;
+  let defense: number;
+
+  if (defender) {
+    const r = getRates(defender);
+    const spears = UNIT_BY_ID.spearman.defense * defender.army.spearman * (1 + r.defenseBonus);
+
+    defense = defensePower(defender, sent.ram ?? 0) * ground + spears * SPEAR_VS_CAVALRY * cavShare;
+  } else {
+    defense = campDef * ground;
+  }
+
+  return { attack, defense };
 }
 
 export function powerScore(s: GameState) {
@@ -203,12 +242,21 @@ export type RaidReport = BattleOutcome & {
  * Step 2: the battle, applied to the defender. Returns the defender's new
  * state and the report the attacker needs.
  */
+export type MapOpts = {
+  terrain?: Terrain;
+  /** One-way march time; the army gets home this long after the battle. */
+  travelMs?: number;
+  /** Where the battle was, so the march home can be drawn. */
+  from?: Point;
+};
+
 export function defendRaid(
   defender0: GameState,
   attacker: GameState,
   sent: Army,
   now: number,
-  rand: number
+  rand: number,
+  opts: MapOpts = {}
 ): { state: GameState; report: RaidReport } {
   if (defender0.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
   const d = cloneState(defender0);
@@ -216,9 +264,10 @@ export function defendRaid(
   const dr = getRates(d);
 
   const defenders = { ...d.army };
+  const nums = battleNumbers(attacker, sent, d, opts.terrain);
   const outcome = resolve(
-    attackPower(attacker, sent),
-    defensePower(d, sent.ram),
+    nums.attack,
+    nums.defense,
     luckFrom(rand),
     sent,
     defenders,
@@ -256,13 +305,20 @@ export function defendRaid(
       defenders,
       loot,
       coins: 0,
-      returnsAt: now + Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier),
+      returnsAt: now + (opts.travelMs ?? Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier)),
     },
   };
 }
 
 /** Step 3: survivors (and healed troops) march home with the loot. */
-export function receiveRaidReport(s0: GameState, report: RaidReport, targetName: string, now: number, rand: number) {
+export function receiveRaidReport(
+  s0: GameState,
+  report: RaidReport,
+  targetName: string,
+  now: number,
+  rand: number,
+  from?: Point
+) {
   const s = cloneState(s0);
   const units = survivorsOf(report.sent, report.attackerLosses);
   for (const u of UNIT_IDS) units[u] += report.attackerHealed[u];
@@ -274,6 +330,7 @@ export function receiveRaidReport(s0: GameState, report: RaidReport, targetName:
       loot: report.loot,
       coins: report.coins,
       returnsAt: report.returnsAt,
+      ...(from ? { from } : {}),
     });
   }
   if (report.attackerWon) s.war.attacksWon += 1;
@@ -299,20 +356,25 @@ export function campReward(s: GameState, level: number) {
   return { resources: Math.round(r.resources * share), coins: Math.round(r.coins * share), first };
 }
 
-/** Attack a barbarian camp. Resolved at once; troops come home with the reward. */
-export function raidCamp(s0: GameState, level: number, units: Army, now: number, rand: number) {
+/** Troops leave for a barbarian camp. Checks the camp can be attacked now. */
+export function dispatchCamp(s0: GameState, level: number, units: Army, now: number) {
   level = Math.floor(level);
   if (!(level >= 1 && level <= MAX_CAMP_LEVEL)) throw new GameError("Unknown camp");
   const st = campStatus(s0, level, now);
   if (st.state === "locked") throw new GameError("Clear the previous camp first", "locked");
   if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");
-
   const s = cloneState(s0);
   const sent = validateSend(s, units);
-  const r = getRates(s);
-  const outcome = resolve(attackPower(s, sent), campDefense(level), luckFrom(rand), sent, emptyArmy(), r.healShare, 0);
-
   for (const u of UNIT_IDS) s.army[u] -= sent[u];
+  return { state: s, sent, level };
+}
+
+/** The fight at a barbarian camp, once the army arrives. Survivors march home with the reward. */
+export function campBattle(s0: GameState, level: number, sent: Army, now: number, rand: number, opts: MapOpts = {}) {
+  const s = cloneState(s0);
+  const r = getRates(s);
+  const nums = battleNumbers(s, sent, null, opts.terrain, campDefense(level));
+  const outcome = resolve(nums.attack, nums.defense, luckFrom(rand), sent, emptyArmy(), r.healShare, 0);
   const home = survivorsOf(sent, outcome.attackerLosses);
   for (const u of UNIT_IDS) home[u] += outcome.attackerHealed[u];
 
@@ -322,7 +384,7 @@ export function raidCamp(s0: GameState, level: number, units: Army, now: number,
     const reward = campReward(s, level);
     for (const res of RESOURCE_IDS) loot[res] = reward.resources;
     coins = reward.coins;
-    if (reward.first) s.camps.cleared = level;
+    if (reward.first) s.camps.cleared = Math.max(s.camps.cleared, level);
     s.camps.lastRaid[level] = now;
     s.war.attacksWon += 1;
     s.war.resourcesLooted += reward.resources * RESOURCE_IDS.length;
@@ -330,12 +392,35 @@ export function raidCamp(s0: GameState, level: number, units: Army, now: number,
     s.war.attacksLost += 1;
   }
 
-  const returnsAt = now + Math.round(CAMP_TRAVEL_SECONDS * 1000 * r.marchMultiplier);
+  const returnsAt = now + (opts.travelMs ?? Math.round(CAMP_TRAVEL_SECONDS * 1000 * r.marchMultiplier));
   if (armySize(home) > 0) {
-    s.marches.push({ id: marchId(now, rand), target: `Barbarian camp ${level}`, units: home, loot, coins, returnsAt });
+    s.marches.push({
+      id: marchId(now, rand),
+      target: `Barbarian camp ${level}`,
+      units: home,
+      loot,
+      coins,
+      returnsAt,
+      ...(opts.from ? { from: opts.from } : {}),
+    });
   }
   const report: RaidReport = { ...outcome, sent, defenders: emptyArmy(), loot, coins, returnsAt };
   return { state: s, report };
+}
+
+/** Attack a barbarian camp and fight at once (no map). */
+export function raidCamp(s0: GameState, level: number, units: Army, now: number, rand: number) {
+  const d = dispatchCamp(s0, level, units, now);
+  return campBattle(d.state, d.level, d.sent, now, rand);
+}
+
+/** Troops that turned back before a battle walk home with nothing. */
+export function returnHome(s0: GameState, units: Army, target: string, returnsAt: number, now: number, rand: number, from?: Point) {
+  const s = cloneState(s0);
+  if (armySize(units) > 0) {
+    s.marches.push({ id: marchId(now, rand), target, units: { ...units }, loot: emptyLoot(), coins: 0, returnsAt, ...(from ? { from } : {}) });
+  }
+  return s;
 }
 
 /** What the attacker sees about a target before attacking. */

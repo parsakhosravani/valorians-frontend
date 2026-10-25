@@ -1,19 +1,19 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 
 import bg from "~/images/background/battle.webp";
 
-import { ArmyTab, BattleResultDrawer, CampsTab, RaidTab, ReportsTab, SendArmyDrawer } from "@/components/organisms/war";
+import { ArmyTab, BattleResultDrawer, ReportsTab, SendArmyDrawer, WarMap } from "@/components/organisms/war";
 import type { AttackTarget } from "@/components/organisms/war";
 import { Tabs } from "@/components/organisms/war/shared";
 import { BattleReport, useGame } from "@/context";
 
-type Tab = "army" | "raid" | "camps" | "reports";
+type Tab = "map" | "army" | "reports";
 
 export const Battle = () => {
   const { state } = useGame();
-  const [tab, setTab] = useState<Tab>("army");
+  const [tab, setTab] = useState<Tab>("map");
   const [target, setTarget] = useState<AttackTarget | null>(null);
   const [result, setResult] = useState<BattleReport | null>(null);
   const [revenge, setRevenge] = useState<number | undefined>();
@@ -22,33 +22,34 @@ export const Battle = () => {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const id = Number(q.get("revenge"));
-    const t = q.get("tab") as Tab | null;
+    const t = q.get("tab");
 
     if (id) {
       setRevenge(id);
-      setTab("raid");
-    } else if (t && ["army", "raid", "camps", "reports"].includes(t)) {
+      setTab("map");
+    } else if (t === "map" || t === "army" || t === "reports") {
       setTab(t);
+    } else if (t === "camps" || t === "raid") {
+      setTab("map");
     }
   }, []);
+  const showResult = useCallback((r: BattleReport) => setResult(r), []);
 
   return (
     <>
       <div className="w-full flex flex-col gap-2 px-3 pt-1">
         <Tabs
           tabs={[
+            { id: "map", label: "Map" },
             { id: "army", label: "Army", badge: state.training.length || undefined },
-            { id: "raid", label: "Raid" },
-            { id: "camps", label: "Camps" },
             { id: "reports", label: "Reports" },
           ]}
           value={tab}
           onChange={setTab}
         />
         <div className="pb-4">
+          {tab === "map" && <WarMap focusId={revenge} onAttack={setTarget} onBattleDone={showResult} />}
           {tab === "army" && <ArmyTab />}
-          {tab === "raid" && <RaidTab revenge={revenge} onAttack={setTarget} />}
-          {tab === "camps" && <CampsTab onAttack={setTarget} />}
           {tab === "reports" && <ReportsTab />}
         </div>
       </div>
@@ -56,10 +57,7 @@ export const Battle = () => {
       <SendArmyDrawer
         target={target}
         onClose={() => setTarget(null)}
-        onResult={(r) => {
-          setTarget(null);
-          setResult(r);
-        }}
+        onSent={() => setTarget(null)}
       />
       <BattleResultDrawer report={result} onClose={() => setResult(null)} />
 
