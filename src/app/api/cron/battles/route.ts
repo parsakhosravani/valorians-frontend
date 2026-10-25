@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { resolveDueAttacks } from "@/server/war";
 import { resolveDueTrades } from "@/server/trade";
+import { ensureBotSetup } from "@/server/bot";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
 
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
+  const bot = await ensureBotSetup().catch(() => null);
 
-  return NextResponse.json({ ok: true, ms: Date.now() - started });
+  return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}) });
 }
