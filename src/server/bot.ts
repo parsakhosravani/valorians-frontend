@@ -23,7 +23,6 @@ export const botToken = () => process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT
 const derive = (purpose: string) =>
   crypto.createHash("sha256").update(`${botToken()}:${purpose}`).digest("hex").slice(0, 32);
 export const webhookSecret = () => derive("webhook");
-export const setupKey = () => derive("setup");
 
 export async function tg(method: string, body: object) {
   const token = botToken();
@@ -301,4 +300,21 @@ export async function setupBot() {
   });
 
   return { app: base, steps };
+}
+
+/**
+ * Runs setupBot when the bot isn't pointed at this app yet (first deploy, a
+ * new token, someone reset it in BotFather). Cheap: one getWebhookInfo call,
+ * at most once every 10 minutes per server instance.
+ */
+let lastCheck = 0;
+
+export async function ensureBotSetup() {
+  if (!botToken() || Date.now() - lastCheck < 10 * 60_000) return null;
+  lastCheck = Date.now();
+  const info = (await tg("getWebhookInfo", {})) as { ok: boolean; result?: { url?: string } };
+
+  if (!info.ok || info.result?.url === `${appUrl()}/api/bot`) return null;
+
+  return setupBot();
 }

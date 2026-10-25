@@ -1,18 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-import { setupBot, setupKey } from "@/server/bot";
+import { setupBot } from "@/server/bot";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Sets the bot's name, descriptions, command menu, Play button and webhook.
- * Run once after deploying: GET /api/bot/setup?key=<key>. The key is derived
- * from the bot token (see setupKey) so only someone with the token can run it.
+ * It only ever applies the same fixed settings, so it's safe to leave open;
+ * it's throttled to once a minute. It also runs by itself from the cron
+ * (see ensureBotSetup), so normally nobody needs to call it.
  */
-export async function GET(req: NextRequest) {
-  if (req.nextUrl.searchParams.get("key") !== setupKey()) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+let last = 0;
+
+export async function GET() {
+  if (Date.now() - last < 60_000) {
+    return NextResponse.json({ ok: false, error: "Ran less than a minute ago, try again shortly" }, { status: 429 });
   }
+  last = Date.now();
 
   return NextResponse.json(await setupBot());
 }
