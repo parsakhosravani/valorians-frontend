@@ -17,6 +17,12 @@ export const Friends: FunctionComponent = () => {
   const { authHeader, me } = useGame();
   const [data, setData] = useState<{ total: number; friends: Friend[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The invite code this launch came with (if any), straight from Telegram.
+  const [launchCode, setLaunchCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLaunchCode((window as any).Telegram?.WebApp?.initDataUnsafe?.start_param ?? null);
+  }, []);
 
   useEffect(() => {
     if (!authHeader) return;
@@ -80,6 +86,11 @@ export const Friends: FunctionComponent = () => {
             {me.invitedBy && (
               <>
                 {" "}· You joined through <b className="text-parch">{me.invitedBy}</b>&apos;s invite
+              </>
+            )}
+            {launchCode && launchCode !== me.referralCode && !me.invitedBy && (
+              <>
+                {" "}· Opened with invite <b className="text-parch">{launchCode}</b>, but it can only count in your first 2 days
               </>
             )}
           </p>
