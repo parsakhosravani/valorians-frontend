@@ -83,6 +83,7 @@ async function init(): Promise<Client> {
     "shield_until INTEGER NOT NULL DEFAULT 0",
     "map_x INTEGER",
     "map_y INTEGER",
+    "photo_src TEXT",
   ]) {
     await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
   }
@@ -110,6 +111,26 @@ async function init(): Promise<Client> {
     CREATE INDEX IF NOT EXISTS attacks_due ON attacks(status, arrives_at);
     CREATE INDEX IF NOT EXISTS attacks_attacker ON attacks(attacker_id, status);
     CREATE INDEX IF NOT EXISTS attacks_defender ON attacks(defender_id, status);
+
+    -- Marketplace offers. The seller's goods are locked while the offer is
+    -- open; once accepted both loads travel and arrive at arrives_at.
+    CREATE TABLE IF NOT EXISTS trades (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      seller_id     INTEGER NOT NULL,
+      give          TEXT NOT NULL,
+      give_amount   INTEGER NOT NULL,
+      want          TEXT NOT NULL,
+      want_amount   INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'open', -- open | accepted | delivering | delivered | cancelled
+      buyer_id      INTEGER,
+      accepted_at   INTEGER,
+      arrives_at    INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS trades_open ON trades(status, created_at DESC);
+    CREATE INDEX IF NOT EXISTS trades_seller ON trades(seller_id, status);
+    CREATE INDEX IF NOT EXISTS trades_buyer ON trades(buyer_id, status);
+    CREATE INDEX IF NOT EXISTS trades_due ON trades(status, arrives_at);
   `);
   return client;
 }

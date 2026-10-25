@@ -24,7 +24,9 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       const telegram = (window as any).Telegram;
       const miniApp = (window as any).Telegram.WebApp;
 
-      if (!miniApp.initData) return; // opened in a normal browser
+      // Opened in a normal browser (Telegram Desktop may still be handing over
+      // its launch data, which lib/api reads from the URL hash as a fallback).
+      if (!miniApp.initData && !window.location.hash.includes("tgWebAppData")) return;
 
       // configs
       miniApp.ready();
@@ -34,6 +36,17 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
       miniApp.setHeaderColor("#120D09");
       miniApp.setBackgroundColor("#120D09");
       miniApp.setBottomBarColor?.("#1E1610");
+
+      // Battle news comes from the bot: ask once for permission to message.
+      try {
+        const asked = localStorage.getItem("valorians:asked-write-access");
+        const allowed = miniApp.initDataUnsafe?.user?.allows_write_to_pm;
+
+        if (!allowed && !asked && miniApp.isVersionAtLeast?.("6.9")) {
+          localStorage.setItem("valorians:asked-write-access", "1");
+          setTimeout(() => miniApp.requestWriteAccess?.(), 2500);
+        }
+      } catch {}
 
       // initial data
       setTelegram(telegram);

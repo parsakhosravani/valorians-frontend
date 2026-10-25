@@ -34,10 +34,48 @@ const DEV_ID_KEY = "valorians:dev-user-id";
  * - in a normal browser with NEXT_PUBLIC_DEV_LOGIN=true: a local test player
  * - otherwise null (the app shows "play on mobile")
  */
+/**
+ * Telegram's signed launch data. The SDK usually exposes it as
+ * Telegram.WebApp.initData, but Telegram Desktop can hand it over only in the
+ * URL hash (#tgWebAppData=…) or, after a reload/navigation, in sessionStorage.
+ */
+export function telegramInitData(): string | null {
+  if (typeof window === "undefined") return null;
+  const fromSdk: string | undefined = (window as any).Telegram?.WebApp?.initData;
+  if (fromSdk) return fromSdk;
+
+  const fromHash = new URLSearchParams(window.location.hash.slice(1)).get("tgWebAppData");
+  if (fromHash) return fromHash;
+
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("__telegram__initParams") || "null");
+    if (saved?.tgWebAppData) return saved.tgWebAppData as string;
+  } catch {}
+  return null;
+}
+
+/** True when the page runs inside any Telegram client (phone, desktop or web). */
+export const insideTelegram = () =>
+  typeof window !== "undefined" &&
+  (!!(window as any).TelegramWebviewProxy ||
+    !!(window as any).Telegram?.WebApp?.platform && (window as any).Telegram.WebApp.platform !== "unknown" ||
+    window.location.hash.includes("tgWebAppData") ||
+    window.parent !== window);
+
 export function resolveAuthHeader(): string | null {
   if (typeof window === "undefined") return null;
-  const initData: string | undefined = (window as any).Telegram?.WebApp?.initData;
-  if (initData) return `tma ${initData}`;
+  const initData = telegramInitData();
+  if (initData) {
+    try {
+      // Keep it for this tab so later navigations still have it.
+      sessionStorage.setItem("valorians:init-data", initData);
+    } catch {}
+    return `tma ${initData}`;
+  }
+  try {
+    const kept = sessionStorage.getItem("valorians:init-data");
+    if (kept) return `tma ${kept}`;
+  } catch {}
 
   if (process.env.NEXT_PUBLIC_DEV_LOGIN === "true") {
     const url = new URL(window.location.href);

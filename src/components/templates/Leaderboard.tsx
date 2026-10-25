@@ -4,9 +4,9 @@ import Image from "next/image";
 import clsx from "clsx";
 
 import bg from "~/images/background/tribe.webp";
-import avatar from "~/images/avatar.webp";
 
 import { Tabs } from "@/components/organisms/war/shared";
+import { Avatar } from "@/components";
 import { useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import useBackButton from "@/hooks/useBackButton";
@@ -66,12 +66,7 @@ export const Leaderboard = () => {
               )}
             >
               <span className="w-8 text-center font-bold">{MEDAL[r.rank - 1] ?? r.rank}</span>
-              {r.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img alt="" className="h-8 w-8 rounded object-cover" src={r.photoUrl} />
-              ) : (
-                <Image alt="" className="h-8 w-8 rounded" src={avatar} />
-              )}
+              <Avatar className="rounded" size={32} src={r.photoUrl} />
               <span className="flex-1 truncate font-bold">
                 {r.name}
                 {r.isMe && " (you)"}

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthError, AuthResult, authenticate } from "./auth";
 import { getOrCreatePlayer, mutatePlayer, Player, playerView } from "./players";
 import { resolveDueAttacks } from "./war";
+import { resolveDueTrades } from "./trade";
 
 import { GameError, GameState } from "@/lib/game/engine";
 
@@ -33,6 +34,10 @@ export function handler(
         await resolveDueAttacks(now).catch((e) => {
           // eslint-disable-next-line no-console
           console.error("resolveDueAttacks", e);
+        });
+        await resolveDueTrades(now).catch((e) => {
+          // eslint-disable-next-line no-console
+          console.error("resolveDueTrades", e);
         });
       }
       const player = await getOrCreatePlayer(auth, now);

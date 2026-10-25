@@ -153,12 +153,12 @@ export const BUILDINGS: BuildingDef[] = [
   def("Windmill", 150, { kind: "production", resource: "crop", perLevel: 60 }, "+60 crop per hour per level."),
   def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 10 }, "+10% crop production per level."),
   def("Treasury", 300, { kind: "coins", perLevel: 40 }, "+40 coins per hour per level."),
-  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour per level."),
+  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
   def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per tap per level."),
   def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
-  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1) and Archers (level 3)."),
-  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Cavalry (level 1)."),
-  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break enemy walls."),
+  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5)."),
+  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10)."),
+  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break walls and Catapults (level 5) that break towers."),
   def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 5 }, "Troops train 5% faster per level."),
   def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 5 }, "+5% attack for all troops per level."),
   def("Armory", 250, { kind: "military", stat: "defense", perLevel: 5 }, "+5% defense for all troops per level."),
@@ -236,7 +236,7 @@ export const REFERRAL_REWARD = {
 
 // ─── War ─────────────────────────────────────────────────────────────────────
 
-export const UNIT_IDS = ["spearman", "archer", "cavalry", "ram"] as const;
+export const UNIT_IDS = ["spearman", "swordsman", "archer", "axeman", "cavalry", "paladin", "knight", "ram", "catapult"] as const;
 export type UnitId = (typeof UNIT_IDS)[number];
 
 export type UnitDef = {
@@ -256,14 +256,29 @@ export type UnitDef = {
   speed: number;
   requires: { building: string; level: number };
   description: string;
+  /** Mounted: weaker in forests, and anti-cavalry troops defend better against it. */
+  mounted?: boolean;
+  /** Defends better against the mounted share of an attack (see ANTI_CAVALRY_BONUS). */
+  antiCavalry?: boolean;
+  /** Share of the enemy's City Gate bonus each one breaks. */
+  wallBreak?: number;
+  /** Share of the enemy's Watchtower defense each one breaks. */
+  towerBreak?: number;
 };
 
 export const UNITS: UnitDef[] = [
   {
-    id: "spearman", name: "Spearman", icon: "🛡️", attack: 12, defense: 18, carry: 25,
+    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 18, carry: 25,
     cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 1 },
     description: "Cheap, sturdy defender. Strong against cavalry.",
+    antiCavalry: true,
+  },
+  {
+    id: "swordsman", name: "Swordsman", icon: "🗡️", attack: 30, defense: 22, carry: 40,
+    cost: { iron: 70, wood: 40, clay: 45, crop: 25 }, time: 25, upkeep: 1, speed: 30,
+    requires: { building: "barracks", level: 2 },
+    description: "Well-armored all-rounder. Good in attack and defense.",
   },
   {
     id: "archer", name: "Archer", icon: "🏹", attack: 22, defense: 10, carry: 15,
@@ -272,23 +287,50 @@ export const UNITS: UnitDef[] = [
     description: "Strong attack, weak in defense.",
   },
   {
-    id: "cavalry", name: "Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
+    id: "axeman", name: "Axeman", icon: "🪓", attack: 45, defense: 12, carry: 45,
+    cost: { iron: 85, wood: 60, clay: 30, crop: 35 }, time: 35, upkeep: 1, speed: 30,
+    requires: { building: "barracks", level: 5 },
+    description: "The strongest foot soldier in attack, but weak in defense.",
+  },
+  {
+    id: "cavalry", name: "Light Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
     cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3, speed: 12,
     requires: { building: "stable", level: 1 },
-    description: "Fastest. Hits hard and carries the most loot, but weak in forests and against spears.",
+    description: "Fast attack horsemen. Carry the most loot, but weak in forests and against spears.",
+    mounted: true,
+  },
+  {
+    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 55, carry: 60,
+    cost: { iron: 140, wood: 100, clay: 100, crop: 70 }, time: 60, upkeep: 2, speed: 15,
+    requires: { building: "stable", level: 3 },
+    description: "Defensive horseman. The best defender, and rides fast to help.",
+    mounted: true,
+  },
+  {
+    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 75, defense: 40, carry: 80,
+    cost: { iron: 220, wood: 160, clay: 150, crop: 90 }, time: 90, upkeep: 4, speed: 14,
+    requires: { building: "stable", level: 10 },
+    description: "Heavy armored knight. The strongest attacker in the game.",
+    mounted: true,
   },
   {
     id: "ram", name: "Battering Ram", icon: "🪵", attack: 30, defense: 5, carry: 0,
     cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 4, speed: 45,
     requires: { building: "siege-workshop", level: 1 },
     description: "Each ram breaks 2% of the enemy's City Gate bonus.",
+    wallBreak: 0.02,
+  },
+  {
+    id: "catapult", name: "Catapult", icon: "☄️", attack: 75, defense: 4, carry: 0,
+    cost: { iron: 250, wood: 300, clay: 150, crop: 60 }, time: 150, upkeep: 6, speed: 55,
+    requires: { building: "siege-workshop", level: 5 },
+    description: "Huge attack but the slowest unit. Each catapult breaks 3% of the enemy's Watchtower defense.",
+    towerBreak: 0.03,
   },
 ];
 
 export const UNIT_BY_ID = Object.fromEntries(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
 
-/** Wall bonus removed per ram (fraction of the bonus). */
-export const RAM_WALL_BREAK = 0.02;
 /** Most training batches a player can queue. */
 export const MAX_TRAIN_BATCHES = 5;
 /** Most units in one batch. */
@@ -318,9 +360,9 @@ export const MIN_MARCH_SECONDS = 20;
 /** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
 export const SCOUT_COST_PER_TILE = 10;
 export const SCOUT_MIN_COST = 30;
-/** Spearmen defend this much better against the cavalry share of an attack. */
-export const SPEAR_VS_CAVALRY = 0.5;
-/** Cavalry loses this much attack when fighting in a forest. */
+/** Anti-cavalry troops (Spearmen) defend this much better against the mounted share of an attack. */
+export const ANTI_CAVALRY_BONUS = 0.5;
+/** Mounted troops lose this much attack when fighting in a forest. */
 export const FOREST_CAVALRY_PENALTY = 0.25;
 
 /** New players can't be attacked for this long. */
@@ -342,3 +384,62 @@ export const campFirstReward = (level: number) => ({
 /** Cleared camps can be raided again for a smaller haul after this cooldown. */
 export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
+
+// ─── Troop ranks and upgrades ────────────────────────────────────────────────
+//
+// Every troop type is one regiment. Battles give it experience (XP); enough XP
+// promotes it to the next rank, and each rank makes the whole regiment
+// stronger. Heavy losses cost XP, because veterans die too.
+// Upgrades are forged in the Arsenal: better weapons and armor, one upgrade at
+// a time. How far a regiment can be upgraded depends on its rank.
+
+export type RankDef = { name: string; xp: number };
+
+export const RANKS: RankDef[] = [
+  { name: "Recruit", xp: 0 },
+  { name: "Soldier", xp: 100 },
+  { name: "Veteran", xp: 400 },
+  { name: "Elite", xp: 1200 },
+  { name: "Champion", xp: 3500 },
+  { name: "Legend", xp: 10000 },
+];
+export const MAX_RANK = RANKS.length - 1;
+
+/** Each rank adds this much attack and defense to the regiment. */
+export const RANK_BONUS = 0.04;
+/** XP for a battle = enemy strength × this (×0.5 for a defeat), shared by the troop types that fought. */
+export const XP_PER_STRENGTH = 0.2;
+export const XP_DEFEAT_SHARE = 0.5;
+/** Losing a share of a regiment costs this share of its XP (losing all of it costs 40%). */
+export const XP_LOSS_SHARE = 0.4;
+
+export const MAX_UNIT_UPGRADE = 10;
+/** Each upgrade level adds this much attack and defense to that troop type. */
+export const UPGRADE_BONUS = 0.05;
+/** Highest upgrade level a regiment of this rank can reach. */
+export const upgradeCapForRank = (rank: number) => Math.min(MAX_UNIT_UPGRADE, 2 + rank * 2);
+/** Upgrades need an Arsenal of at least this level. */
+export const UPGRADE_BUILDING = { building: "arsenal", level: 1 };
+/** Resources to go from `level` to `level + 1`: 20× the unit's training cost, growing 60% per level. */
+export const unitUpgradeCost = (unit: UnitDef, level: number) =>
+  Object.fromEntries(
+    RESOURCE_IDS.map((r) => [r, Math.round(unit.cost[r] * 20 * Math.pow(1.6, level))])
+  ) as Record<ResourceId, number>;
+/** Seconds to go from `level` to `level + 1`, before Military Command speedup. */
+export const unitUpgradeSeconds = (unit: UnitDef, level: number) =>
+  Math.round(unit.time * 8 * Math.pow(1.7, level));
+
+/** Short names for upgrade levels, shown on the troop card. */
+export const UPGRADE_NAMES = [
+  "Rough gear",
+  "Tempered steel",
+  "Riveted mail",
+  "Oak-and-iron",
+  "Forged plate",
+  "Rune-etched",
+  "Dwarven steel",
+  "Jarl's armory",
+  "Saga-forged",
+  "Valhalla-blessed",
+  "Legendary",
+];

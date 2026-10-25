@@ -7,10 +7,13 @@ import { Button, Drawer } from "@/components";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";
+import { RANKS, UNIT_BY_ID } from "@/lib/game/config";
 
 export const BattleSummary = ({ report, asDefender = false }: { report: BattleReport; asDefender?: boolean }) => {
   const won = asDefender ? !report.attackerWon : report.attackerWon;
   const lootTotal = RESOURCES.reduce((s, r) => s + (report.loot[r.id] ?? 0), 0);
+  const xp = asDefender ? report.defenderXp : report.attackerXp;
+  const promoted = (asDefender ? report.defenderPromoted : report.attackerPromoted) ?? [];
 
   return (
     <div className="flex flex-col gap-3">
@@ -59,6 +62,17 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
           </div>
         )}
       </div>
+      {xp && armySize(xp) > 0 && (
+        <div className="text-sm">
+          <span className="text-[#B19C80]">Experience: </span>
+          <ArmyLine army={xp} /> <span className="text-[#B19C80]">XP</span>
+        </div>
+      )}
+      {promoted.map((p) => (
+        <div key={p.unit} className="text-center font-bold text-[#E3A948]">
+          🎖️ {UNIT_BY_ID[p.unit].name}s promoted to {RANKS[p.rank].name}!
+        </div>
+      ))}
       {lootTotal > 0 || report.coins > 0 ? (
         <div className="bg-[#1E1610] rounded p-2">
           <div className="text-[10px] text-[#B19C80] mb-1">{asDefender ? "STOLEN FROM YOU" : "LOOT"}</div>

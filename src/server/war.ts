@@ -4,12 +4,14 @@ import crypto from "crypto";
 
 import { getDb } from "./db";
 import { homeOf } from "./map";
-import { Player, findById, mutatePlayer } from "./players";
+import { notify } from "./notify";
+import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
-import { GameError, advance, emptyArmy, getRates } from "@/lib/game/engine";
+import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
 import { Point, campPosition, distance, marchMs, scoutCost, terrainAt } from "@/lib/game/map";
 import {
+  Promotion,
   RaidReport,
   armySize,
   battleNumbers,
@@ -58,7 +60,7 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
     targets.push({
       id: p.id,
       name: displayName(p),
-      photoUrl: p.photoUrl,
+      photoUrl: avatarUrl(p.id),
       population: Math.floor(s.population),
       power: powerScore(s),
       defense: scoutEstimate(s, me.state),
@@ -142,6 +144,14 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
       args: [me.id, defenderId, campLevel, JSON.stringify(sent), home.x, home.y, dest.x, dest.y, now, now + travel],
     });
 
+    if (defenderId) {
+      // Warn the defender; with a Watchtower they also see which troops.
+      const def = await findById(defenderId);
+      const watch = (def?.state.buildings["watchtower"] ?? 0) >= 1;
+
+      await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel);
+    }
+
     return { player: after, march: { id: Number(ins.lastInsertRowid), arrivesAt: now + travel } };
   } catch (e) {
     await mutatePlayer(me.id, now, (s) => cancelRaid(s, sent));
@@ -173,6 +183,13 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   arrivesAt: Number(r.arrives_at),
 });
 
+/** Troop types whose rank went up from one state to the next. */
+const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, after: typeof before): Promotion[] =>
+  UNIT_IDS.filter((u) => rankForXp(after.troops[u].xp) > rankForXp(before.troops[u].xp)).map((u) => ({
+    unit: u,
+    rank: rankForXp(after.troops[u].xp),
+  }));
+
 /** The battle at the end of one march. Times use the arrival moment. */
 async function resolveAttack(a: AttackRow, now: number) {
   const at = a.arrivesAt;
@@ -195,6 +212,7 @@ async function resolveAttack(a: AttackRow, now: number) {
     const full: StoredReport = { ...report, attackerName: displayName(attacker), defenderName: `Barbarian camp ${a.campLevel}` };
 
     await saveReport(attacker.id, null, a.campLevel, full, at, a.id);
+    await notify.attackResult(attacker.id, full.defenderName, report, now);
 
     return;
   }
@@ -222,14 +240,28 @@ async function resolveAttack(a: AttackRow, now: number) {
     await mutatePlayer(attacker.id, now, (s) =>
       returnHome(s, a.units, defender ? displayName(defender) : "Abandoned land", at + travelMs, now, rand(), a.to)
     );
+    await notify.turnedBack(attacker.id, defender ? displayName(defender) : "The target");
 
     return;
   }
   const r: RaidReport = report;
   const full: StoredReport = { ...r, attackerName: displayName(attacker), defenderName: displayName(defender) };
 
-  await mutatePlayer(attacker.id, now, (s) => receiveRaidReport(s, r, full.defenderName, at, rand(), a.to));
+  let promoted: Promotion[] = [];
+
+  await mutatePlayer(attacker.id, now, (s) => {
+    const next = receiveRaidReport(s, r, full.defenderName, at, rand(), a.to);
+
+    promoted = promotionsBetween(s, next);
+
+    return next;
+  });
+  full.attackerPromoted = promoted;
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
+  await Promise.all([
+    notify.attackResult(attacker.id, full.defenderName, full, now),
+    r.attackerWon ? notify.raided(defender.id, full.attackerName, r, attacker.id) : notify.defended(defender.id, full.attackerName, r),
+  ]);
 }
 
 /**
@@ -369,7 +401,7 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
       rank: i + 1,
       id: Number(r.id),
       name: String(r.first_name || (r.username ? `@${r.username}` : "Player")),
-      photoUrl: r.photo_url == null ? null : String(r.photo_url),
+      photoUrl: avatarUrl(Number(r.id)),
       value: Math.floor(Number(r[col])),
       isMe: Number(r.id) === me.id,
     })),

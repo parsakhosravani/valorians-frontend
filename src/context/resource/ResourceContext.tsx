@@ -21,7 +21,8 @@ import woodBg from "~/images/background/wood.webp";
 import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
 
-import { ApiError, PlayerView, apiRequest, resolveAuthHeader } from "@/lib/api";
+import { ApiError, PlayerView, apiRequest, insideTelegram, resolveAuthHeader } from "@/lib/api";
+import type { Offer } from "@/lib/game/trade";
 import {
   COMBO_WINDOW_MS,
   RESOURCE_IDS,
@@ -82,6 +83,8 @@ interface GameContextType {
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
   train: (unit: UnitId, count: number) => Promise<boolean>;
+  /** Starts forging a troop type's next Arsenal upgrade. */
+  upgradeTroop: (unit: UnitId) => Promise<boolean>;
   /** Attack a player (target = id) or a barbarian camp (camp = level). */
   /** Sends an army across the map; resolves to its arrival time, or null if it couldn't leave. */
   attack: (to: { target?: number; camp?: number }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
@@ -89,6 +92,12 @@ interface GameContextType {
   /** Quietly reloads the player's state (e.g. after a battle was fought on the server). */
   refresh: () => Promise<void>;
   scout: (target: number) => Promise<ScoutReport | null>;
+  /** Marketplace: post an offer, buy one, or take yours back. */
+  trade: {
+    post: (o: Offer) => Promise<boolean>;
+    accept: (id: number) => Promise<boolean>;
+    cancel: (id: number) => Promise<boolean>;
+  };
   authHeader: string | null;
 }
 
@@ -198,7 +207,13 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [authHeader, accept]);
 
   const load = useCallback(async () => {
-    const auth = resolveAuthHeader();
+    let auth = resolveAuthHeader();
+    // Telegram Desktop can hand over the launch data a moment after the page
+    // starts; wait up to ~3s inside Telegram before giving up.
+    for (let i = 0; !auth && insideTelegram() && i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      auth = resolveAuthHeader();
+    }
     setAuthHeader(auth);
     if (!auth) {
       setStatus("no-auth");
@@ -342,6 +357,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),
+    upgradeTroop: (unit) => act("war/upgrade", { unit }, "The Arsenal is forging your upgrade"),
     attack: async (to, units) => {
       const res = await send<PlayerView & { march: { id: number; arrivesAt: number } }>("war/march", { ...to, units }, "Army on the march");
 
@@ -361,6 +377,11 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       const res = await send<PlayerView & { scout: ScoutReport }>("war/scout", { target });
 
       return res?.scout ?? null;
+    },
+    trade: {
+      post: (o) => act("trade/offer", o, "Offer posted on the market"),
+      accept: (id) => act("trade/accept", { id }, "Deal! Merchants are on their way"),
+      cancel: (id) => act("trade/cancel", { id }, "Offer cancelled, goods returned"),
     },
     authHeader,
   };

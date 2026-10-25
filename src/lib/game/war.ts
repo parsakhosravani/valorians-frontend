@@ -16,10 +16,9 @@ import {
   MAX_TRAIN_BATCHES,
   RAIDED_SHIELD_MS,
   RAID_TRAVEL_SECONDS,
-  RAM_WALL_BREAK,
   RESOURCE_IDS,
   ResourceId,
-  SPEAR_VS_CAVALRY,
+  ANTI_CAVALRY_BONUS,
   UNITS,
   UNIT_BY_ID,
   UNIT_IDS,
@@ -27,6 +26,16 @@ import {
   campDefense,
   campFirstReward,
   militiaDefense,
+  MAX_RANK,
+  MAX_UNIT_UPGRADE,
+  RANKS,
+  UPGRADE_BUILDING,
+  XP_DEFEAT_SHARE,
+  XP_LOSS_SHARE,
+  XP_PER_STRENGTH,
+  unitUpgradeCost,
+  unitUpgradeSeconds,
+  upgradeCapForRank,
 } from "./config";
 import {
   Army,
@@ -37,6 +46,9 @@ import {
   getRates,
   totalArmy,
   trainingEndsAt,
+  rankForXp,
+  unitMultiplier,
+  unitRank,
 } from "./engine";
 import { Point, TERRAIN, Terrain } from "./map";
 
@@ -81,24 +93,43 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
 
 // ─── Battle maths ────────────────────────────────────────────────────────────
 
+/** Attack of one troop of this type, with its rank and upgrades (before buildings). */
+export const unitAttack = (s: GameState, u: UnitId) => UNIT_BY_ID[u].attack * unitMultiplier(s, u);
+/** Defense of one troop of this type, with its rank and upgrades (before buildings). */
+export const unitDefense = (s: GameState, u: UnitId) => UNIT_BY_ID[u].defense * unitMultiplier(s, u);
+
 export function attackPower(s: GameState, units: Army) {
-  const raw = UNITS.reduce((sum, u) => sum + u.attack * (units[u.id] ?? 0), 0);
+  const raw = UNIT_IDS.reduce((sum, u) => sum + unitAttack(s, u) * (units[u] ?? 0), 0);
   return raw * (1 + getRates(s).attackBonus);
 }
 
-/** Defense of a tribe against an attack bringing `rams` battering rams. */
-export function defensePower(s: GameState, rams = 0) {
+/** How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking army breaks, 0–1. */
+export function siegeBreak(sent: Army) {
+  let wall = 0;
+  let tower = 0;
+  for (const u of UNITS) {
+    wall += (u.wallBreak ?? 0) * (sent[u.id] ?? 0);
+    tower += (u.towerBreak ?? 0) * (sent[u.id] ?? 0);
+  }
+  return { wall: Math.min(1, wall), tower: Math.min(1, tower) };
+}
+
+/** Defense of a tribe against an attack by `sent` (its siege engines break walls and towers). */
+export function defensePower(s: GameState, sent?: Army) {
   const r = getRates(s);
-  const troops = UNITS.reduce((sum, u) => sum + u.defense * s.army[u.id], 0);
-  const wall = r.wallBonus * Math.max(0, 1 - rams * RAM_WALL_BREAK);
-  return (troops + r.flatDefense + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
+  const troops = UNIT_IDS.reduce((sum, u) => sum + unitDefense(s, u) * s.army[u], 0);
+  const br = sent ? siegeBreak(sent) : { wall: 0, tower: 0 };
+  const wall = r.wallBonus * (1 - br.wall);
+  const tower = r.flatDefense * (1 - br.tower);
+  return (troops + tower + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
 }
 
 /**
  * Attack and defense for one battle, with the strategy rules applied:
  * - the defender's terrain adds defense (hills +20%, forest +10%)
- * - cavalry fights 25% weaker in a forest
- * - spearmen defend 50% better against the cavalry share of the attack
+ * - mounted troops (Light Cavalry, Paladins, Knights) fight 25% weaker in a forest
+ * - anti-cavalry troops (Spearmen) defend 50% better against the mounted share of the attack
+ * - rams break the City Gate, catapults break the Watchtower
  * `defender` is null for a barbarian camp, which uses `campDef`.
  */
 export function battleNumbers(
@@ -109,7 +140,7 @@ export function battleNumbers(
   campDef = 0
 ) {
   const bonus = 1 + getRates(attacker).attackBonus;
-  let cav = UNIT_BY_ID.cavalry.attack * (sent.cavalry ?? 0) * bonus;
+  let cav = UNITS.filter((u) => u.mounted).reduce((a, u) => a + unitAttack(attacker, u.id) * (sent[u.id] ?? 0), 0) * bonus;
   const rest = attackPower(attacker, sent) - cav;
 
   if (terrain === "forest") cav *= 1 - FOREST_CAVALRY_PENALTY;
@@ -120,9 +151,11 @@ export function battleNumbers(
 
   if (defender) {
     const r = getRates(defender);
-    const spears = UNIT_BY_ID.spearman.defense * defender.army.spearman * (1 + r.defenseBonus);
+    const spears =
+      UNITS.filter((u) => u.antiCavalry).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) *
+      (1 + r.defenseBonus);
 
-    defense = defensePower(defender, sent.ram ?? 0) * ground + spears * SPEAR_VS_CAVALRY * cavShare;
+    defense = defensePower(defender, sent) * ground + spears * ANTI_CAVALRY_BONUS * cavShare;
   } else {
     defense = campDef * ground;
   }
@@ -132,7 +165,7 @@ export function battleNumbers(
 
 export function powerScore(s: GameState) {
   const army = totalArmy(s);
-  const troops = UNITS.reduce((sum, u) => sum + ((u.attack + u.defense) / 2) * army[u.id], 0);
+  const troops = UNIT_IDS.reduce((sum, u) => sum + ((unitAttack(s, u) + unitDefense(s, u)) / 2) * army[u], 0);
   const buildings = Object.values(s.buildings).reduce((a, b) => a + b, 0);
   return Math.round(troops + buildings * 10);
 }
@@ -146,6 +179,116 @@ export type BattleOutcome = {
   attackerHealed: Army;
   defenderLosses: Army;
   defenderHealed: Army;
+  /** XP each troop type earned (missing in reports from before ranks existed). */
+  attackerXp?: Army;
+  defenderXp?: Army;
+  /** Troop types that reached a new rank in this battle. */
+  attackerPromoted?: Promotion[];
+  defenderPromoted?: Promotion[];
+};
+
+export type Promotion = { unit: UnitId; rank: number };
+
+// ─── Ranks and experience ────────────────────────────────────────────────────
+
+/**
+ * XP from one battle, shared by the troop types that fought in proportion to
+ * how much they contributed (attack when attacking, defense when defending).
+ */
+export function battleXp(s: GameState, fought: Army, enemyStrength: number, won: boolean, as: "attack" | "defense"): Army {
+  const xp = emptyArmy();
+  const weight = (u: UnitId) => (as === "attack" ? unitAttack(s, u) : unitDefense(s, u)) * (fought[u] ?? 0);
+  const total = UNIT_IDS.reduce((a, u) => a + weight(u), 0);
+  if (total <= 0) return xp;
+  const pool = enemyStrength * XP_PER_STRENGTH * (won ? 1 : XP_DEFEAT_SHARE);
+  for (const u of UNIT_IDS) xp[u] = Math.round((pool * weight(u)) / total);
+  return xp;
+}
+
+/**
+ * Applies a battle to the regiments: losses cost XP (a share of the veterans
+ * died), then the earned XP is added. `regiment` is each type's size before
+ * the battle. Returns the types that went up a rank.
+ */
+export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
+  const promoted: Promotion[] = [];
+  for (const u of UNIT_IDS) {
+    const t = s.troops[u];
+    const before = rankForXp(t.xp);
+    if (regiment[u] > 0 && dead[u] > 0) {
+      t.xp *= 1 - XP_LOSS_SHARE * Math.min(1, dead[u] / regiment[u]);
+    }
+    t.xp = Math.round(t.xp + (earned[u] ?? 0));
+    const after = rankForXp(t.xp);
+    if (after > before) promoted.push({ unit: u, rank: after });
+  }
+  return promoted;
+}
+
+/** Rank, XP progress and upgrade limits of one troop type, for display. */
+export function troopInfo(s: GameState, u: UnitId) {
+  const t = s.troops[u];
+  const rank = unitRank(s, u);
+  const next = rank < MAX_RANK ? RANKS[rank + 1] : null;
+  const floor = RANKS[rank].xp;
+  return {
+    rank,
+    rankName: RANKS[rank].name,
+    xp: t.xp,
+    nextRank: next ? { name: next.name, xp: next.xp } : null,
+    progress: next ? (t.xp - floor) / (next.xp - floor) : 1,
+    level: t.level,
+    cap: upgradeCapForRank(rank),
+    multiplier: unitMultiplier(s, u),
+  };
+}
+
+// ─── Arsenal upgrades ────────────────────────────────────────────────────────
+
+export function troopUpgradeInfo(s: GameState, u: UnitId) {
+  const def = UNIT_BY_ID[u];
+  if (!def) throw new GameError("Unknown unit");
+  const info = troopInfo(s, u);
+  const level = info.level;
+  return {
+    level,
+    cap: info.cap,
+    maxed: level >= MAX_UNIT_UPGRADE,
+    /** Needs a higher rank before the next upgrade. */
+    rankLocked: level >= info.cap && level < MAX_UNIT_UPGRADE,
+    cost: unitUpgradeCost(def, level),
+    seconds: Math.max(5, Math.round(unitUpgradeSeconds(def, level) * getRates(s).trainSpeedMultiplier)),
+  };
+}
+
+/** Starts forging the next upgrade for a troop type in the Arsenal. */
+export function upgradeTroop(s0: GameState, unit: UnitId, now: number): GameState {
+  const def = UNIT_BY_ID[unit];
+  if (!def) throw new GameError("Unknown unit");
+  if ((s0.buildings[UPGRADE_BUILDING.building] ?? 0) < UPGRADE_BUILDING.level) {
+    throw new GameError(`Build the Arsenal to upgrade troops`, "locked");
+  }
+  if (!unitUnlocked(s0, unit)) throw new GameError(`Unlock ${def.name} first`, "locked");
+  if (s0.forge) throw new GameError("The Arsenal is already forging an upgrade", "busy");
+  const info = troopUpgradeInfo(s0, unit);
+  if (info.maxed) throw new GameError("Already fully upgraded", "max_level");
+  if (info.rankLocked) {
+    throw new GameError(`${def.name} need more battle experience to upgrade further`, "rank_locked");
+  }
+  const s = cloneState(s0);
+  for (const r of RESOURCE_IDS) {
+    if (s.resources[r] < info.cost[r]) throw new GameError(`Not enough ${r}`, "not_enough_resources");
+  }
+  for (const r of RESOURCE_IDS) s.resources[r] -= info.cost[r];
+  s.forge = { unit, toLevel: info.level + 1, startedAt: now, endsAt: now + info.seconds * 1000 };
+  return s;
+}
+
+/** Each type's full regiment (home + away) plus troops currently in a battle. */
+const regimentWith = (s: GameState, fighting: Army) => {
+  const r = totalArmy(s);
+  for (const u of UNIT_IDS) r[u] += fighting[u] ?? 0;
+  return r;
 };
 
 /** Losses for each side. The loser is wiped out; the winner loses (loser/winner)^1.5. */
@@ -275,6 +418,13 @@ export function defendRaid(
     dr.healShare
   );
 
+  // Experience: the defenders learn from the fight, the attackers' share is
+  // carried in the report and applied when they get it (receiveRaidReport).
+  const won = !outcome.attackerWon;
+  const defenderXp = battleXp(d, defenders, outcome.attack, won, "defense");
+  const attackerXp = battleXp(attacker, sent, outcome.defense, outcome.attackerWon, "attack");
+  const defenderPromoted = applyBattleXp(d, totalArmy(d), outcome.defenderLosses, defenderXp);
+
   // Healed defenders recover at home straight away, so only real losses go.
   for (const u of UNIT_IDS) d.army[u] -= outcome.defenderLosses[u];
 
@@ -301,6 +451,9 @@ export function defendRaid(
     state: d,
     report: {
       ...outcome,
+      attackerXp,
+      defenderXp,
+      defenderPromoted,
       sent,
       defenders,
       loot,
@@ -320,6 +473,7 @@ export function receiveRaidReport(
   from?: Point
 ) {
   const s = cloneState(s0);
+  if (report.attackerXp) applyBattleXp(s, regimentWith(s, report.sent), report.attackerLosses, report.attackerXp);
   const units = survivorsOf(report.sent, report.attackerLosses);
   for (const u of UNIT_IDS) units[u] += report.attackerHealed[u];
   if (armySize(units) > 0) {
@@ -375,6 +529,8 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
   const r = getRates(s);
   const nums = battleNumbers(s, sent, null, opts.terrain, campDefense(level));
   const outcome = resolve(nums.attack, nums.defense, luckFrom(rand), sent, emptyArmy(), r.healShare, 0);
+  const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack");
+  const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp);
   const home = survivorsOf(sent, outcome.attackerLosses);
   for (const u of UNIT_IDS) home[u] += outcome.attackerHealed[u];
 
@@ -404,7 +560,16 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
       ...(opts.from ? { from: opts.from } : {}),
     });
   }
-  const report: RaidReport = { ...outcome, sent, defenders: emptyArmy(), loot, coins, returnsAt };
+  const report: RaidReport = {
+    ...outcome,
+    attackerXp,
+    attackerPromoted,
+    sent,
+    defenders: emptyArmy(),
+    loot,
+    coins,
+    returnsAt,
+  };
   return { state: s, report };
 }
 

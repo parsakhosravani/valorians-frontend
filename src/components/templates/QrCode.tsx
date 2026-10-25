@@ -3,7 +3,7 @@ import Image from "next/image";
 import rqcode from "~/images/qr/qr-code.png";
 import bg from "~/images/background/battle.webp";
 
-/** Shown outside Telegram's mobile app: the game is played on a phone. */
+/** Shown when the page is opened outside Telegram: the game runs inside Telegram. */
 export const QrCode = () => {
   const bot = process.env.NEXT_PUBLIC_BOT_ADDRESS;
 
@@ -13,7 +13,7 @@ export const QrCode = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-ground/40 to-ground" />
       <div className="relative flex flex-col items-center gap-3">
         <h1 className="font-display font-black text-3xl tracking-[0.06em] text-goldtext">VALORIANS LEGEND</h1>
-        <p className="text-sub">Play on your phone in Telegram</p>
+        <p className="text-sub">Open the game inside Telegram, on your phone or Telegram Desktop</p>
         <a className="mt-2" href={`https://t.me/${bot}`}>
           <Image
             alt={`Open @${bot} in Telegram`}

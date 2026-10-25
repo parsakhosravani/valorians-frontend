@@ -4,10 +4,9 @@ import Image from "next/image";
 
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
-import avatar from "~/images/avatar.webp";
 import viking from "~/images/friends/viking.png";
 
-import { Coin, TextImage, InviteLink } from "@/components";
+import { Avatar, Coin, TextImage, InviteLink } from "@/components";
 import useBackButton from "@/hooks/useBackButton";
 import { useGame } from "@/context";
 import { Friend, apiRequest } from "@/lib/api";
@@ -101,12 +100,7 @@ export const Friends: FunctionComponent = () => {
                 key={f.id}
                 className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg border border-line rounded-xl"
               >
-                {f.photoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt="avatar" className="h-[34px] w-[34px] rounded object-cover" src={f.photoUrl} />
-                ) : (
-                  <Image alt="avatar" height={34} src={avatar} width={34} />
-                )}
+                <Avatar className="rounded" size={34} src={f.photoUrl} />
                 <div className="flex flex-col justify-start gap-[5px] min-w-0">
                   <div className="leading-none font-bold truncate">{f.name}</div>
                   <div className="flex gap-2">

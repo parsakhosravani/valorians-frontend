@@ -52,7 +52,7 @@ export const SendArmyDrawer = ({
   const verdict = !d ? "" : power > defMax * 1.1 ? "Likely victory" : power < defMin * 0.9 ? "Likely defeat" : "Close fight";
   const travel = target ? marchMs(units, target.distance, rates.marchMultiplier) : 0;
   const slowest = UNITS.find((u) => units[u.id] > 0 && u.speed === armySpeed(units));
-  const hasCavalry = units.cavalry > 0;
+  const hasCavalry = UNITS.some((u) => u.mounted && units[u.id] > 0);
 
   const send = async () => {
     if (!target) return;
@@ -80,11 +80,12 @@ export const SendArmyDrawer = ({
               {TERRAIN[terrain].defense > 0 && <span className="text-[#F08A6C]"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
             </span>
             {terrain === "forest" && hasCavalry && (
-              <span className="px-2 py-1 rounded-lg bg-[#2A140E] border border-[#8A3B23] text-[#FFB27A]">🐎 cavalry −25% in forest</span>
+              <span className="px-2 py-1 rounded-lg bg-[#2A140E] border border-[#8A3B23] text-[#FFB27A]">🐎 horsemen −25% in forest</span>
             )}
           </div>
 
-          {UNITS.map((u) => (
+          {/* Only troop types you have at home. */}
+          {UNITS.filter((u) => state.army[u.id] > 0).map((u) => (
             <div key={u.id} className="flex items-center gap-2">
               <UnitBadge size={32} unit={u.id} />
               <div className="flex-1 text-sm">
