@@ -107,7 +107,39 @@ test("defenders and walls can win", () => {
 test("rams weaken walls", () => {
   const d = withBarracks();
   d.buildings["city-gate"] = 10;
-  expect(W.defensePower(d, 50)).toBeLessThan(W.defensePower(d, 0));
+  const rams = { ...E.emptyArmy(), ram: 50 };
+  // 50 rams × 2% = the whole 60% gate bonus is gone
+  expect(W.defensePower(d, rams) * 1.6).toBeCloseTo(W.defensePower(d));
+});
+
+test("catapults break the Watchtower", () => {
+  const d = withBarracks();
+  d.buildings.watchtower = 10; // 600 flat defense
+  const full = W.defensePower(d);
+  const hit = W.defensePower(d, { ...E.emptyArmy(), catapult: 10 }); // −30% of 600
+  expect(full - hit).toBeCloseTo(180 * (1 + E.getRates(d).defenseBonus));
+});
+
+test("new troops unlock at higher building levels", () => {
+  const s = withBarracks(5);
+  expect(() => W.trainTroops(s, "swordsman", 1, T0)).not.toThrow();
+  expect(() => W.trainTroops(s, "axeman", 1, T0)).not.toThrow();
+  s.buildings.stable = 3;
+  expect(() => W.trainTroops(s, "paladin", 1, T0)).not.toThrow();
+  expect(() => W.trainTroops(s, "knight", 1, T0)).toThrow("Needs Stable level 10");
+});
+
+test("knights are mounted: weaker in forests and countered by spearmen", () => {
+  const atk = withBarracks();
+  const def = withBarracks();
+  def.army.spearman = 100;
+  const knights = { ...E.emptyArmy(), knight: 60 };
+  const axes = { ...E.emptyArmy(), axeman: 100 }; // same attack as the knights
+  const vsKnights = W.battleNumbers(atk, knights, def, "plains");
+  const vsAxes = W.battleNumbers(atk, axes, def, "plains");
+  expect(vsKnights.attack).toBeCloseTo(vsAxes.attack);
+  expect(vsKnights.defense).toBeGreaterThan(vsAxes.defense * 1.2);
+  expect(W.battleNumbers(atk, knights, def, "forest").attack).toBeCloseTo(vsKnights.attack * 0.75);
 });
 
 test("old saves get war fields", () => {

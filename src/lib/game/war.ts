@@ -16,10 +16,9 @@ import {
   MAX_TRAIN_BATCHES,
   RAIDED_SHIELD_MS,
   RAID_TRAVEL_SECONDS,
-  RAM_WALL_BREAK,
   RESOURCE_IDS,
   ResourceId,
-  SPEAR_VS_CAVALRY,
+  ANTI_CAVALRY_BONUS,
   UNITS,
   UNIT_BY_ID,
   UNIT_IDS,
@@ -104,19 +103,33 @@ export function attackPower(s: GameState, units: Army) {
   return raw * (1 + getRates(s).attackBonus);
 }
 
-/** Defense of a tribe against an attack bringing `rams` battering rams. */
-export function defensePower(s: GameState, rams = 0) {
+/** How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking army breaks, 0–1. */
+export function siegeBreak(sent: Army) {
+  let wall = 0;
+  let tower = 0;
+  for (const u of UNITS) {
+    wall += (u.wallBreak ?? 0) * (sent[u.id] ?? 0);
+    tower += (u.towerBreak ?? 0) * (sent[u.id] ?? 0);
+  }
+  return { wall: Math.min(1, wall), tower: Math.min(1, tower) };
+}
+
+/** Defense of a tribe against an attack by `sent` (its siege engines break walls and towers). */
+export function defensePower(s: GameState, sent?: Army) {
   const r = getRates(s);
   const troops = UNIT_IDS.reduce((sum, u) => sum + unitDefense(s, u) * s.army[u], 0);
-  const wall = r.wallBonus * Math.max(0, 1 - rams * RAM_WALL_BREAK);
-  return (troops + r.flatDefense + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
+  const br = sent ? siegeBreak(sent) : { wall: 0, tower: 0 };
+  const wall = r.wallBonus * (1 - br.wall);
+  const tower = r.flatDefense * (1 - br.tower);
+  return (troops + tower + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
 }
 
 /**
  * Attack and defense for one battle, with the strategy rules applied:
  * - the defender's terrain adds defense (hills +20%, forest +10%)
- * - cavalry fights 25% weaker in a forest
- * - spearmen defend 50% better against the cavalry share of the attack
+ * - mounted troops (Light Cavalry, Paladins, Knights) fight 25% weaker in a forest
+ * - anti-cavalry troops (Spearmen) defend 50% better against the mounted share of the attack
+ * - rams break the City Gate, catapults break the Watchtower
  * `defender` is null for a barbarian camp, which uses `campDef`.
  */
 export function battleNumbers(
@@ -127,7 +140,7 @@ export function battleNumbers(
   campDef = 0
 ) {
   const bonus = 1 + getRates(attacker).attackBonus;
-  let cav = unitAttack(attacker, "cavalry") * (sent.cavalry ?? 0) * bonus;
+  let cav = UNITS.filter((u) => u.mounted).reduce((a, u) => a + unitAttack(attacker, u.id) * (sent[u.id] ?? 0), 0) * bonus;
   const rest = attackPower(attacker, sent) - cav;
 
   if (terrain === "forest") cav *= 1 - FOREST_CAVALRY_PENALTY;
@@ -138,9 +151,11 @@ export function battleNumbers(
 
   if (defender) {
     const r = getRates(defender);
-    const spears = unitDefense(defender, "spearman") * defender.army.spearman * (1 + r.defenseBonus);
+    const spears =
+      UNITS.filter((u) => u.antiCavalry).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) *
+      (1 + r.defenseBonus);
 
-    defense = defensePower(defender, sent.ram ?? 0) * ground + spears * SPEAR_VS_CAVALRY * cavShare;
+    defense = defensePower(defender, sent) * ground + spears * ANTI_CAVALRY_BONUS * cavShare;
   } else {
     defense = campDef * ground;
   }

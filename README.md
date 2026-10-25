@@ -31,7 +31,7 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 
 ### War
 
-- **Troops:** Spearmen and Archers (Barracks), Cavalry (Stable), Battering Rams (Siege Workshop). Each has attack, defense, carry capacity, training time and a crop upkeep. Training runs as a queue (up to 5 batches); Military Command speeds it up.
+- **Troops:** infantry from the Barracks — Spearmen (1), Swordsmen (2), Archers (3), Axemen (5); horsemen from the Stable — Light Cavalry (1), Paladins (3), Knights (10); siege from the Siege Workshop — Battering Rams (1), Catapults (5). Each has attack, defense, carry capacity, speed, training time and a crop upkeep. Horsemen fight 25% weaker in forests and Spearmen defend 50% better against them. Rams break the City Gate bonus, catapults the Watchtower. Training runs as a queue (up to 5 batches); Military Command speeds it up.
 - **Raids on players:** the Raid tab lists unshielded tribes close to your power. Attack power vs defense (troops at home + Watchtower + militia, boosted by Armory, Trapmaker and City Gate; rams break the gate bonus), ±10% luck. The loser's army is wiped out; the winner loses (loser/winner)^1.5 of theirs. Hospital saves part of the losses.
 - **Loot:** winners carry home up to half of what the defender has above their Hideout's protected amount, limited by carry capacity. Armies take time to come home (War hall shortens it); loot arrives with them.
 - **Protection:** new players get a 72h shield (attacking a player ends it), and a raided tribe gets a 2h shield.
@@ -56,7 +56,7 @@ All routes need the `Authorization` header and return `{ serverTime, me, state }
 | POST | `/api/quests/start` | `{ quest: "telegram" \| "youtube" \| "x" }` |
 | POST | `/api/quests/claim` | `{ quest }` |
 | GET | `/api/friends` | — returns `{ total, friends[] }` |
-| POST | `/api/war/train` | `{ unit: "spearman" \| "archer" \| "cavalry" \| "ram", count }` |
+| POST | `/api/war/train` | `{ unit, count }` (unit ids in `config.ts`) |
 | POST | `/api/war/upgrade` | `{ unit }` — starts forging that troop type's next Arsenal upgrade |
 | GET | `/api/war/targets` | — tribes you can raid now |
 | POST | `/api/war/raid` | `{ target: playerId, units }` — also returns `report` |

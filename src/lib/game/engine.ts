@@ -50,7 +50,7 @@ import {
 
 export type Army = Record<UnitId, number>;
 
-export const emptyArmy = (): Army => ({ spearman: 0, archer: 0, cavalry: 0, ram: 0 });
+export const emptyArmy = (): Army => Object.fromEntries(UNIT_IDS.map((u) => [u, 0])) as Army;
 
 /** A batch of troops in training. Units finish one after another. */
 export type TrainItem = {
@@ -81,12 +81,8 @@ export type TroopRecord = { xp: number; level: number };
 /** An upgrade being forged in the Arsenal. */
 export type ForgeItem = { unit: UnitId; toLevel: number; startedAt: number; endsAt: number };
 
-export const emptyTroops = (): Record<UnitId, TroopRecord> => ({
-  spearman: { xp: 0, level: 0 },
-  archer: { xp: 0, level: 0 },
-  cavalry: { xp: 0, level: 0 },
-  ram: { xp: 0, level: 0 },
-});
+export const emptyTroops = (): Record<UnitId, TroopRecord> =>
+  Object.fromEntries(UNIT_IDS.map((u) => [u, { xp: 0, level: 0 }])) as Record<UnitId, TroopRecord>;
 
 /** Rank index (0 = Recruit) for an amount of XP. */
 export const rankForXp = (xp: number) => {
