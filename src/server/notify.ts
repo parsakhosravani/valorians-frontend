@@ -117,6 +117,20 @@ export const notify = {
         );
   },
 
+  tradeAccepted(
+    sellerId: number,
+    buyer: string,
+    t: { give: string; giveAmount: number; want: string; wantAmount: number },
+    travelMs: number
+  ) {
+    return sendToPlayer(
+      sellerId,
+      `🤝 <b>${esc(buyer)}</b> took your offer: ${fmt(t.giveAmount)} ${t.give} for ${fmt(t.wantAmount)} ${t.want}.\n\n` +
+        `Merchants arrive with your ${t.want} in <b>${inMinutes(travelMs)}</b>.`,
+      "🤝 Open the market"
+    );
+  },
+
   turnedBack(attackerId: number, target: string) {
     return sendToPlayer(
       attackerId,

@@ -153,7 +153,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Windmill", 150, { kind: "production", resource: "crop", perLevel: 60 }, "+60 crop per hour per level."),
   def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 10 }, "+10% crop production per level."),
   def("Treasury", 300, { kind: "coins", perLevel: 40 }, "+40 coins per hour per level."),
-  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour per level."),
+  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
   def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per tap per level."),
   def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
   def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1) and Archers (level 3)."),

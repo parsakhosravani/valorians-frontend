@@ -49,6 +49,12 @@ export const NAV_ICONS = {
       <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.4.6 4 2.8 4 6" />
     </Svg>
   ),
+  trade: (
+    <Svg>
+      <path d="M12 3v18M5 21h14" />
+      <path d="M4 7h16M7 7l-3 7a3 3 0 0 0 6 0zM17 7l-3 7a3 3 0 0 0 6 0z" />
+    </Svg>
+  ),
   mine: (
     <Svg>
       <path d="M14 4c3 0 6 2 7 5M3 21l9-9M10 4c-3 0-6 2-7 5" />
@@ -61,6 +67,7 @@ const items: { icon: React.ReactNode; name: string; link: Route }[] = [
   { icon: NAV_ICONS.hall, name: "Hall", link: "/hall" as Route },
   { icon: NAV_ICONS.build, name: "Build", link: "/tribe" },
   { icon: NAV_ICONS.war, name: "War", link: "/battle" },
+  { icon: NAV_ICONS.trade, name: "Trade", link: "/market" as Route },
   { icon: NAV_ICONS.friends, name: "Friends", link: "/friends" },
   { icon: NAV_ICONS.mine, name: "Mine", link: "/resources" },
 ];
@@ -72,7 +79,7 @@ export const Navbar = () => {
   return (
     <nav
       className={clsx(
-        "max-w-md w-full grid grid-cols-5 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
+        "max-w-md w-full grid grid-cols-6 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
         telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-3"
       )}
     >

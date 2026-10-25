@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { resolveDueAttacks } from "@/server/war";
+import { resolveDueTrades } from "@/server/trade";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Fights battles whose armies have arrived, even when nobody has the game
+ * Fights battles whose armies have arrived (and hands over traded goods), even when nobody has the game
  * open, so results (and bot notifications) go out on time. Called every few
  * minutes by .github/workflows/battles.yml.
  *
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
 
   await resolveDueAttacks(started);
+  await resolveDueTrades(started);
 
   return NextResponse.json({ ok: true, ms: Date.now() - started });
 }

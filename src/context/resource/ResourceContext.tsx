@@ -22,6 +22,7 @@ import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
 
 import { ApiError, PlayerView, apiRequest, insideTelegram, resolveAuthHeader } from "@/lib/api";
+import type { Offer } from "@/lib/game/trade";
 import {
   COMBO_WINDOW_MS,
   RESOURCE_IDS,
@@ -89,6 +90,12 @@ interface GameContextType {
   /** Quietly reloads the player's state (e.g. after a battle was fought on the server). */
   refresh: () => Promise<void>;
   scout: (target: number) => Promise<ScoutReport | null>;
+  /** Marketplace: post an offer, buy one, or take yours back. */
+  trade: {
+    post: (o: Offer) => Promise<boolean>;
+    accept: (id: number) => Promise<boolean>;
+    cancel: (id: number) => Promise<boolean>;
+  };
   authHeader: string | null;
 }
 
@@ -367,6 +374,11 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       const res = await send<PlayerView & { scout: ScoutReport }>("war/scout", { target });
 
       return res?.scout ?? null;
+    },
+    trade: {
+      post: (o) => act("trade/offer", o, "Offer posted on the market"),
+      accept: (id) => act("trade/accept", { id }, "Deal! Merchants are on their way"),
+      cancel: (id) => act("trade/cancel", { id }, "Offer cancelled, goods returned"),
     },
     authHeader,
   };
