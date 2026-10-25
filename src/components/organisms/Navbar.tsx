@@ -67,7 +67,6 @@ const items: { icon: React.ReactNode; name: string; link: Route }[] = [
   { icon: NAV_ICONS.hall, name: "Hall", link: "/hall" as Route },
   { icon: NAV_ICONS.build, name: "Build", link: "/tribe" },
   { icon: NAV_ICONS.war, name: "War", link: "/battle" },
-  { icon: NAV_ICONS.trade, name: "Trade", link: "/market" as Route },
   { icon: NAV_ICONS.friends, name: "Friends", link: "/friends" },
   { icon: NAV_ICONS.mine, name: "Mine", link: "/resources" },
 ];
@@ -79,8 +78,8 @@ export const Navbar = () => {
   return (
     <nav
       className={clsx(
-        "max-w-md w-full grid grid-cols-6 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
-        telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-3"
+        "max-w-md w-full grid grid-cols-5 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
+        telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-3",
       )}
     >
       {items.map((item) => {
@@ -91,7 +90,7 @@ export const Navbar = () => {
             key={item.name}
             className={clsx(
               "flex flex-col items-center gap-0.5 text-[11px]",
-              active ? "text-goldtext font-extrabold" : "text-muted font-bold"
+              active ? "text-goldtext font-extrabold" : "text-muted font-bold",
             )}
             href={item.link}
           >
