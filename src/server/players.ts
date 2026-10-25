@@ -72,6 +72,12 @@ const profileArgs = (u: TelegramAuthUser) => [
   u.is_premium ? 1 : 0,
 ];
 
+/** One log line per invite attempt, so missing friends can be traced in the logs. */
+const logReferral = (data: Record<string, unknown>) => {
+  // eslint-disable-next-line no-console
+  console.info(`[referral] ${JSON.stringify(data)}`);
+};
+
 /** New players can still be linked to an inviter this long after they first played. */
 const LATE_REFERRAL_MS = 48 * 3600 * 1000;
 
@@ -118,10 +124,14 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
               language_code = ?, is_premium = ?, last_seen_at = ? WHERE id = ?`,
       args: [...profileArgs(auth.user), now, auth.user.id],
     });
-    if (auth.startParam && existing.referredBy == null && now - existing.createdAt < LATE_REFERRAL_MS) {
+    if (auth.startParam && existing.referredBy == null) {
+      const young = now - existing.createdAt < LATE_REFERRAL_MS;
       // Opened the game once without the link (e.g. from the bot's menu
       // button), then came back through a friend's invite: still count it.
-      if (await linkLateReferral(existing, auth.startParam, !!auth.user.is_premium)) return (await findById(existing.id))!;
+      const linked = young && (await linkLateReferral(existing, auth.startParam, !!auth.user.is_premium));
+
+      logReferral({ user: existing.id, code: auth.startParam, kind: "existing", ageH: (now - existing.createdAt) / 3.6e6, linked });
+      if (linked) return (await findById(existing.id))!;
     }
     return existing;
   }
@@ -131,6 +141,8 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
   let referredBy: number | null = null;
 
   const inviterId = auth.startParam ? await findIdByCode(auth.startParam) : null;
+
+  logReferral({ user: auth.user.id, code: auth.startParam ?? null, kind: "new", inviter: inviterId });
   if (inviterId && inviterId !== auth.user.id) {
     referredBy = inviterId;
     const bonus = auth.user.is_premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins;
