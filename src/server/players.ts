@@ -240,6 +240,13 @@ export async function mutatePlayer(
   throw new Error("Too many simultaneous updates, try again");
 }
 
+/**
+ * Where a player's picture is served from: their Telegram profile photo,
+ * fetched through the bot (see /api/avatar/[id]). Works even when Telegram
+ * leaves the photo out of the sign-in data.
+ */
+export const avatarUrl = (id: number) => `/api/avatar/${id}`;
+
 export async function rankOf(population: number) {
   const db = await getDb();
   const rs = await db.execute({
@@ -259,7 +266,7 @@ export async function playerView(p: Player, now: number) {
       username: p.username,
       firstName: p.firstName,
       lastName: p.lastName,
-      photoUrl: p.photoUrl,
+      photoUrl: avatarUrl(p.id),
       referralCode: p.referralCode,
       invitedBy: inviter ? inviter.firstName || (inviter.username ? `@${inviter.username}` : "a friend") : null,
       rank: await rankOf(p.state.population),
@@ -291,7 +298,7 @@ export async function listFriends(id: number) {
         id: Number(f.id),
         name: String(f.first_name || f.username || "Player"),
         username: str(f.username),
-        photoUrl: str(f.photo_url),
+        photoUrl: avatarUrl(Number(f.id)),
         isPremium: premium,
         population: Math.floor(Number(f.population)),
         bonusCoins: premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins,

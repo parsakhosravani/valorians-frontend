@@ -5,7 +5,7 @@ import type { Row } from "@libsql/client";
 import { getDb } from "./db";
 import { homeOf } from "./map";
 import { notify } from "./notify";
-import { Player, findById, mutatePlayer } from "./players";
+import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { displayName } from "./war";
 
 import type { ResourceId } from "@/lib/game/config";
@@ -182,7 +182,7 @@ export async function resolveDueTrades(now: number) {
 const who = async (id: number | null) => {
   const p = id == null ? null : await findById(id);
 
-  return p ? { id: p.id, name: displayName(p), photoUrl: p.photoUrl } : null;
+  return p ? { id: p.id, name: displayName(p), photoUrl: avatarUrl(p.id) } : null;
 };
 
 /** Everything the Trade page shows. */
@@ -232,7 +232,7 @@ export async function marketView(me: Player, now: number) {
             username: r.username == null ? null : String(r.username),
             firstName: String(r.first_name ?? ""),
           }),
-          photoUrl: r.photo_url == null ? null : String(r.photo_url),
+          photoUrl: avatarUrl(t.sellerId),
         },
         tiles: Math.round(tiles * 10) / 10,
         travelMs: tradeTravelMs(tiles),

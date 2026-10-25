@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { getDb } from "./db";
 import { homeOf } from "./map";
 import { notify } from "./notify";
-import { Player, findById, mutatePlayer } from "./players";
+import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
 import { GameError, advance, emptyArmy, getRates } from "@/lib/game/engine";
 import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
@@ -59,7 +59,7 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
     targets.push({
       id: p.id,
       name: displayName(p),
-      photoUrl: p.photoUrl,
+      photoUrl: avatarUrl(p.id),
       population: Math.floor(s.population),
       power: powerScore(s),
       defense: scoutEstimate(s, me.state),
@@ -384,7 +384,7 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
       rank: i + 1,
       id: Number(r.id),
       name: String(r.first_name || (r.username ? `@${r.username}` : "Player")),
-      photoUrl: r.photo_url == null ? null : String(r.photo_url),
+      photoUrl: avatarUrl(Number(r.id)),
       value: Math.floor(Number(r[col])),
       isMe: Number(r.id) === me.id,
     })),

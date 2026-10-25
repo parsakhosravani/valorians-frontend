@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getDb } from "./db";
-import { Player } from "./players";
+import { Player, avatarUrl } from "./players";
 
 import { advance } from "@/lib/game/engine";
 import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
@@ -79,7 +79,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     return {
       id,
       name: String(row.first_name || (row.username ? `@${row.username}` : "Player")),
-      photoUrl: row.photo_url == null ? null : String(row.photo_url),
+      photoUrl: avatarUrl(id),
       x: p.x,
       y: p.y,
       isMe: id === me.id,
