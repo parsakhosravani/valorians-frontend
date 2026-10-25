@@ -120,3 +120,78 @@ test("old saves get war fields", () => {
   expect(s.shieldUntil).toBe(0);
   expect(s.camps.cleared).toBe(0);
 });
+
+// ─── Ranks and upgrades ──────────────────────────────────────────────────────
+
+test("winning at a camp gives XP; enough XP promotes the regiment and makes it stronger", () => {
+  let s = withBarracks();
+  s.army.spearman = 50;
+  const weak = W.attackPower(s, s.army);
+  const { state, report } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 50 }, T0, 0.5);
+  // camp 1 defense 80 × 0.2 = 16 XP, all for the spearmen
+  expect(report.attackerXp?.spearman).toBe(16);
+  expect(state.troops.spearman.xp).toBeGreaterThan(14);
+  expect(E.unitRank(state, "spearman")).toBe(0);
+
+  s = withBarracks();
+  s.army.spearman = 50;
+  s.troops.spearman.xp = 95;
+  const r2 = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 50 }, T0, 0.5);
+  expect(r2.report.attackerPromoted).toEqual([{ unit: "spearman", rank: 1 }]);
+  const back = E.advance(r2.state, r2.report.returnsAt + 1);
+  expect(W.attackPower(back, { ...E.emptyArmy(), spearman: 50 })).toBeCloseTo(weak * 1.04);
+});
+
+test("XP is shared by contribution and a wiped-out regiment loses some of its XP", () => {
+  const s = withBarracks(3);
+  s.buildings.stable = 1;
+  s.army = { spearman: 10, archer: 0, cavalry: 10, ram: 0 };
+  const xp = W.battleXp(s, s.army, 1000, true, "attack");
+  // spears 12×10 vs cavalry 45×10 → 120:450 of 200 XP
+  expect(xp.spearman).toBe(42);
+  expect(xp.cavalry).toBe(158);
+
+  const t = withBarracks();
+  t.army.spearman = 2;
+  t.troops.spearman.xp = 1000;
+  const { state } = W.raidCamp(t, 1, { ...E.emptyArmy(), spearman: 2 }, T0, 0.5);
+  // all 2 died: −40%, then +8 XP for the lost fight (80 × 0.2 × 0.5)
+  expect(state.troops.spearman.xp).toBe(608);
+});
+
+test("defenders earn XP too, and raid attackers get theirs when the report arrives", () => {
+  const atk = withBarracks();
+  atk.army.spearman = 100;
+  const def = withBarracks();
+  def.shieldUntil = 0;
+  def.army.spearman = 5;
+  const d = W.dispatchRaid(atk, { ...E.emptyArmy(), spearman: 100 }, T0);
+  const { state: defAfter, report } = W.defendRaid(def, d.state, d.sent, T0, 0.5);
+  expect(report.attackerWon).toBe(true);
+  expect(report.defenderXp!.spearman).toBeGreaterThan(0);
+  expect(defAfter.troops.spearman.xp).toBeGreaterThan(0);
+
+  const atkAfter = W.receiveRaidReport(d.state, report, "Def", T0, 0.3);
+  expect(atkAfter.troops.spearman.xp).toBeGreaterThan(0);
+});
+
+test("Arsenal upgrades: need the Arsenal and rank, cost resources, finish over time", () => {
+  let s = withBarracks();
+  expect(() => W.upgradeTroop(s, "spearman", T0)).toThrow("Build the Arsenal");
+  s.buildings.arsenal = 1;
+  s = W.upgradeTroop(s, "spearman", T0);
+  expect(s.resources.iron).toBe(14000 - 500);
+  expect(() => W.upgradeTroop(s, "spearman", T0)).toThrow("already forging");
+  const ends = s.forge!.endsAt;
+  expect(E.advance(s, ends - 1).troops.spearman.level).toBe(0);
+  s = E.advance(s, ends);
+  expect(s.troops.spearman.level).toBe(1);
+  expect(s.forge).toBeNull();
+  expect(E.unitMultiplier(s, "spearman")).toBeCloseTo(1.05);
+
+  // A Recruit regiment stops at level 2
+  s.troops.spearman.level = 2;
+  expect(() => W.upgradeTroop(s, "spearman", T0)).toThrow("more battle experience");
+  s.troops.spearman.xp = 100; // Soldier → cap 4
+  expect(() => W.upgradeTroop(s, "spearman", T0)).not.toThrow();
+});

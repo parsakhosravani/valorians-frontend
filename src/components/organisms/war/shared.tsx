@@ -1,8 +1,11 @@
 "use client";
 import clsx from "clsx";
 
-import { UNITS, UnitId, UNIT_BY_ID } from "@/lib/game/config";
-import type { Army } from "@/lib/game/engine";
+import { TroopPortrait } from "./TroopPortrait";
+
+import { useResourceContext } from "@/context";
+import { UNITS, UnitId } from "@/lib/game/config";
+import { unitRank, type Army } from "@/lib/game/engine";
 
 export const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
 
@@ -12,13 +15,16 @@ export const Card = ({ children, className }: { children: React.ReactNode; class
   </div>
 );
 
-export const UnitBadge = ({ unit, size = 36 }: { unit: UnitId; size?: number }) => (
-  <div
-    className="rounded-full bg-[#1E1610] border-2 border-[#E3A948] flex items-center justify-center shrink-0"
-    style={{ width: size, height: size, fontSize: size * 0.5 }}
-  >
-    {UNIT_BY_ID[unit].icon}
-  </div>
+/** Framed portrait of a troop type, showing your regiment's current rank. */
+export const UnitBadge = ({ unit, size = 36 }: { unit: UnitId; size?: number }) => {
+  const { state } = useResourceContext();
+
+  return <TroopPortrait className="shrink-0" rank={state ? unitRank(state, unit) : 0} size={size} unit={unit} />;
+};
+
+/** Tiny unframed portrait for use inside a line of text. */
+export const UnitIcon = ({ unit, size = 18 }: { unit: UnitId; size?: number }) => (
+  <TroopPortrait className="inline-block align-[-4px] rounded-full" framed={false} size={size} unit={unit} />
 );
 
 /** "🛡️ 12  🏹 3" — only units with a count. */
@@ -30,8 +36,8 @@ export const ArmyLine = ({ army, className }: { army: Army; className?: string }
   return (
     <span className={clsx("inline-flex flex-wrap gap-x-2", className)}>
       {parts.map((u) => (
-        <span key={u.id}>
-          {u.icon} {fmt(army[u.id])}
+        <span key={u.id} className="inline-flex items-center gap-1">
+          <UnitIcon unit={u.id} /> {fmt(army[u.id])}
         </span>
       ))}
     </span>

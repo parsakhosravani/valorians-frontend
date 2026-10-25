@@ -7,10 +7,11 @@ import { homeOf } from "./map";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
-import { GameError, advance, emptyArmy, getRates } from "@/lib/game/engine";
+import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
 import { Point, campPosition, distance, marchMs, scoutCost, terrainAt } from "@/lib/game/map";
 import {
+  Promotion,
   RaidReport,
   armySize,
   battleNumbers,
@@ -182,6 +183,13 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   arrivesAt: Number(r.arrives_at),
 });
 
+/** Troop types whose rank went up from one state to the next. */
+const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, after: typeof before): Promotion[] =>
+  UNIT_IDS.filter((u) => rankForXp(after.troops[u].xp) > rankForXp(before.troops[u].xp)).map((u) => ({
+    unit: u,
+    rank: rankForXp(after.troops[u].xp),
+  }));
+
 /** The battle at the end of one march. Times use the arrival moment. */
 async function resolveAttack(a: AttackRow, now: number) {
   const at = a.arrivesAt;
@@ -239,10 +247,19 @@ async function resolveAttack(a: AttackRow, now: number) {
   const r: RaidReport = report;
   const full: StoredReport = { ...r, attackerName: displayName(attacker), defenderName: displayName(defender) };
 
-  await mutatePlayer(attacker.id, now, (s) => receiveRaidReport(s, r, full.defenderName, at, rand(), a.to));
+  let promoted: Promotion[] = [];
+
+  await mutatePlayer(attacker.id, now, (s) => {
+    const next = receiveRaidReport(s, r, full.defenderName, at, rand(), a.to);
+
+    promoted = promotionsBetween(s, next);
+
+    return next;
+  });
+  full.attackerPromoted = promoted;
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
   await Promise.all([
-    notify.attackResult(attacker.id, full.defenderName, r, now),
+    notify.attackResult(attacker.id, full.defenderName, full, now),
     r.attackerWon ? notify.raided(defender.id, full.attackerName, r, attacker.id) : notify.defended(defender.id, full.attackerName, r),
   ]);
 }
