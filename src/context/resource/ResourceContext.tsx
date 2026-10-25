@@ -89,6 +89,8 @@ interface GameContextType {
   /** Quietly reloads the player's state (e.g. after a battle was fought on the server). */
   refresh: () => Promise<void>;
   scout: (target: number) => Promise<ScoutReport | null>;
+  /** Picks a portrait, or null to use the Telegram photo. */
+  setAvatar: (avatar: string | null) => Promise<boolean>;
   authHeader: string | null;
 }
 
@@ -368,6 +370,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
 
       return res?.scout ?? null;
     },
+    setAvatar: (avatar) => act("me/avatar", { avatar }, "Avatar updated"),
     authHeader,
   };
 

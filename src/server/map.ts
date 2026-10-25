@@ -1,5 +1,7 @@
 import "server-only";
 
+import { SHOWN_PHOTO_SQL } from "@/lib/game/avatars";
+
 import { getDb } from "./db";
 import { Player } from "./players";
 
@@ -67,7 +69,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const r = Math.max(8, Math.min(30, Math.round(radius) || VIEW_RADIUS));
 
   const rs = await db.execute({
-    sql: `SELECT id, username, first_name, photo_url, population, power, shield_until, map_x, map_y, state
+    sql: `SELECT id, username, first_name, ${SHOWN_PHOTO_SQL}, population, power, shield_until, map_x, map_y, state
           FROM users WHERE map_x BETWEEN ? AND ? AND map_y BETWEEN ? AND ?`,
     args: [c.x - r, c.x + r, c.y - r, c.y + r],
   });
