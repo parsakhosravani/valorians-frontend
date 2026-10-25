@@ -5,9 +5,10 @@ import crypto from "crypto";
 import { getDb } from "./db";
 import { homeOf } from "./map";
 import { notify } from "./notify";
-import { Player, findById, mutatePlayer } from "./players";
+import { Player, findById, mutatePlayer, shownPhoto } from "./players";
 
 import { GameError, advance, emptyArmy, getRates } from "@/lib/game/engine";
+import { SHOWN_PHOTO_SQL } from "@/lib/game/avatars";
 import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
 import { Point, campPosition, distance, marchMs, scoutCost, terrainAt } from "@/lib/game/map";
 import {
@@ -59,7 +60,7 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
     targets.push({
       id: p.id,
       name: displayName(p),
-      photoUrl: p.photoUrl,
+      photoUrl: shownPhoto(p),
       population: Math.floor(s.population),
       power: powerScore(s),
       defense: scoutEstimate(s, me.state),
@@ -370,7 +371,7 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   const db = await getDb();
   const [top, mine] = await db.batch(
     [
-      `SELECT id, username, first_name, photo_url, population, power, wins FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
+      `SELECT id, username, first_name, ${SHOWN_PHOTO_SQL}, population, power, wins FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
       { sql: `SELECT ${col} AS v FROM users WHERE id = ?`, args: [me.id] },
     ],
     "read"

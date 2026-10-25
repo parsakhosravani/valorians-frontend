@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
@@ -14,6 +14,8 @@ const usable = (url?: string | null) => !!url;
 
 export const Avatar = ({ src, size, className }: { src?: string | null; size: number; className?: string }) => {
   const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [src]);
   const cls = clsx("object-cover shrink-0", className);
 
   if (usable(src) && !failed) {

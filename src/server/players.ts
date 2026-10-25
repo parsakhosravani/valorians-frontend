@@ -7,7 +7,8 @@ import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
 
 import { REFERRAL_REWARD } from "@/lib/game/config";
-import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
+import { AvatarId, SHOWN_PHOTO_SQL, avatarSrc, isAvatarId } from "@/lib/game/avatars";
+import { GameError, GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 
 /** Columns copied out of the state so they can be sorted and filtered in SQL. */
@@ -26,6 +27,8 @@ export type Player = {
   photoUrl: string | null;
   /** The raw Telegram photo URL last checked (photoUrl is null if it was only a letter tile). */
   photoSrc: string | null;
+  /** A portrait the player picked; null means use the Telegram photo. */
+  avatar: AvatarId | null;
   isPremium: boolean;
   referralCode: string;
   referredBy: number | null;
@@ -43,6 +46,7 @@ const toPlayer = (r: Row): Player => ({
   lastName: str(r.last_name),
   photoUrl: str(r.photo_url),
   photoSrc: str(r.photo_src),
+  avatar: isAvatarId(r.avatar) ? r.avatar : null,
   isPremium: Number(r.is_premium) === 1,
   referralCode: String(r.referral_code),
   referredBy: r.referred_by == null ? null : Number(r.referred_by),
@@ -240,6 +244,19 @@ export async function mutatePlayer(
   throw new Error("Too many simultaneous updates, try again");
 }
 
+/** The picture other players see: the picked portrait, else the Telegram photo. */
+export const shownPhoto = (p: Pick<Player, "avatar" | "photoUrl">) => (p.avatar ? avatarSrc(p.avatar) : p.photoUrl);
+
+/** Picks a portrait, or null to go back to the Telegram photo. */
+export async function setAvatar(p: Player, avatar: unknown) {
+  if (avatar != null && !isAvatarId(avatar)) throw new GameError("Unknown avatar");
+  const db = await getDb();
+
+  await db.execute({ sql: "UPDATE users SET avatar = ? WHERE id = ?", args: [avatar ?? null, p.id] });
+
+  return { ...p, avatar: (avatar ?? null) as AvatarId | null };
+}
+
 export async function rankOf(population: number) {
   const db = await getDb();
   const rs = await db.execute({
@@ -259,7 +276,9 @@ export async function playerView(p: Player, now: number) {
       username: p.username,
       firstName: p.firstName,
       lastName: p.lastName,
-      photoUrl: p.photoUrl,
+      photoUrl: shownPhoto(p),
+      telegramPhotoUrl: p.photoUrl,
+      avatar: p.avatar,
       referralCode: p.referralCode,
       invitedBy: inviter ? inviter.firstName || (inviter.username ? `@${inviter.username}` : "a friend") : null,
       rank: await rankOf(p.state.population),
@@ -276,7 +295,7 @@ export async function listFriends(id: number) {
     [
       { sql: "SELECT COUNT(*) AS n FROM users WHERE referred_by = ?", args: [id] },
       {
-        sql: `SELECT id, username, first_name, photo_url, is_premium, population, created_at
+        sql: `SELECT id, username, first_name, ${SHOWN_PHOTO_SQL}, is_premium, population, created_at
               FROM users WHERE referred_by = ? ORDER BY created_at DESC LIMIT 200`,
         args: [id],
       },
