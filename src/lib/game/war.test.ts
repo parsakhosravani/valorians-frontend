@@ -195,3 +195,14 @@ test("Arsenal upgrades: need the Arsenal and rank, cost resources, finish over t
   s.troops.spearman.xp = 100; // Soldier → cap 4
   expect(() => W.upgradeTroop(s, "spearman", T0)).not.toThrow();
 });
+
+test("states saved before ranks existed still work everywhere", () => {
+  const old = E.createInitialState(T0) as any;
+  delete old.troops;
+  delete old.forge;
+  old.army.spearman = 10;
+  const s = E.advance(old, T0 + 1000);
+  expect(W.powerScore(s)).toBeGreaterThan(0);
+  expect(W.defensePower(s)).toBeGreaterThan(0);
+  expect(E.normalizeState(old).troops.spearman).toEqual({ xp: 0, level: 0 });
+});

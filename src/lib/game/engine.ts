@@ -95,11 +95,11 @@ export const rankForXp = (xp: number) => {
   return r;
 };
 
-export const unitRank = (s: GameState, u: UnitId) => rankForXp(s.troops[u]?.xp ?? 0);
+export const unitRank = (s: GameState, u: UnitId) => rankForXp(s.troops?.[u]?.xp ?? 0);
 
 /** Attack and defense multiplier a troop type gets from its rank and upgrades. */
 export const unitMultiplier = (s: GameState, u: UnitId) =>
-  1 + unitRank(s, u) * RANK_BONUS + (s.troops[u]?.level ?? 0) * UPGRADE_BONUS;
+  1 + unitRank(s, u) * RANK_BONUS + (s.troops?.[u]?.level ?? 0) * UPGRADE_BONUS;
 
 export type WarStats = {
   attacksWon: number;
@@ -454,7 +454,9 @@ function structuredCloneState(s: GameState): GameState {
     war: { ...s.war },
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
-    troops: Object.fromEntries(UNIT_IDS.map((u) => [u, { ...s.troops[u] }])) as Record<UnitId, TroopRecord>,
+    troops: Object.fromEntries(
+      UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0, level: s.troops?.[u]?.level ?? 0 }])
+    ) as Record<UnitId, TroopRecord>,
     forge: s.forge ? { ...s.forge } : null,
   };
 }
