@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
-import bg from "~/images/background/battle.webp";
+import bg from "~/images/background/intro.webp";
 import hallBg from "~/images/background/tribe.webp";
 import coin from "~/images/resources/coin.webp";
 import iron from "~/images/resources/iron.webp";
@@ -32,29 +32,6 @@ const TIPS = [
 
 const MIN_SHOW_MS = 1200;
 const SLOW_MS = 12000;
-
-const Emblem = () => (
-  <svg aria-hidden="true" className="w-24 h-24 drop-shadow-[0_0_24px_rgba(227,169,72,0.45)]" viewBox="0 0 64 64">
-    <path
-      d="M32 5 54 13v16c0 14-10 23-22 30C20 52 10 43 10 29V13z"
-      fill="#1E1610"
-      stroke="#E3A948"
-      strokeLinejoin="round"
-      strokeWidth="2.5"
-    />
-    <path d="M32 11 48 17v12c0 10-7 17-16 22-9-5-16-12-16-22V17z" fill="none" stroke="#6B4A2B" strokeWidth="1.2" />
-    <path d="M22 21l20 20M42 21 22 41" stroke="#F2C66D" strokeLinecap="round" strokeWidth="3.5" />
-    <path
-      d="M18.5 18.5l6.5 1-1 6.5M45.5 18.5l-6.5 1 1 6.5"
-      fill="none"
-      stroke="#E8612C"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2.5"
-    />
-    <circle cx="32" cy="31" fill="#E3A948" r="3" />
-  </svg>
-);
 
 const EMBERS = Array.from({ length: 14 }, (_, i) => ({
   left: (i * 37) % 100,
@@ -149,12 +126,15 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
       <Image
         priority
         alt=""
-        className="absolute inset-0 w-full h-full object-cover object-top motion-safe:animate-kenburns"
+        className="absolute inset-0 w-full h-full object-cover object-[50%_30%] motion-safe:animate-kenburns"
         placeholder="blur"
         src={bg}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-ground/30 via-ground/40 to-ground" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_35%,rgba(232,97,44,0.18),transparent_60%)]" />
+      {/* Keep the painting vivid: darken only behind the title and the loading bar. */}
+      <div className="absolute inset-x-0 top-0 h-[34%] bg-gradient-to-b from-ground/85 via-ground/40 to-transparent" />
+      <div className="absolute inset-x-0 bottom-0 h-[45%] bg-gradient-to-t from-ground via-ground/80 to-transparent" />
+      {/* Lightning flicker in the storm. */}
+      <div className="absolute inset-0 bg-[#BFE8FF] mix-blend-overlay pointer-events-none motion-safe:animate-[lightning_7s_ease-in-out_infinite] opacity-0" />
 
       <div aria-hidden="true" className="absolute inset-0 pointer-events-none motion-reduce:hidden">
         {EMBERS.map((e, i) => (
@@ -173,9 +153,8 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
         ))}
       </div>
 
-      <div className="relative h-full flex flex-col items-center px-8 pt-[22svh] pb-8">
-        <Emblem />
-        <h1 className="mt-5 font-display font-black text-[44px] leading-none tracking-[0.06em] text-transparent bg-clip-text bg-gradient-to-b from-[#FBE3A6] via-goldtext to-gold drop-shadow-[0_2px_0_rgba(0,0,0,0.6)]">
+      <div className="relative h-full flex flex-col items-center px-8 pt-[7svh] pb-8">
+        <h1 className="font-display font-black text-[46px] leading-none tracking-[0.06em] text-transparent bg-clip-text bg-gradient-to-b from-[#FBE3A6] via-goldtext to-gold drop-shadow-[0_3px_6px_rgba(0,0,0,0.9)]">
           VALORIANS
         </h1>
         <div className="mt-2 flex items-center gap-3 text-goldtext">
