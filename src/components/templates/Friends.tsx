@@ -15,7 +15,7 @@ import { REFERRAL_REWARD } from "@/lib/game/config";
 
 export const Friends: FunctionComponent = () => {
   useBackButton();
-  const { authHeader } = useGame();
+  const { authHeader, me } = useGame();
   const [data, setData] = useState<{ total: number; friends: Friend[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,6 +75,15 @@ export const Friends: FunctionComponent = () => {
               No friends yet. Share your invite link and you&apos;ll both get bonuses when they start playing.
             </p>
           )}
+          <p className="text-xs text-[#B19C80] mt-1 mb-2">
+            Friends count when they open the game through your link within 2 days of starting to play. Your code:{" "}
+            <b className="text-goldtext">{me.referralCode}</b>
+            {me.invitedBy && (
+              <>
+                {" "}· You joined through <b className="text-parch">{me.invitedBy}</b>&apos;s invite
+              </>
+            )}
+          </p>
           <div className="grid grid-cols-2 gap-2.5 w-full pb-4">
             {data?.friends.map((f) => (
               <div
