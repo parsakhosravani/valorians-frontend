@@ -5,4 +5,3 @@ export * from "./Drawer";
 export * from "./ProgressBar";
 export * from "./TextImage";
 export * from "./Avatar";
-export * from "./AvatarPicker";

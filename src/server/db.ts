@@ -84,7 +84,6 @@ async function init(): Promise<Client> {
     "map_x INTEGER",
     "map_y INTEGER",
     "photo_src TEXT",
-    "avatar TEXT",
   ]) {
     await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
   }
