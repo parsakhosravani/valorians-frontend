@@ -260,7 +260,7 @@ export type UnitDef = {
 
 export const UNITS: UnitDef[] = [
   {
-    id: "spearman", name: "Spearman", icon: "🛡️", attack: 12, defense: 18, carry: 25,
+    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 18, carry: 25,
     cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 1 },
     description: "Cheap, sturdy defender. Strong against cavalry.",
