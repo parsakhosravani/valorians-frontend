@@ -237,6 +237,22 @@ export const Hall = () => {
     });
   }
 
+  // 5b. Storage nearly full: sell the surplus on the Market
+  const fullest = RESOURCES.map((r) => ({ r, share: state.resources[r.id] / rates.capacity })).sort(
+    (a, b) => b.share - a.share
+  )[0];
+
+  if (fullest && fullest.share >= 0.9 && (state.buildings["trading-post"] ?? 0) >= 1) {
+    tasks.push({
+      key: "trade",
+      img: buildingImage(BUILDING_BY_ID["trading-post"]),
+      title: `Trade your extra ${fullest.r.name.toLowerCase()}`,
+      sub: `Storage is ${Math.round(fullest.share * 100)}% full. Swap it on the Market`,
+      state: "todo",
+      action: { label: "Trade", href: "/market" },
+    });
+  }
+
   // 6. Barbarian camp
   const nextCamp = state.camps.cleared + 1;
 
