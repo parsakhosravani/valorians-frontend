@@ -24,6 +24,8 @@ export type Player = {
   firstName: string;
   lastName: string | null;
   photoUrl: string | null;
+  /** The raw Telegram photo URL last checked (photoUrl is null if it was only a letter tile). */
+  photoSrc: string | null;
   isPremium: boolean;
   referralCode: string;
   referredBy: number | null;
@@ -40,6 +42,7 @@ const toPlayer = (r: Row): Player => ({
   firstName: String(r.first_name ?? ""),
   lastName: str(r.last_name),
   photoUrl: str(r.photo_url),
+  photoSrc: str(r.photo_src),
   isPremium: Number(r.is_premium) === 1,
   referralCode: String(r.referral_code),
   referredBy: r.referred_by == null ? null : Number(r.referred_by),
@@ -62,6 +65,29 @@ async function findIdByCode(code: string) {
 
 const newReferralCode = () =>
   crypto.randomBytes(9).toString("base64url").replace(/[-_]/g, "").slice(0, 8);
+
+/**
+ * Telegram always sends a photo URL, but when the picture is private or the
+ * user has none it is a generated letter tile. Those are small SVGs with
+ * text and no embedded image; treat them as "no photo" so the game shows its
+ * own default avatar. Returns the URL to keep, or null.
+ */
+async function realPhoto(url: string | undefined): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+
+    if (!res.ok) return null;
+    const type = res.headers.get("content-type") ?? "";
+
+    if (!type.includes("svg")) return url; // a real jpeg/png
+    const body = await res.text();
+
+    return /<image\b/i.test(body) ? url : null;
+  } catch {
+    return url; // can't tell; the client falls back if it fails to load
+  }
+}
 
 const profileArgs = (u: TelegramAuthUser) => [
   u.username ?? null,
@@ -113,11 +139,19 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
   const existing = await findById(auth.user.id);
 
   if (existing) {
+    const src = auth.user.photo_url ?? null;
+    // Only re-check the picture when Telegram sends a different URL.
+    const photo = src === existing.photoSrc ? existing.photoUrl : await realPhoto(auth.user.photo_url);
+    const args = profileArgs(auth.user);
+
+    args[3] = photo;
     await db.execute({
       sql: `UPDATE users SET username = ?, first_name = ?, last_name = ?, photo_url = ?,
-              language_code = ?, is_premium = ?, last_seen_at = ? WHERE id = ?`,
-      args: [...profileArgs(auth.user), now, auth.user.id],
+              language_code = ?, is_premium = ?, last_seen_at = ?, photo_src = ? WHERE id = ?`,
+      args: [...args, now, src, auth.user.id],
     });
+    existing.photoUrl = photo;
+    existing.photoSrc = src;
     if (auth.startParam && existing.referredBy == null && now - existing.createdAt < LATE_REFERRAL_MS) {
       // Opened the game once without the link (e.g. from the bot's menu
       // button), then came back through a friend's invite: still count it.

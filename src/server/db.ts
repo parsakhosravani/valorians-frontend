@@ -83,6 +83,7 @@ async function init(): Promise<Client> {
     "shield_until INTEGER NOT NULL DEFAULT 0",
     "map_x INTEGER",
     "map_y INTEGER",
+    "photo_src TEXT",
   ]) {
     await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
   }
