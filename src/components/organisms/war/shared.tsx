@@ -12,14 +12,30 @@ export const Card = ({ children, className }: { children: React.ReactNode; class
   </div>
 );
 
-export const UnitBadge = ({ unit, size = 36 }: { unit: UnitId; size?: number }) => (
-  <div
-    className="rounded-full bg-[#1E1610] border-2 border-[#E3A948] flex items-center justify-center shrink-0"
-    style={{ width: size, height: size, fontSize: size * 0.5 }}
-  >
-    {UNIT_BY_ID[unit].icon}
-  </div>
-);
+/** Splits an icon like "🛡️🗡️" into its emoji. */
+const emojiParts = (icon: string) =>
+  typeof Intl !== "undefined" && "Segmenter" in Intl
+    ? Array.from(new Intl.Segmenter().segment(icon), (s) => s.segment)
+    : [icon];
+
+export const UnitBadge = ({ unit, size = 36 }: { unit: UnitId; size?: number }) => {
+  const [first, second] = emojiParts(UNIT_BY_ID[unit].icon);
+
+  return (
+    <div
+      className="relative rounded-full bg-[#1E1610] border-2 border-[#E3A948] flex items-center justify-center shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.5 }}
+    >
+      {first}
+      {/* A second emoji (the Knight's sword) is drawn over the first. */}
+      {second && (
+        <span className="absolute" style={{ fontSize: size * 0.38, right: size * 0.12, bottom: size * 0.1 }}>
+          {second}
+        </span>
+      )}
+    </div>
+  );
+};
 
 /** "🛡️ 12  🏹 3" — only units with a count. */
 export const ArmyLine = ({ army, className }: { army: Army; className?: string }) => {

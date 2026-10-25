@@ -268,14 +268,14 @@ export type UnitDef = {
 
 export const UNITS: UnitDef[] = [
   {
-    id: "spearman", name: "Spearman", icon: "🛡️", attack: 12, defense: 18, carry: 25,
+    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 18, carry: 25,
     cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 1 },
     description: "Cheap, sturdy defender. Strong against cavalry.",
     antiCavalry: true,
   },
   {
-    id: "swordsman", name: "Swordsman", icon: "🤺", attack: 30, defense: 22, carry: 40,
+    id: "swordsman", name: "Swordsman", icon: "🗡️", attack: 30, defense: 22, carry: 40,
     cost: { iron: 70, wood: 40, clay: 45, crop: 25 }, time: 25, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 2 },
     description: "Well-armored all-rounder. Good in attack and defense.",
@@ -307,7 +307,7 @@ export const UNITS: UnitDef[] = [
     mounted: true,
   },
   {
-    id: "knight", name: "Knight", icon: "🏇", attack: 75, defense: 40, carry: 80,
+    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 75, defense: 40, carry: 80,
     cost: { iron: 220, wood: 160, clay: 150, crop: 90 }, time: 90, upkeep: 4, speed: 14,
     requires: { building: "stable", level: 10 },
     description: "Heavy armored knight. The strongest attacker in the game.",
