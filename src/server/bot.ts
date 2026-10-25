@@ -121,7 +121,7 @@ async function howToPlay(chatId: number) {
       `<b>1. Build.</b> Mines, Sawmill, Brickyard and Windmill produce resources every hour, even while you're away. ` +
       `The Town Hall builds faster and unlocks more builders.\n\n` +
       `<b>2. Mine daily.</b> Strike the rocks in the Daily Mine for a big boost. Stamina refills every day.\n\n` +
-      `<b>3. Train an army.</b> Spearmen and Huscarls hold the line, archers and berserkers hit hard, cavalry and raiders ride fast, rams and catapults break defenses.\n\n` +
+      `<b>3. Train an army.</b> Spearmen and swordsmen hold the line, archers and axemen hit hard, cavalry, paladins and knights ride fast, rams and catapults break defenses.\n\n` +
       `<b>4. Conquer the map.</b> Raid barbarian camps and rival tribes. Armies take time to march, so plan your strikes. ` +
       `Hills and forests help defenders; scout before you attack.\n\n` +
       `<b>5. Trade.</b> Build a Trading Post and swap your extra resources with other chiefs.\n\n` +

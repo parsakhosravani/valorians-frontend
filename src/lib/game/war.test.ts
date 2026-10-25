@@ -122,22 +122,24 @@ test("catapults break the Watchtower", () => {
 
 test("new troops unlock at higher building levels", () => {
   const s = withBarracks(5);
-  expect(() => W.trainTroops(s, "berserker", 1, T0)).not.toThrow();
-  expect(() => W.trainTroops(s, "huscarl", 1, T0)).toThrow("Needs Barracks level 10");
-  s.buildings.stable = 4;
-  expect(() => W.trainTroops(s, "raider", 1, T0)).toThrow("Needs Stable level 5");
+  expect(() => W.trainTroops(s, "swordsman", 1, T0)).not.toThrow();
+  expect(() => W.trainTroops(s, "axeman", 1, T0)).not.toThrow();
+  s.buildings.stable = 3;
+  expect(() => W.trainTroops(s, "paladin", 1, T0)).not.toThrow();
+  expect(() => W.trainTroops(s, "knight", 1, T0)).toThrow("Needs Stable level 10");
 });
 
-test("raiders count as mounted, huscarls as anti-cavalry", () => {
+test("knights are mounted: weaker in forests and countered by spearmen", () => {
   const atk = withBarracks();
   const def = withBarracks();
-  def.army.huscarl = 50;
-  const raid = { ...E.emptyArmy(), raider: 100 };
-  const foot = { ...E.emptyArmy(), berserker: 74 }; // about the same attack as the raiders
-  const vsRaiders = W.battleNumbers(atk, raid, def, "plains");
-  const vsFoot = W.battleNumbers(atk, foot, def, "plains");
-  expect(vsRaiders.defense).toBeGreaterThan(vsFoot.defense * 1.2);
-  expect(W.battleNumbers(atk, raid, def, "forest").attack).toBeCloseTo(vsRaiders.attack * 0.75);
+  def.army.spearman = 100;
+  const knights = { ...E.emptyArmy(), knight: 60 };
+  const axes = { ...E.emptyArmy(), axeman: 100 }; // same attack as the knights
+  const vsKnights = W.battleNumbers(atk, knights, def, "plains");
+  const vsAxes = W.battleNumbers(atk, axes, def, "plains");
+  expect(vsKnights.attack).toBeCloseTo(vsAxes.attack);
+  expect(vsKnights.defense).toBeGreaterThan(vsAxes.defense * 1.2);
+  expect(W.battleNumbers(atk, knights, def, "forest").attack).toBeCloseTo(vsKnights.attack * 0.75);
 });
 
 test("old saves get war fields", () => {

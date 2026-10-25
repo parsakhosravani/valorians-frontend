@@ -127,8 +127,8 @@ export function defensePower(s: GameState, sent?: Army) {
 /**
  * Attack and defense for one battle, with the strategy rules applied:
  * - the defender's terrain adds defense (hills +20%, forest +10%)
- * - mounted troops (Cavalry, Raiders) fight 25% weaker in a forest
- * - anti-cavalry troops (Spearmen, Huscarls) defend 50% better against the mounted share of the attack
+ * - mounted troops (Light Cavalry, Paladins, Knights) fight 25% weaker in a forest
+ * - anti-cavalry troops (Spearmen) defend 50% better against the mounted share of the attack
  * - rams break the City Gate, catapults break the Watchtower
  * `defender` is null for a barbarian camp, which uses `campDef`.
  */

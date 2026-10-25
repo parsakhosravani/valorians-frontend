@@ -156,8 +156,8 @@ export const BUILDINGS: BuildingDef[] = [
   def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
   def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per tap per level."),
   def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
-  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Archers (3), Berserkers (5) and Huscarls (10)."),
-  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Cavalry (level 1) and Raiders (level 5)."),
+  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5)."),
+  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10)."),
   def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break walls and Catapults (level 5) that break towers."),
   def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 5 }, "Troops train 5% faster per level."),
   def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 5 }, "+5% attack for all troops per level."),
@@ -236,7 +236,7 @@ export const REFERRAL_REWARD = {
 
 // ─── War ─────────────────────────────────────────────────────────────────────
 
-export const UNIT_IDS = ["spearman", "archer", "berserker", "huscarl", "cavalry", "raider", "ram", "catapult"] as const;
+export const UNIT_IDS = ["spearman", "swordsman", "archer", "axeman", "cavalry", "paladin", "knight", "ram", "catapult"] as const;
 export type UnitId = (typeof UNIT_IDS)[number];
 
 export type UnitDef = {
@@ -275,36 +275,42 @@ export const UNITS: UnitDef[] = [
     antiCavalry: true,
   },
   {
+    id: "swordsman", name: "Swordsman", icon: "🤺", attack: 30, defense: 22, carry: 40,
+    cost: { iron: 70, wood: 40, clay: 45, crop: 25 }, time: 25, upkeep: 1, speed: 30,
+    requires: { building: "barracks", level: 2 },
+    description: "Well-armored all-rounder. Good in attack and defense.",
+  },
+  {
     id: "archer", name: "Archer", icon: "🏹", attack: 22, defense: 10, carry: 15,
     cost: { iron: 35, wood: 55, clay: 15, crop: 20 }, time: 20, upkeep: 1, speed: 27,
     requires: { building: "barracks", level: 3 },
     description: "Strong attack, weak in defense.",
   },
   {
-    id: "berserker", name: "Berserker", icon: "🪓", attack: 38, defense: 8, carry: 20,
-    cost: { iron: 60, wood: 40, clay: 20, crop: 40 }, time: 35, upkeep: 2, speed: 28,
+    id: "axeman", name: "Axeman", icon: "🪓", attack: 45, defense: 12, carry: 45,
+    cost: { iron: 85, wood: 60, clay: 30, crop: 35 }, time: 35, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 5 },
-    description: "Fearless axe warrior. Hits very hard on foot, barely defends.",
+    description: "The strongest foot soldier in attack, but weak in defense.",
   },
   {
-    id: "huscarl", name: "Huscarl", icon: "🪖", attack: 25, defense: 40, carry: 30,
-    cost: { iron: 90, wood: 50, clay: 60, crop: 40 }, time: 50, upkeep: 2, speed: 32,
-    requires: { building: "barracks", level: 10 },
-    description: "Elite armored guard. The best defender, and strong against cavalry.",
-    antiCavalry: true,
-  },
-  {
-    id: "cavalry", name: "Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
+    id: "cavalry", name: "Light Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
     cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3, speed: 12,
     requires: { building: "stable", level: 1 },
-    description: "Heavy horsemen. Hit hard and carry a lot, but weak in forests and against spears.",
+    description: "Fast attack horsemen. Carry the most loot, but weak in forests and against spears.",
     mounted: true,
   },
   {
-    id: "raider", name: "Raider", icon: "🏇", attack: 28, defense: 12, carry: 110,
-    cost: { iron: 60, wood: 70, clay: 30, crop: 50 }, time: 35, upkeep: 2, speed: 9,
-    requires: { building: "stable", level: 5 },
-    description: "Light horsemen. The fastest troops and carry the most loot, but weak in a real fight.",
+    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 55, carry: 60,
+    cost: { iron: 140, wood: 100, clay: 100, crop: 70 }, time: 60, upkeep: 2, speed: 15,
+    requires: { building: "stable", level: 3 },
+    description: "Defensive horseman. The best defender, and rides fast to help.",
+    mounted: true,
+  },
+  {
+    id: "knight", name: "Knight", icon: "🏇", attack: 75, defense: 40, carry: 80,
+    cost: { iron: 220, wood: 160, clay: 150, crop: 90 }, time: 90, upkeep: 4, speed: 14,
+    requires: { building: "stable", level: 10 },
+    description: "Heavy armored knight. The strongest attacker in the game.",
     mounted: true,
   },
   {
@@ -354,7 +360,7 @@ export const MIN_MARCH_SECONDS = 20;
 /** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
 export const SCOUT_COST_PER_TILE = 10;
 export const SCOUT_MIN_COST = 30;
-/** Anti-cavalry troops (Spearmen, Huscarls) defend this much better against the mounted share of an attack. */
+/** Anti-cavalry troops (Spearmen) defend this much better against the mounted share of an attack. */
 export const ANTI_CAVALRY_BONUS = 0.5;
 /** Mounted troops lose this much attack when fighting in a forest. */
 export const FOREST_CAVALRY_PENALTY = 0.25;
