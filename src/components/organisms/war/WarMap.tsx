@@ -560,7 +560,7 @@ export const WarMap = ({
           <div
             ref={scroller}
             className={clsx(
-              "absolute inset-0 overflow-auto overscroll-contain select-none [scrollbar-width:thin]",
+              "absolute inset-0 overflow-auto overscroll-contain select-none no-scrollbar",
               drag.current?.moved ? "cursor-grabbing" : "cursor-grab",
             )}
             onClickCapture={onClickCapture}

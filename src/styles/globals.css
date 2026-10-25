@@ -34,6 +34,16 @@ body {
   display: none; /* WebKit */
 }
 
+/* Scrolls but never shows a scrollbar (the war map). */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .font-display {
   font-family: "Cinzel", Georgia, serif;
 }
