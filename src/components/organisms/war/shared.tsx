@@ -1,9 +1,7 @@
 "use client";
 import clsx from "clsx";
 
-import { UnitIcon } from "./UnitIcon";
-
-import { UNITS, UnitId } from "@/lib/game/config";
+import { UNITS, UnitId, UNIT_BY_ID } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 
 export const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
@@ -16,10 +14,10 @@ export const Card = ({ children, className }: { children: React.ReactNode; class
 
 export const UnitBadge = ({ unit, size = 36 }: { unit: UnitId; size?: number }) => (
   <div
-    className="rounded-full bg-[radial-gradient(circle_at_50%_40%,#4A3828,#241A12)] border-2 border-[#E3A948] flex items-center justify-center shrink-0"
-    style={{ width: size, height: size }}
+    className="rounded-full bg-[#1E1610] border-2 border-[#E3A948] flex items-center justify-center shrink-0"
+    style={{ width: size, height: size, fontSize: size * 0.5 }}
   >
-    <UnitIcon size={size * 0.82} unit={unit} />
+    {UNIT_BY_ID[unit].icon}
   </div>
 );
 
@@ -32,8 +30,8 @@ export const ArmyLine = ({ army, className }: { army: Army; className?: string }
   return (
     <span className={clsx("inline-flex flex-wrap gap-x-2", className)}>
       {parts.map((u) => (
-        <span key={u.id} className="inline-flex items-center gap-0.5">
-          <UnitIcon size={20} unit={u.id} /> {fmt(army[u.id])}
+        <span key={u.id}>
+          {u.icon} {fmt(army[u.id])}
         </span>
       ))}
     </span>

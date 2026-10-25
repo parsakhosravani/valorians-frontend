@@ -4,7 +4,6 @@ import clsx from "clsx";
 import Image from "next/image";
 
 import { ArmyLine, Card, Stepper, UnitBadge, fmt } from "./shared";
-import { UnitIcon } from "./UnitIcon";
 
 import { Button } from "@/components";
 import { RESOURCES, useGame } from "@/context";
@@ -200,8 +199,7 @@ export const ArmyTab = () => {
             return (
               <div key={i} className="flex justify-between text-sm">
                 <span>
-                  <UnitIcon className="inline-block align-[-5px]" size={20} unit={unit.id} /> {unit.name} {fmt(t.done)}/
-                  {fmt(t.count)}
+                  {unit.icon} {unit.name} {fmt(t.done)}/{fmt(t.count)}
                 </span>
                 <span className="text-[#B19C80]">
                   {started ? `${formatDuration(end - now)} left` : `starts in ${formatDuration(t.startsAt - now)}`}
