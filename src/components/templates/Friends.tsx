@@ -1,9 +1,13 @@
 "use client";
 import React, { FunctionComponent, useEffect, useState } from "react";
+import Image from "next/image";
 
-import { InviteLink } from "@/components/organisms/InviteLink";
-import { Amount, Avatar, Backdrop, Card, Empty, SectionTitle, Spinner } from "@/components/ui";
-import { GameIcon, TroopArt } from "@/art";
+import bg from "~/images/background/friends.webp";
+import population from "~/images/resources/population.webp";
+import avatar from "~/images/avatar.webp";
+import viking from "~/images/friends/viking.png";
+
+import { Coin, TextImage, InviteLink } from "@/components";
 import useBackButton from "@/hooks/useBackButton";
 import { useGame } from "@/context";
 import { Friend, apiRequest } from "@/lib/api";
@@ -24,57 +28,92 @@ export const Friends: FunctionComponent = () => {
 
   return (
     <>
-      <div className="relative flex flex-col gap-4 w-full px-3 pt-2 pb-4">
-        {/* Hero */}
-        <Card className="relative overflow-hidden flex gap-2 pl-0 pb-0" tone="gold">
-          <div className="relative w-[120px] shrink-0 -mb-1">
-            <TroopArt className="absolute bottom-0 left-0 w-[130px] h-[130px]" id="spearman" />
+      <div className="relative flex flex-col w-full px-3 pt-8 pb-4">
+        <div className="bg-buildingBg border border-line min-h-[100px] w-full flex justify-end rounded-2xl">
+          <div className="w-2/6 flex flex-col justify-start relative">
+            <Image
+              alt="avatar"
+              className="absolute max-w-[130px] max-h-[130px] w-[120%] h-[120%] bottom-0 object-left-bottom object-contain"
+              src={viking}
+            />
           </div>
-          <div className="flex flex-col gap-2 py-1 pb-3 min-w-0">
-            <h1 className="font-display font-extrabold text-display-lg leading-none">Raise your clan</h1>
-            <p className="text-small text-parch-300">Every friend who joins brings gifts for both of you.</p>
-            <ul className="flex flex-col gap-1 text-small font-bold">
-              <li className="flex items-center gap-1.5">
-                <Amount icon="coin" value={REFERRAL_REWARD.coins} /> <span className="text-parch-500">each</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Amount icon="coin" value={REFERRAL_REWARD.premiumCoins} /> <span className="text-parch-500">if they have Premium</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Amount icon="population" value={`+${REFERRAL_REWARD.population}`} /> <span className="text-parch-500">people per friend</span>
-              </li>
-            </ul>
+          <div className="w-4/6 flex flex-col justify-between pl-3 py-2.5">
+            <div className="text-left font-display text-parch text-lg font-bold">Invite Friends!</div>
+            <div className="text-[#D8C9AE] text-xs font-normal">You and your friend will receive bonuses</div>
+            <div className="flex items-center w-full gap-1">
+              <Coin amount={REFERRAL_REWARD.coins} />
+              <div className="text-center text-parch text-[9px] font-bold">For you and your friend</div>
+            </div>
+            <div className="flex items-center w-full gap-1">
+              <Coin amount={REFERRAL_REWARD.premiumCoins} />
+              <div className="text-[9px] font-bold">
+                <span className="text-parch">If your friend has </span>
+                <span className="text-[#E3A948]">Telegram Premium</span>
+              </div>
+            </div>
+            <div className="flex items-center w-full gap-1">
+              <TextImage
+                direction="row"
+                imgAlt="population"
+                imgSrc={population}
+                size="small"
+                title={`+${REFERRAL_REWARD.population}`}
+              />
+              <div className="text-parch text-[9px] font-bold">population for you per friend</div>
+            </div>
           </div>
-        </Card>
+        </div>
 
-        <div className="flex flex-col gap-2">
-          <SectionTitle>Your clan{data ? ` · ${data.total}` : ""}</SectionTitle>
-          {error && <p className="text-small text-blood-400">{error}</p>}
-          {!data && !error && <Spinner />}
+        <div className="flex flex-col w-full items-start mt-4">
+          <div className="font-display text-parch text-lg font-bold">
+            Your Friends{data ? ` (${data.total})` : ""}:
+          </div>
+          {error && <p className="text-sm text-[#F08A6C]">{error}</p>}
+          {!data && !error && <p className="text-sm text-[#B19C80]">Loading…</p>}
           {data && data.friends.length === 0 && (
-            <Empty art={<GameIcon id="population" size={44} />} title="No friends yet">
-              Share your invite link. You both get rewards when they start playing.
-            </Empty>
+            <p className="text-sm text-[#B19C80] mt-1">
+              No friends yet. Share your invite link and you&apos;ll both get bonuses when they start playing.
+            </p>
           )}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5 w-full pb-4">
             {data?.friends.map((f) => (
-              <Card key={f.id} className="flex gap-2 items-center !p-2">
-                <Avatar seed={f.id} size={38} src={f.photoUrl} />
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <div className="font-bold truncate leading-tight">{f.name}</div>
+              <div
+                key={f.id}
+                className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg border border-line rounded-xl"
+              >
+                {f.photoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="avatar" className="h-[34px] w-[34px] rounded object-cover" src={f.photoUrl} />
+                ) : (
+                  <Image alt="avatar" height={34} src={avatar} width={34} />
+                )}
+                <div className="flex flex-col justify-start gap-[5px] min-w-0">
+                  <div className="leading-none font-bold truncate">{f.name}</div>
                   <div className="flex gap-2">
-                    <Amount icon="coin" size="xs" value={f.bonusCoins} />
-                    <Amount icon="population" size="xs" value={f.population} />
+                    <Coin amount={f.bonusCoins} />
+                    <TextImage
+                      direction="row"
+                      imgAlt="population"
+                      imgSrc={population}
+                      size="small"
+                      title={f.population.toLocaleString("en-US")}
+                    />
                   </div>
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
         </div>
 
-        <InviteLink className="sticky bottom-2" />
+        <InviteLink className="sticky bottom-2 mt-2" />
       </div>
-      <Backdrop scene="feast" />
+
+      <Image
+        priority
+        alt={"intro"}
+        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-25"
+        src={bg}
+      />
     </>
   );
 };

@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 
-import { fmt } from "./shared";
+import { Card, fmt } from "./shared";
 import { BattleSummary } from "./BattleResultDrawer";
 
-import { Badge, Card, Empty, Icon, Sheet, Spinner } from "@/components/ui";
-import { GameIcon } from "@/art";
+import { Drawer } from "@/components";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -34,31 +33,34 @@ export const ReportsTab = () => {
 
   return (
     <div className="flex flex-col gap-2">
-      {!items && <Spinner />}
-      {items?.length === 0 && <Empty title="No battles yet">Raid a tribe or a barbarian camp and the report shows up here.</Empty>}
+      {!items && <p className="text-sm text-[#B19C80]">Loading…</p>}
+      {items?.length === 0 && <p className="text-sm text-[#B19C80]">No battles yet.</p>}
       {items?.map((it) => {
         const loot = RESOURCES.reduce((s, r) => s + (it.report.loot[r.id] ?? 0), 0);
 
         return (
-          <Card key={it.id} className="flex items-center gap-3" onClick={() => setOpen(it)}>
-            <span className="w-10 h-10 rounded-xl bg-ink-700 border border-ink-500 flex items-center justify-center shrink-0">
-              <GameIcon id={it.role === "defender" ? "defense" : "attack"} size={24} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold truncate">{it.role === "attacker" ? `You attacked ${it.opponent}` : `${it.opponent} attacked you`}</div>
-              <div className="text-caption font-bold text-parch-500">
-                {formatDuration(now - it.at)} ago
-                {loot > 0 && ` · ${it.role === "attacker" ? "+" : "−"}${fmt(loot)} resources`}
+          <button key={it.id} className="text-left" onClick={() => setOpen(it)}>
+            <Card className="flex items-center gap-3">
+              <div className="text-2xl">{it.role === "defender" ? "🛡️" : "⚔️"}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold truncate">
+                  {it.role === "attacker" ? `You attacked ${it.opponent}` : `${it.opponent} attacked you`}
+                </div>
+                <div className="text-xs text-[#B19C80]">
+                  {formatDuration(now - it.at)} ago
+                  {loot > 0 && ` · ${it.role === "attacker" ? "+" : "−"}${fmt(loot)} resources`}
+                </div>
               </div>
-            </div>
-            <Badge tone={it.won ? "moss" : "ember"}>{it.won ? "Won" : "Lost"}</Badge>
-            <Icon className="text-parch-500" name="chevron" size={18} />
-          </Card>
+              <span className={it.won ? "text-good font-bold text-sm" : "text-[#F08A6C] font-bold text-sm"}>
+                {it.won ? "Won" : "Lost"}
+              </span>
+            </Card>
+          </button>
         );
       })}
-      <Sheet open={!!open} title="Battle report" onClose={() => setOpen(null)}>
+      <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
         {open && <BattleSummary asDefender={open.role === "defender"} report={open.report} />}
-      </Sheet>
+      </Drawer>
     </div>
   );
 };

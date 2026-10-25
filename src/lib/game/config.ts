@@ -177,6 +177,8 @@ export const BUILDING_BY_ID: Record<BuildingId, BuildingDef> = Object.fromEntrie
   BUILDINGS.map((b) => [b.id, b])
 );
 
+export const buildingImage = (b: BuildingDef) =>
+  `/images/buildings/${encodeURIComponent(b.name)}.webp`;
 
 /** Every building level adds this much population growth per hour… */
 export const GROWTH_PER_BUILDING_LEVEL = 2;

@@ -1,18 +1,19 @@
 "use client";
 import { useState } from "react";
-import Image, { StaticImageData } from "next/image";
+import { StaticImageData } from "next/image";
 
 import telegramIcon from "~/images/social/telegram.png";
 import youtubeIcon from "~/images/social/youtube.png";
 import xIcon from "~/images/social/x.png";
+import population from "~/images/resources/population.webp";
 
-import { Amount, Button, Sheet } from "@/components/ui";
+import { Button, Coin, Col, Row, Text } from "@/components";
+import { Drawer, TextImage } from "@/components/molecules";
 import { useGame, useTelegramContext } from "@/context";
 import { QUESTS, QuestDef, QuestId, questUrl } from "@/lib/game/config";
 import { questStatus } from "@/lib/game/engine";
 import { formatDuration } from "@/lib/format";
 
-/** Official brand marks for the social tasks. */
 export const QUEST_ICONS: Record<QuestId, StaticImageData> = {
   telegram: telegramIcon,
   youtube: youtubeIcon,
@@ -29,14 +30,6 @@ const QUEST_LINKS: Record<QuestId, string | null> = {
 export const questLink = (id: QuestId) => QUEST_LINKS[id];
 
 export const ACTIVE_QUESTS: QuestDef[] = QUESTS.filter((q) => QUEST_LINKS[q.id]);
-
-export const QuestRewards = ({ quest }: { quest: QuestDef }) => (
-  <span className="flex flex-wrap gap-x-3 gap-y-1">
-    <Amount icon="coin" value={quest.reward.coins} />
-    <Amount icon="population" suffix="" value={`+${quest.reward.population}`} />
-    <Amount icon="population" suffix="/h" tone="good" value={`+${quest.reward.growth}`} />
-  </span>
-);
 
 interface QuestDrawerProps {
   openDrawer: QuestId | null;
@@ -72,36 +65,59 @@ export const QuestDrawer: React.FC<QuestDrawerProps> = ({ setOpenDrawer, openDra
   };
 
   return (
-    <Sheet open={openDrawer !== null} title={quest?.title} onClose={() => setOpenDrawer(null)}>
+    <Drawer isOpen={openDrawer !== null} position="bottom" onClose={() => setOpenDrawer(null)}>
       {quest && status && (
-        <div className="flex flex-col gap-4 pb-1">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-ink-950/50 border border-ink-600">
-            <Image alt="" className="w-14 h-14 rounded-2xl" src={QUEST_ICONS[quest.id]} />
-            <div className="flex flex-col gap-1">
-              <span className="text-caption font-extrabold tracking-[0.14em] text-parch-500">REWARD</span>
-              <QuestRewards quest={quest} />
-            </div>
-          </div>
+        <Col className="gap-4 pb-2">
+          <Row className="justify-center">
+            <TextImage
+              direction="column"
+              imgAlt={quest.title}
+              imgSrc={QUEST_ICONS[quest.id]}
+              size="large"
+              title={quest.title}
+            />
+          </Row>
+          <Row className="justify-center items-center gap-3">
+            <Coin amount={quest.reward.coins} />
+            <TextImage imgAlt="population" imgSrc={population} size="small" title={`+${quest.reward.population}`} />
+            <TextImage
+              imgAlt="population growth"
+              imgSrc={population}
+              size="small"
+              title={`+${quest.reward.growth}/h`}
+            />
+          </Row>
 
           {status.state === "claimed" ? (
-            <Button disabled full icon="check" size="lg">
-              Completed
+            <Button isFull disabled size="large">
+              Completed ✓
             </Button>
           ) : (
-            <div className="flex flex-col gap-2">
-              <Button full size="lg" variant={status.state === "new" ? "primary" : "secondary"} onClick={() => open(quest)}>
-                {quest.id === "telegram" ? "Join the channel" : quest.id === "youtube" ? "Subscribe" : "Follow"}
+            <Col className="gap-2">
+              <Button isFull size="large" variant={status.state === "new" ? "primary" : "outline"} onClick={() => open(quest)}>
+                {quest.id === "telegram" ? "Join" : quest.id === "youtube" ? "Subscribe" : "Follow"}
               </Button>
               {status.state !== "new" && (
-                <Button full disabled={status.state === "waiting"} loading={busy} size="lg" onClick={() => claim(quest)}>
-                  {status.state === "waiting" ? `Claim in ${formatDuration(status.readyAt - now)}` : "Claim reward"}
+                <Button
+                  isFull
+                  disabled={busy || status.state === "waiting"}
+                  size="large"
+                  onClick={() => claim(quest)}
+                >
+                  {status.state === "waiting"
+                    ? `Claim in ${formatDuration(status.readyAt - now)}`
+                    : "Claim Reward"}
                 </Button>
               )}
-              {status.state === "new" && <p className="text-center text-small text-parch-500">Do the task, then come back here to claim your reward.</p>}
-            </div>
+              {status.state === "new" && (
+                <Text className="text-center" color="gray" size="small">
+                  Complete the task, then come back to claim your reward.
+                </Text>
+              )}
+            </Col>
           )}
-        </div>
+        </Col>
       )}
-    </Sheet>
+    </Drawer>
   );
 };

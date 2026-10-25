@@ -1,8 +1,9 @@
 "use client";
+import Image from "next/image";
+
 import { ArmyLine, fmt } from "./shared";
 
-import { Amount, Button, Card, Overline, Sheet, Stat } from "@/components/ui";
-import { GameIcon } from "@/art";
+import { Button, Drawer } from "@/components";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";
@@ -13,54 +14,64 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col items-center text-center gap-1 pt-1">
-        <span className={won ? "drop-shadow-[0_0_24px_rgba(240,190,90,0.55)]" : "grayscale opacity-80"}>
-          <GameIcon id={won ? "trophy" : "defense"} size={64} />
-        </span>
-        <div className={won ? "font-display font-extrabold text-display-xl text-gold-300" : "font-display font-extrabold text-display-xl text-blood-400"}>
+      <div className="text-center">
+        <div className="text-5xl">{won ? "🏆" : "💀"}</div>
+        <div className={won ? "text-2xl font-black text-good" : "text-2xl font-black text-[#F08A6C]"}>
           {won ? "Victory!" : "Defeat"}
         </div>
-        <div className="text-small font-bold text-parch-500">
-          {report.attackerName} vs {report.defenderName}
+        <div className="text-sm text-[#B19C80]">
+          {report.attackerName} ⚔️ {report.defenderName}
         </div>
       </div>
-      <Card className="grid grid-cols-3 gap-1" tone="sunken">
-        <Stat label="Attack" value={fmt(report.attack)} />
-        <Stat label="Defense" value={fmt(report.defense)} />
-        <Stat label="Luck" value={`${report.luck >= 1 ? "+" : ""}${Math.round((report.luck - 1) * 100)}%`} />
-      </Card>
-      <div className="flex flex-col gap-1.5 text-small">
-        <div className="flex justify-between gap-2">
-          <span className="text-parch-500 font-bold">Attackers sent</span>
+      <div className="grid grid-cols-3 text-center bg-[#1E1610] rounded p-2 text-sm">
+        <div>
+          <div className="text-[10px] text-[#B19C80]">ATTACK</div>
+          <b>{fmt(report.attack)}</b>
+        </div>
+        <div>
+          <div className="text-[10px] text-[#B19C80]">DEFENSE</div>
+          <b>{fmt(report.defense)}</b>
+        </div>
+        <div>
+          <div className="text-[10px] text-[#B19C80]">LUCK</div>
+          <b>{report.luck >= 1 ? "+" : ""}{Math.round((report.luck - 1) * 100)}%</b>
+        </div>
+      </div>
+      <div className="text-sm flex flex-col gap-1">
+        <div>
+          <span className="text-[#B19C80]">Attackers sent: </span>
           <ArmyLine army={report.sent} />
         </div>
-        <div className="flex justify-between gap-2">
-          <span className="text-parch-500 font-bold">Attackers lost</span>
+        <div>
+          <span className="text-[#B19C80]">Attackers lost: </span>
           <ArmyLine army={report.attackerLosses} />
         </div>
         {armySize(report.attackerHealed) > 0 && (
-          <div className="flex justify-between gap-2">
-            <span className="text-parch-500 font-bold">Saved by hospital</span>
+          <div>
+            <span className="text-[#B19C80]">Saved by hospital: </span>
             <ArmyLine army={report.attackerHealed} />
           </div>
         )}
         {armySize(report.defenders) > 0 && (
-          <div className="flex justify-between gap-2">
-            <span className="text-parch-500 font-bold">Defenders lost</span>
+          <div>
+            <span className="text-[#B19C80]">Defenders lost: </span>
             <ArmyLine army={report.defenderLosses} />
           </div>
         )}
       </div>
       {lootTotal > 0 || report.coins > 0 ? (
-        <Card className="flex flex-col gap-1.5" tone={asDefender ? "danger" : "gold"}>
-          <Overline>{asDefender ? "Stolen from you" : "Loot"}</Overline>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <div className="bg-[#1E1610] rounded p-2">
+          <div className="text-[10px] text-[#B19C80] mb-1">{asDefender ? "STOLEN FROM YOU" : "LOOT"}</div>
+          <div className="flex flex-wrap gap-x-3 text-sm">
             {RESOURCES.map((r) => (
-              <Amount key={r.id} icon={r.id} value={report.loot[r.id] ?? 0} />
+              <span key={r.id} className="flex items-center gap-1">
+                <Image alt={r.name} className="h-4 w-4" src={r.img} />
+                {fmt(report.loot[r.id] ?? 0)}
+              </span>
             ))}
-            {report.coins > 0 && <Amount icon="coin" value={report.coins} />}
+            {report.coins > 0 && <span>🪙 {fmt(report.coins)}</span>}
           </div>
-        </Card>
+        </div>
       ) : null}
     </div>
   );
@@ -71,21 +82,21 @@ export const BattleResultDrawer = ({ report, onClose }: { report: BattleReport |
   const home = report && armySize(report.sent) - armySize(report.attackerLosses) > 0;
 
   return (
-    <Sheet open={!!report} title="Battle report" onClose={onClose}>
+    <Drawer isOpen={!!report} position="bottom" onClose={onClose}>
       {report && (
         <div className="flex flex-col gap-3">
           <BattleSummary report={report} />
           {home && (
-            <p className="text-center text-small text-parch-500">
+            <p className="text-center text-sm text-[#B19C80]">
               Your army returns in {formatDuration(report.returnsAt - now)}
               {report.attackerWon ? " with the loot" : ""}.
             </p>
           )}
-          <Button full size="lg" onClick={onClose}>
-            Continue
+          <Button isFull onClick={onClose}>
+            OK
           </Button>
         </div>
       )}
-    </Sheet>
+    </Drawer>
   );
 };

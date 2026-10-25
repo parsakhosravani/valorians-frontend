@@ -3,10 +3,9 @@
 @import "tailwindcss/utilities";
 
 body {
-  font-family: "Nunito", system-ui, sans-serif;
-  font-variant-numeric: tabular-nums;
-  background: #15110d;
-  color: #f4ece0;
+  font-family: "Alegreya Sans", system-ui, sans-serif;
+  background: #120d09;
+  color: #efe3cc;
   touch-action: pan-y;
   touch-action: none;
   overflow: hidden;
@@ -36,8 +35,7 @@ body {
 }
 
 .font-display {
-  font-family: "Grenze", Georgia, serif;
-  letter-spacing: 0.01em;
+  font-family: "Cinzel", Georgia, serif;
 }
 
 @keyframes spot-pulse {
@@ -51,10 +49,3 @@ body {
   50% { box-shadow: inset 0 0 110px rgba(232, 97, 44, 0.7); }
 }
 .animate-frenzy { animation: frenzy-glow 1.2s ease-in-out infinite; }
-
-/* Village map: give hand-placed decor the same ink outline as the art kit. */
-.dio-ink :is(polygon, path, rect, circle, ellipse):not([opacity]):not([stroke]) {
-  stroke: #2b1f15;
-  stroke-width: 1.1;
-  stroke-linejoin: round;
-}

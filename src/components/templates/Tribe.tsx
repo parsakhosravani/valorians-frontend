@@ -2,7 +2,8 @@
 
 import React, { FunctionComponent, useEffect, useState } from "react";
 
-import { Builder, Building, Diorama, Segmented, Sheet } from "@/components";
+import { Builder, Building, Diorama, Drawer } from "@/components";
+import { Tabs } from "@/components/organisms/war/shared";
 import { BUILDINGS, BuildingDef } from "@/lib/game/config";
 import { useGame } from "@/context";
 
@@ -39,8 +40,8 @@ export const Tribe: FunctionComponent = () => {
     <div className="h-full flex flex-col">
       <div className="px-3 pt-1 flex flex-col gap-2">
         <Builder />
-        <Segmented
-          options={[
+        <Tabs
+          tabs={[
             { id: "map", label: "Village" },
             { id: "list", label: "List" },
           ]}
@@ -50,7 +51,7 @@ export const Tribe: FunctionComponent = () => {
       </div>
 
       {view === "map" ? (
-        <div className="relative flex-1 min-h-0 mt-2 mx-3 rounded-3xl overflow-hidden border border-ink-500 shadow-raised">
+        <div className="relative flex-1 min-h-0 mt-2 mx-3 rounded-2xl overflow-hidden border border-line">
           <Diorama selectedId={open?.id} onOpen={setOpen} />
         </div>
       ) : (
@@ -61,9 +62,13 @@ export const Tribe: FunctionComponent = () => {
         </div>
       )}
 
-      <Sheet open={!!open} title={open?.name} onClose={() => setOpen(null)}>
-        {open && <Building bare building={open} />}
-      </Sheet>
+      <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
+        {open && (
+          <div className="pt-1">
+            <Building building={open} />
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

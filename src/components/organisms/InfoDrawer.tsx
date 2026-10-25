@@ -1,31 +1,40 @@
 "use client";
 import React, { useState } from "react";
-
-import { Button, Sheet } from "@/components/ui";
-import { GameIcon } from "@/art";
+import { Button, Col, Drawer, Row, TextImage } from "@/components";
+import info from "~/images/info.webp";
+import Image from "next/image";
 
 interface InfoDrawerProps {
   title: string;
   content: React.ReactNode;
 }
 
-/** A small (i) button that explains something in a sheet. */
 export const InfoDrawer: React.FC<InfoDrawerProps> = ({ title, content }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <>
-      <button aria-label={`About ${title}`} className="shrink-0 rounded-full active:scale-95" type="button" onClick={() => setIsOpen(true)}>
-        <GameIcon id="info" size={22} />
-      </button>
-      <Sheet open={isOpen} title={title} onClose={() => setIsOpen(false)}>
-        <div className="flex flex-col gap-4 pt-1">
-          <p className="text-body text-parch-300">{content}</p>
-          <Button full onClick={() => setIsOpen(false)}>
+    <Row className="text-center justify-center">
+      <Image onClick={() => setIsOpen(true)} width={18} alt="info" src={info} />
+      <Drawer
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        position="bottom"
+      >
+        <Col className="justify-center items-center gap-5">
+          <TextImage
+            size="large"
+            direction="column"
+            imgSrc={info}
+            imgAlt="info"
+          >
+            <p className="text-2xl font-black">{title}</p>
+            <p className="text-[#B19C80]">{content}</p>
+          </TextImage>
+          <Button isFull onClick={() => setIsOpen(false)}>
             Got it
           </Button>
-        </div>
-      </Sheet>
-    </>
+        </Col>
+      </Drawer>
+    </Row>
   );
 };

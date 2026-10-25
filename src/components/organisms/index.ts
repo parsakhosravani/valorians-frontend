@@ -5,4 +5,4 @@ export * from "./quest";
 export * from "./InviteLink";
 export * from "./Main";
 export * from "./InfoDrawer";
-export * from "./User";
+export * from "./resource";

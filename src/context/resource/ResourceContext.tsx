@@ -10,6 +10,16 @@ import React, {
   useState,
 } from "react";
 import toast from "react-hot-toast";
+import { StaticImageData } from "next/image";
+
+import iron from "~/images/resources/iron.webp";
+import wood from "~/images/resources/wood.webp";
+import clay from "~/images/resources/clay.webp";
+import crop from "~/images/resources/crop.webp";
+import ironBg from "~/images/background/iron.webp";
+import woodBg from "~/images/background/wood.webp";
+import clayBg from "~/images/background/clay.webp";
+import cropBg from "~/images/background/crop.webp";
 
 import { ApiError, PlayerView, apiRequest, resolveAuthHeader } from "@/lib/api";
 import {
@@ -34,17 +44,18 @@ import {
   getRates,
 } from "@/lib/game/engine";
 
-/** A resource; its id doubles as its GameIcon, ResourceNode and Scene id. */
 export type TResource = {
   id: ResourceId;
   name: string;
+  img: StaticImageData;
+  bg: StaticImageData;
 };
 
 export const RESOURCES: TResource[] = [
-  { id: "iron", name: RESOURCE_NAMES.iron },
-  { id: "wood", name: RESOURCE_NAMES.wood },
-  { id: "clay", name: RESOURCE_NAMES.clay },
-  { id: "crop", name: RESOURCE_NAMES.crop },
+  { id: "iron", name: RESOURCE_NAMES.iron, img: iron, bg: ironBg },
+  { id: "wood", name: RESOURCE_NAMES.wood, img: wood, bg: woodBg },
+  { id: "clay", name: RESOURCE_NAMES.clay, img: clay, bg: clayBg },
+  { id: "crop", name: RESOURCE_NAMES.crop, img: crop, bg: cropBg },
 ];
 
 export type GameStatus = "loading" | "ready" | "error" | "no-auth";

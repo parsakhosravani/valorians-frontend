@@ -1,20 +1,28 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
+import clsx from "clsx";
 
-import { Amount, ArtTile, Button, Card, LevelShield, Meter, Overline } from "@/components/ui";
-import { BuildingArt } from "@/art";
+import time from "~/images/resources/time.webp";
+import population from "~/images/resources/population.webp";
+
+import { TextImage } from "@/components/molecules";
+import { Button, Chip, Col, Row, Text } from "@/components";
 import { RESOURCES, useGame } from "@/context";
-import { BuildingDef, CROP_UPKEEP_PER_BUILDING_LEVEL, GROWTH_PER_BUILDING_LEVEL } from "@/lib/game/config";
+import {
+  BuildingDef,
+  CROP_UPKEEP_PER_BUILDING_LEVEL,
+  GROWTH_PER_BUILDING_LEVEL,
+  buildingImage,
+} from "@/lib/game/config";
 import { buildingUpgradeInfo, getRates } from "@/lib/game/engine";
-import { formatDuration } from "@/lib/format";
+import { compact, formatDuration } from "@/lib/format";
 
 interface BuildingProps {
   building: BuildingDef;
-  /** In the sheet the card drops its own frame. */
-  bare?: boolean;
 }
 
-export const Building: React.FC<BuildingProps> = ({ building, bare }) => {
+export const Building: React.FC<BuildingProps> = ({ building }) => {
   const { state, now, upgradeBuilding } = useGame();
   const [busy, setBusy] = useState(false);
 
@@ -30,65 +38,93 @@ export const Building: React.FC<BuildingProps> = ({ building, bare }) => {
     setBusy(false);
   };
 
-  let label = level === 0 ? "Build" : `Upgrade to level ${info.from + 1}`;
-  let disabled = false;
+  let label = "Upgrade";
+  let disabled = busy;
 
   if (info.maxed) [label, disabled] = ["Max level", true];
-  else if (!freeBuilder) [label, disabled] = ["All builders busy", true];
-  else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name.toLowerCase()).join(", ")}`, true];
+  else if (!freeBuilder) [label, disabled] = ["No free builder", true];
+  else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name).join(", ")}`, true];
 
-  const body = (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-3">
-        <ArtTile size={bare ? 112 : 92} tone={level === 0 ? "locked" : "default"}>
-          <BuildingArt className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)]" id={building.id} level={level} />
-          {level > 0 && <LevelShield className="absolute left-1 top-1" level={level} />}
-        </ArtTile>
-        <div className="flex flex-col gap-1 flex-1 min-w-0">
-          {!bare && <h3 className="font-display font-bold text-display-md leading-tight">{building.name}</h3>}
-          <p className="text-small text-parch-300">{building.description}</p>
-          {!info.maxed && !inQueue && <Amount icon="time" size="xs" tone="muted" value={formatDuration(info.seconds * 1000)} />}
-        </div>
-      </div>
+  return (
+    <Col className="bg-buildingBg rounded-2xl border border-line p-3">
+      <Row className="relative gap-3">
+        <Row className="-top-1.5 -left-1.5 absolute z-[1]">
+          <Chip color="primary" label={String(level)} />
+        </Row>
+        <Image
+          alt={building.name}
+          className="h-[96px] w-[96px] object-contain shrink-0 bg-panel2 rounded-xl"
+          height={110}
+          src={buildingImage(building)}
+          width={110}
+        />
+        <Col className="justify-center gap-2 flex-1 min-w-0">
+          <Row className="justify-between items-center gap-2">
+            <h2 className="font-display text-[17px] font-bold leading-tight">{building.name}</h2>
+            {!info.maxed && !inQueue && (
+              <TextImage imgAlt="time cost" imgSrc={time} size="small" title={formatDuration(info.seconds * 1000)} />
+            )}
+          </Row>
+          <Text color="gray" size="small">
+            {building.description}
+          </Text>
 
-      {inQueue ? (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex justify-between text-small font-bold">
-            <span>Building level {inQueue.toLevel}</span>
-            <span className="text-parch-500">{formatDuration(inQueue.endsAt - now)} left</span>
-          </div>
-          <Meter max={inQueue.endsAt - inQueue.startedAt} tone="ember" value={now - inQueue.startedAt} />
-        </div>
-      ) : (
-        !info.maxed && (
-          <div className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-ink-950/50 border border-ink-600">
-            <Overline>
-              Cost · level {info.from} → {info.from + 1}
-            </Overline>
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
-              {RESOURCES.map((r) => (
-                <Amount key={r.id} icon={r.id} tone={state.resources[r.id] < info.cost ? "bad" : undefined} value={info.cost} />
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-x-3 text-caption font-bold text-parch-500">
-              <span>
-                Pop. growth <b className="text-moss-400">+{GROWTH_PER_BUILDING_LEVEL}/h</b>
-              </span>
-              <span>
-                Crop upkeep <b className="text-blood-400">−{CROP_UPKEEP_PER_BUILDING_LEVEL}/h</b>
-              </span>
-            </div>
-          </div>
-        )
-      )}
-
+          {inQueue ? (
+            <Col className="gap-1">
+              <Text size="small">
+                Upgrading to level {inQueue.toLevel} · {formatDuration(inQueue.endsAt - now)} left
+              </Text>
+              <div className="h-2 w-full bg-panel2 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-gold to-ember rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, ((now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) * 100)}%`,
+                  }}
+                />
+              </div>
+            </Col>
+          ) : (
+            !info.maxed && (
+              <Col className="gap-1">
+                <Text color="gray" size="tiny">
+                  Upgrade cost (level {info.from} → {info.from + 1})
+                </Text>
+                <Row className="flex-wrap gap-x-2 gap-y-1">
+                  {RESOURCES.map((r) => (
+                    <span
+                      key={r.id}
+                      className={clsx(state.resources[r.id] < info.cost && "text-[#F08A6C]")}
+                    >
+                      <TextImage imgAlt={r.name} imgSrc={r.img} size="small" title={compact(info.cost)} />
+                    </span>
+                  ))}
+                  <TextImage
+                    imgAlt="population growth"
+                    imgSrc={population}
+                    size="small"
+                    title={`+${GROWTH_PER_BUILDING_LEVEL}/h`}
+                  />
+                  <span className="text-[#F08A6C]">
+                    <TextImage
+                      imgAlt="crop upkeep"
+                      imgSrc={RESOURCES[3].img}
+                      size="small"
+                      title={`-${CROP_UPKEEP_PER_BUILDING_LEVEL}/h`}
+                    />
+                  </span>
+                </Row>
+              </Col>
+            )
+          )}
+        </Col>
+      </Row>
       {!inQueue && (
-        <Button full disabled={disabled} loading={busy} size={bare ? "lg" : "md"} onClick={onUpgrade}>
-          {label}
-        </Button>
+        <div className="mt-2">
+          <Button isFull disabled={disabled} size="small" onClick={onUpgrade}>
+            {label}
+          </Button>
+        </div>
       )}
-    </div>
+    </Col>
   );
-
-  return bare ? body : <Card>{body}</Card>;
 };
