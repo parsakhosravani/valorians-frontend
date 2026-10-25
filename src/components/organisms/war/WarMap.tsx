@@ -218,6 +218,53 @@ export const WarMap = ({
     }
   }, [data]);
 
+  // Mouse (Telegram Desktop): drag to pan; the wheel scrolls both ways.
+  const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
+  const onPointerDown = (e: React.PointerEvent) => {
+    const el = scroller.current;
+
+    if (e.pointerType !== "mouse" || e.button !== 0 || !el) return;
+    drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moved: false };
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    const el = scroller.current;
+
+    if (!d || !el) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+
+    if (!d.moved && Math.abs(dx) + Math.abs(dy) > 5) {
+      d.moved = true;
+      el.setPointerCapture?.(e.pointerId);
+    }
+    if (d.moved) {
+      el.scrollLeft = d.left - dx;
+      el.scrollTop = d.top - dy;
+    }
+  };
+  const endDrag = (e: React.PointerEvent) => {
+    scroller.current?.releasePointerCapture?.(e.pointerId);
+    // Let the click that ends a drag be swallowed, then reset.
+    setTimeout(() => (drag.current = null), 0);
+  };
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (drag.current?.moved) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  };
+  const onWheel = (e: React.WheelEvent) => {
+    const el = scroller.current;
+
+    if (!el || e.ctrlKey) return;
+    // Trackpads send both axes already; a plain mouse wheel with Shift pans sideways.
+    if (e.shiftKey && !e.deltaX) {
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  };
+
   const recentre = () => {
     const el = scroller.current;
 
@@ -329,7 +376,19 @@ export const WarMap = ({
           </div>
         )}
         {data && (
-          <div ref={scroller} className="absolute inset-0 overflow-auto scrollable overscroll-contain">
+          <div
+            ref={scroller}
+            className={clsx(
+              "absolute inset-0 overflow-auto overscroll-contain select-none [scrollbar-width:thin]",
+              drag.current?.moved ? "cursor-grabbing" : "cursor-grab"
+            )}
+            onClickCapture={onClickCapture}
+            onPointerCancel={endDrag}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onWheel={onWheel}
+          >
             <div className="relative" style={{ width: n * T, height: n * T }}>
               <svg aria-hidden="true" className="absolute inset-0" height={n * T} width={n * T}>
                 <Ground n={n} ox={ox} oy={oy} />
@@ -383,7 +442,7 @@ export const WarMap = ({
                   style={{ left: px(c.x) - 24, top: py(c.y) - 26, width: 48 }}
                   onClick={() => setSelected({ kind: "camp", camp: c })}
                 >
-                  <Image alt="" className="w-11 h-11 object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.6)]" height={88} src={buildingImage(BUILDING_BY_ID["barracks"])} width={88} />
+                  <Image draggable={false} alt="" className="w-11 h-11 object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.6)]" height={88} src={buildingImage(BUILDING_BY_ID["barracks"])} width={88} />
                   <span
                     className={clsx(
                       "-mt-1.5 px-1.5 rounded-full text-[10px] font-black border",
@@ -414,7 +473,7 @@ export const WarMap = ({
                         t.isMe ? "border-gold shadow-[0_0_16px_rgba(227,169,72,0.8)]" : s === "weaker" ? "border-good" : s === "stronger" ? "border-[#F08A6C]" : "border-[#E3A948]/70"
                       )}
                     >
-                      <Image alt="" className="w-10 h-10 object-contain" height={80} src={buildingImage(BUILDING_BY_ID["town-hall"])} width={80} />
+                      <Image draggable={false} alt="" className="w-10 h-10 object-contain" height={80} src={buildingImage(BUILDING_BY_ID["town-hall"])} width={80} />
                       {shielded && !t.isMe && <span className="absolute -top-1 -right-1 text-sm">🛡️</span>}
                       <span className="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-[#1A120B] text-[10px] font-black flex items-center justify-center">
                         {t.townHall}
