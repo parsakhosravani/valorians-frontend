@@ -45,7 +45,6 @@ import {
   hiddenResources,
   RANKS,
   RANK_BONUS,
-  UPGRADE_BONUS,
 } from "./config";
 
 export type Army = Record<UnitId, number>;
@@ -75,14 +74,11 @@ export type March = {
   from?: { x: number; y: number };
 };
 
-/** A regiment's battle experience and how far the Arsenal has upgraded it. */
-export type TroopRecord = { xp: number; level: number };
-
-/** An upgrade being forged in the Arsenal. */
-export type ForgeItem = { unit: UnitId; toLevel: number; startedAt: number; endsAt: number };
+/** A regiment's battle experience; it sets the regiment's rank. */
+export type TroopRecord = { xp: number };
 
 export const emptyTroops = (): Record<UnitId, TroopRecord> =>
-  Object.fromEntries(UNIT_IDS.map((u) => [u, { xp: 0, level: 0 }])) as Record<UnitId, TroopRecord>;
+  Object.fromEntries(UNIT_IDS.map((u) => [u, { xp: 0 }])) as Record<UnitId, TroopRecord>;
 
 /** Rank index (0 = Recruit) for an amount of XP. */
 export const rankForXp = (xp: number) => {
@@ -93,9 +89,9 @@ export const rankForXp = (xp: number) => {
 
 export const unitRank = (s: GameState, u: UnitId) => rankForXp(s.troops?.[u]?.xp ?? 0);
 
-/** Attack and defense multiplier a troop type gets from its rank and upgrades. */
+/** Attack and defense multiplier a troop type gets from its rank. */
 export const unitMultiplier = (s: GameState, u: UnitId) =>
-  1 + unitRank(s, u) * RANK_BONUS + (s.troops?.[u]?.level ?? 0) * UPGRADE_BONUS;
+  1 + unitRank(s, u) * RANK_BONUS;
 
 export type WarStats = {
   attacksWon: number;
@@ -144,10 +140,8 @@ export type GameState = {
   /** Highest barbarian camp cleared, and when each was last raided. */
   camps: { cleared: number; lastRaid: Record<string, number> };
   war: WarStats;
-  /** Rank XP and upgrade level of each troop type. */
+  /** Battle experience (rank) of each troop type. */
   troops: Record<UnitId, TroopRecord>;
-  /** The Arsenal upgrade in progress, if any. */
-  forge: ForgeItem | null;
 };
 
 export type Rates = {
@@ -210,13 +204,14 @@ export function createInitialState(now: number): GameState {
     camps: { cleared: 0, lastRaid: {} },
     war: { attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, resourcesLooted: 0 },
     troops: emptyTroops(),
-    forge: null,
   };
 }
 
 /** Fills in anything missing from an older saved state. */
-export function normalizeState(s: GameState): GameState {
-  const fresh = createInitialState(s.updatedAt);
+export function normalizeState(saved: GameState): GameState {
+  const fresh = createInitialState(saved.updatedAt);
+  // Arsenal troop upgrades were removed; drop any upgrade left in old saves.
+  const { forge: _forge, ...s } = saved as GameState & { forge?: unknown };
   return {
     ...fresh,
     ...s,
@@ -236,9 +231,8 @@ export function normalizeState(s: GameState): GameState {
     frenzy: { ...fresh.frenzy, ...s.frenzy },
     streak: { ...fresh.streak, ...s.streak },
     troops: Object.fromEntries(
-      UNIT_IDS.map((u) => [u, { ...fresh.troops[u], ...(s.troops?.[u] ?? {}) }])
+      UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
-    forge: s.forge ?? null,
   };
 }
 
@@ -379,17 +373,6 @@ export function advance(state: GameState, now: number): GameState {
   for (const m of s.marches) {
     if (m.returnsAt <= now) events.push({ at: m.returnsAt, run: () => returnMarch(s, m) });
   }
-  const forge = s.forge;
-  if (forge && forge.endsAt <= now) {
-    events.push({
-      at: forge.endsAt,
-      run: () => {
-        const t = s.troops[forge.unit];
-        t.level = Math.max(t.level, forge.toLevel);
-        s.forge = null;
-      },
-    });
-  }
   events.sort((a, b) => a.at - b.at);
   for (const ev of events) {
     flow(s, Math.max(s.updatedAt, ev.at));
@@ -451,9 +434,8 @@ function structuredCloneState(s: GameState): GameState {
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
     troops: Object.fromEntries(
-      UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0, level: s.troops?.[u]?.level ?? 0 }])
+      UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
-    forge: s.forge ? { ...s.forge } : null,
   };
 }
 

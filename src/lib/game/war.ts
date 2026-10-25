@@ -27,15 +27,10 @@ import {
   campFirstReward,
   militiaDefense,
   MAX_RANK,
-  MAX_UNIT_UPGRADE,
   RANKS,
-  UPGRADE_BUILDING,
   XP_DEFEAT_SHARE,
   XP_LOSS_SHARE,
   XP_PER_STRENGTH,
-  unitUpgradeCost,
-  unitUpgradeSeconds,
-  upgradeCapForRank,
 } from "./config";
 import {
   Army,
@@ -225,7 +220,7 @@ export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: 
   return promoted;
 }
 
-/** Rank, XP progress and upgrade limits of one troop type, for display. */
+/** Rank and XP progress of one troop type, for display. */
 export function troopInfo(s: GameState, u: UnitId) {
   const t = s.troops[u];
   const rank = unitRank(s, u);
@@ -237,51 +232,8 @@ export function troopInfo(s: GameState, u: UnitId) {
     xp: t.xp,
     nextRank: next ? { name: next.name, xp: next.xp } : null,
     progress: next ? (t.xp - floor) / (next.xp - floor) : 1,
-    level: t.level,
-    cap: upgradeCapForRank(rank),
     multiplier: unitMultiplier(s, u),
   };
-}
-
-// ─── Arsenal upgrades ────────────────────────────────────────────────────────
-
-export function troopUpgradeInfo(s: GameState, u: UnitId) {
-  const def = UNIT_BY_ID[u];
-  if (!def) throw new GameError("Unknown unit");
-  const info = troopInfo(s, u);
-  const level = info.level;
-  return {
-    level,
-    cap: info.cap,
-    maxed: level >= MAX_UNIT_UPGRADE,
-    /** Needs a higher rank before the next upgrade. */
-    rankLocked: level >= info.cap && level < MAX_UNIT_UPGRADE,
-    cost: unitUpgradeCost(def, level),
-    seconds: Math.max(5, Math.round(unitUpgradeSeconds(def, level) * getRates(s).trainSpeedMultiplier)),
-  };
-}
-
-/** Starts forging the next upgrade for a troop type in the Arsenal. */
-export function upgradeTroop(s0: GameState, unit: UnitId, now: number): GameState {
-  const def = UNIT_BY_ID[unit];
-  if (!def) throw new GameError("Unknown unit");
-  if ((s0.buildings[UPGRADE_BUILDING.building] ?? 0) < UPGRADE_BUILDING.level) {
-    throw new GameError(`Build the Arsenal to upgrade troops`, "locked");
-  }
-  if (!unitUnlocked(s0, unit)) throw new GameError(`Unlock ${def.name} first`, "locked");
-  if (s0.forge) throw new GameError("The Arsenal is already forging an upgrade", "busy");
-  const info = troopUpgradeInfo(s0, unit);
-  if (info.maxed) throw new GameError("Already fully upgraded", "max_level");
-  if (info.rankLocked) {
-    throw new GameError(`${def.name} need more battle experience to upgrade further`, "rank_locked");
-  }
-  const s = cloneState(s0);
-  for (const r of RESOURCE_IDS) {
-    if (s.resources[r] < info.cost[r]) throw new GameError(`Not enough ${r}`, "not_enough_resources");
-  }
-  for (const r of RESOURCE_IDS) s.resources[r] -= info.cost[r];
-  s.forge = { unit, toLevel: info.level + 1, startedAt: now, endsAt: now + info.seconds * 1000 };
-  return s;
 }
 
 /** Each type's full regiment (home + away) plus troops currently in a battle. */
