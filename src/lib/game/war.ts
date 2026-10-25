@@ -306,7 +306,7 @@ function resolve(
   const attackerShare = attackerWon ? Math.pow(defense / a, 1.5) : 1;
   const defenderShare = attackerWon ? 1 : Math.pow(a / Math.max(1, defense), 1.5);
 
-  const lose = (army: Army, share: number, heal: number) => {
+  const lose = (army: Army, share: number, heal: number, won: boolean) => {
     const losses = emptyArmy();
     const healed = emptyArmy();
     for (const u of UNIT_IDS) {
@@ -314,10 +314,18 @@ function resolve(
       healed[u] = Math.floor(dead * heal);
       losses[u] = dead - healed[u];
     }
+    // A narrow win can round every unit to dead. The winner always keeps at
+    // least one unit (the best carrier), or nobody would march the loot home.
+    if (won && armySize(army) > 0 && UNIT_IDS.every((u) => losses[u] >= army[u])) {
+      const keep = UNIT_IDS.filter((u) => army[u] > 0).reduce((best, u) =>
+        UNIT_BY_ID[u].carry > UNIT_BY_ID[best].carry ? u : best
+      );
+      losses[keep] -= 1;
+    }
     return { losses, healed };
   };
-  const at = lose(sent, attackerShare, attackerHeal);
-  const df = lose(defenders, defenderShare, defenderHeal);
+  const at = lose(sent, attackerShare, attackerHeal, attackerWon);
+  const df = lose(defenders, defenderShare, defenderHeal, !attackerWon);
   return {
     attackerWon,
     attack: Math.round(a),

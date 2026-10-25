@@ -62,6 +62,23 @@ test("camp: weak army is wiped out", () => {
   expect(campDefense(1)).toBe(80);
 });
 
+test("camp: a narrow win always leaves someone to bring the loot home", () => {
+  // 7 spearmen sit right at camp 1's defense, so some luck rolls win by a hair.
+  let narrowWins = 0;
+  for (let i = 0; i < 100; i++) {
+    const s = withBarracks();
+    s.army.spearman = 7;
+    const { state, report } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 7 }, T0, i / 100);
+    if (!report.attackerWon) continue;
+    if (report.defense / report.attack > 0.95) narrowWins += 1;
+    expect(state.marches.length).toBe(1);
+    const back = E.advance(state, report.returnsAt + 1);
+    expect(back.army.spearman).toBeGreaterThan(0);
+    expect(back.resources.iron).toBeGreaterThan(state.resources.iron);
+  }
+  expect(narrowWins).toBeGreaterThan(0);
+});
+
 test("raid: shields, loot limited by carry and hideout, defender shielded after", () => {
   const attacker = withBarracks();
   attacker.army.cavalry = 100;
