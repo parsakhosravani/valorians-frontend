@@ -4,7 +4,13 @@ import Image from "next/image";
 
 import bg from "~/images/background/battle.webp";
 
-import { ArmyTab, BattleResultDrawer, ReportsTab, SendArmyDrawer, WarMap } from "@/components/organisms/war";
+import {
+  ArmyTab,
+  BattleResultDrawer,
+  ReportsTab,
+  SendArmyDrawer,
+  WarMap,
+} from "@/components/organisms/war";
 import type { AttackTarget } from "@/components/organisms/war";
 import { Tabs } from "@/components/organisms/war/shared";
 import { BattleReport, useGame } from "@/context";
@@ -38,17 +44,31 @@ export const Battle = () => {
   return (
     <>
       <div className="w-full flex flex-col gap-2 px-3 pt-1">
-        <Tabs
-          tabs={[
-            { id: "map", label: "Map" },
-            { id: "army", label: "Army", badge: state.training.length || undefined },
-            { id: "reports", label: "Reports" },
-          ]}
-          value={tab}
-          onChange={setTab}
-        />
-        <div className="pb-4">
-          {tab === "map" && <WarMap focusId={revenge} onAttack={setTarget} onBattleDone={showResult} />}
+        <div className="w-full max-w-md mx-auto">
+          <Tabs
+            tabs={[
+              { id: "map", label: "Map" },
+              {
+                id: "army",
+                label: "Army",
+                badge: state.training.length || undefined,
+              },
+              { id: "reports", label: "Reports" },
+            ]}
+            value={tab}
+            onChange={setTab}
+          />
+        </div>
+        <div
+          className={tab === "map" ? "pb-4" : "pb-4 w-full max-w-md mx-auto"}
+        >
+          {tab === "map" && (
+            <WarMap
+              focusId={revenge}
+              onAttack={setTarget}
+              onBattleDone={showResult}
+            />
+          )}
           {tab === "army" && <ArmyTab />}
           {tab === "reports" && <ReportsTab />}
         </div>

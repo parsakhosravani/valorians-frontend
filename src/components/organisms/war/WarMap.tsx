@@ -542,7 +542,7 @@ export const WarMap = ({
       )}
 
       {/* The map */}
-      <div className="relative rounded-2xl overflow-hidden border border-line h-[min(62svh,520px)] bg-[#1B2416]">
+      <div className="relative rounded-2xl overflow-hidden border border-line h-[min(62svh,520px)] lg:h-[calc(100svh-250px)] lg:min-h-[420px] bg-[#1B2416]">
         {!data && !error && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-muted">
             Unrolling the map…
