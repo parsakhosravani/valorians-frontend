@@ -18,13 +18,17 @@ export const Battle = () => {
   const [result, setResult] = useState<BattleReport | null>(null);
   const [revenge, setRevenge] = useState<number | undefined>();
 
-  // /battle?revenge=<playerId> comes from the Hall feed.
+  // /battle?revenge=<playerId> and /battle?tab=<tab> come from the Hall.
   useEffect(() => {
-    const id = Number(new URLSearchParams(window.location.search).get("revenge"));
+    const q = new URLSearchParams(window.location.search);
+    const id = Number(q.get("revenge"));
+    const t = q.get("tab") as Tab | null;
 
     if (id) {
       setRevenge(id);
       setTab("raid");
+    } else if (t && ["army", "raid", "camps", "reports"].includes(t)) {
+      setTab(t);
     }
   }, []);
 
