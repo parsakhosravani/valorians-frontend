@@ -243,7 +243,7 @@ async function resolveAttack(a: AttackRow, now: number) {
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
   await Promise.all([
     notify.attackResult(attacker.id, full.defenderName, r, now),
-    r.attackerWon ? notify.raided(defender.id, full.attackerName, r) : notify.defended(defender.id, full.attackerName, r),
+    r.attackerWon ? notify.raided(defender.id, full.attackerName, r, attacker.id) : notify.defended(defender.id, full.attackerName, r),
   ]);
 }
 

@@ -128,6 +128,13 @@ export const Market = () => {
   useBackButton();
   const { authHeader, state, rates, now, trade, refresh } = useGame();
   const [tab, setTab] = useState<Tab>("buy");
+
+  // /market?tab=mine (from the bot's "offer taken" message) or ?tab=sell.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+
+    if (t === "mine" || t === "sell" || t === "buy") setTab(t);
+  }, []);
   const [data, setData] = useState<MarketView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ResourceId | "all">("all");
