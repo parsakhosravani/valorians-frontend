@@ -1,5 +1,6 @@
 "use client";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -95,6 +96,13 @@ const T = 46; // tile size in px at zoom 1
 const MIN_ZOOM = 0.45;
 const MAX_ZOOM = 1.8;
 
+/** Map radius (tiles) that fills this box even fully zoomed out. */
+const wantedRadius = (el: HTMLElement | null) => {
+  const side = el ? Math.max(el.clientWidth, el.clientHeight) : 0;
+
+  return Math.min(30, Math.max(14, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1));
+};
+
 const TERRAIN_FILL: Record<Terrain, string[]> = {
   plains: ["#5E6B37", "#627039", "#5A6734"],
   forest: ["#34492A", "#36502B", "#314527"],
@@ -109,7 +117,15 @@ const TERRAIN_ICON: Record<Terrain, string> = {
   lake: "🌊",
 };
 
-const Ground = ({ ox, oy, n }: { ox: number; oy: number; n: number }) => {
+const Ground = memo(function Ground({
+  ox,
+  oy,
+  n,
+}: {
+  ox: number;
+  oy: number;
+  n: number;
+}) {
   const tiles = [];
 
   for (let j = 0; j < n; j++) {
@@ -159,7 +175,7 @@ const Ground = ({ ox, oy, n }: { ox: number; oy: number; n: number }) => {
   }
 
   return <>{tiles}</>;
-};
+});
 
 // ─── The map ─────────────────────────────────────────────────────────────────
 
@@ -180,6 +196,8 @@ export const WarMap = ({
   const [scouts, setScouts] = useState<Record<number, ScoutReport>>({});
   const [busy, setBusy] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const radius = useRef(0);
   const outgoing = useRef<Set<number>>(new Set());
   const centred = useRef(false);
 
@@ -188,7 +206,8 @@ export const WarMap = ({
     try {
       const d = await apiRequest<MapData>(
         authHeader,
-        focusId ? `war/map?focus=${focusId}` : "war/map",
+        `war/map?r=${(radius.current = Math.max(radius.current, wantedRadius(box.current)))}` +
+          (focusId ? `&focus=${focusId}` : ""),
       );
       const ids = new Set(
         d.movements.filter((m) => m.kind === "outgoing").map((m) => m.id),
@@ -248,6 +267,20 @@ export const WarMap = ({
   const px = (x: number) => (x - ox) * T + T / 2;
   const py = (y: number) => (y - oy) * T + T / 2;
 
+  // A bigger window loads a bigger area: keep the same spot in view.
+  const origin = useRef<{ ox: number; oy: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const o = origin.current;
+
+    if (data && el && o && (o.ox !== ox || o.oy !== oy)) {
+      el.scrollLeft += (o.ox - ox) * T * zoomRef.current;
+      el.scrollTop += (o.oy - oy) * T * zoomRef.current;
+    }
+    if (data) origin.current = { ox, oy };
+  }, [data, ox, oy]);
+
   // Start centred on your tribe (or the one you came to take revenge on).
   useLayoutEffect(() => {
     const el = scroller.current;
@@ -255,6 +288,8 @@ export const WarMap = ({
     if (!data || !el || centred.current) return;
     const focus =
       (focusId && data.tribes.find((t) => t.id === focusId)) || data.home;
+
+    paint(Math.max(1, minZoom()), 0, 0, 0, 0);
 
     el.scrollLeft = px(focus.x) * zoomRef.current - el.clientWidth / 2;
     el.scrollTop = py(focus.y) * zoomRef.current - el.clientHeight / 2;
@@ -315,33 +350,102 @@ export const WarMap = ({
     }
   };
   // ─── Zoom: mouse wheel, trackpad pinch, two-finger pinch, +/− buttons ──────
-  const [zoom, setZoom] = useState(1);
+  // Zoom is drawn straight to the DOM every frame (no React render of the
+  // whole map), and eases toward its target so it never jumps.
   const zoomRef = useRef(1);
+  const sizer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const goal = useRef<{
+    z: number;
+    fx: number;
+    fy: number;
+    bx: number;
+    by: number;
+  } | null>(null);
+  const frame = useRef(0);
+  const nRef = useRef(0);
 
-  zoomRef.current = zoom;
+  nRef.current = n;
 
-  /** Zooms keeping the map point under `focus` (px inside the viewport) still. */
-  const zoomTo = useCallback(
-    (next: number, focus?: { x: number; y: number }) => {
+  /** Smallest zoom that still fills the box, so no empty space shows. */
+  const minZoom = useCallback(() => {
+    const el = scroller.current;
+    const size = nRef.current * T;
+
+    if (!el || !size) return MIN_ZOOM;
+
+    return Math.min(
+      MAX_ZOOM,
+      Math.max(MIN_ZOOM, el.clientWidth / size, el.clientHeight / size),
+    );
+  }, []);
+
+  /** Draws zoom z, keeping map point (bx, by) under viewport point (fx, fy). */
+  const paint = useCallback(
+    (z: number, fx: number, fy: number, bx: number, by: number) => {
       const el = scroller.current;
-      const z0 = zoomRef.current;
-      const z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next));
-
-      if (!el || Math.abs(z - z0) < 0.001) return;
-      const fx = focus?.x ?? el.clientWidth / 2;
-      const fy = focus?.y ?? el.clientHeight / 2;
-      const bx = (el.scrollLeft + fx) / z0;
-      const by = (el.scrollTop + fy) / z0;
+      const size = nRef.current * T;
 
       zoomRef.current = z;
-      setZoom(z);
-      requestAnimationFrame(() => {
+      if (sizer.current) {
+        sizer.current.style.width = `${size * z}px`;
+        sizer.current.style.height = `${size * z}px`;
+      }
+      if (inner.current) inner.current.style.transform = `scale(${z})`;
+      if (el) {
         el.scrollLeft = bx * z - fx;
         el.scrollTop = by * z - fy;
-      });
+      }
     },
     [],
   );
+
+  /** Zooms toward `next`, keeping the map point under `focus` (px in the viewport) still. */
+  const zoomTo = useCallback(
+    (next: number, focus?: { x: number; y: number }, instant = false) => {
+      const el = scroller.current;
+
+      if (!el) return;
+      const z0 = zoomRef.current;
+      const z = Math.max(minZoom(), Math.min(MAX_ZOOM, next));
+      const fx = focus?.x ?? el.clientWidth / 2;
+      const fy = focus?.y ?? el.clientHeight / 2;
+      const g = {
+        z,
+        fx,
+        fy,
+        bx: (el.scrollLeft + fx) / z0,
+        by: (el.scrollTop + fy) / z0,
+      };
+
+      goal.current = g;
+      if (instant) {
+        cancelAnimationFrame(frame.current);
+        frame.current = 0;
+        paint(z, fx, fy, g.bx, g.by);
+
+        return;
+      }
+      if (frame.current) return; // the running animation picks up the new goal
+      const step = () => {
+        const t = goal.current;
+
+        if (!t) return (frame.current = 0);
+        const cur = zoomRef.current;
+        const done = Math.abs(t.z - cur) < 0.002;
+        const z1 = done ? t.z : cur + (t.z - cur) * 0.25;
+
+        paint(z1, t.fx, t.fy, t.bx, t.by);
+        frame.current = done ? 0 : requestAnimationFrame(step);
+      };
+
+      frame.current = requestAnimationFrame(step);
+    },
+    [minZoom, paint],
+  );
+  /** Where the next zoom step starts from (the goal while one is easing). */
+  const zoomNow = () =>
+    frame.current && goal.current ? goal.current.z : zoomRef.current;
 
   const hasMap = !!data;
 
@@ -368,8 +472,10 @@ export const WarMap = ({
       const speed = e.ctrlKey ? 0.01 : 0.0018; // pinch gestures send small deltas
 
       zoomTo(
-        zoomRef.current * Math.exp(-e.deltaY * unit * speed),
+        (e.ctrlKey ? zoomRef.current : zoomNow()) *
+          Math.exp(-e.deltaY * unit * speed),
         local(e.clientX, e.clientY),
+        e.ctrlKey,
       );
     };
     // Two-finger pinch on phones and tablets.
@@ -388,7 +494,7 @@ export const WarMap = ({
         (e.touches[0].clientY + e.touches[1].clientY) / 2,
       );
 
-      zoomTo(pinch.z * (dist(e.touches) / pinch.d), mid);
+      zoomTo(pinch.z * (dist(e.touches) / pinch.d), mid, true);
     };
     const onEnd = () => (pinch = null);
 
@@ -404,6 +510,35 @@ export const WarMap = ({
       el.removeEventListener("touchend", onEnd);
     };
   }, [hasMap, zoomTo]);
+
+  // Window resized (Telegram Desktop, rotating a tablet): ease the zoom so
+  // the map still fills the box, and load more of the world if needed.
+  useEffect(() => {
+    const el = box.current;
+
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let last = 0;
+    let size = { w: el.clientWidth, h: el.clientHeight };
+    const ro = new ResizeObserver(() => {
+      const sc = scroller.current;
+
+      // Keep the middle of the view in the middle.
+      if (sc) {
+        sc.scrollLeft -= (el.clientWidth - size.w) / 2;
+        sc.scrollTop -= (el.clientHeight - size.h) / 2;
+      }
+      size = { w: el.clientWidth, h: el.clientHeight };
+      if (zoomRef.current < minZoom() - 0.001) zoomTo(minZoom());
+      if (wantedRadius(el) > radius.current && Date.now() - last > 1000) {
+        last = Date.now();
+        load();
+      }
+    });
+
+    ro.observe(el);
+
+    return () => ro.disconnect();
+  }, [hasMap, load, minZoom, zoomTo]);
 
   const recentre = () => {
     const el = scroller.current;
@@ -542,7 +677,10 @@ export const WarMap = ({
       )}
 
       {/* The map */}
-      <div className="relative rounded-2xl overflow-hidden border border-line h-[min(62svh,520px)] lg:h-[calc(100svh-250px)] lg:min-h-[420px] bg-[#1B2416]">
+      <div
+        ref={box}
+        className="relative rounded-2xl overflow-hidden border border-line h-[max(320px,calc(100svh-260px))] bg-[#1B2416]"
+      >
         {!data && !error && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-muted">
             Unrolling the map…
@@ -570,15 +708,20 @@ export const WarMap = ({
             onPointerUp={endDrag}
           >
             <div
+              ref={sizer}
               className="relative"
-              style={{ width: n * T * zoom, height: n * T * zoom }}
+              style={{
+                width: n * T * zoomRef.current,
+                height: n * T * zoomRef.current,
+              }}
             >
               <div
+                ref={inner}
                 className="absolute left-0 top-0 origin-top-left"
                 style={{
                   width: n * T,
                   height: n * T,
-                  transform: `scale(${zoom})`,
+                  transform: `scale(${zoomRef.current})`,
                 }}
               >
                 <svg
@@ -757,14 +900,14 @@ export const WarMap = ({
             <button
               aria-label="Zoom in"
               className="w-11 h-11 rounded-xl bg-panel/95 border border-line text-xl font-black text-goldtext shadow-lg"
-              onClick={() => zoomTo(zoomRef.current * 1.25)}
+              onClick={() => zoomTo(zoomNow() * 1.4)}
             >
               +
             </button>
             <button
               aria-label="Zoom out"
               className="w-11 h-11 rounded-xl bg-panel/95 border border-line text-xl font-black text-goldtext shadow-lg"
-              onClick={() => zoomTo(zoomRef.current / 1.25)}
+              onClick={() => zoomTo(zoomNow() / 1.4)}
             >
               −
             </button>

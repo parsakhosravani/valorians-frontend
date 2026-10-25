@@ -59,12 +59,12 @@ type Movement = {
 };
 
 /** Everything the War map shows around a point (your home by default). */
-export async function mapView(me: Player, now: number, center?: Point) {
+export async function mapView(me: Player, now: number, center?: Point, radius = VIEW_RADIUS) {
   await settleAll();
   const home = await homeOf(me.id);
   const c = center ?? home;
   const db = await getDb();
-  const r = VIEW_RADIUS;
+  const r = Math.max(8, Math.min(30, Math.round(radius) || VIEW_RADIUS));
 
   const rs = await db.execute({
     sql: `SELECT id, username, first_name, photo_url, population, power, shield_until, map_x, map_y, state
