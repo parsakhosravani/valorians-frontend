@@ -1,0 +1,21 @@
+name: Resolve battles
+
+# Armies that arrive while nobody has the game open are fought here, so
+# players get their battle results and bot notifications within minutes.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call the battle resolver
+        env:
+          # Optional repository secrets; the defaults work for the live game.
+          APP_URL: ${{ secrets.APP_URL || 'https://valorians-legend.vercel.app' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS --max-time 60 ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} "$APP_URL/api/cron/battles"

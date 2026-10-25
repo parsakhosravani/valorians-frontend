@@ -21,7 +21,7 @@ import woodBg from "~/images/background/wood.webp";
 import clayBg from "~/images/background/clay.webp";
 import cropBg from "~/images/background/crop.webp";
 
-import { ApiError, PlayerView, apiRequest, resolveAuthHeader } from "@/lib/api";
+import { ApiError, PlayerView, apiRequest, insideTelegram, resolveAuthHeader } from "@/lib/api";
 import {
   COMBO_WINDOW_MS,
   RESOURCE_IDS,
@@ -198,7 +198,13 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [authHeader, accept]);
 
   const load = useCallback(async () => {
-    const auth = resolveAuthHeader();
+    let auth = resolveAuthHeader();
+    // Telegram Desktop can hand over the launch data a moment after the page
+    // starts; wait up to ~3s inside Telegram before giving up.
+    for (let i = 0; !auth && insideTelegram() && i < 15; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      auth = resolveAuthHeader();
+    }
     setAuthHeader(auth);
     if (!auth) {
       setStatus("no-auth");

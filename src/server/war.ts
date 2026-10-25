@@ -4,6 +4,7 @@ import crypto from "crypto";
 
 import { getDb } from "./db";
 import { homeOf } from "./map";
+import { notify } from "./notify";
 import { Player, findById, mutatePlayer } from "./players";
 
 import { GameError, advance, emptyArmy, getRates } from "@/lib/game/engine";
@@ -142,6 +143,14 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
       args: [me.id, defenderId, campLevel, JSON.stringify(sent), home.x, home.y, dest.x, dest.y, now, now + travel],
     });
 
+    if (defenderId) {
+      // Warn the defender; with a Watchtower they also see which troops.
+      const def = await findById(defenderId);
+      const watch = (def?.state.buildings["watchtower"] ?? 0) >= 1;
+
+      await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel);
+    }
+
     return { player: after, march: { id: Number(ins.lastInsertRowid), arrivesAt: now + travel } };
   } catch (e) {
     await mutatePlayer(me.id, now, (s) => cancelRaid(s, sent));
@@ -195,6 +204,7 @@ async function resolveAttack(a: AttackRow, now: number) {
     const full: StoredReport = { ...report, attackerName: displayName(attacker), defenderName: `Barbarian camp ${a.campLevel}` };
 
     await saveReport(attacker.id, null, a.campLevel, full, at, a.id);
+    await notify.attackResult(attacker.id, full.defenderName, report, now);
 
     return;
   }
@@ -222,6 +232,7 @@ async function resolveAttack(a: AttackRow, now: number) {
     await mutatePlayer(attacker.id, now, (s) =>
       returnHome(s, a.units, defender ? displayName(defender) : "Abandoned land", at + travelMs, now, rand(), a.to)
     );
+    await notify.turnedBack(attacker.id, defender ? displayName(defender) : "The target");
 
     return;
   }
@@ -230,6 +241,10 @@ async function resolveAttack(a: AttackRow, now: number) {
 
   await mutatePlayer(attacker.id, now, (s) => receiveRaidReport(s, r, full.defenderName, at, rand(), a.to));
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
+  await Promise.all([
+    notify.attackResult(attacker.id, full.defenderName, r, now),
+    r.attackerWon ? notify.raided(defender.id, full.attackerName, r) : notify.defended(defender.id, full.attackerName, r),
+  ]);
 }
 
 /**
