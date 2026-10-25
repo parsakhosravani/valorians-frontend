@@ -107,7 +107,37 @@ test("defenders and walls can win", () => {
 test("rams weaken walls", () => {
   const d = withBarracks();
   d.buildings["city-gate"] = 10;
-  expect(W.defensePower(d, 50)).toBeLessThan(W.defensePower(d, 0));
+  const rams = { ...E.emptyArmy(), ram: 50 };
+  // 50 rams × 2% = the whole 60% gate bonus is gone
+  expect(W.defensePower(d, rams) * 1.6).toBeCloseTo(W.defensePower(d));
+});
+
+test("catapults break the Watchtower", () => {
+  const d = withBarracks();
+  d.buildings.watchtower = 10; // 600 flat defense
+  const full = W.defensePower(d);
+  const hit = W.defensePower(d, { ...E.emptyArmy(), catapult: 10 }); // −30% of 600
+  expect(full - hit).toBeCloseTo(180 * (1 + E.getRates(d).defenseBonus));
+});
+
+test("new troops unlock at higher building levels", () => {
+  const s = withBarracks(5);
+  expect(() => W.trainTroops(s, "berserker", 1, T0)).not.toThrow();
+  expect(() => W.trainTroops(s, "huscarl", 1, T0)).toThrow("Needs Barracks level 10");
+  s.buildings.stable = 4;
+  expect(() => W.trainTroops(s, "raider", 1, T0)).toThrow("Needs Stable level 5");
+});
+
+test("raiders count as mounted, huscarls as anti-cavalry", () => {
+  const atk = withBarracks();
+  const def = withBarracks();
+  def.army.huscarl = 50;
+  const raid = { ...E.emptyArmy(), raider: 100 };
+  const foot = { ...E.emptyArmy(), berserker: 74 }; // about the same attack as the raiders
+  const vsRaiders = W.battleNumbers(atk, raid, def, "plains");
+  const vsFoot = W.battleNumbers(atk, foot, def, "plains");
+  expect(vsRaiders.defense).toBeGreaterThan(vsFoot.defense * 1.2);
+  expect(W.battleNumbers(atk, raid, def, "forest").attack).toBeCloseTo(vsRaiders.attack * 0.75);
 });
 
 test("old saves get war fields", () => {

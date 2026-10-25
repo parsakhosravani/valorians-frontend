@@ -931,15 +931,16 @@ export const WarMap = ({
               <span className="flex flex-col gap-1.5 text-left text-sm">
                 <span>
                   Armies march across the map; farther targets take longer. An
-                  army moves at the speed of its slowest unit (cavalry fastest,
-                  rams slowest). The battle happens when it arrives.
+                  army moves at the speed of its slowest unit (raiders fastest,
+                  catapults slowest). The battle happens when it arrives.
                 </span>
                 <span>
                   ⛰️ Hills give the defender +20% defense, 🌲 forests +10%, and
-                  cavalry fights 25% weaker in forests.
+                  horsemen (cavalry, raiders) fight 25% weaker in forests.
                 </span>
                 <span>
-                  🛡️ Spearmen defend 50% better against cavalry. Mix your army
+                  🛡️ Spearmen and Huscarls defend 50% better against horsemen. Rams
+                  break the City Gate, catapults the Watchtower. Mix your army
                   to match the target.
                 </span>
                 <span>
