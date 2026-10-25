@@ -1051,7 +1051,7 @@ export const WarMap = ({
                           <span className="text-muted">Home:</span>
                           {(Object.keys(sc.troops) as UnitId[]).map((u) => (
                             <span key={u}>
-                              <UnitIcon className="inline-block align-[-5px]" size={20} unit={u} /> {fmt(sc.troops[u])}
+                              <UnitIcon className="inline-block align-[-4px] text-[#E3A948]" size={18} unit={u} /> {fmt(sc.troops[u])}
                             </span>
                           ))}
                         </div>

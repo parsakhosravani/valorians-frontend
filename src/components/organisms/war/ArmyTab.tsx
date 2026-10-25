@@ -200,7 +200,7 @@ export const ArmyTab = () => {
             return (
               <div key={i} className="flex justify-between text-sm">
                 <span>
-                  <UnitIcon className="inline-block align-[-5px]" size={20} unit={unit.id} /> {unit.name} {fmt(t.done)}/
+                  <UnitIcon className="inline-block align-[-4px] text-[#E3A948]" size={18} unit={unit.id} /> {unit.name} {fmt(t.done)}/
                   {fmt(t.count)}
                 </span>
                 <span className="text-[#B19C80]">
