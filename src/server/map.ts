@@ -3,7 +3,7 @@ import "server-only";
 import { getDb } from "./db";
 import { Player, avatarUrl } from "./players";
 
-import { advance } from "@/lib/game/engine";
+import { advance, normalizeState } from "@/lib/game/engine";
 import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
 import { Point, campPosition, distance, homeSlot, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutEstimate } from "@/lib/game/war";
@@ -74,7 +74,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const tribes = rs.rows.map((row) => {
     const id = Number(row.id);
     const p = { x: Number(row.map_x), y: Number(row.map_y) };
-    const s = advance(JSON.parse(String(row.state)), now);
+    const s = advance(normalizeState(JSON.parse(String(row.state))), now);
 
     return {
       id,
