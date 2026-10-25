@@ -1,11 +1,9 @@
-import "@fontsource/grenze/600.css";
-import "@fontsource/grenze/700.css";
-import "@fontsource/grenze/800.css";
-import "@fontsource/nunito/400.css";
-import "@fontsource/nunito/600.css";
-import "@fontsource/nunito/700.css";
-import "@fontsource/nunito/800.css";
-import "@fontsource/nunito/900.css";
+import "@fontsource/cinzel/700.css";
+import "@fontsource/cinzel/900.css";
+import "@fontsource/alegreya-sans/400.css";
+import "@fontsource/alegreya-sans/500.css";
+import "@fontsource/alegreya-sans/700.css";
+import "@fontsource/alegreya-sans/800.css";
 import "@/styles/globals.css";
 import type { Metadata, Viewport } from "next";
 import { Main } from "@/components";
@@ -25,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#15110D",
+  themeColor: "#120D09",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

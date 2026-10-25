@@ -1,11 +1,13 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 
-import { fmt } from "./shared";
+import avatar from "~/images/avatar.webp";
+
+import { Card, fmt } from "./shared";
 import { AttackTarget } from "./SendArmyDrawer";
 
-import { Amount, Avatar, Button, Card, Empty, SectionTitle, Spinner } from "@/components/ui";
-import { GameIcon } from "@/art";
+import { Button } from "@/components";
 import { useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -38,55 +40,56 @@ export const RaidTab = ({ onAttack, revenge }: { onAttack: (t: AttackTarget) => 
   useEffect(load, [load]);
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <Card className="flex flex-col gap-1.5 text-small text-parch-300" tone="sunken">
+    <div className="flex flex-col gap-2">
+      <Card className="text-xs text-[#B19C80] flex flex-col gap-1">
         <p>
           Raid other tribes to steal resources. Win and your survivors carry loot home; lose and your army falls.
           {!rates.canScout && " Build an Exploration Center to see enemies' exact defense."}
         </p>
         <p>
-          Raided tribes get a {RAIDED_SHIELD_MS / 3600000}h shield, and your Hideout keeps {fmt(rates.hidden)} of each resource safe.
+          Raided tribes get a {RAIDED_SHIELD_MS / 3600000}h shield, and your Hideout keeps {fmt(rates.hidden)} of each
+          resource safe.
         </p>
         {shielded && (
-          <p className="flex items-center gap-1.5 font-bold text-gold-300">
-            <GameIcon id="shield-time" size={18} />
-            Shielded for {formatDuration(state.shieldUntil - now)}. Attacking a player ends your shield.
+          <p className="text-[#E3A948] font-bold">
+            🛡️ You&apos;re shielded for {formatDuration(state.shieldUntil - now)}. Attacking a player ends your shield.
           </p>
         )}
       </Card>
 
-      <SectionTitle
-        action={
-          <Button icon="refresh" size="sm" variant="ghost" onClick={load}>
-            Find others
-          </Button>
-        }
-      >
-        Tribes nearby
-      </SectionTitle>
+      <div className="flex justify-between items-center">
+        <h3 className="font-bold">Tribes nearby</h3>
+        <Button size="small" variant="outline" onClick={load}>
+          ↻ Find others
+        </Button>
+      </div>
 
-      {error && <p className="text-small text-blood-400">{error}</p>}
-      {!targets && !error && <Spinner label="Scouting" />}
+      {error && <p className="text-sm text-[#F08A6C]">{error}</p>}
+      {!targets && !error && <p className="text-sm text-[#B19C80]">Scouting…</p>}
       {targets?.length === 0 && (
-        <Empty title="Nobody to raid right now">Everyone nearby is shielded. Try the barbarian camps, or check back later.</Empty>
+        <p className="text-sm text-[#B19C80]">
+          No tribes can be attacked right now — everyone nearby is shielded. Try the barbarian camps, or check back
+          later.
+        </p>
       )}
       {targets?.map((t) => (
-        <Card key={t.id} className="flex items-center gap-3" tone={t.id === revenge ? "danger" : "default"}>
-          <Avatar seed={t.id} size={44} src={t.photoUrl} />
+        <Card key={t.id} className={t.id === revenge ? "flex items-center gap-2 !border-ember" : "flex items-center gap-2"}>
+          {t.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img alt="" className="h-10 w-10 rounded object-cover" src={t.photoUrl} />
+          ) : (
+            <Image alt="" className="h-10 w-10 rounded" src={avatar} />
+          )}
           <div className="flex-1 min-w-0">
-            <div className="font-display font-bold text-title truncate">
-              {t.name}
-              {t.id === revenge && <span className="ml-1.5 text-caption font-extrabold text-ember-300">REVENGE</span>}
-            </div>
-            <div className="flex gap-x-3 flex-wrap">
-              <Amount icon="population" size="xs" value={t.population} />
-              <Amount icon="attack" size="xs" value={t.power} />
-              <Amount icon="defense" size="xs" value={t.defense.exact ? fmt(t.defense.min) : `${fmt(t.defense.min)}–${fmt(t.defense.max)}`} />
+            <div className="font-bold truncate">{t.name}</div>
+            <div className="text-xs text-[#B19C80] flex gap-2 flex-wrap">
+              <span>👥 {fmt(t.population)}</span>
+              <span>💪 {fmt(t.power)}</span>
+              <span>🛡️ {t.defense.exact ? fmt(t.defense.min) : `${fmt(t.defense.min)}–${fmt(t.defense.max)}`}</span>
             </div>
           </div>
           <Button
-            size="sm"
-            variant="danger"
+            size="small"
             onClick={() =>
               onAttack({
                 title: `Raid ${t.name}`,
