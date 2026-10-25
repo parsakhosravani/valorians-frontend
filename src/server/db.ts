@@ -81,12 +81,35 @@ async function init(): Promise<Client> {
     "power REAL NOT NULL DEFAULT 0",
     "wins INTEGER NOT NULL DEFAULT 0",
     "shield_until INTEGER NOT NULL DEFAULT 0",
+    "map_x INTEGER",
+    "map_y INTEGER",
   ]) {
     await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
   }
+  await client.execute("ALTER TABLE battles ADD COLUMN attack_id INTEGER").catch(() => {});
   await client.executeMultiple(`
     CREATE INDEX IF NOT EXISTS users_power ON users(power DESC);
     CREATE INDEX IF NOT EXISTS users_wins ON users(wins DESC);
+    CREATE INDEX IF NOT EXISTS users_map ON users(map_x, map_y);
+
+    -- Armies marching across the world map. The battle happens when they arrive.
+    CREATE TABLE IF NOT EXISTS attacks (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      attacker_id   INTEGER NOT NULL,
+      defender_id   INTEGER,                       -- null for barbarian camps
+      camp_level    INTEGER,
+      units         TEXT NOT NULL,                 -- JSON Army
+      from_x        INTEGER NOT NULL,
+      from_y        INTEGER NOT NULL,
+      to_x          INTEGER NOT NULL,
+      to_y          INTEGER NOT NULL,
+      sent_at       INTEGER NOT NULL,
+      arrives_at    INTEGER NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'marching' -- marching | resolving | done | recalled
+    );
+    CREATE INDEX IF NOT EXISTS attacks_due ON attacks(status, arrives_at);
+    CREATE INDEX IF NOT EXISTS attacks_attacker ON attacks(attacker_id, status);
+    CREATE INDEX IF NOT EXISTS attacks_defender ON attacks(defender_id, status);
   `);
   return client;
 }

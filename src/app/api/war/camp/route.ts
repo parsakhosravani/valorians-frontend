@@ -1,10 +1,10 @@
 import { handler } from "@/server/http";
 import { playerView } from "@/server/players";
-import { attackCamp } from "@/server/war";
+import { marchTo } from "@/server/war";
 
-/** Body: { level: number, units: { spearman, archer, cavalry, ram } } */
+/** Body: { level: number, units }. Sends an army to one of your barbarian camps. */
 export const POST = handler(async ({ body, player, now }) => {
-  const { player: p, report } = await attackCamp(player, Number(body.level), body.units, now);
+  const { player: p, march } = await marchTo(player, { camp: Number(body.level) }, body.units, now);
 
-  return { ...(await playerView(p, now)), report };
+  return { ...(await playerView(p, now)), march };
 });

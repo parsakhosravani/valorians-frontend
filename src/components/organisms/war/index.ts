@@ -1,6 +1,5 @@
 export * from "./ArmyTab";
-export * from "./RaidTab";
-export * from "./CampsTab";
+export * from "./WarMap";
 export * from "./ReportsTab";
 export * from "./SendArmyDrawer";
 export * from "./BattleResultDrawer";
