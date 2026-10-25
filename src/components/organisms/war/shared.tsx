@@ -16,10 +16,10 @@ export const Card = ({ children, className }: { children: React.ReactNode; class
 
 export const UnitBadge = ({ unit, size = 36 }: { unit: UnitId; size?: number }) => (
   <div
-    className="rounded-full bg-[#1E1610] border-2 border-[#E3A948] text-[#E3A948] flex items-center justify-center shrink-0"
+    className="rounded-full bg-[radial-gradient(circle_at_50%_40%,#4A3828,#241A12)] border-2 border-[#E3A948] flex items-center justify-center shrink-0"
     style={{ width: size, height: size }}
   >
-    <UnitIcon size={size * 0.62} unit={unit} />
+    <UnitIcon size={size * 0.82} unit={unit} />
   </div>
 );
 
@@ -33,7 +33,7 @@ export const ArmyLine = ({ army, className }: { army: Army; className?: string }
     <span className={clsx("inline-flex flex-wrap gap-x-2", className)}>
       {parts.map((u) => (
         <span key={u.id} className="inline-flex items-center gap-0.5">
-          <UnitIcon className="text-[#E3A948]" size={18} unit={u.id} /> {fmt(army[u.id])}
+          <UnitIcon size={20} unit={u.id} /> {fmt(army[u.id])}
         </span>
       ))}
     </span>
