@@ -27,6 +27,7 @@ export type Player = {
   isPremium: boolean;
   referralCode: string;
   referredBy: number | null;
+  createdAt: number;
   version: number;
   state: GameState;
 };
@@ -42,6 +43,7 @@ const toPlayer = (r: Row): Player => ({
   isPremium: Number(r.is_premium) === 1,
   referralCode: String(r.referral_code),
   referredBy: r.referred_by == null ? null : Number(r.referred_by),
+  createdAt: Number(r.created_at),
   version: Number(r.version),
   state: normalizeState(JSON.parse(String(r.state))),
 });
@@ -70,6 +72,41 @@ const profileArgs = (u: TelegramAuthUser) => [
   u.is_premium ? 1 : 0,
 ];
 
+/** New players can still be linked to an inviter this long after they first played. */
+const LATE_REFERRAL_MS = 48 * 3600 * 1000;
+
+/** Links an existing new-ish player to their inviter and pays both sides once. */
+async function linkLateReferral(player: Player, code: string, premium: boolean) {
+  const inviterId = await findIdByCode(code);
+
+  if (!inviterId || inviterId === player.id) return false;
+  const inviter = await findById(inviterId);
+
+  // No loops: you can't be invited by someone you invited.
+  if (!inviter || inviter.referredBy === player.id) return false;
+  const db = await getDb();
+  const bonus = premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins;
+  const credit = (id: number, coins: number, pop: number): InStatement => ({
+    sql: `UPDATE users SET
+            state = json_set(state,
+              '$.coins', json_extract(state, '$.coins') + ?,
+              '$.population', json_extract(state, '$.population') + ?),
+            population = population + ?,
+            version = version + 1
+          WHERE id = ?`,
+    args: [coins, pop, pop, id],
+  });
+  const claim = await db.execute({
+    sql: "UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL",
+    args: [inviterId, player.id],
+  });
+
+  if (claim.rowsAffected !== 1) return false; // linked by a parallel request
+  await db.batch([credit(player.id, bonus, 0), credit(inviterId, bonus, REFERRAL_REWARD.population)], "write");
+
+  return true;
+}
+
 /** Loads the player, creating them (and paying referral bonuses) on first visit. */
 export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<Player> {
   const db = await getDb();
@@ -81,6 +118,11 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
               language_code = ?, is_premium = ?, last_seen_at = ? WHERE id = ?`,
       args: [...profileArgs(auth.user), now, auth.user.id],
     });
+    if (auth.startParam && existing.referredBy == null && now - existing.createdAt < LATE_REFERRAL_MS) {
+      // Opened the game once without the link (e.g. from the bot's menu
+      // button), then came back through a friend's invite: still count it.
+      if (await linkLateReferral(existing, auth.startParam, !!auth.user.is_premium)) return (await findById(existing.id))!;
+    }
     return existing;
   }
 
@@ -174,6 +216,8 @@ export async function rankOf(population: number) {
 }
 
 export async function playerView(p: Player, now: number) {
+  const inviter = p.referredBy ? await findById(p.referredBy) : null;
+
   return {
     serverTime: now,
     me: {
@@ -183,6 +227,7 @@ export async function playerView(p: Player, now: number) {
       lastName: p.lastName,
       photoUrl: p.photoUrl,
       referralCode: p.referralCode,
+      invitedBy: inviter ? inviter.firstName || (inviter.username ? `@${inviter.username}` : "a friend") : null,
       rank: await rankOf(p.state.population),
     },
     state: p.state,

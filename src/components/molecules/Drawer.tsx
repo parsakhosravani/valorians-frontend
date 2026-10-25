@@ -1,5 +1,8 @@
 "use client";
-import React, { ReactNode, useEffect, useRef } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import clsx from "clsx";
+
 import { CloseIcon } from "@/components";
 
 type DrawerPosition = "bottom" | "right" | "left";
@@ -12,63 +15,69 @@ interface DrawerProps {
   onClose: () => void;
 }
 
-export const Drawer: React.FC<DrawerProps> = ({
-  position,
-  children,
-  isOpen,
-  title,
-  onClose,
-}) => {
-  const drawerRef = useRef<HTMLDivElement>(null);
+/**
+ * Sheet that slides in over the whole app. It is rendered into <body>
+ * through a portal: inside the scrolling <main>, iOS traps fixed elements
+ * under the bottom navigation bar and the sheet only peeks out.
+ */
+export const Drawer: React.FC<DrawerProps> = ({ position, children, isOpen, title, onClose }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        drawerRef.current &&
-        !drawerRef.current.contains(event.target as Node) &&
-        isOpen
-      ) {
-        onClose();
-      }
-    };
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    window.addEventListener("keydown", onKey);
+
+    return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, onClose]);
 
+  if (!mounted) return null;
+
   const positionClasses = {
-    bottom: "inset-x-0 bottom-0 h-auto",
+    bottom: "inset-x-0 bottom-0 h-auto rounded-t-3xl",
     right: "inset-y-0 right-0 w-64",
     left: "inset-y-0 left-0 w-64",
   };
+  const hidden = {
+    bottom: "translate-y-full",
+    right: "translate-x-full",
+    left: "-translate-x-full",
+  };
 
-  return (
+  return createPortal(
     <>
-      {isOpen && <div className="fixed inset-0 bg-black bg-opacity-50 z-40" />}
       <div
-        ref={drawerRef}
-        className={`fixed bg-[#1E1610] max-w-md mx-auto w-full shadow-lg transition-transform duration-300 ease-in-out z-50 rounded-t-3xl ${
-          positionClasses[position]
-        } ${
-          isOpen
-            ? "transform translate-y-0 translate-x-0"
-            : position === "bottom"
-            ? "transform translate-y-full"
-            : position === "right"
-            ? "transform translate-x-full"
-            : "transform -translate-x-full"
-        }`}
+        aria-hidden="true"
+        className={clsx(
+          "fixed inset-0 bg-black/55 z-[100] transition-opacity duration-200",
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        onClick={onClose}
+      />
+      <div
+        aria-modal="true"
+        className={clsx(
+          "fixed bg-[#1E1610] max-w-md mx-auto w-full shadow-lg transition-transform duration-300 ease-in-out z-[101]",
+          positionClasses[position],
+          isOpen ? "translate-x-0 translate-y-0" : hidden[position]
+        )}
+        role="dialog"
       >
-        <div className="p-4 pb-8 relative border-t-2 border-gold rounded-t-3xl max-h-[85svh] overflow-y-auto scrollable">
-          <div className="flex justify-between items-center">
+        <div
+          className="px-4 pt-4 relative border-t-2 border-gold rounded-t-3xl max-h-[85svh] overflow-y-auto scrollable overscroll-contain"
+          style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
+        >
+          <div className="flex justify-between items-center gap-3">
             <h2 className="font-display text-xl font-bold">{title}</h2>
-            <CloseIcon onClick={onClose} />
+            <CloseIcon className="shrink-0 cursor-pointer" onClick={onClose} />
           </div>
           {children}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 };
