@@ -342,3 +342,62 @@ export const campFirstReward = (level: number) => ({
 /** Cleared camps can be raided again for a smaller haul after this cooldown. */
 export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
+
+// ─── Troop ranks and upgrades ────────────────────────────────────────────────
+//
+// Every troop type is one regiment. Battles give it experience (XP); enough XP
+// promotes it to the next rank, and each rank makes the whole regiment
+// stronger. Heavy losses cost XP, because veterans die too.
+// Upgrades are forged in the Arsenal: better weapons and armor, one upgrade at
+// a time. How far a regiment can be upgraded depends on its rank.
+
+export type RankDef = { name: string; xp: number };
+
+export const RANKS: RankDef[] = [
+  { name: "Recruit", xp: 0 },
+  { name: "Soldier", xp: 100 },
+  { name: "Veteran", xp: 400 },
+  { name: "Elite", xp: 1200 },
+  { name: "Champion", xp: 3500 },
+  { name: "Legend", xp: 10000 },
+];
+export const MAX_RANK = RANKS.length - 1;
+
+/** Each rank adds this much attack and defense to the regiment. */
+export const RANK_BONUS = 0.04;
+/** XP for a battle = enemy strength × this (×0.5 for a defeat), shared by the troop types that fought. */
+export const XP_PER_STRENGTH = 0.2;
+export const XP_DEFEAT_SHARE = 0.5;
+/** Losing a share of a regiment costs this share of its XP (losing all of it costs 40%). */
+export const XP_LOSS_SHARE = 0.4;
+
+export const MAX_UNIT_UPGRADE = 10;
+/** Each upgrade level adds this much attack and defense to that troop type. */
+export const UPGRADE_BONUS = 0.05;
+/** Highest upgrade level a regiment of this rank can reach. */
+export const upgradeCapForRank = (rank: number) => Math.min(MAX_UNIT_UPGRADE, 2 + rank * 2);
+/** Upgrades need an Arsenal of at least this level. */
+export const UPGRADE_BUILDING = { building: "arsenal", level: 1 };
+/** Resources to go from `level` to `level + 1`: 20× the unit's training cost, growing 60% per level. */
+export const unitUpgradeCost = (unit: UnitDef, level: number) =>
+  Object.fromEntries(
+    RESOURCE_IDS.map((r) => [r, Math.round(unit.cost[r] * 20 * Math.pow(1.6, level))])
+  ) as Record<ResourceId, number>;
+/** Seconds to go from `level` to `level + 1`, before Military Command speedup. */
+export const unitUpgradeSeconds = (unit: UnitDef, level: number) =>
+  Math.round(unit.time * 8 * Math.pow(1.7, level));
+
+/** Short names for upgrade levels, shown on the troop card. */
+export const UPGRADE_NAMES = [
+  "Rough gear",
+  "Tempered steel",
+  "Riveted mail",
+  "Oak-and-iron",
+  "Forged plate",
+  "Rune-etched",
+  "Dwarven steel",
+  "Jarl's armory",
+  "Saga-forged",
+  "Valhalla-blessed",
+  "Legendary",
+];

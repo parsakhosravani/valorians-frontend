@@ -1,8 +1,8 @@
 import "server-only";
 
-import { RESOURCE_IDS, UNITS } from "@/lib/game/config";
+import { RANKS, RESOURCE_IDS, UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
-import type { RaidReport } from "@/lib/game/war";
+import type { Promotion, RaidReport } from "@/lib/game/war";
 
 /**
  * Battle news sent as Telegram messages from the bot, so players hear about
@@ -25,6 +25,12 @@ const armyText = (a: Army | null | undefined) => {
 
   return parts.length ? parts.join("  ") : "nobody";
 };
+
+/** "\n\n🎖️ Your Spearmen are now Veterans!" for each regiment that went up a rank. */
+const promotionText = (p: Promotion[] | undefined) =>
+  p?.length
+    ? "\n\n" + p.map((x) => `🎖️ Your ${UNIT_BY_ID[x.unit].name}s are now <b>${RANKS[x.rank].name}s</b>!`).join("\n")
+    : "";
 
 const lootTotal = (r: RaidReport) => RESOURCE_IDS.reduce((s, k) => s + (r.loot[k] ?? 0), 0);
 
@@ -83,7 +89,8 @@ export const notify = {
       defenderId,
       `🛡️ <b>You held off ${esc(attacker)}!</b>\n\n` +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
-        `They lost: ${armyText(r.attackerLosses)}\nYou lost: ${armyText(r.defenderLosses)}`,
+        `They lost: ${armyText(r.attackerLosses)}\nYou lost: ${armyText(r.defenderLosses)}` +
+        promotionText(r.defenderPromoted),
       "📜 See the report",
       "/battle?tab=reports"
     );
@@ -94,7 +101,8 @@ export const notify = {
       defenderId,
       `💀 <b>${esc(attacker)} raided your tribe</b> and took ${fmt(lootTotal(r))} resources.\n\n` +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
-        `You lost: ${armyText(r.defenderLosses)}\nYou're shielded for 2 hours. Time for revenge?`,
+        `You lost: ${armyText(r.defenderLosses)}\nYou're shielded for 2 hours. Time for revenge?` +
+        promotionText(r.defenderPromoted),
       "⚔️ Take revenge",
       attackerId ? `/battle?revenge=${attackerId}` : "/battle?tab=reports"
     );
@@ -108,7 +116,8 @@ export const notify = {
           attackerId,
           `🏆 <b>Victory at ${esc(target)}!</b>\n\n` +
             `Loot: ${fmt(lootTotal(r))} resources${r.coins ? ` + ${fmt(r.coins)} coins` : ""}\n` +
-            `Lost: ${armyText(r.attackerLosses)}\nYour army is home in ${inMinutes(home)}.`,
+            `Lost: ${armyText(r.attackerLosses)}\nYour army is home in ${inMinutes(home)}.` +
+            promotionText(r.attackerPromoted),
           "📜 See the report",
           "/battle?tab=reports"
         )
@@ -116,7 +125,8 @@ export const notify = {
           attackerId,
           `💀 <b>Defeat at ${esc(target)}.</b>\n\n` +
             `Your attack ${fmt(r.attack)} vs their defense ${fmt(r.defense)}.\n` +
-            `Lost: ${armyText(r.attackerLosses)}\nScout first and bring more troops next time.`,
+            `Lost: ${armyText(r.attackerLosses)}\nScout first and bring more troops next time.` +
+            promotionText(r.attackerPromoted),
           "📜 See the report",
           "/battle?tab=reports"
         );

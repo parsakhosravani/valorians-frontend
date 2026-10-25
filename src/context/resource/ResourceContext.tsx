@@ -83,6 +83,8 @@ interface GameContextType {
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
   train: (unit: UnitId, count: number) => Promise<boolean>;
+  /** Starts forging a troop type's next Arsenal upgrade. */
+  upgradeTroop: (unit: UnitId) => Promise<boolean>;
   /** Attack a player (target = id) or a barbarian camp (camp = level). */
   /** Sends an army across the map; resolves to its arrival time, or null if it couldn't leave. */
   attack: (to: { target?: number; camp?: number }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
@@ -355,6 +357,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),
+    upgradeTroop: (unit) => act("war/upgrade", { unit }, "The Arsenal is forging your upgrade"),
     attack: async (to, units) => {
       const res = await send<PlayerView & { march: { id: number; arrivesAt: number } }>("war/march", { ...to, units }, "Army on the march");
 
