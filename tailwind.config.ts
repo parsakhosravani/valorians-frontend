@@ -5,6 +5,13 @@ const config: Config = {
   theme: {
     extend: {
       keyframes: {
+        lightning: {
+          "0%, 88%, 100%": { opacity: "0" },
+          "89%": { opacity: "0.55" },
+          "90%": { opacity: "0.1" },
+          "91.5%": { opacity: "0.45" },
+          "94%": { opacity: "0" },
+        },
         float: {
           "0%, 100%": { transform: "translate(-50%, 0)" },
           "50%": { transform: "translate(-50%, -5px)" },
