@@ -401,6 +401,3 @@ export const UPGRADE_NAMES = [
   "Valhalla-blessed",
   "Legendary",
 ];
-
-/** Troop types that have a painted portrait in /public/images/troops/<id>.webp. */
-export const PAINTED_TROOPS: UnitId[] = [];

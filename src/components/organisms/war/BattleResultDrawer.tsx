@@ -1,21 +1,19 @@
 "use client";
 import Image from "next/image";
 
-import { ArmyLine, UnitIcon, fmt } from "./shared";
-import { RANK_METAL, TroopPortrait } from "./TroopPortrait";
+import { ArmyLine, fmt } from "./shared";
 
 import { Button, Drawer } from "@/components";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";
-import { RANKS, UNITS, UNIT_BY_ID } from "@/lib/game/config";
+import { RANKS, UNIT_BY_ID } from "@/lib/game/config";
 
 export const BattleSummary = ({ report, asDefender = false }: { report: BattleReport; asDefender?: boolean }) => {
   const won = asDefender ? !report.attackerWon : report.attackerWon;
   const lootTotal = RESOURCES.reduce((s, r) => s + (report.loot[r.id] ?? 0), 0);
   const xp = asDefender ? report.defenderXp : report.attackerXp;
   const promoted = (asDefender ? report.defenderPromoted : report.attackerPromoted) ?? [];
-  const earned = UNITS.filter((u) => (xp?.[u.id] ?? 0) > 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -64,37 +62,17 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
           </div>
         )}
       </div>
-      {promoted.map((p) => {
-        const metal = RANK_METAL[p.rank];
-
-        return (
-          <div
-            key={p.unit}
-            className="flex items-center gap-3 rounded-xl p-2 border"
-            style={{ borderColor: metal.mid, background: `linear-gradient(90deg, ${metal.dark}66, transparent)` }}
-          >
-            <TroopPortrait rank={p.rank} size={48} unit={p.unit} />
-            <div>
-              <div className="text-[10px] tracking-wider text-muted">PROMOTED</div>
-              <div className="font-display font-bold" style={{ color: metal.label }}>
-                {UNIT_BY_ID[p.unit].name}s are now {RANKS[p.rank].name}s
-              </div>
-            </div>
-          </div>
-        );
-      })}
-      {earned.length > 0 && (
-        <div className="bg-[#1E1610] rounded p-2">
-          <div className="text-[10px] text-[#B19C80] mb-1">BATTLE EXPERIENCE</div>
-          <div className="flex flex-wrap gap-x-3 text-sm">
-            {earned.map((u) => (
-              <span key={u.id} className="inline-flex items-center gap-1">
-                <UnitIcon unit={u.id} /> <b className="text-good">+{fmt(xp![u.id])}</b> XP
-              </span>
-            ))}
-          </div>
+      {xp && armySize(xp) > 0 && (
+        <div className="text-sm">
+          <span className="text-[#B19C80]">Experience: </span>
+          <ArmyLine army={xp} /> <span className="text-[#B19C80]">XP</span>
         </div>
       )}
+      {promoted.map((p) => (
+        <div key={p.unit} className="text-center font-bold text-[#E3A948]">
+          🎖️ {UNIT_BY_ID[p.unit].name}s promoted to {RANKS[p.rank].name}!
+        </div>
+      ))}
       {lootTotal > 0 || report.coins > 0 ? (
         <div className="bg-[#1E1610] rounded p-2">
           <div className="text-[10px] text-[#B19C80] mb-1">{asDefender ? "STOLEN FROM YOU" : "LOOT"}</div>

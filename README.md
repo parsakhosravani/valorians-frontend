@@ -37,7 +37,7 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 - **Protection:** new players get a 72h shield (attacking a player ends it), and a raided tribe gets a 2h shield.
 - **Barbarian camps:** 30 levels of PvE. First win gives a big reward and unlocks the next camp; beaten camps can be raided again hourly for 30%.
 - **Ranks:** each troop type is a regiment that earns XP in every battle (attacking or defending), shared by how much each type contributed; losses cost XP because veterans die too. Recruit → Soldier → Veteran → Elite → Champion → Legend, each rank +4% attack and defense. Promotions show in the battle report and the Telegram message.
-- **Arsenal upgrades:** with an Arsenal, forge better gear for a troop type, one upgrade at a time, +5% attack and defense per level (up to 10). Rank sets how far you can go: level 2 as Recruits, +2 per rank. Drawn portraits can be swapped for painted ones by adding `public/images/troops/<id>.webp` and listing the id in `PAINTED_TROOPS`.
+- **Arsenal upgrades:** with an Arsenal, forge better gear for a troop type, one upgrade at a time, +5% attack and defense per level (up to 10). Rank sets how far you can go: level 2 as Recruits, +2 per rank.
 - **Reports and leaderboard:** every battle is saved for both sides; the leaderboard ranks tribes by population, power and victories (tap your rank in the header).
 
 All numbers are in `src/lib/game/config.ts`; the rules are in `src/lib/game/war.ts` (tests in `war.test.ts`).

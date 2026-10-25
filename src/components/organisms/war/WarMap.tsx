@@ -12,7 +12,7 @@ import Image from "next/image";
 import clsx from "clsx";
 
 import { AttackTarget } from "./SendArmyDrawer";
-import { ArmyLine, UnitIcon, fmt } from "./shared";
+import { ArmyLine, fmt } from "./shared";
 
 import { Button, Drawer, InfoDrawer } from "@/components";
 import {
@@ -27,6 +27,7 @@ import {
   BUILDING_BY_ID,
   RESOURCE_NAMES,
   ResourceId,
+  UNIT_BY_ID,
   UnitId,
   buildingImage,
 } from "@/lib/game/config";
@@ -1049,7 +1050,7 @@ export const WarMap = ({
                           <span className="text-muted">Home:</span>
                           {(Object.keys(sc.troops) as UnitId[]).map((u) => (
                             <span key={u}>
-                              <UnitIcon unit={u} /> {fmt(sc.troops[u])}
+                              {UNIT_BY_ID[u].icon} {fmt(sc.troops[u])}
                             </span>
                           ))}
                         </div>
