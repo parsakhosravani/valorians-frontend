@@ -184,9 +184,34 @@ async function init(): Promise<Client> {
     ["clans", "tech_shieldwall INTEGER NOT NULL DEFAULT 0"],
     ["users", "clan_role TEXT"],
     ["users", "clan_donated REAL NOT NULL DEFAULT 0"],
+    // Bot announcements: players who muted news, or blocked / never started the bot.
+    ["users", "news_off INTEGER NOT NULL DEFAULT 0"],
+    ["users", "bot_blocked INTEGER NOT NULL DEFAULT 0"],
   ]) {
     await client.execute(`ALTER TABLE ${table} ADD COLUMN ${col}`).catch(() => {});
   }
+  await client.executeMultiple(`
+    -- Update announcements an admin broadcasts from the bot chat. The post is
+    -- copied from the admin's own message (text, photo, video...) to every
+    -- player, in batches, resuming from cursor (the last user id reached).
+    CREATE TABLE IF NOT EXISTS announcements (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_id      INTEGER NOT NULL,
+      source_chat   INTEGER,                       -- the admin's chat holding the post
+      source_msg    INTEGER,                       -- message id of the post to copy
+      status        TEXT NOT NULL DEFAULT 'awaiting', -- awaiting | draft | sending | done | cancelled
+      to_channel    INTEGER NOT NULL DEFAULT 0,
+      cursor        INTEGER NOT NULL DEFAULT 0,
+      total         INTEGER NOT NULL DEFAULT 0,
+      sent          INTEGER NOT NULL DEFAULT 0,
+      failed        INTEGER NOT NULL DEFAULT 0,
+      locked_until  INTEGER NOT NULL DEFAULT 0,   -- one sender at a time
+      created_at    INTEGER NOT NULL,
+      started_at    INTEGER,
+      finished_at   INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS announcements_status ON announcements(status);
+  `);
   return client;
 }
 

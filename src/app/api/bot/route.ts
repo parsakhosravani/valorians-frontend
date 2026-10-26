@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleUpdate, webhookSecret } from "@/server/bot";
 
 export const dynamic = "force-dynamic";
+// Starting an announcement sends a first batch before answering.
+export const maxDuration = 30;
 
 /** Telegram webhook for @valorians_bot (set up by /api/bot/setup). */
 export async function POST(req: NextRequest) {
