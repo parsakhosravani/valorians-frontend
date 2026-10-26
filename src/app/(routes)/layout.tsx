@@ -41,7 +41,7 @@ export default function RootLayout({
       <body className="bg-ground text-parch mx-auto flex justify-center">
         {/* Toasts styled like the game's panels: dark wood, gold trim, ember for errors. */}
         <Toaster
-          containerStyle={{ top: "calc(env(safe-area-inset-top) + 10px)" }}
+          containerStyle={{ top: "calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px) + 10px)" }}
           position="top-center"
           toastOptions={{
             duration: 2500,

@@ -10,6 +10,10 @@ import { Coin, NAV_ICONS, User } from "@/components";
 import { RESOURCES, useGame } from "@/context";
 import { compact } from "@/lib/format";
 
+/** 0.75rem below the device notch plus Telegram's own full-screen controls. */
+const HEADER_TOP_PADDING =
+  "calc(0.75rem + max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px))";
+
 /** Top bar on every screen (with the Market button); Build, War and Market also show your stock. */
 export const Header: React.FC = () => {
   const { state, rates, me } = useGame();
@@ -20,7 +24,13 @@ export const Header: React.FC = () => {
   const onMarket = pathname === "/market";
 
   return (
-    <header className="w-full flex flex-col gap-2 px-3 pt-3 pb-2 z-20 bg-ground/80 backdrop-blur-sm">
+    <header
+      className="w-full flex flex-col gap-2 px-3 pb-2 z-20 bg-ground/80 backdrop-blur-sm"
+      // In full-screen Telegram (e.g. iPhones with a Dynamic Island) its Close and ⋯
+      // buttons float over the top corners and swallow taps on the avatar and Trade.
+      // Telegram reports that area in these CSS variables (0 when not full-screen).
+      style={{ paddingTop: HEADER_TOP_PADDING }}
+    >
       <div className="flex items-center gap-2">
         <User />
         <div className="flex-1" />
