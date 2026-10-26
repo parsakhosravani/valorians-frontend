@@ -23,6 +23,7 @@ import cropBg from "~/images/background/crop.webp";
 
 import { ApiError, PlayerView, apiRequest, insideTelegram, resolveAuthHeader } from "@/lib/api";
 import type { Offer } from "@/lib/game/trade";
+import type { ClanFlag, JoinMode, TechId, TreasuryKey } from "@/lib/game/clan";
 import {
   COMBO_WINDOW_MS,
   RESOURCE_IDS,
@@ -96,12 +97,24 @@ interface GameContextType {
     accept: (id: number) => Promise<boolean>;
     cancel: (id: number) => Promise<boolean>;
   };
-  /** Clans: found one, join one, leave yours, or (as leader) remove a member. */
+  /** Clans: membership, ranks, the flag, the treasury and clan techs. */
   clan: {
-    create: (c: { name: string; tag: string; description?: string }) => Promise<boolean>;
+    create: (c: { name: string; tag: string; description?: string; flag: ClanFlag; joinMode: JoinMode }) => Promise<boolean>;
+    /** Joins an open clan or asks to join one that takes requests. */
     join: (id: number) => Promise<boolean>;
+    cancelRequest: (id: number) => Promise<boolean>;
+    answer: (id: number, accept: boolean) => Promise<boolean>;
     leave: () => Promise<boolean>;
     kick: (id: number) => Promise<boolean>;
+    setRole: (id: number, role: "officer" | "member") => Promise<boolean>;
+    transfer: (id: number) => Promise<boolean>;
+    update: (
+      c: Partial<{ flag: ClanFlag; description: string; name: string; joinMode: JoinMode; minPopulation: number }>,
+      success?: string
+    ) => Promise<boolean>;
+    donate: (key: TreasuryKey, amount: number) => Promise<boolean>;
+    upgradeTech: (tech: TechId) => Promise<boolean>;
+    aid: (id: number, key: TreasuryKey, amount: number) => Promise<boolean>;
   };
   authHeader: string | null;
 }
@@ -389,9 +402,26 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     },
     clan: {
       create: (c) => act("clan/create", c, "Clan founded!"),
-      join: (id) => act("clan/join", { id }, "Welcome to the clan!"),
+      join: async (id) => {
+        const res = await send<PlayerView & { joined: boolean }>("clan/join", { id });
+
+        if (res) {
+          toast.dismiss();
+          toast.success(res.joined ? "Welcome to the clan!" : "Request sent. The clan's officers will decide.");
+        }
+
+        return !!res;
+      },
+      cancelRequest: (id) => act("clan/cancel", { id }, "Request withdrawn"),
+      answer: (id, accept) => act("clan/answer", { id, accept }, accept ? "Welcome aboard!" : "Request declined"),
       leave: () => act("clan/leave", {}, "You left the clan"),
       kick: (id) => act("clan/kick", { id }, "Member removed"),
+      setRole: (id, role) => act("clan/role", { id, role }, role === "officer" ? "Named a Huscarl" : "Rank removed"),
+      transfer: (id) => act("clan/transfer", { id }, "The clan has a new Jarl"),
+      update: (c, success = "Clan updated") => act("clan/update", c, success),
+      donate: (key, amount) => act("clan/donate", { key, amount }, "Donated to the treasury"),
+      upgradeTech: (tech) => act("clan/tech", { tech }, "Clan tech raised!"),
+      aid: (id, key, amount) => act("clan/aid", { id, key, amount }, "Aid sent"),
     },
     authHeader,
   };

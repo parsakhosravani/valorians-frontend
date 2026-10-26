@@ -6,6 +6,7 @@ import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { displayName } from "./war";
 
+import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from "@/lib/game/clan";
 import { CLAN, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
 import { advance } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
@@ -189,13 +190,16 @@ async function myClan(chatId: number, userId: number) {
   }
   const db = await getDb();
   const rs = await db.execute({
-    sql: `SELECT c.name, c.tag, c.leader_id, COUNT(u.id) AS members, COALESCE(SUM(u.population), 0) AS population
+    sql: `SELECT c.*, COUNT(u.id) AS members, COALESCE(SUM(u.population), 0) AS population
           FROM clans c LEFT JOIN users u ON u.clan_id = c.id WHERE c.id = ? GROUP BY c.id`,
     args: [p.clanId],
   });
   const c = rs.rows[0];
 
   if (!c) return menu(chatId);
+  const techs = Object.fromEntries(TECH_IDS.map((t) => [t, Number(c[`tech_${t}`] ?? 0)])) as Techs;
+  const flag = storedFlag(c.flag, Number(c.id));
+  const emblem = flag.emblem >= 0 ? `${FLAG_EMBLEMS[flag.emblem]} ` : "";
   const top = await db.execute({
     sql: "SELECT username, first_name, population FROM users WHERE clan_id = ? ORDER BY population DESC LIMIT 5",
     args: [p.clanId],
@@ -206,8 +210,8 @@ async function myClan(chatId: number, userId: number) {
 
   await send(
     chatId,
-    `🛡️ <b>[${esc(String(c.tag))}] ${esc(String(c.name))}</b>\n\n` +
-      `👥 ${fmt(Number(c.members))}/${CLAN.maxMembers} members · ${compact(Number(c.population))} people\n` +
+    `${emblem}<b>[${esc(String(c.tag))}] ${esc(String(c.name))}</b> · level ${clanLevel(techs)}\n\n` +
+      `👥 ${fmt(Number(c.members))}/${maxMembers(techs)} members · ${compact(Number(c.population))} people\n` +
       (Number(c.leader_id) === userId ? `👑 You lead this clan\n` : "") +
       `\n<b>Strongest members</b>\n${lines}`,
     [[playButton("🛡️ Open my clan", "/clan")], [back]]

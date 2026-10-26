@@ -39,6 +39,8 @@ import {
 } from "@/lib/game/config";
 import { TERRAIN, Terrain, scoutCost, terrainAt } from "@/lib/game/map";
 import type { Army } from "@/lib/game/engine";
+import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
+import { ClanFlag } from "@/components/molecules/ClanFlag";
 
 // ─── Data from /api/war/map ──────────────────────────────────────────────────
 
@@ -56,6 +58,9 @@ type Tribe = {
   terrain: Terrain;
   distance: number;
   defense: { min: number; max: number; exact: boolean } | null;
+  clan: { id: number; tag: string; flag: ClanFlagData } | null;
+  /** In your clan: can't be attacked. */
+  ally: boolean;
 };
 
 type Camp = {
@@ -916,7 +921,9 @@ export const WarMap = ({
                           "relative w-12 h-12 rounded-full flex items-center justify-center border-[3px] bg-[#1E1610]/70",
                           t.isMe
                             ? "border-gold shadow-[0_0_16px_rgba(227,169,72,0.8)]"
-                            : s === "weaker"
+                            : t.ally
+                              ? "border-[#7FB3D0] shadow-[0_0_10px_rgba(127,179,208,0.6)]"
+                              : s === "weaker"
                               ? "border-good"
                               : s === "stronger"
                                 ? "border-[#F08A6C]"
@@ -939,6 +946,11 @@ export const WarMap = ({
                         <span className="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-[#1A120B] text-[10px] font-black flex items-center justify-center">
                           {t.townHall}
                         </span>
+                        {t.clan && (
+                          <span className="absolute -top-3 -left-2.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                            <ClanFlag flag={t.clan.flag} size={22} title={`[${t.clan.tag}]`} />
+                          </span>
+                        )}
                       </span>
                       <span
                         className={clsx(
@@ -948,7 +960,7 @@ export const WarMap = ({
                             : "bg-[#1E1610]/90 text-parch border border-line",
                         )}
                       >
-                        {t.isMe ? "You" : t.name}
+                        {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
                       </span>
                     </button>
                   );
@@ -1088,6 +1100,16 @@ export const WarMap = ({
             return (
               <div className="flex flex-col gap-3 pt-2">
                 <div className="flex flex-wrap gap-2 text-xs font-bold">
+                  {t.clan && (
+                    <span
+                      className={clsx(
+                        "flex items-center gap-1 px-2 py-0.5 rounded-lg border",
+                        t.ally ? "bg-[#14222A] border-[#7FB3D0] text-[#A9D3EA]" : "bg-panel2 border-line",
+                      )}
+                    >
+                      <ClanFlag flag={t.clan.flag} size={20} />[{t.clan.tag}]{t.ally && !t.isMe ? " · your clan" : ""}
+                    </span>
+                  )}
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
                     {TERRAIN_ICON[t.terrain]} {ground.name}
                     {ground.defense > 0 &&
@@ -1198,13 +1220,19 @@ export const WarMap = ({
                           Build an Exploration Center to scout.
                         </p>
                       )}
-                      <Button
-                        className="flex-1"
-                        disabled={shielded}
-                        onClick={() => attackTribe(t)}
-                      >
-                        ⚔️ Attack
-                      </Button>
+                      {t.ally ? (
+                        <p className="flex-1 text-xs font-bold text-[#A9D3EA] self-center">
+                          🤝 Clanmate. You fight side by side, not against each other.
+                        </p>
+                      ) : (
+                        <Button
+                          className="flex-1"
+                          disabled={shielded}
+                          onClick={() => attackTribe(t)}
+                        >
+                          ⚔️ Attack
+                        </Button>
+                      )}
                     </div>
                   </>
                 )}

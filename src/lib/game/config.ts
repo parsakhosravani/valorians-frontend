@@ -237,6 +237,24 @@ export const CLAN = {
   tagMin: 2,
   tagMax: 5,
   descriptionMax: 160,
+  /** Most officers (Huscarls) a clan can name besides its leader. */
+  maxOfficers: 4,
+  /** Pending join requests one player can have out at once. */
+  maxRequests: 3,
+  /** Each Great Hall level adds this many member seats (on top of maxMembers). */
+  seatsPerHallLevel: 5,
+  /** Perk per tech level, in percent. */
+  fieldsPercent: 3,
+  bannersPercent: 2,
+  shieldwallPercent: 2,
+  /** Tech cost for level 0 → 1 (each resource, and coins); each level costs techCostGrowth× more. */
+  techBaseResources: 4000,
+  techBaseCoins: 500,
+  techCostGrowth: 2.2,
+  /** A donated coin counts this much towards a member's contribution. */
+  coinContributionWeight: 4,
+  /** Entries kept in the clan chronicle shown to members. */
+  logSize: 40,
 };
 
 // ─── War ─────────────────────────────────────────────────────────────────────

@@ -145,7 +145,48 @@ async function init(): Promise<Client> {
     CREATE INDEX IF NOT EXISTS trades_seller ON trades(seller_id, status);
     CREATE INDEX IF NOT EXISTS trades_buyer ON trades(buyer_id, status);
     CREATE INDEX IF NOT EXISTS trades_due ON trades(status, arrives_at);
+
+    -- Chiefs asking to join a clan that takes members by request.
+    CREATE TABLE IF NOT EXISTS clan_requests (
+      clan_id       INTEGER NOT NULL,
+      user_id       INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      PRIMARY KEY (clan_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS clan_requests_user ON clan_requests(user_id);
+
+    -- The clan chronicle: joins, donations, techs, promotions...
+    CREATE TABLE IF NOT EXISTS clan_log (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      clan_id       INTEGER NOT NULL,
+      at            INTEGER NOT NULL,
+      actor_id      INTEGER,
+      target_id     INTEGER,
+      kind          TEXT NOT NULL,
+      data          TEXT NOT NULL DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS clan_log_clan ON clan_log(clan_id, id DESC);
   `);
+
+  // Clan flags, roles, join policy, treasury and techs (added after clans launched).
+  for (const [table, col] of [
+    ["clans", "flag TEXT"],
+    ["clans", "join_mode TEXT NOT NULL DEFAULT 'open'"],
+    ["clans", "min_population INTEGER NOT NULL DEFAULT 0"],
+    ["clans", "t_iron REAL NOT NULL DEFAULT 0"],
+    ["clans", "t_wood REAL NOT NULL DEFAULT 0"],
+    ["clans", "t_clay REAL NOT NULL DEFAULT 0"],
+    ["clans", "t_crop REAL NOT NULL DEFAULT 0"],
+    ["clans", "t_coins REAL NOT NULL DEFAULT 0"],
+    ["clans", "tech_hall INTEGER NOT NULL DEFAULT 0"],
+    ["clans", "tech_fields INTEGER NOT NULL DEFAULT 0"],
+    ["clans", "tech_banners INTEGER NOT NULL DEFAULT 0"],
+    ["clans", "tech_shieldwall INTEGER NOT NULL DEFAULT 0"],
+    ["users", "clan_role TEXT"],
+    ["users", "clan_donated REAL NOT NULL DEFAULT 0"],
+  ]) {
+    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${col}`).catch(() => {});
+  }
   return client;
 }
 

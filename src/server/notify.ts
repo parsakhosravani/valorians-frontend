@@ -73,6 +73,19 @@ export async function sendToPlayer(userId: number, html: string, button = "⚔�
 // ─── Messages ────────────────────────────────────────────────────────────────
 
 export const notify = {
+  clanRequest(officerId: number, chief: string, clan: string) {
+    return sendToPlayer(
+      officerId,
+      `🛡️ <b>${esc(chief)}</b> asks to join <b>${esc(clan)}</b>.`,
+      "🛡️ Review request",
+      "/clan"
+    );
+  },
+
+  clanAccepted(userId: number, clan: string) {
+    return sendToPlayer(userId, `🎉 You were accepted into <b>${esc(clan)}</b>! Your clan's perks now apply.`, "🛡️ Open clan", "/clan");
+  },
+
   incoming(defenderId: number, attacker: string, units: Army | null, travelMs: number) {
     return sendToPlayer(
       defenderId,

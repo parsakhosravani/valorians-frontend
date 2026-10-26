@@ -41,15 +41,18 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
   const myPower = Math.max(50, powerScore(me.state));
   const ids: number[] = [];
   if (includeId && includeId !== me.id) {
-    const r = await db.execute({ sql: "SELECT id FROM users WHERE id = ? AND shield_until <= ?", args: [includeId, now] });
+    const r = await db.execute({
+      sql: "SELECT id FROM users WHERE id = ? AND shield_until <= ? AND (clan_id IS NULL OR clan_id IS NOT ?)",
+      args: [includeId, now, me.clanId],
+    });
     if (r.rows[0]) ids.push(includeId);
   }
   const rs = await db.execute({
     sql: `SELECT id FROM users
-          WHERE id != ? AND shield_until <= ?
+          WHERE id != ? AND shield_until <= ? AND (clan_id IS NULL OR clan_id IS NOT ?)
           ORDER BY ABS(power - ?) ASC, RANDOM()
           LIMIT 6`,
-    args: [me.id, now, myPower],
+    args: [me.id, now, me.clanId, myPower],
   });
   for (const row of rs.rows) if (!ids.includes(Number(row.id))) ids.push(Number(row.id));
   const targets = [];
@@ -122,6 +125,7 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
     const target = await findById(defenderId);
 
     if (!target) throw new GameError("That tribe doesn't exist");
+    if (me.clanId != null && target.clanId === me.clanId) throw new GameError("That tribe is in your clan. Clanmates don't raid each other.", "same_clan");
     if (target.state.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
     dest = await homeOf(defenderId);
   }

@@ -46,6 +46,7 @@ import {
   RANKS,
   RANK_BONUS,
 } from "./config";
+import { ClanPerks, NO_PERKS } from "./clan";
 
 export type Army = Record<UnitId, number>;
 
@@ -142,6 +143,8 @@ export type GameState = {
   war: WarStats;
   /** Battle experience (rank) of each troop type. */
   troops: Record<UnitId, TroopRecord>;
+  /** Bonuses from the player's clan techs (percent). Set by the server when the clan changes. */
+  clanPerks: ClanPerks;
 };
 
 export type Rates = {
@@ -204,6 +207,7 @@ export function createInitialState(now: number): GameState {
     camps: { cleared: 0, lastRaid: {} },
     war: { attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, resourcesLooted: 0 },
     troops: emptyTroops(),
+    clanPerks: { ...NO_PERKS },
   };
 }
 
@@ -230,6 +234,7 @@ export function normalizeState(saved: GameState): GameState {
     war: { ...fresh.war, ...s.war },
     frenzy: { ...fresh.frenzy, ...s.frenzy },
     streak: { ...fresh.streak, ...s.streak },
+    clanPerks: { ...fresh.clanPerks, ...s.clanPerks },
     troops: Object.fromEntries(
       UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
@@ -297,8 +302,12 @@ export function getRates(s: GameState): Rates {
   const army = totalArmy(s);
   const troopUpkeep = UNITS.reduce((sum, u) => sum + u.upkeep * army[u.id], 0);
 
+  const perks = s.clanPerks ?? NO_PERKS;
+  const clanProduction = 1 + perks.production / 100;
+
+  for (const id of RESOURCE_IDS) if (id !== "crop") production[id] *= clanProduction;
   production.crop =
-    production.crop * (1 + cropBoost) - CROP_UPKEEP_PER_BUILDING_LEVEL * totalLevels - troopUpkeep;
+    production.crop * (1 + cropBoost) * clanProduction - CROP_UPKEEP_PER_BUILDING_LEVEL * totalLevels - troopUpkeep;
   growth += GROWTH_PER_BUILDING_LEVEL * totalLevels;
 
   const energyCapacity = energyCapacityForLevel(s.skills.energy);
@@ -315,8 +324,8 @@ export function getRates(s: GameState): Rates {
     buildSpeedMultiplier: Math.max(0.2, 1 - TOWN_HALL_SPEEDUP_PER_LEVEL * townHall),
     troopUpkeep,
     trainSpeedMultiplier: Math.max(0.25, 1 - mil.trainSpeed / 100),
-    attackBonus: mil.attack / 100,
-    defenseBonus: mil.defense / 100,
+    attackBonus: (mil.attack + perks.attack) / 100,
+    defenseBonus: (mil.defense + perks.defense) / 100,
     wallBonus: mil.wall / 100,
     flatDefense: mil.flatDefense,
     hidden: hiddenResources(level(s, "hideout")),
