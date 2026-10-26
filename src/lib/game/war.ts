@@ -31,6 +31,7 @@ import {
   XP_DEFEAT_SHARE,
   XP_LOSS_SHARE,
   XP_PER_STRENGTH,
+  LANDING_DEFENSE,
 } from "./config";
 import {
   Army,
@@ -45,11 +46,17 @@ import {
   unitMultiplier,
   unitRank,
 } from "./engine";
-import { Point, TERRAIN, Terrain } from "./map";
+import { Point, SHIP_ID, TERRAIN, Terrain, shipsNeeded } from "./map";
+
+/** Troops that fight (everything but ships). */
+const FIGHTERS = UNIT_IDS.filter((u) => !UNIT_BY_ID[u].transport);
 
 const emptyLoot = (): Record<ResourceId, number> => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
 
 export const armySize = (a: Army) => UNIT_IDS.reduce((n, u) => n + (a[u] ?? 0), 0);
+
+/** Troops in an army, not counting the ships carrying them. */
+export const fighterCount = (a: Army) => FIGHTERS.reduce((n, u) => n + (a[u] ?? 0), 0);
 
 export function unitUnlocked(s: GameState, unit: UnitId) {
   const req = UNIT_BY_ID[unit].requires;
@@ -162,6 +169,8 @@ export function defensePower(s: GameState, sent?: Army) {
  * - mounted troops (Light Cavalry, Paladins, Knights) fight 25% weaker in a forest
  * - anti-cavalry troops (Spearmen) defend 50% better against the mounted share of the attack
  * - rams break the City Gate, catapults break the Watchtower
+ * - an army landing from the sea fights uphill: the defenders get +25%, and
+ *   their Harbor adds more
  * `defender` is null for a barbarian camp, which uses `campDef`.
  */
 export function battleNumbers(
@@ -169,7 +178,8 @@ export function battleNumbers(
   sent: Army,
   defender: GameState | null,
   terrain: Terrain = "plains",
-  campDef = 0
+  campDef = 0,
+  landing = false
 ) {
   const bonus = 1 + getRates(attacker).attackBonus;
   let cav = UNITS.filter((u) => u.mounted).reduce((a, u) => a + unitAttack(attacker, u.id) * (sent[u.id] ?? 0), 0) * bonus;
@@ -188,12 +198,24 @@ export function battleNumbers(
       (1 + r.defenseBonus);
 
     defense = defensePower(defender, sent) * ground + spears * ANTI_CAVALRY_BONUS * cavShare;
+    if (landing) defense *= landingFactor(defender);
   } else {
     defense = campDef * ground;
   }
 
   return { attack, defense };
 }
+
+/** How much harder a tribe is to take from the sea: the beach, plus its Harbor. */
+export const landingFactor = (defender: GameState) => 1 + LANDING_DEFENSE + getRates(defender).seaDefenseBonus;
+
+/** The same, from the Harbor level alone (it's visible on the map). */
+export const landingFactorFor = (harborLevel: number) => {
+  const e = BUILDINGS.find((b) => b.id === "harbor")!.effect;
+  const perLevel = e.kind === "military" ? e.perLevel : 0;
+
+  return 1 + LANDING_DEFENSE + (perLevel * harborLevel) / 100;
+};
 
 export function powerScore(s: GameState) {
   const army = totalArmy(s);
@@ -298,15 +320,16 @@ function resolve(
   const lose = (army: Army, share: number, heal: number, won: boolean) => {
     const losses = emptyArmy();
     const healed = emptyArmy();
-    for (const u of UNIT_IDS) {
+    // Ships never fight: they wait off the beach and are never lost.
+    for (const u of FIGHTERS) {
       const dead = Math.min(army[u], Math.round(army[u] * share));
       healed[u] = Math.floor(dead * heal);
       losses[u] = dead - healed[u];
     }
     // A narrow win can round every unit to dead. The winner always keeps at
     // least one unit (the best carrier), or nobody would march the loot home.
-    if (won && armySize(army) > 0 && UNIT_IDS.every((u) => losses[u] >= army[u])) {
-      const keep = UNIT_IDS.filter((u) => army[u] > 0).reduce((best, u) =>
+    if (won && fighterCount(army) > 0 && FIGHTERS.every((u) => losses[u] >= army[u])) {
+      const keep = FIGHTERS.filter((u) => army[u] > 0).reduce((best, u) =>
         UNIT_BY_ID[u].carry > UNIT_BY_ID[best].carry ? u : best
       );
       losses[keep] -= 1;
@@ -338,8 +361,29 @@ function validateSend(s: GameState, units: Army): Army {
     if (n > s.army[u]) throw new GameError(`You only have ${s.army[u]} ${UNIT_BY_ID[u].name} at home`, "not_enough_troops");
     clean[u] = n;
   }
-  if (armySize(clean) === 0) throw new GameError("Choose some troops to send", "no_troops");
+  if (fighterCount(clean) === 0) throw new GameError("Choose some troops to send", "no_troops");
   return clean;
+}
+
+/**
+ * Puts an army on ships when its path crosses the sea: exactly the Longships
+ * it needs go along (more would just sit idle). Over land, ships stay home.
+ */
+export function embark(s: GameState, units: Army, naval: boolean): Army {
+  const out = { ...emptyArmy(), ...units, [SHIP_ID]: 0 } as Army;
+  if (!naval) return out;
+  const need = shipsNeeded(out);
+  const have = s.army[SHIP_ID] ?? 0;
+  if (need > have) {
+    throw new GameError(
+      have === 0 && (s.buildings["harbor"] ?? 0) === 0
+        ? "That's across the sea. Build a Harbor and Longships to carry your army."
+        : `Crossing the sea takes ${need} Longships for these troops; you have ${have} at home.`,
+      "need_ships"
+    );
+  }
+  out[SHIP_ID] = need;
+  return out;
 }
 
 const carryOf = (units: Army) => UNITS.reduce((sum, u) => sum + u.carry * units[u.id], 0);
@@ -388,6 +432,8 @@ export type MapOpts = {
   travelMs?: number;
   /** Where the battle was, so the march home can be drawn. */
   from?: Point;
+  /** The attackers came by sea and have to land on the beach. */
+  landing?: boolean;
 };
 
 export function defendRaid(
@@ -404,7 +450,7 @@ export function defendRaid(
   const dr = getRates(d);
 
   const defenders = { ...d.army };
-  const nums = battleNumbers(attacker, sent, d, opts.terrain);
+  const nums = battleNumbers(attacker, sent, d, opts.terrain, 0, opts.landing);
   const outcome = resolve(
     nums.attack,
     nums.defense,

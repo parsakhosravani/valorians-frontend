@@ -8,8 +8,8 @@ import { Button, Drawer } from "@/components";
 import { useGame, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy } from "@/lib/game/engine";
-import { TERRAIN, Terrain, armySpeed, marchMs } from "@/lib/game/map";
-import { armySize, battleNumbers } from "@/lib/game/war";
+import { Point, TERRAIN, Terrain, armySpeed, routeMs, seaRoute, shipsNeeded } from "@/lib/game/map";
+import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
 
 export type AttackTarget = {
@@ -20,17 +20,22 @@ export type AttackTarget = {
   /** Tiles from your tribe. */
   distance: number;
   terrain: Terrain;
+  /** Your tribe and the target, to work out whether the march crosses the sea. */
+  from: Point;
+  at: Point;
+  /** The target tribe's Harbor level (none for camps). */
+  harbor?: number;
   note?: string;
 };
 
 /** Attack must beat the top of the defense by this much to count as "enough". */
 const SAFETY = 1.25;
 
-/** The same share of every troop type at home. */
+/** The same share of every troop type at home (ships go along by themselves). */
 const scaled = (home: Army, f: number): Army => {
   const a = emptyArmy();
 
-  for (const u of UNITS) a[u.id] = f >= 1 ? home[u.id] : Math.round(home[u.id] * f);
+  for (const u of UNITS) if (!u.transport) a[u.id] = f >= 1 ? home[u.id] : Math.round(home[u.id] * f);
 
   return a;
 };
@@ -68,7 +73,11 @@ export const SendArmyDrawer = ({
   const [busy, setBusy] = useState(false);
 
   const terrain = target?.terrain ?? "plains";
-  const ground = 1 + TERRAIN[terrain].defense;
+  const route = target ? seaRoute(target.from, target.at) : null;
+  const naval = !!route?.naval;
+  // Landing on a tribe's beach favours them; barbarian camps have no harbor to defend.
+  const landing = naval && target?.to.target ? landingFactorFor(target.harbor ?? 0) : 1;
+  const ground = (1 + TERRAIN[terrain].defense) * landing;
   const d = target?.defense;
   const defMin = d ? d.min * ground : 0;
   const defMax = d ? d.max * ground : 0;
@@ -89,14 +98,17 @@ export const SendArmyDrawer = ({
   }, [target?.title]);
 
   const { attack: power } = battleNumbers(state, units, null, terrain, 0);
-  const carry = UNITS.reduce((s, u) => s + u.carry * units[u.id], 0);
   const verdict = !d ? "" : power > defMax * 1.1 ? "Likely victory" : power < defMin * 0.9 ? "Likely defeat" : "Close fight";
   const tone = verdict === "Likely victory" ? "good" : verdict === "Likely defeat" ? "bad" : "even";
-  const travel = target ? marchMs(units, target.distance, rates.marchMultiplier) : 0;
-  const slowest = UNITS.find((u) => units[u.id] > 0 && u.speed === armySpeed(units));
+  const ships = naval ? shipsNeeded(units) : 0;
+  const shipsHome = state.army.longship;
+  const shortOfShips = naval && ships > shipsHome;
+  const carry = UNITS.reduce((s, u) => s + u.carry * units[u.id], 0) + (naval ? ships * UNIT_BY_ID.longship.carry : 0);
+  const travel = target ? routeMs(units, target.from, target.at, rates.marchMultiplier) : 0;
+  const slowest = UNITS.find((u) => !u.transport && units[u.id] > 0 && u.speed === armySpeed(units));
   const hasCavalry = UNITS.some((u) => u.mounted && units[u.id] > 0);
-  const size = armySize(units);
-  const home = UNITS.filter((u) => state.army[u.id] > 0);
+  const size = fighterCount(units);
+  const home = UNITS.filter((u) => !u.transport && state.army[u.id] > 0);
   // Attack's share of attack + defense, for the balance bar.
   const balance = power + defMax > 0 ? power / (power + (defMin + defMax) / 2) : 0;
 
@@ -134,6 +146,12 @@ export const SendArmyDrawer = ({
               {terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} {TERRAIN[terrain].name}
               {TERRAIN[terrain].defense > 0 && <span className="text-[#F08A6C]"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
             </span>
+            {naval && (
+              <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
+                🌊 Across the sea
+                {landing > 1 && <span className="text-[#F08A6C]"> · +{Math.round((landing - 1) * 100)}% their defense (beach)</span>}
+              </span>
+            )}
             {terrain === "forest" && hasCavalry && (
               <span className="px-2 py-1 rounded-lg bg-[#2A140E] border border-[#8A3B23] text-[#FFB27A]">🐎 horsemen −25% in forest</span>
             )}
@@ -227,6 +245,32 @@ export const SendArmyDrawer = ({
             })}
           </div>
 
+          {/* Ships for a sea crossing */}
+          {naval && (
+            <div
+              className={clsx(
+                "rounded-xl border px-2.5 py-2 flex items-center gap-2 text-xs",
+                shortOfShips ? "bg-[#2A140E] border-[#8A3B23] text-[#FFB27A]" : "bg-[#14222A] border-[#4F86A3] text-[#A9D3EA]"
+              )}
+            >
+              <span className="text-xl animate-sail">⛵</span>
+              <span className="flex-1">
+                {(state.buildings["harbor"] ?? 0) === 0 ? (
+                  <>Build a <b>Harbor</b> and Longships to cross the sea.</>
+                ) : (
+                  <>
+                    <b>
+                      {fmt(ships)} / {fmt(shipsHome)} Longships
+                    </b>{" "}
+                    {shortOfShips
+                      ? `· ${fmt(ships - shipsHome)} more needed, or send fewer troops`
+                      : `· ${Math.max(1, Math.round(route!.sea))} tiles at sea, sailing ${UNIT_BY_ID.longship.speed}s/tile`}
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Attack vs defense */}
           <div className="rounded-xl bg-panel border border-line p-2.5 flex flex-col gap-2">
             <div className="flex justify-between items-baseline text-sm">
@@ -269,12 +313,14 @@ export const SendArmyDrawer = ({
             </p>
           )}
 
-          <Button isFull disabled={busy || size === 0} size="large" onClick={send}>
+          <Button isFull disabled={busy || size === 0 || shortOfShips} size="large" onClick={send}>
             {size === 0
               ? "Choose troops"
+              : shortOfShips
+                ? `Need ${fmt(ships)} Longships`
               : busy
                 ? "Marching…"
-                : `⚔️ March · arrives ${new Date(now + travel).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                : `${naval ? "⛵ Sail" : "⚔️ March"} · arrives ${new Date(now + travel).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
           </Button>
         </div>
       )}

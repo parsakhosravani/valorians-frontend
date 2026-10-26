@@ -168,6 +168,8 @@ export type Rates = {
   marchMultiplier: number;
   canScout: boolean;
   healShare: number;
+  /** Extra defense against armies landing from the sea (Harbor). */
+  seaDefenseBonus: number;
 };
 
 export class GameError extends Error {
@@ -258,7 +260,7 @@ export function getRates(s: GameState): Rates {
   let growth = BASE_POPULATION_GROWTH + s.bonusGrowth;
   let tapBoost = 0;
   let totalLevels = 0;
-  const mil = { trainSpeed: 0, attack: 0, defense: 0, wall: 0, flatDefense: 0, march: 0, heal: 0 };
+  const mil = { trainSpeed: 0, attack: 0, defense: 0, wall: 0, flatDefense: 0, march: 0, heal: 0, seaDefense: 0 };
   const production: Record<ResourceId, number> = {
     iron: BASE_PRODUCTION_PER_HOUR,
     wood: BASE_PRODUCTION_PER_HOUR,
@@ -332,6 +334,7 @@ export function getRates(s: GameState): Rates {
     marchMultiplier: Math.max(0.3, 1 - mil.march / 100),
     canScout: level(s, "exploration-center") >= 1,
     healShare: Math.min(0.5, mil.heal / 100),
+    seaDefenseBonus: mil.seaDefense / 100,
   };
 }
 

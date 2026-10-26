@@ -9,7 +9,7 @@ import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
-import { Point, campPosition, distance, marchMs, scoutCost, terrainAt } from "@/lib/game/map";
+import { Point, campPosition, distance, routeMs, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   Promotion,
   RaidReport,
@@ -20,6 +20,7 @@ import {
   defendRaid,
   dispatchCamp,
   dispatchRaid,
+  embark,
   powerScore,
   receiveRaidReport,
   returnHome,
@@ -130,13 +131,16 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
     dest = await homeOf(defenderId);
   }
 
+  // Across the sea the army sails, and takes the Longships it needs along.
+  const naval = seaRoute(home, dest).naval;
   let sent!: Army;
   let travel = 0;
   const after = await mutatePlayer(me.id, now, (s) => {
-    const d = campLevel ? dispatchCamp(s, campLevel, units, now) : dispatchRaid(s, units, now);
+    const boarded = embark(s, units, naval);
+    const d = campLevel ? dispatchCamp(s, campLevel, boarded, now) : dispatchRaid(s, boarded, now);
 
     sent = d.sent;
-    travel = marchMs(sent, distance(home, dest), getRates(s).marchMultiplier);
+    travel = routeMs(sent, home, dest, getRates(s).marchMultiplier);
 
     return d.state;
   });
@@ -199,6 +203,7 @@ async function resolveAttack(a: AttackRow, now: number) {
   const at = a.arrivesAt;
   const travelMs = a.arrivesAt - a.sentAt;
   const terrain = terrainAt(a.to.x, a.to.y);
+  const landing = seaRoute(a.from, a.to).naval;
   const attacker = await findById(a.attackerId);
 
   if (!attacker) return;
@@ -227,7 +232,7 @@ async function resolveAttack(a: AttackRow, now: number) {
   if (defender) {
     try {
       await mutatePlayer(defender.id, now, (s) => {
-        const r = defendRaid(s, attacker.state, a.units, at, rand(), { terrain, travelMs, from: a.to });
+        const r = defendRaid(s, attacker.state, a.units, at, rand(), { terrain, travelMs, from: a.to, landing });
 
         report = r.report;
 
