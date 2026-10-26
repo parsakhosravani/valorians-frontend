@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 
+import { adminIds, announceButton, cancelAnnounce, markReachable, newsIsOn, setNews, startAnnounce, takeAdminPost } from "./announce";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { displayName } from "./war";
@@ -225,7 +226,12 @@ async function menu(chatId: number) {
 // ─── Webhook entry ───────────────────────────────────────────────────────────
 
 type Update = {
-  message?: { chat: { id: number; type: string }; from?: { id: number; first_name?: string }; text?: string };
+  message?: {
+    message_id: number;
+    chat: { id: number; type: string };
+    from?: { id: number; first_name?: string };
+    text?: string;
+  };
   callback_query?: { id: string; from: { id: number; first_name?: string }; message?: { chat: { id: number } }; data?: string };
 };
 
@@ -234,20 +240,51 @@ export async function handleUpdate(u: Update) {
     const q = u.callback_query;
     const chatId = q.message?.chat.id ?? q.from.id;
 
+    if (q.data === "news:off") {
+      await setNews(q.from.id, false);
+      await tg("answerCallbackQuery", {
+        callback_query_id: q.id,
+        text: "🔕 News muted. Send /news to turn it back on.",
+        show_alert: true,
+      });
+
+      return;
+    }
     await tg("answerCallbackQuery", { callback_query_id: q.id });
+    if (q.data?.startsWith("ann:")) return announceButton(q.data, q.from.id, chatId);
     await route(q.data ?? "menu", chatId, q.from.id, q.from.first_name ?? "");
 
     return;
   }
   const m = u.message;
 
-  if (!m?.text || !m.from || m.chat.type !== "private") return;
+  if (!m?.from || m.chat.type !== "private") return;
+  await markReachable(m.from.id).catch(() => {});
+  // An admin's post after /announce (it may be a photo or video, not just text).
+  if (await takeAdminPost(m)) return;
+  if (!m.text) return;
   const [cmd] = m.text.trim().split(/\s+/);
   const name = cmd.replace(/^\//, "").replace(/@.*$/, "").toLowerCase();
 
   if (name === "start") return welcome(m.chat.id, m.from.first_name ?? "");
+  if (name === "announce" && (await startAnnounce(m.chat.id, m.from.id))) return;
+  if (name === "cancel" && (await cancelAnnounce(m.chat.id, m.from.id))) return;
+  if (name === "news") return toggleNews(m.chat.id, m.from.id);
 
   return route(name, m.chat.id, m.from.id, m.from.first_name ?? "");
+}
+
+async function toggleNews(chatId: number, userId: number) {
+  const on = !(await newsIsOn(userId));
+
+  await setNews(userId, on);
+  await send(
+    chatId,
+    on
+      ? `🔔 <b>News on.</b> You'll get update announcements here. Send /news again to mute them.`
+      : `🔕 <b>News muted.</b> You won't get update announcements. Battle alerts still come through. Send /news to turn news back on.`,
+    [[{ text: "« Menu", callback_data: "menu" }]]
+  );
 }
 
 function route(name: string, chatId: number, userId: number, firstName: string) {
@@ -303,8 +340,24 @@ export async function setupBot() {
       { command: "top", description: "🏆 Top chiefs" },
       { command: "clan", description: "🛡️ Your clan" },
       { command: "help", description: "📜 How to play" },
+      { command: "news", description: "🔔 Update news on/off" },
     ],
   });
+  // Admins also see /announce in their own command menu.
+  for (const id of adminIds()) {
+    await run("setMyCommands", {
+      scope: { type: "chat", chat_id: id },
+      commands: [
+        { command: "announce", description: "📢 Send an update announcement" },
+        { command: "cancel", description: "✖️ Cancel the announcement" },
+        { command: "start", description: "⚔️ Begin your legend" },
+        { command: "tribe", description: "🏰 Your tribe at a glance" },
+        { command: "top", description: "🏆 Top chiefs" },
+        { command: "clan", description: "🛡️ Your clan" },
+        { command: "news", description: "🔔 Update news on/off" },
+      ],
+    });
+  }
   await run("setChatMenuButton", { menu_button: { type: "web_app", text: "Play", web_app: { url: base } } });
   await run("setWebhook", {
     url: `${base}/api/bot`,

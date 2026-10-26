@@ -3,8 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDueAttacks } from "@/server/war";
 import { resolveDueTrades } from "@/server/trade";
 import { ensureBotSetup } from "@/server/bot";
+import { deliverAnnouncements } from "@/server/announce";
 
 export const dynamic = "force-dynamic";
+// Room to keep sending a big announcement (the workflow waits up to 60s).
+export const maxDuration = 60;
 
 /**
  * Fights battles whose armies have arrived (and hands over traded goods), even when nobody has the game
@@ -31,6 +34,11 @@ export async function GET(req: NextRequest) {
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
   const bot = await ensureBotSetup().catch(() => null);
+  // Announcements still going out: keep sending for the rest of this run.
+  await deliverAnnouncements(Math.max(0, 45_000 - (Date.now() - started))).catch((e) =>
+    // eslint-disable-next-line no-console
+    console.error("announcements failed", e)
+  );
 
   return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}) });
 }

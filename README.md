@@ -41,6 +41,16 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 
 All numbers are in `src/lib/game/config.ts`; the rules are in `src/lib/game/war.ts` (tests in `war.test.ts`).
 
+### Update announcements
+
+Admins broadcast news from the bot chat. Put your Telegram user id in `BOT_ADMIN_IDS` (comma-separated for several admins), then in @valorians_bot:
+
+1. Send `/announce`.
+2. Send the post: text, or a photo or video with a caption. Formatting, emoji and links are kept.
+3. The bot shows a preview exactly as players will see it, with **Send to N players**, **Players + news channel** (when `TELEGRAM_CHANNEL_ID` is set and the bot can post there) and **Cancel**.
+
+Sending runs at ~25 messages a second: a first batch right away, the rest from the cron (`/api/cron/battles`, every 5 minutes), picking up where it stopped. When it's done the bot messages you how many players got it. Each announcement carries a **Play now** button and a **Mute news** button; players can also toggle news with `/news`. Players who blocked the bot are skipped until they write to it again. Battle alerts are not affected by muting.
+
 ### API
 
 All routes need the `Authorization` header and return `{ serverTime, me, state }` unless noted.
