@@ -43,7 +43,7 @@ All numbers are in `src/lib/game/config.ts`; the rules are in `src/lib/game/war.
 
 ### Update announcements
 
-Admins broadcast news from the bot chat. To become an admin, either put your Telegram user id in `BOT_ADMIN_IDS` (comma-separated for several admins), or set a secret `BOT_ADMIN_CODE` (16+ characters) and open `https://t.me/valorians_bot?start=admin_<code>`: the bot makes you an admin and right away sends a test announcement of the live version (with **🧪 Send to me only** to preview it safely). Then in @valorians_bot:
+Admins broadcast news from the bot chat. To become an admin, either put your Telegram user id in `BOT_ADMIN_IDS` (comma-separated for several admins), or open `https://t.me/valorians_bot?start=admin_<code>`, where the code is `BOT_ADMIN_CODE` if set, otherwise the first 32 hex characters of `sha256("<bot token>:admin")` (keep it private): the bot makes you an admin and right away sends a test announcement of the live version (with **🧪 Send to me only** to preview it safely). Then in @valorians_bot:
 
 1. Send `/announce`.
 2. Send the post: text, or a photo or video with a caption. Formatting, emoji and links are kept.
