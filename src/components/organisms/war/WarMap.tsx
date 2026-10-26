@@ -145,7 +145,7 @@ const TERRAIN_FILL: Record<Terrain, string[]> = {
   plains: ["#5E6B37", "#627039", "#5A6734"],
   forest: ["#34492A", "#36502B", "#314527"],
   hills: ["#7B6848", "#81704E", "#76633F"],
-  mountains: ["#5E554B", "#635A4F", "#595046"],
+  mountains: ["#4E4130", "#534633", "#4A3D2C"],
   lake: ["#2F5664", "#315A69", "#2D5260"],
   sea: ["#1E4258", "#20465D", "#1C3F54"],
 };
@@ -154,7 +154,7 @@ const TERRAIN_ICON: Record<Terrain, string> = {
   plains: "🌾",
   forest: "🌲",
   hills: "⛰️",
-  mountains: "🏔️",
+  mountains: "⛰️",
   lake: "💧",
   sea: "🌊",
 };
@@ -205,26 +205,14 @@ const Ground = memo(function Ground({
             />
           )}
           {t === "mountains" && (
-            <g>
-              <polygon
-                fill="#3F382F"
-                points={`${px + 3},${py + 40} ${px + 17},${py + 12} ${px + 31},${py + 40}`}
-              />
-              <polygon
-                fill="#4A4238"
-                points={`${px + 15},${py + 40} ${px + 30},${py + 6} ${px + 44},${py + 40}`}
-              />
-              <polygon
-                fill="#E8E1D0"
-                opacity="0.9"
-                points={`${px + 25},${py + 17} ${px + 30},${py + 6} ${px + 35},${py + 17} ${px + 31},${py + 14} ${px + 28},${py + 18}`}
-              />
-              <polygon
-                fill="#D9D1BE"
-                opacity="0.75"
-                points={`${px + 13},${py + 20} ${px + 17},${py + 12} ${px + 21},${py + 20} ${px + 17},${py + 18}`}
-              />
-            </g>
+            <path
+              d={`M${px + 8} ${py + 32} l8 -10 l6 6 l8 -12 l10 16`}
+              fill="none"
+              opacity="0.85"
+              stroke="#2E261B"
+              strokeLinejoin="round"
+              strokeWidth="2.5"
+            />
           )}
           {t === "lake" && (
             <path
@@ -1226,7 +1214,7 @@ export const WarMap = ({
                   catapults slowest). The battle happens when it arrives.
                 </span>
                 <span>
-                  🏔️ Armies follow roads, not straight lines: they march around
+                  ⛰️ Armies follow roads, not straight lines: they march around
                   mountains and lakes, and forests and hills slow them down. When
                   the way round is too long, they sail.
                 </span>
