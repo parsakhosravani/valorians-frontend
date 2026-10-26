@@ -8,8 +8,16 @@ import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
 import { Button } from "@/components";
 import { RESOURCES, useGame } from "@/context";
 import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef } from "@/lib/game/config";
-import { trainingEndsAt } from "@/lib/game/engine";
-import { attackPower, defensePower, troopInfo, unitAttack, unitDefense, unitUnlocked } from "@/lib/game/war";
+import { TrainItem, trainingEndsAt } from "@/lib/game/engine";
+import {
+  attackPower,
+  defensePower,
+  trainingRefund,
+  troopInfo,
+  unitAttack,
+  unitDefense,
+  unitUnlocked,
+} from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
 
 type Group = "all" | "infantry" | "cavalry" | "siege";
@@ -154,6 +162,76 @@ const LockedRow = ({ unit }: { unit: UnitDef }) => (
   </div>
 );
 
+/** One batch in the training queue, with a cancel button that asks before refunding. */
+const TrainingRow = ({ item: t }: { item: TrainItem }) => {
+  const { now, cancelTraining } = useGame();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const unit = UNITS.find((u) => u.id === t.unit)!;
+  const end = trainingEndsAt(t);
+  const started = now >= t.startsAt;
+  const progress = started ? (now - t.startsAt) / Math.max(1, end - t.startsAt) : 0;
+  const refund = trainingRefund(t);
+
+  const onCancel = async () => {
+    setBusy(true);
+    await cancelTraining(t.startsAt);
+    setBusy(false);
+    setConfirming(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="truncate">
+          <UnitEmoji unit={unit.id} /> {unit.name} {fmt(t.done)}/{fmt(t.count)}
+        </span>
+        <span className="flex items-center gap-2 shrink-0">
+          <span className="text-[#B19C80]">
+            {started ? `${formatDuration(end - now)} left` : `starts in ${formatDuration(t.startsAt - now)}`}
+          </span>
+          {!confirming && (
+            <button
+              aria-label={`Cancel ${unit.name} training`}
+              className="h-6 w-6 -mr-1 grid place-items-center rounded-full text-[#B19C80] hover:text-[#F08A6C] hover:bg-[#F08A6C]/10"
+              onClick={() => setConfirming(true)}
+            >
+              ✕
+            </button>
+          )}
+        </span>
+      </div>
+      <div className="h-1 rounded-full bg-[#120D09] overflow-hidden">
+        <div className="h-full bg-[#9DD07F]" style={{ width: `${Math.min(100, progress * 100)}%` }} />
+      </div>
+      {confirming && (
+        <div className="flex flex-col gap-2 bg-[#120D09]/60 rounded-xl p-2.5 mt-1">
+          <div className="text-xs text-[#B19C80]">
+            Cancel the {fmt(t.count - t.done)} {unit.name} not yet trained?
+            {t.done > 0 && ` The ${fmt(t.done)} already trained stay.`}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="text-[#B19C80]">Refund</span>
+            {RESOURCES.map((r) => (
+              <span key={r.id} className="flex items-center gap-1 text-good">
+                <Image alt={r.name} className="h-3.5 w-3.5" src={r.img} />+{fmt(refund[r.id])}
+              </span>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button disabled={busy} size="small" variant="secondary" onClick={() => setConfirming(false)}>
+              Keep
+            </Button>
+            <Button disabled={busy} size="small" variant="danger" onClick={onCancel}>
+              Cancel training
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ArmyTab = () => {
   const { state, rates, now } = useGame();
   const [group, setGroup] = useState<Group>("all");
@@ -185,28 +263,9 @@ export const ArmyTab = () => {
       {state.training.length > 0 && (
         <Card className="flex flex-col gap-2">
           <h3 className="font-bold text-sm">Training</h3>
-          {state.training.map((t, i) => {
-            const unit = UNITS.find((u) => u.id === t.unit)!;
-            const end = trainingEndsAt(t);
-            const started = now >= t.startsAt;
-            const progress = started ? (now - t.startsAt) / Math.max(1, end - t.startsAt) : 0;
-
-            return (
-              <div key={i} className="flex flex-col gap-1">
-                <div className="flex justify-between text-sm">
-                  <span>
-                    <UnitEmoji unit={unit.id} /> {unit.name} {fmt(t.done)}/{fmt(t.count)}
-                  </span>
-                  <span className="text-[#B19C80]">
-                    {started ? `${formatDuration(end - now)} left` : `starts in ${formatDuration(t.startsAt - now)}`}
-                  </span>
-                </div>
-                <div className="h-1 rounded-full bg-[#120D09] overflow-hidden">
-                  <div className="h-full bg-[#9DD07F]" style={{ width: `${Math.min(100, progress * 100)}%` }} />
-                </div>
-              </div>
-            );
-          })}
+          {state.training.map((t) => (
+            <TrainingRow key={t.startsAt} item={t} />
+          ))}
         </Card>
       )}
 

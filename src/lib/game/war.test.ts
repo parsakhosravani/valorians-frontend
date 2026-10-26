@@ -252,3 +252,27 @@ test("old saves with Arsenal upgrades load without them", () => {
   expect(s.troops.spearman).toEqual({ xp: 500 });
   expect(E.unitMultiplier(s, "spearman")).toBeCloseTo(1.08); // Veteran, no upgrade bonus
 });
+
+test("cancelling a running batch keeps trained units, refunds the rest and moves the queue up", () => {
+  let s = W.trainTroops(withBarracks(), "spearman", 10, T0); // 15s each
+  s = W.trainTroops(s, "spearman", 2, T0);
+  const now = T0 + 15_000 * 4 + 500;
+  s = E.advance(s, now);
+  expect(s.army.spearman).toBe(4);
+  const wood = s.resources.wood;
+
+  s = W.cancelTraining(s, T0, now);
+  expect(s.army.spearman).toBe(4);
+  expect(s.resources.wood).toBe(wood + 45 * 6);
+  expect(s.training.length).toBe(1);
+  expect(s.training[0].startsAt).toBe(now);
+});
+
+test("cancelling a queued batch leaves the running one alone", () => {
+  let s = W.trainTroops(withBarracks(), "spearman", 2, T0);
+  s = W.trainTroops(s, "spearman", 2, T0);
+  s = W.trainTroops(s, "spearman", 2, T0);
+  s = W.cancelTraining(s, T0 + 30_000, T0 + 1000);
+  expect(s.training.map((t) => t.startsAt)).toEqual([T0, T0 + 30_000]);
+  expect(() => W.cancelTraining(s, 123, T0)).toThrow("already finished");
+});
