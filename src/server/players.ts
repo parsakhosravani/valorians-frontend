@@ -196,6 +196,19 @@ async function clanBadge(clanId: number | null) {
   return c ? { id: Number(c.id), name: String(c.name), tag: String(c.tag), leaderId: Number(c.leader_id) } : null;
 }
 
+/** Trades still in play for the player: their open offers plus deals whose merchants are on the road. */
+async function activeTrades(id: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM trades WHERE seller_id = ? AND status IN ('open', 'accepted', 'delivering')) +
+            (SELECT COUNT(*) FROM trades WHERE buyer_id = ? AND status IN ('accepted', 'delivering')) AS n`,
+    args: [id, id],
+  });
+
+  return Number(rs.rows[0]?.n ?? 0);
+}
+
 export async function playerView(p: Player, now: number) {
 
   return {
@@ -208,6 +221,8 @@ export async function playerView(p: Player, now: number) {
       photoUrl: avatarUrl(p.id),
       clan: await clanBadge(p.clanId),
       rank: await rankOf(p.state.population),
+      /** Shown as a badge on the header's Trade button. */
+      activeTrades: await activeTrades(p.id),
     },
     state: p.state,
   };
