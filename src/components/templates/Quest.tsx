@@ -4,7 +4,9 @@ import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import viking from "~/images/quest/viking.png";
 import Image from "next/image";
-import { ACTIVE_QUESTS, Coin, QUEST_ICONS, QuestDrawer, TextImage } from "@/components";
+import clsx from "clsx";
+import { ACTIVE_QUESTS, Coin, QUEST_ICONS, QuestDrawer } from "@/components";
+import { EmptyState, SectionTitle } from "@/components/atoms/Ui";
 import { useGame } from "@/context";
 import { QuestId } from "@/lib/game/config";
 import { questStatus } from "@/lib/game/engine";
@@ -17,70 +19,59 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
 
   return (
     <>
-      <div className="relative flex flex-col w-full px-3 pt-8 pb-4">
-        <div className="bg-buildingBg border border-line min-h-[100px] w-full flex justify-end rounded-2xl">
-          <div className="w-2/6 flex flex-col justify-start relative">
+      <div className="relative flex flex-col gap-3 w-full px-3 pt-8 pb-4">
+        {/* The saga keeper */}
+        <div className="card-hero min-h-[104px] w-full flex justify-end">
+          <div className="w-[38%] relative">
             <Image
+              alt=""
+              className="absolute max-w-[150px] w-[125%] h-[140%] bottom-0 -left-1 object-left-bottom object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]"
               src={viking}
-              alt="avatar"
-              className="absolute max-w-[130px] max-h-[130px] w-[120%] h-[120%] bottom-0 object-left-bottom object-contain"
             />
           </div>
-          <div className="w-4/6 flex flex-col justify-between pl-3 py-2.5">
-            <div className="text-left font-display text-parch text-lg font-bold">
-              Sagas
-            </div>
-            <div className="text-[#D8C9AE] text-xs font-normal">
-              By completing tasks, you earn rewards that help you develop your
-              tribe faster. Use these rewards to enhance your tribe's growth and
-              strength!
-            </div>
+          <div className="w-[62%] flex flex-col justify-center gap-1 pr-3 py-3">
+            <h1 className="title-screen">Sagas</h1>
+            <p className="text-sub text-[13px] leading-snug">
+              Finish tasks to earn coins and people that grow your tribe faster.
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-col w-full items-start mt-4">
-          <div className="font-display text-parch text-lg font-bold">
-            Tasks
-          </div>
-          <div className="grid gap-2.5 w-full pb-4">
-            {ACTIVE_QUESTS.length === 0 && (
-              <p className="text-sm text-[#B19C80]">No tasks right now. Check back soon!</p>
-            )}
-            {ACTIVE_QUESTS.map((item) => {
-              const done = questStatus(state, item.id, now).state === "claimed";
+        <SectionTitle right={`${ACTIVE_QUESTS.filter((q) => questStatus(state, q.id, now).state === "claimed").length} of ${ACTIVE_QUESTS.length} done`}>
+          Tasks
+        </SectionTitle>
+        <div className="grid gap-2 w-full">
+          {ACTIVE_QUESTS.length === 0 && (
+            <EmptyState e="📦" title="No tasks right now">
+              New sagas arrive often. Check back soon!
+            </EmptyState>
+          )}
+          {ACTIVE_QUESTS.map((item) => {
+            const done = questStatus(state, item.id, now).state === "claimed";
 
-              return (
-                <button
-                  key={item.id}
-                  className="w-full h-12 flex gap-2 items-center px-[6px] py-[5px] bg-buildingBg border border-line rounded-xl text-left"
-                  onClick={() => setOpenDrawer(item.id)}
-                >
-                  <Image alt="social" height={34} src={QUEST_ICONS[item.id]} width={34} />
-                  <div className="flex flex-col justify-start gap-[5px] flex-1">
-                    <div className="leading-none font-bold">{item.title}</div>
-                    <div className="flex gap-3">
-                      <Coin amount={item.reward.coins} />
-                      <TextImage
-                        direction="row"
-                        imgAlt="population"
-                        imgSrc={population}
-                        size="small"
-                        title={`+${item.reward.population}`}
-                      />
-                      <TextImage
-                        direction="row"
-                        imgAlt="populationPerHour"
-                        imgSrc={population}
-                        size="small"
-                        title={`+${item.reward.growth}/h`}
-                      />
-                    </div>
+            return (
+              <button
+                key={item.id}
+                className={clsx("card w-full flex gap-3 items-center p-2.5 text-left active:scale-[0.99] transition-transform", done && "opacity-60")}
+                onClick={() => setOpenDrawer(item.id)}
+              >
+                <Image alt="" className="w-10 h-10 rounded-lg shrink-0" height={40} src={QUEST_ICONS[item.id]} width={40} />
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <div className="leading-tight font-bold truncate">{item.title}</div>
+                  <div className="flex flex-wrap gap-1">
+                    <span className="pill pill-gold h-5"><Coin amount={item.reward.coins} /></span>
+                    <span className="pill h-5">
+                      <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={population} />+{item.reward.population}
+                    </span>
+                    <span className="pill pill-good h-5">
+                      <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={population} />+{item.reward.growth}/h
+                    </span>
                   </div>
-                  <span className="text-lg pr-1">{done ? "✅" : "›"}</span>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+                <span className={clsx("shrink-0 font-display font-black text-lg pr-1", done ? "text-good" : "text-goldtext")}>{done ? "✓" : "›"}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
       <QuestDrawer openDrawer={openDrawer} setOpenDrawer={setOpenDrawer} />
@@ -89,7 +80,7 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
         priority
         src={bg}
         alt={"intro"}
-        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-25"
+        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-30"
       />
     </>
   );

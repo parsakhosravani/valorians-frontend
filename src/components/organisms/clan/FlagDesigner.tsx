@@ -38,13 +38,13 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center w-24 h-28 rounded-xl bg-panel border border-line">
+        <div className="flex items-center justify-center w-24 h-28 inset">
           <ClanFlag flag={value} size={92} />
         </div>
         <div className="flex flex-col gap-2 flex-1">
           <p className="text-xs text-sub">Your banner flies over every member's village on the map and beside your clan's name.</p>
           <button
-            className="self-start h-8 px-3 rounded-[10px] bg-panel2 border border-line text-sm font-bold text-parch"
+            className="btn btn-wood btn-sm self-start font-sans font-extrabold text-sm"
             type="button"
             onClick={() => onChange(defaultFlag(seed + Math.floor(Math.random() * 1e6)))}
           >
@@ -65,7 +65,7 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
               aria-pressed={value.pattern === p.id}
               className={clsx(
                 "flex flex-col items-center gap-0.5 rounded-lg border py-1",
-                value.pattern === p.id ? "border-gold bg-gold/10" : "border-line bg-panel"
+                value.pattern === p.id ? "border-gold bg-gold/10" : "border-line bg-ink/50"
               )}
               type="button"
               onClick={() => set({ pattern: p.id })}
@@ -84,7 +84,7 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
             aria-pressed={value.emblem === -1}
             className={clsx(
               "aspect-square rounded-lg border text-[10px] font-bold text-muted",
-              value.emblem === -1 ? "border-gold bg-gold/10" : "border-line bg-panel"
+              value.emblem === -1 ? "border-gold bg-gold/10" : "border-line bg-ink/50"
             )}
             type="button"
             onClick={() => set({ emblem: -1 })}
@@ -97,7 +97,7 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
               aria-pressed={value.emblem === i}
               className={clsx(
                 "aspect-square rounded-lg border p-1 flex items-center justify-center",
-                value.emblem === i ? "border-gold bg-gold/10" : "border-line bg-panel"
+                value.emblem === i ? "border-gold bg-gold/10" : "border-line bg-ink/50"
               )}
               type="button"
               onClick={() => set({ emblem: i })}

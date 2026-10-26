@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useState } from "react";
 import { StaticImageData } from "next/image";
 
@@ -7,8 +8,8 @@ import youtubeIcon from "~/images/social/youtube.png";
 import xIcon from "~/images/social/x.png";
 import population from "~/images/resources/population.webp";
 
-import { Button, Coin, Col, Row, Text } from "@/components";
-import { Drawer, TextImage } from "@/components/molecules";
+import { Button, Coin, Col, Text } from "@/components";
+import { Drawer } from "@/components/molecules";
 import { useGame, useTelegramContext } from "@/context";
 import { QUESTS, QuestDef, QuestId, questUrl } from "@/lib/game/config";
 import { questStatus } from "@/lib/game/engine";
@@ -68,25 +69,24 @@ export const QuestDrawer: React.FC<QuestDrawerProps> = ({ setOpenDrawer, openDra
     <Drawer isOpen={openDrawer !== null} position="bottom" onClose={() => setOpenDrawer(null)}>
       {quest && status && (
         <Col className="gap-4 pb-2">
-          <Row className="justify-center">
-            <TextImage
-              direction="column"
-              imgAlt={quest.title}
-              imgSrc={QUEST_ICONS[quest.id]}
-              size="large"
-              title={quest.title}
-            />
-          </Row>
-          <Row className="justify-center items-center gap-3">
-            <Coin amount={quest.reward.coins} />
-            <TextImage imgAlt="population" imgSrc={population} size="small" title={`+${quest.reward.population}`} />
-            <TextImage
-              imgAlt="population growth"
-              imgSrc={population}
-              size="small"
-              title={`+${quest.reward.growth}/h`}
-            />
-          </Row>
+          <Col className="items-center text-center gap-2 pt-1">
+            <Image alt="" className="w-16 h-16 rounded-2xl shadow-card" height={64} src={QUEST_ICONS[quest.id]} width={64} />
+            <p className="title-screen !text-[20px]">{quest.title}</p>
+          </Col>
+          <div className="inset grid grid-cols-3 divide-x divide-line/50 py-2.5 text-center">
+            <span className="flex flex-col items-center gap-0.5">
+              <span className="label">Coins</span>
+              <Coin amount={quest.reward.coins} />
+            </span>
+            <span className="flex flex-col items-center gap-0.5">
+              <span className="label">People</span>
+              <span className="stat text-parch"><Image alt="" className="w-4 h-4 rounded-sm" src={population} />+{quest.reward.population}</span>
+            </span>
+            <span className="flex flex-col items-center gap-0.5">
+              <span className="label">Growth</span>
+              <span className="stat text-good"><Image alt="" className="w-4 h-4 rounded-sm" src={population} />+{quest.reward.growth}/h</span>
+            </span>
+          </div>
 
           {status.state === "claimed" ? (
             <Button isFull disabled size="large">

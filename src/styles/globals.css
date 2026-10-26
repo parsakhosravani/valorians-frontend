@@ -59,3 +59,107 @@ body {
   50% { box-shadow: inset 0 0 110px rgba(232, 97, 44, 0.7); }
 }
 .animate-frenzy { animation: frenzy-glow 1.2s ease-in-out infinite; }
+
+/* ───────────────────────── Valorians v2 design system ─────────────────────────
+ * Every screen is built from these few pieces so the whole game shares one look:
+ *   surfaces  .card  .card-hero  .card-flat  .inset
+ *   actions   .btn + .btn-gold | .btn-wood | .btn-ghost | .btn-ember, sizes .btn-sm/.btn-lg
+ *   tabs      .seg > .seg-btn[aria-selected=true]
+ *   text      .title-screen  .title-section  .label
+ *   bits      .pill(-gold|-good|-bad|-sea)  .bar > .bar-fill  .divider  .stat
+ * Colors come from tailwind.config.ts tokens. */
+@layer components {
+  /* Surfaces */
+  .card {
+    @apply relative rounded-2xl border border-line shadow-card;
+    background: linear-gradient(180deg, rgba(42, 31, 22, 0.94) 0%, rgba(30, 22, 16, 0.94) 100%);
+  }
+  .card-flat {
+    @apply relative rounded-2xl border border-line/70;
+    background: rgba(30, 22, 16, 0.86);
+  }
+  .card-hero {
+    @apply relative rounded-2xl border border-gold shadow-glow;
+    background: radial-gradient(120% 90% at 0% 0%, rgba(227, 169, 72, 0.16) 0%, rgba(227, 169, 72, 0) 55%),
+      linear-gradient(180deg, #33251A 0%, #1E1610 100%);
+  }
+  .inset {
+    @apply rounded-xl border border-line/60 shadow-inset;
+    background: rgba(11, 8, 6, 0.55);
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-xl font-display font-black text-[15px] leading-none
+      select-none whitespace-nowrap transition-transform active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-goldtext
+      disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  .btn-sm { @apply h-8 px-3 text-[13px] rounded-[10px]; }
+  .btn-lg { @apply h-12 px-6 text-base; }
+  .btn-gold {
+    @apply text-[#1A120B] border border-[#F7D58A];
+    background: linear-gradient(180deg, #F6CC72 0%, #E3A948 55%, #C98C2E 100%);
+    box-shadow: 0 3px 0 #7A5418, 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 245, 210, 0.7);
+  }
+  .btn-gold:active { box-shadow: 0 1px 0 #7A5418, 0 3px 8px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 245, 210, 0.6); }
+  .btn-wood {
+    @apply text-parch border border-line;
+    background: linear-gradient(180deg, #3A2B1E 0%, #2A1F16 100%);
+    box-shadow: 0 2px 0 #0B0806, inset 0 1px 0 rgba(255, 226, 170, 0.08);
+  }
+  .btn-ghost { @apply text-goldtext border border-gold/70 bg-transparent; }
+  .btn-ember {
+    @apply text-[#FFF4EA] border border-[#F59A72];
+    background: linear-gradient(180deg, #F07B48 0%, #E8612C 60%, #B9441A 100%);
+    box-shadow: 0 3px 0 #6E2A10, 0 6px 14px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 220, 200, 0.5);
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    @apply text-muted border-line shadow-none;
+    background: #2A1F16;
+  }
+
+  /* Segmented tabs */
+  .seg { @apply flex w-full gap-1 p-1 rounded-xl border border-line shadow-inset; background: rgba(11, 8, 6, 0.6); }
+  .seg-btn {
+    @apply relative flex-1 h-9 rounded-[9px] text-sm font-bold text-muted transition-colors;
+  }
+  .seg-btn[aria-selected="true"] {
+    @apply text-[#1A120B] font-extrabold;
+    background: linear-gradient(180deg, #F6CC72 0%, #E3A948 100%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 245, 210, 0.7);
+  }
+
+  /* Type */
+  .title-screen {
+    @apply font-display font-black text-[22px] leading-tight tracking-[0.02em] text-transparent bg-clip-text;
+    background-image: linear-gradient(180deg, #FBE3A6 0%, #F2C66D 45%, #C98C2E 100%);
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.85));
+  }
+  .title-section {
+    @apply flex items-center gap-2 font-display font-bold text-[13px] uppercase tracking-[0.14em] text-goldtext;
+  }
+  .title-section::after {
+    content: "";
+    @apply flex-1 h-px;
+    background: linear-gradient(90deg, rgba(227, 169, 72, 0.55), rgba(227, 169, 72, 0));
+  }
+  .label { @apply text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted; }
+
+  /* Small bits */
+  .pill {
+    @apply inline-flex items-center gap-1 h-6 px-2 rounded-full border border-line text-xs font-extrabold text-parch whitespace-nowrap;
+    background: rgba(11, 8, 6, 0.6);
+  }
+  .pill-gold { @apply border-gold/70 text-goldtext; background: rgba(227, 169, 72, 0.12); }
+  .pill-good { @apply border-good/60 text-good; background: rgba(157, 208, 127, 0.1); }
+  .pill-bad { @apply border-bad/60 text-bad; background: rgba(240, 138, 108, 0.1); }
+  .pill-sea { @apply border-sea/60 text-sea; background: rgba(127, 179, 208, 0.1); }
+  .bar { @apply h-2 w-full rounded-full overflow-hidden border border-line/60; background: rgba(11, 8, 6, 0.8); }
+  .bar-fill {
+    @apply block h-full rounded-full transition-[width] duration-500;
+    background: linear-gradient(90deg, #E3A948 0%, #F2C66D 60%, #E8612C 100%);
+  }
+  .divider { @apply h-px w-full; background: linear-gradient(90deg, rgba(74, 54, 36, 0), #4A3624 20%, #4A3624 80%, rgba(74, 54, 36, 0)); }
+  .stat { @apply inline-flex items-center gap-1 text-xs font-extrabold text-sub tabular-nums; }
+}

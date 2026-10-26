@@ -145,33 +145,33 @@ export const SendArmyDrawer = ({
     <Drawer isOpen={!!target} position="bottom" title={target?.title} onClose={onClose}>
       {target && d && (
         <div className="flex flex-col gap-3 pt-2">
-          {target.note && <p className="text-xs text-[#E3A948]">{target.note}</p>}
+          {target.note && <p className="text-xs text-gold">{target.note}</p>}
 
           {/* Where the fight will be */}
           <div className="flex flex-wrap gap-2 text-xs font-bold">
-            <span className="px-2 py-1 rounded-lg bg-panel2 border border-line"><GameIcon e="📍" /> {target.distance} tiles away</span>
-            <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+            <span className="pill h-7 px-2"><GameIcon e="📍" /> {target.distance} tiles away</span>
+            <span className="pill h-7 px-2">
               <GameIcon e={terrain === "mountains" || terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} /> {TERRAIN[terrain].name}
-              {TERRAIN[terrain].defense > 0 && <span className="text-[#F08A6C]"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
+              {TERRAIN[terrain].defense > 0 && <span className="text-bad"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
             </span>
             {route?.detour && (
-              <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+              <span className="pill h-7 px-2">
                 <GameIcon e="🛤️" /> {route.climbed ? "No road: a hard climb" : naval ? "Sea road" : "Road winds around"} · {Math.round(route.length)} tiles
               </span>
             )}
             {naval && (
-              <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
+              <span className="pill pill-sea h-7 px-2">
                 <GameIcon e="🌊" /> Across the sea
-                {landing > 1 && <span className="text-[#F08A6C]"> · +{Math.round((landing - 1) * 100)}% their defense (beach)</span>}
+                {landing > 1 && <span className="text-bad"> · +{Math.round((landing - 1) * 100)}% their defense (beach)</span>}
               </span>
             )}
             {terrain === "forest" && hasCavalry && (
-              <span className="px-2 py-1 rounded-lg bg-[#2A140E] border border-[#8A3B23] text-[#FFB27A]">🐎 horsemen −25% in forest</span>
+              <span className="pill pill-bad h-7 px-2">🐎 horsemen −25% in forest</span>
             )}
           </div>
 
           {/* Quick picks for the whole army */}
-          <div className="flex items-center gap-1 bg-panel border border-line rounded-xl p-1">
+          <div className="seg">
             {presets.map((p) => {
               // An empty pick matches every preset when nobody is home, so only a real selection counts.
               // Only the tapped pick lights up, and only while the sliders still match it.
@@ -217,14 +217,14 @@ export const SendArmyDrawer = ({
                     <UnitBadge size={30} unit={u.id} />
                     <div className="flex-1 min-w-0 leading-tight">
                       <div className="text-sm font-bold truncate">{u.name}</div>
-                      <div className="text-[10px] text-[#B19C80]">
+                      <div className="text-[10px] text-muted">
                         {fmt(max - n)} stay home · {u.speed}s/tile
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
                         aria-label={`fewer ${u.name}`}
-                        className="w-7 h-7 rounded-lg bg-[#1E1610] font-bold disabled:opacity-30"
+                        className="btn btn-wood w-7 h-7 px-0 rounded-lg text-sm disabled:opacity-30"
                         disabled={n <= 0}
                         onClick={() => setOne(u.id, n - 1)}
                       >
@@ -232,14 +232,14 @@ export const SendArmyDrawer = ({
                       </button>
                       <input
                         aria-label={`${u.name} to send`}
-                        className="w-12 h-7 rounded-lg bg-[#1E1610] text-center text-sm font-extrabold outline-none focus:ring-1 focus:ring-gold"
+                        className="inset w-12 h-7 rounded-lg text-center text-sm font-extrabold tabular-nums outline-none focus:border-gold"
                         inputMode="numeric"
                         value={n}
                         onChange={(e) => setOne(u.id, Number(e.target.value.replace(/\D/g, "")))}
                       />
                       <button
                         aria-label={`more ${u.name}`}
-                        className="w-7 h-7 rounded-lg bg-[#1E1610] font-bold disabled:opacity-30"
+                        className="btn btn-wood w-7 h-7 px-0 rounded-lg text-sm disabled:opacity-30"
                         disabled={n >= max}
                         onClick={() => setOne(u.id, n + 1)}
                       >
@@ -293,13 +293,13 @@ export const SendArmyDrawer = ({
           )}
 
           {/* Attack vs defense */}
-          <div className="rounded-xl bg-panel border border-line p-2.5 flex flex-col gap-2">
+          <div className="inset p-2.5 flex flex-col gap-2">
             <div className="flex justify-between items-baseline text-sm">
               <span className="font-extrabold"><GameIcon e="⚔️" /> {fmt(power)}</span>
               <span
                 className={clsx(
                   "text-xs font-extrabold",
-                  !size ? "text-muted" : tone === "good" ? "text-good" : tone === "bad" ? "text-[#F08A6C]" : "text-[#E3A948]"
+                  !size ? "text-muted" : tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : "text-gold"
                 )}
               >
                 {size ? verdict : "Choose troops"}
@@ -326,7 +326,7 @@ export const SendArmyDrawer = ({
           </div>
 
           {size > 0 && (
-            <p className="text-[11px] text-center text-[#B19C80] -mt-1">
+            <p className="text-[11px] text-center text-muted -mt-1">
               Luck can swing it ±10%.
               {slowest && size > units[slowest.id] ? ` ${UNIT_BY_ID[slowest.id].name} set the pace.` : ""} Back home in{" "}
               {formatDuration(travel * 2)}.

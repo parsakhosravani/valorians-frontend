@@ -170,7 +170,7 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
             <p className="font-display font-bold text-lg">The gates won&apos;t open</p>
             <p className="text-sm text-sub">{error || "We couldn't reach your tribe. Check your connection."}</p>
             <button
-              className="h-11 px-8 rounded-xl bg-gold text-[#1A120B] font-display font-black"
+              className="btn btn-gold btn-lg px-8"
               onClick={retry}
             >
               Try again

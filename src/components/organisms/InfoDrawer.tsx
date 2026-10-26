@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Button, Col, Drawer, Row, TextImage } from "@/components";
+import { Button, Col, Drawer, Row } from "@/components";
 import info from "~/images/info.webp";
 import Image from "next/image";
 
@@ -14,23 +14,15 @@ export const InfoDrawer: React.FC<InfoDrawerProps> = ({ title, content }) => {
 
   return (
     <Row className="text-center justify-center">
-      <Image onClick={() => setIsOpen(true)} width={18} alt="info" src={info} />
-      <Drawer
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        position="bottom"
-      >
-        <Col className="justify-center items-center gap-5">
-          <TextImage
-            size="large"
-            direction="column"
-            imgSrc={info}
-            imgAlt="info"
-          >
-            <p className="text-2xl font-black">{title}</p>
-            <p className="text-[#B19C80]">{content}</p>
-          </TextImage>
-          <Button isFull onClick={() => setIsOpen(false)}>
+      <button aria-label={`About ${title}`} className="w-6 h-6 rounded-md overflow-hidden active:scale-95 transition-transform" type="button" onClick={() => setIsOpen(true)}>
+        <Image alt="" className="w-full h-full" src={info} />
+      </button>
+      <Drawer isOpen={isOpen} position="bottom" onClose={() => setIsOpen(false)}>
+        <Col className="items-center text-center gap-3 pt-1">
+          <Image alt="" className="w-16 h-16 rounded-xl" src={info} />
+          <p className="title-screen">{title}</p>
+          <p className="text-sub text-[15px] leading-snug max-w-[320px]">{content}</p>
+          <Button isFull size="large" onClick={() => setIsOpen(false)}>
             Got it
           </Button>
         </Col>

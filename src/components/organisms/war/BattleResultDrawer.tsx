@@ -19,11 +19,11 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
   return (
     <div className="flex flex-col gap-3">
       <div className="text-center">
-        <div className="text-5xl"><GameIcon e={won ? "🏆" : "💀"} /></div>
-        <div className={won ? "text-2xl font-black text-good" : "text-2xl font-black text-[#F08A6C]"}>
+        <div className="text-[56px] leading-none drop-shadow-[0_6px_14px_rgba(0,0,0,0.6)]"><GameIcon e={won ? "🏆" : "💀"} /></div>
+        <div className={won ? "font-display text-[26px] font-black text-good mt-1" : "font-display text-[26px] font-black text-bad mt-1"}>
           {won ? "Victory!" : "Defeat"}
         </div>
-        <div className="text-sm text-[#B19C80]">
+        <div className="text-sm text-muted">
           {report.attackerName} <GameIcon e="⚔️" /> {report.defenderName}
         </div>
         {report.battleMs != null && report.rounds?.length ? (
@@ -32,56 +32,56 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
           </div>
         ) : null}
       </div>
-      <div className="grid grid-cols-3 text-center bg-[#1E1610] rounded p-2 text-sm">
+      <div className="inset grid grid-cols-3 divide-x divide-line/50 text-center py-2 text-sm">
         <div>
-          <div className="text-[10px] text-[#B19C80]">ATTACK</div>
+          <div className="label !text-micro">ATTACK</div>
           <b>{fmt(report.attack)}</b>
         </div>
         <div>
-          <div className="text-[10px] text-[#B19C80]">DEFENSE</div>
+          <div className="label !text-micro">DEFENSE</div>
           <b>{fmt(report.defense)}</b>
         </div>
         <div>
-          <div className="text-[10px] text-[#B19C80]">LUCK</div>
+          <div className="label !text-micro">LUCK</div>
           <b>{report.luck >= 1 ? "+" : ""}{Math.round((report.luck - 1) * 100)}%</b>
         </div>
       </div>
       <div className="text-sm flex flex-col gap-1">
         <div>
-          <span className="text-[#B19C80]">Attackers sent: </span>
+          <span className="text-muted">Attackers sent: </span>
           <ArmyLine army={report.sent} />
         </div>
         <div>
-          <span className="text-[#B19C80]">Attackers lost: </span>
+          <span className="text-muted">Attackers lost: </span>
           <ArmyLine army={report.attackerLosses} />
         </div>
         {armySize(report.attackerHealed) > 0 && (
           <div>
-            <span className="text-[#B19C80]">Saved by hospital: </span>
+            <span className="text-muted">Saved by hospital: </span>
             <ArmyLine army={report.attackerHealed} />
           </div>
         )}
         {armySize(report.defenders) > 0 && (
           <div>
-            <span className="text-[#B19C80]">Defenders lost: </span>
+            <span className="text-muted">Defenders lost: </span>
             <ArmyLine army={report.defenderLosses} />
           </div>
         )}
       </div>
       {xp && armySize(xp) > 0 && (
         <div className="text-sm">
-          <span className="text-[#B19C80]">Experience: </span>
-          <ArmyLine army={xp} /> <span className="text-[#B19C80]">XP</span>
+          <span className="text-muted">Experience: </span>
+          <ArmyLine army={xp} /> <span className="text-muted">XP</span>
         </div>
       )}
       {promoted.map((p) => (
-        <div key={p.unit} className="text-center font-bold text-[#E3A948]">
+        <div key={p.unit} className="text-center font-bold text-gold">
           <GameIcon e="🎖️" /> {UNIT_BY_ID[p.unit].name}s promoted to {RANKS[p.rank].name}!
         </div>
       ))}
       {lootTotal > 0 || report.coins > 0 ? (
-        <div className="bg-[#1E1610] rounded p-2">
-          <div className="text-[10px] text-[#B19C80] mb-1">{asDefender ? "STOLEN FROM YOU" : "LOOT"}</div>
+        <div className="inset p-2.5">
+          <div className="label !text-micro mb-1">{asDefender ? "Stolen from you" : "Loot"}</div>
           <div className="flex flex-wrap gap-x-3 text-sm">
             {RESOURCES.map((r) => (
               <span key={r.id} className="flex items-center gap-1">
@@ -107,7 +107,7 @@ export const BattleResultDrawer = ({ report, onClose }: { report: BattleReport |
         <div className="flex flex-col gap-3">
           <BattleSummary report={report} />
           {home && (
-            <p className="text-center text-sm text-[#B19C80]">
+            <p className="text-center text-sm text-muted">
               Your army returns in {formatDuration(report.returnsAt - now)}
               {report.attackerWon ? " with the loot" : ""}.
             </p>

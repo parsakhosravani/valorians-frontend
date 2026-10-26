@@ -9,8 +9,10 @@ interface ButtonProps {
   disabled?: boolean;
   isFull?: boolean;
   className?: string;
+  type?: "button" | "submit";
 }
 
+/** The game's button, on the v2 .btn classes (gold = primary action, wood = secondary). */
 export const Button: React.FC<ButtonProps> = ({
   onClick,
   children,
@@ -19,28 +21,26 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   isFull = false,
   className,
-}) => {
-  return (
-    <button
-      className={clsx(
-        "rounded-[10px] font-extrabold transition-transform active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-goldtext",
-        {
-          "bg-gold text-[#1A120B] font-display": variant === "primary",
-          "bg-panel2 text-parch border border-line": variant === "secondary",
-          "bg-transparent border border-gold text-goldtext": variant === "outline",
-          "bg-ember text-[#FFF4EA] font-display": variant === "danger",
-          "h-8 px-3 text-sm": size === "small",
-          "h-10 px-4 text-[15px]": size === "medium",
-          "h-12 px-6 text-base": size === "large",
-          "w-full": isFull,
-          "!bg-panel2 !text-muted border border-line cursor-not-allowed active:scale-100": disabled,
-        },
-        className
-      )}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-};
+  type = "button",
+}) => (
+  <button
+    className={clsx(
+      "btn",
+      {
+        "btn-gold": variant === "primary",
+        "btn-wood": variant === "secondary",
+        "btn-ghost": variant === "outline",
+        "btn-ember": variant === "danger",
+        "btn-sm": size === "small",
+        "btn-lg": size === "large",
+        "w-full": isFull,
+      },
+      className,
+    )}
+    disabled={disabled}
+    type={type}
+    onClick={onClick}
+  >
+    {children}
+  </button>
+);

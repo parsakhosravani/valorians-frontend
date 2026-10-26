@@ -105,7 +105,7 @@ export const BattleToken = ({
       <span
         className={clsx(
           "mt-1.5 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
-          incoming ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]" : "bg-[#1E1610]/95 text-goldtext border-line",
+          incoming ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]" : "bg-panel/95 text-goldtext border-line",
         )}
       >
         Round {Math.min(b.totalRounds, b.rounds.length + 1)}/{b.totalRounds} · {formatDuration(b.endsAt - now)}
@@ -145,7 +145,7 @@ export const BattleRow = ({ m, now, onWatch }: { m: BattleMovement; now: number;
         {formatDuration(b.endsAt - now)}
       </span>
       <button
-        className="shrink-0 h-8 px-2.5 rounded-lg bg-panel2 border border-line text-xs font-bold"
+        className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs"
         onClick={onWatch}
       >
         Watch
@@ -160,7 +160,7 @@ const StrengthBar = ({ label, left, color }: { label: string; left: number; colo
       <span className="font-bold truncate"><IconText text={label} /></span>
       <span className="text-muted tabular-nums">{Math.round(left * 100)}%</span>
     </div>
-    <div className="h-2.5 rounded-full bg-[#120D09] overflow-hidden border border-line">
+    <div className="h-2.5 rounded-full bg-ground overflow-hidden border border-line">
       <div
         className="h-full rounded-full transition-[width] duration-700 ease-out"
         style={{ width: `${left * 100}%`, background: color }}
@@ -204,13 +204,13 @@ export const LiveBattleDrawer = ({
               </span>
               <span className="text-goldtext">Result in {formatDuration(b.endsAt - now)}</span>
             </div>
-            <div className="h-1.5 rounded-full bg-[#120D09] overflow-hidden">
+            <div className="h-1.5 rounded-full bg-ground overflow-hidden">
               <div className="h-full bg-gold transition-[width] duration-1000 ease-linear" style={{ width: `${done * 100}%` }} />
             </div>
           </div>
 
           {/* Strength */}
-          <div className="bg-[#1E1610] rounded-xl p-2.5 flex flex-col gap-2">
+          <div className="inset p-2.5 flex flex-col gap-2">
             <StrengthBar color="#F2C66D" label={`⚔️ ${names.attacker}`} left={last?.attackLeft ?? 1} />
             <StrengthBar color="#F06A44" label={`🛡️ ${names.defender}`} left={last?.defenseLeft ?? 1} />
           </div>
@@ -245,7 +245,7 @@ export const LiveBattleDrawer = ({
               const prev = b.rounds[r.n - 2] ?? null;
 
               return (
-                <div key={r.n} className="rounded-lg bg-[#1E1610] px-2.5 py-1.5 text-xs flex flex-col gap-0.5">
+                <div key={r.n} className="inset rounded-lg px-2.5 py-1.5 text-xs flex flex-col gap-0.5">
                   <span className="font-bold text-goldtext">Round {r.n}</span>
                   <span>
                     <span className="text-muted">{names.attacker} lost </span>
