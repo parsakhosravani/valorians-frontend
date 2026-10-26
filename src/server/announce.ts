@@ -15,13 +15,71 @@ import { appUrl, tg } from "./bot";
  * each announcement; players who blocked the bot are skipped from then on.
  */
 
-export const adminIds = () =>
-  (process.env.BOT_ADMIN_IDS || "")
+const parseIds = (s: string) =>
+  s
     .split(/[\s,]+/)
     .map(Number)
     .filter((n) => Number.isInteger(n) && n > 0);
 
-export const isAdmin = (id: number) => adminIds().includes(id);
+/** Admins: BOT_ADMIN_IDS, plus anyone who opened the secret admin link. */
+export async function adminIds() {
+  const db = await getDb();
+  const rs = await db.execute("SELECT value FROM meta WHERE key = 'admin_ids'");
+
+  return Array.from(new Set([...parseIds(process.env.BOT_ADMIN_IDS || ""), ...parseIds(String(rs.rows[0]?.value ?? ""))]));
+}
+
+export const isAdmin = async (id: number) => (await adminIds()).includes(id);
+
+/**
+ * The secret admin link: t.me/<bot>?start=admin_<BOT_ADMIN_CODE>. Opening it
+ * makes that Telegram account an admin (no need to look up your user id), then
+ * sends a test announcement of the version that's live right now.
+ */
+export async function claimAdmin(chatId: number, userId: number, payload: string) {
+  const code = process.env.BOT_ADMIN_CODE || "";
+
+  if (code.length < 16 || payload !== `admin_${code}`) return false;
+  const db = await getDb();
+  const ids = await adminIds();
+
+  if (!ids.includes(userId)) {
+    const stored = parseIds(String((await db.execute("SELECT value FROM meta WHERE key = 'admin_ids'")).rows[0]?.value ?? ""));
+
+    await db.execute({
+      sql: "INSERT INTO meta (key, value) VALUES ('admin_ids', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      args: [[...stored, userId].join(",")],
+    });
+  }
+  await tg("setMyCommands", {
+    scope: { type: "chat", chat_id: userId },
+    commands: [
+      { command: "announce", description: "📢 Send an update announcement" },
+      { command: "cancel", description: "✖️ Cancel the announcement" },
+      { command: "start", description: "⚔️ Begin your legend" },
+      { command: "tribe", description: "🏰 Your tribe at a glance" },
+      { command: "top", description: "🏆 Top chiefs" },
+      { command: "clan", description: "🛡️ Your clan" },
+      { command: "news", description: "🔔 Update news on/off" },
+    ],
+  });
+  await say(
+    chatId,
+    `👑 <b>You're an admin of Valorians Legend.</b>\n\n` +
+      `After every merged pull request goes live, I'll send you a draft update announcement to approve.\n\n` +
+      `Here's a test with the version that's live now. Tap <b>🧪 Send to me only</b> to see exactly what players get. ` +
+      `<b>Send to players</b> sends it for real.\n\nYou can also write one any time with /announce.`
+  );
+  // The test: draft the live version for this admin (and claim it, if nobody has yet).
+  if (!(await checkRelease())) {
+    const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+
+    if (sha) await draftRelease([userId], sha, await notesFor(sha));
+    else await say(chatId, `⚠️ I can't tell which version is live (VERCEL_GIT_COMMIT_SHA is missing).`);
+  }
+
+  return true;
+}
 
 const channelId = () => process.env.TELEGRAM_CHANNEL_ID || "";
 
@@ -72,7 +130,7 @@ const say = (chatId: number, text: string, rows?: object[][]) =>
 
 /** /announce: wait for the admin's next message, which becomes the post. */
 export async function startAnnounce(chatId: number, adminId: number) {
-  if (!isAdmin(adminId)) return false;
+  if (!(await isAdmin(adminId))) return false;
   const db = await getDb();
 
   await db.execute({
@@ -94,7 +152,7 @@ export async function startAnnounce(chatId: number, adminId: number) {
 }
 
 export async function cancelAnnounce(chatId: number, adminId: number) {
-  if (!isAdmin(adminId)) return false;
+  if (!(await isAdmin(adminId))) return false;
   const db = await getDb();
   const rs = await db.execute({
     sql: "UPDATE announcements SET status = 'cancelled' WHERE admin_id = ? AND status IN ('awaiting', 'draft')",
@@ -111,7 +169,7 @@ export async function cancelAnnounce(chatId: number, adminId: number) {
  * shows the preview. Returns true when the message was used.
  */
 export async function takeAdminPost(m: { chat: { id: number }; from?: { id: number }; message_id: number; text?: string }) {
-  if (!m.from || !isAdmin(m.from.id) || m.text?.startsWith("/")) return false;
+  if (!m.from || m.text?.startsWith("/") || !(await isAdmin(m.from.id))) return false;
   const db = await getDb();
   const rs = await db.execute({
     sql: "SELECT id FROM announcements WHERE admin_id = ? AND status = 'awaiting' ORDER BY id DESC LIMIT 1",
@@ -149,15 +207,16 @@ async function controls(id: number, rewrite = false) {
   const rows: object[][] = [[{ text: `📨 Send to ${fmt(await audience())} players`, callback_data: `ann:send:${id}` }]];
 
   if (channelId()) rows.push([{ text: "📨 Players + news channel", callback_data: `ann:both:${id}` }]);
+  rows.push([{ text: "🧪 Send to me only", callback_data: `ann:test:${id}` }]);
   if (rewrite) rows.push([{ text: "✏️ Write my own", callback_data: `ann:edit:${id}` }]);
   rows.push([{ text: "✖️ Cancel", callback_data: `ann:cancel:${id}` }]);
 
   return rows;
 }
 
-/** Buttons on the preview: ann:send|both|edit|cancel:<id>. */
+/** Buttons on the preview: ann:send|both|test|edit|cancel:<id>. */
 export async function announceButton(data: string, adminId: number, chatId: number) {
-  if (!isAdmin(adminId)) return;
+  if (!(await isAdmin(adminId))) return;
   const [, action, raw] = data.split(":");
   const id = Number(raw);
   const db = await getDb();
@@ -168,6 +227,23 @@ export async function announceButton(data: string, adminId: number, chatId: numb
       args: [id],
     });
     await say(chatId, "✖️ Announcement cancelled.");
+
+    return;
+  }
+  if (action === "test") {
+    // Exactly what a player gets, to this admin only; the draft stays open.
+    const row = (await db.execute({ sql: "SELECT source_chat, source_msg FROM announcements WHERE id = ?", args: [id] }))
+      .rows[0];
+
+    if (row) {
+      await tg("copyMessage", {
+        chat_id: chatId,
+        from_chat_id: Number(row.source_chat),
+        message_id: Number(row.source_msg),
+        reply_markup: playerMarkup(),
+      });
+      await say(chatId, `🧪 That's what players will see. Send it to them?`, await controls(id, true));
+    }
 
     return;
   }
@@ -293,8 +369,9 @@ export async function maybeCheckRelease() {
 
 export async function checkRelease() {
   const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+  const admins = await adminIds();
 
-  if (!sha || !adminIds().length) return null;
+  if (!sha || !admins.length) return null;
   const db = await getDb();
 
   await db.execute({ sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('release_sha', '')", args: [] });
@@ -308,29 +385,43 @@ export async function checkRelease() {
   });
 
   if (!claim.rowsAffected || !repo()) return null;
-  let changes: string[] = [];
+  const changes = await notesFor(sha, last);
 
+  await draftRelease(admins, sha, changes);
+
+  return { release: sha.slice(0, 7), changes: changes.length };
+}
+
+/** What changed since `last` (or, the first time, in this version alone). */
+async function notesFor(sha: string, last = "") {
+  if (!repo()) return [];
   try {
-    // First time: just this version's own changes, not the whole history.
-    changes = await changesBetween(last || (await parentOf(sha)), sha);
+    return await changesBetween(last || (await parentOf(sha)), sha);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error("release notes failed", e);
+
+    return [];
   }
+}
+
+/** Sends each admin the drafted announcement for `sha` with the approve buttons. */
+async function draftRelease(admins: number[], sha: string, changes: string[]) {
+  const db = await getDb();
   const short = sha.slice(0, 7);
   const post =
     `🆕 <b>Valorians Legend has been updated!</b>\n\n` +
     (changes.length ? changes.map((c) => `• ${esc(c)}`).join("\n") + "\n\n" : "") +
     `Tap <b>Play now</b> to see what's new, chief! ⚔️`;
 
-  for (const admin of adminIds()) {
+  for (const admin of admins) {
     await db.execute({
       sql: "UPDATE announcements SET status = 'cancelled' WHERE admin_id = ? AND status IN ('awaiting', 'draft')",
       args: [admin],
     });
     await say(
       admin,
-      `🚀 <b>New version deployed</b> (<code>${short}</code>)\n\n` +
+      `🚀 <b>New version live</b> (<code>${short}</code>)\n\n` +
         (changes.length
           ? `Here's a draft announcement from what changed. Want to change it? Tap <b>Write my own</b>.`
           : `I couldn't read what changed, so here's a short draft. Tap <b>Write my own</b> to say more.`)
@@ -350,12 +441,9 @@ export async function checkRelease() {
             VALUES (?, ?, ?, 'draft', ?, ?) RETURNING id`,
       args: [admin, admin, draft.result.message_id, sha, Date.now()],
     });
-    const id = Number(row.rows[0].id);
 
-    await say(admin, `Send it to players?`, await controls(id, true));
+    await say(admin, `Send it to players?`, await controls(Number(row.rows[0].id), true));
   }
-
-  return { release: short, changes: changes.length };
 }
 
 // ─── Players ─────────────────────────────────────────────────────────────────

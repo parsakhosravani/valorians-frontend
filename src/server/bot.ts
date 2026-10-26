@@ -2,7 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 
-import { adminIds, announceButton, cancelAnnounce, markReachable, newsIsOn, setNews, startAnnounce, takeAdminPost } from "./announce";
+import { adminIds, announceButton, cancelAnnounce, claimAdmin, markReachable, newsIsOn, setNews, startAnnounce, takeAdminPost } from "./announce";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { displayName } from "./war";
@@ -266,7 +266,13 @@ export async function handleUpdate(u: Update) {
   const [cmd] = m.text.trim().split(/\s+/);
   const name = cmd.replace(/^\//, "").replace(/@.*$/, "").toLowerCase();
 
-  if (name === "start") return welcome(m.chat.id, m.from.first_name ?? "");
+  if (name === "start") {
+    const payload = m.text.trim().split(/\s+/)[1] ?? "";
+
+    if (payload.startsWith("admin_") && (await claimAdmin(m.chat.id, m.from.id, payload))) return;
+
+    return welcome(m.chat.id, m.from.first_name ?? "");
+  }
   if (name === "announce" && (await startAnnounce(m.chat.id, m.from.id))) return;
   if (name === "cancel" && (await cancelAnnounce(m.chat.id, m.from.id))) return;
   if (name === "news") return toggleNews(m.chat.id, m.from.id);
@@ -344,7 +350,7 @@ export async function setupBot() {
     ],
   });
   // Admins also see /announce in their own command menu.
-  for (const id of adminIds()) {
+  for (const id of await adminIds()) {
     await run("setMyCommands", {
       scope: { type: "chat", chat_id: id },
       commands: [
