@@ -71,6 +71,9 @@ export const SendArmyDrawer = ({
   const { telegram } = useTelegramContext();
   const [units, setUnits] = useState<Army>(emptyArmy());
   const [busy, setBusy] = useState(false);
+  // The quick pick last tapped. Small armies round several picks to the same troops,
+  // so matching by army alone would light up more than one button.
+  const [picked, setPicked] = useState<number | null>(null);
 
   const terrain = target?.terrain ?? "plains";
   const route = target ? marchRoute(target.from, target.at) : null;
@@ -93,7 +96,11 @@ export const SendArmyDrawer = ({
   // Open at half the army (never everything, so home stays defended), or at
   // "enough" when half wouldn't win. Sending more also brings back more loot.
   useEffect(() => {
-    if (target) setUnits(scaled(state.army, Math.max(0.5, enough ?? 0)));
+    if (target) {
+      const f = Math.max(0.5, enough ?? 0);
+      setUnits(scaled(state.army, f));
+      setPicked(f);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.title]);
 
@@ -166,7 +173,9 @@ export const SendArmyDrawer = ({
           <div className="flex items-center gap-1 bg-panel border border-line rounded-xl p-1">
             {presets.map((p) => {
               // An empty pick matches every preset when nobody is home, so only a real selection counts.
-              const active = size > 0 && sameArmy(units, scaled(state.army, p.f));
+              // Only the tapped pick lights up, and only while the sliders still match it.
+              const active =
+                size > 0 && picked != null && Math.abs(picked - p.f) < 0.01 && sameArmy(units, scaled(state.army, p.f));
               const disabled = home.length === 0;
 
               return (
@@ -178,7 +187,10 @@ export const SendArmyDrawer = ({
                     active ? "bg-gold text-[#1A120B]" : "text-muted",
                     p.label === "Enough" && !active && "text-good"
                   )}
-                  onClick={() => setUnits(scaled(state.army, p.f))}
+                  onClick={() => {
+                    setUnits(scaled(state.army, p.f));
+                    setPicked(p.f);
+                  }}
                 >
                   {p.label === "Enough" ? `✓ Enough` : p.label}
                 </button>
