@@ -13,7 +13,6 @@ import {
   MAX_BATCH,
   MAX_CAMP_LEVEL,
   MAX_LOOT_SHARE,
-  MAX_TRAIN_BATCHES,
   RAIDED_SHIELD_MS,
   RAID_TRAVEL_SECONDS,
   RESOURCE_IDS,
@@ -40,6 +39,7 @@ import {
   cloneState,
   emptyArmy,
   getRates,
+  maxTrainBatches,
   totalArmy,
   trainingEndsAt,
   rankForXp,
@@ -75,7 +75,7 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
     const b = BUILDINGS.find((x) => x.id === def.requires.building)!;
     throw new GameError(`Needs ${b.name} level ${def.requires.level}`, "locked");
   }
-  if (s0.training.length >= MAX_TRAIN_BATCHES) throw new GameError("Training queue is full", "queue_full");
+  if (s0.training.length >= maxTrainBatches(s0)) throw new GameError("Training queue is full", "queue_full");
 
   const s = cloneState(s0);
   for (const r of RESOURCE_IDS) {

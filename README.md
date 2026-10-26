@@ -53,6 +53,20 @@ Sending runs at ~25 messages a second: a first batch right away, the rest from t
 
 **After each deploy** the bot notices the new version (Vercel's `VERCEL_GIT_COMMIT_SHA`) right after the deploy finishes and **announces it to every player automatically**, listing the pull requests merged since the last version (their titles are the bullet points, so write them for players). Admins get a note when it goes out and when it's delivered; the news channel gets it too when `TELEGRAM_CHANNEL_ID` is set. A deploy whose changes can't be read is skipped. Set `RELEASE_ANNOUNCE=draft` to approve each one from the bot instead (Send / Send to me only / Write my own / Cancel), or `off` to stop them.
 
+### Valorians Plus
+
+A monthly subscription paid in **Telegram Stars**, the only way Telegram allows Mini Apps to sell digital goods. It sells convenience, never power:
+
+- **+1 builder** (one more building under construction at a time)
+- **+2 training slots** in the barracks queue
+- **👑 the Plus crown** next to the player's name and on the leaderboard
+
+Every player can take a **3-day free trial** once. The price is `PLUS_PRICE_STARS` (default 150 Stars); perks and trial length live in `PLUS` in `config.ts`.
+
+How a payment flows: the app asks `/api/plus/invoice` for a subscription invoice link (`createInvoiceLink` with a 30-day `subscription_period`) and opens it with `Telegram.WebApp.openInvoice`. Telegram sends the bot a `pre_checkout_query`, which `src/server/plus.ts` checks and approves, then a `successful_payment` message on the first payment and on every monthly renewal. Each payment is stored in the `payments` table by its charge id, so a repeated update never counts twice, and Plus runs until the renewal date Telegram reports. Players cancel from Telegram (Settings → My Stars); Plus then runs out at the end of the paid month. A refund (`refundStarPayment`) ends Plus right away. The bot also has a `/plus` command.
+
+The webhook must receive `pre_checkout_query` updates. The cron re-runs the bot setup by itself when the webhook is missing them, so existing deploys pick this up within minutes; you can also open `/api/bot/setup` once.
+
 ### API
 
 All routes need the `Authorization` header and return `{ serverTime, me, state }` unless noted.
@@ -77,6 +91,8 @@ All routes need the `Authorization` header and return `{ serverTime, me, state }
 | POST | `/api/war/camp` | `{ level, units }` — also returns `report` |
 | GET | `/api/war/reports` | — your last 30 battles |
 | GET | `/api/leaderboard?by=population\|power\|wins` | — top 50 and your rank |
+| POST | `/api/plus/trial` | — starts the one free Plus trial |
+| POST | `/api/plus/invoice` | — returns `{ link }`, a Stars subscription invoice for Plus |
 
 Errors come back as `{ error, code }` with status 400 (game rule) or 401 (sign-in).
 

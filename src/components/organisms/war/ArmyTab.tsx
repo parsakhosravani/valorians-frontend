@@ -8,7 +8,7 @@ import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
 import { Button } from "@/components";
 import { RESOURCES, useGame } from "@/context";
 import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef } from "@/lib/game/config";
-import { TrainItem, trainingEndsAt } from "@/lib/game/engine";
+import { TrainItem, maxTrainBatches, trainingEndsAt } from "@/lib/game/engine";
 import {
   attackPower,
   defensePower,
@@ -273,7 +273,12 @@ export const ArmyTab = () => {
 
       {state.training.length > 0 && (
         <Card className="flex flex-col gap-2">
-          <h3 className="font-bold text-sm">Training</h3>
+          <h3 className="font-bold text-sm">
+            Training{" "}
+            <span className="text-[#B19C80] font-bold text-xs">
+              · {state.training.length} of {maxTrainBatches(state)} slots
+            </span>
+          </h3>
           {state.training.map((t) => (
             <TrainingRow key={t.startsAt} item={t} />
           ))}

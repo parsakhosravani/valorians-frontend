@@ -12,7 +12,7 @@ import { apiRequest } from "@/lib/api";
 import useBackButton from "@/hooks/useBackButton";
 
 type Metric = "population" | "power" | "wins";
-type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean };
+type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean; plus?: boolean };
 type Data = { metric: Metric; me: { rank: number; value: number }; top: Row[] };
 
 const LABEL: Record<Metric, string> = { population: "👥", power: "💪", wins: "🏆" };
@@ -69,6 +69,7 @@ export const Leaderboard = () => {
               <Avatar className="rounded" size={32} src={r.photoUrl} />
               <span className="flex-1 truncate font-bold">
                 {r.name}
+                {r.plus && <span aria-label="Plus" className="ml-1" title="Valorians Plus">👑</span>}
                 {r.isMe && " (you)"}
               </span>
               <span className="font-bold">

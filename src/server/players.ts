@@ -9,6 +9,7 @@ import type { AuthResult, TelegramAuthUser } from "./auth";
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 import { storedFlag } from "@/lib/game/clan";
+import { plusPrice } from "./plus";
 
 /** Columns copied out of the state so they can be sorted and filtered in SQL. */
 const stateColumns = (s: GameState) => [
@@ -16,6 +17,7 @@ const stateColumns = (s: GameState) => [
   powerScore(s),
   s.war.attacksWon + s.war.defensesWon,
   s.shieldUntil,
+  s.plus?.until ?? 0,
 ];
 
 export type Player = {
@@ -119,9 +121,9 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
   for (let attempt = 0; attempt < 5; attempt++) {
     const insert: InStatement = {
       sql: `INSERT INTO users (username, first_name, last_name, photo_url, language_code, is_premium,
-              id, referral_code, population, power, wins, shield_until, state, version,
+              id, referral_code, population, power, wins, shield_until, plus_until, state, version,
               created_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       args: [
         ...profileArgs(auth.user),
         auth.user.id,
@@ -163,7 +165,7 @@ export async function mutatePlayer(
     const next = fn(advance(player.state, now));
     const rs = await db.execute({
       sql: `UPDATE users SET state = ?, population = ?, power = ?, wins = ?, shield_until = ?,
-              version = version + 1 WHERE id = ? AND version = ?`,
+              plus_until = ?, version = version + 1 WHERE id = ? AND version = ?`,
       args: [JSON.stringify(next), ...stateColumns(next), id, player.version],
     });
     if (rs.rowsAffected === 1) return { ...player, version: player.version + 1, state: next };
@@ -226,6 +228,8 @@ export async function playerView(p: Player, now: number) {
       rank: await rankOf(p.state.population),
       /** Shown as a badge on the header's Trade button. */
       activeTrades: await activeTrades(p.id),
+      /** Monthly Valorians Plus price in Telegram Stars. */
+      plusPrice: plusPrice(),
     },
     state: p.state,
   };

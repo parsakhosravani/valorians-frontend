@@ -118,6 +118,12 @@ interface GameContextType {
     upgradeTech: (tech: TechId) => Promise<boolean>;
     aid: (id: number, key: TreasuryKey, amount: number) => Promise<boolean>;
   };
+  /** Valorians Plus: the one free trial, or a monthly Telegram Stars subscription. */
+  plus: {
+    trial: () => Promise<boolean>;
+    /** Opens Telegram's payment sheet; resolves true once the payment went through. */
+    subscribe: () => Promise<boolean>;
+  };
   authHeader: string | null;
 }
 
@@ -425,6 +431,47 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       donate: (key, amount) => act("clan/donate", { key, amount }, "Donated to the treasury"),
       upgradeTech: (tech) => act("clan/tech", { tech }, "Clan tech raised!"),
       aid: (id, key, amount) => act("clan/aid", { id, key, amount }, "Aid sent"),
+    },
+    plus: {
+      trial: () => act("plus/trial", {}, "👑 Plus is on! Enjoy your free days"),
+      subscribe: async () => {
+        if (!authHeader) return false;
+        const webApp = (window as any).Telegram?.WebApp;
+
+        if (!webApp?.openInvoice) {
+          showError(new Error("Open the game inside Telegram to pay with Stars"));
+
+          return false;
+        }
+        let link: string;
+
+        try {
+          link = (await apiRequest<{ link: string }>(authHeader, "plus/invoice", {})).link;
+        } catch (e) {
+          showError(e);
+
+          return false;
+        }
+        const status = await new Promise<string>((resolve) => webApp.openInvoice(link, resolve));
+
+        if (status === "failed") showError(new Error("The payment didn't go through"));
+        if (status !== "paid") return false;
+        webApp.HapticFeedback?.notificationOccurred("success");
+        toast.dismiss();
+        toast.success("👑 Welcome to Valorians Plus!");
+        // Telegram tells the server a moment after the sheet closes; wait for it.
+        for (let i = 0; i < 10; i++) {
+          try {
+            const res = await apiRequest<PlayerView>(authHeader, "me");
+
+            accept(res);
+            if (res.state.plus.until > res.serverTime) break;
+          } catch {}
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+
+        return true;
+      },
     },
     authHeader,
   };
