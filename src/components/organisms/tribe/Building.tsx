@@ -4,10 +4,10 @@ import Image from "next/image";
 import clsx from "clsx";
 
 import time from "~/images/resources/time.webp";
+import { SectionTitle } from "@/components/atoms/Ui";
 import population from "~/images/resources/population.webp";
 
-import { TextImage } from "@/components/molecules";
-import { Button, Chip, Col, Row, Text } from "@/components";
+import { Button, Chip } from "@/components";
 import { RESOURCES, useGame } from "@/context";
 import {
   BuildingDef,
@@ -45,86 +45,70 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
   else if (!freeBuilder) [label, disabled] = ["No free builder", true];
   else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name).join(", ")}`, true];
 
+  const progress = inQueue ? Math.min(1, (now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) : 0;
+
   return (
-    <Col className="bg-buildingBg rounded-2xl border border-line p-3">
-      <Row className="relative gap-3">
-        <Row className="-top-1.5 -left-1.5 absolute z-[1]">
-          <Chip color="primary" label={String(level)} />
-        </Row>
+    <div className="flex flex-col gap-3 pt-1">
+      {/* Art and name */}
+      <div className="relative flex flex-col items-center text-center gap-1">
+        <span aria-hidden className="absolute top-2 w-44 h-28 rounded-full bg-gold/15 blur-2xl" />
         <Image
           alt={building.name}
-          className="h-[96px] w-[96px] object-contain shrink-0 bg-panel2 rounded-xl"
-          height={110}
+          className="relative h-[132px] w-[132px] object-contain drop-shadow-[0_8px_10px_rgba(0,0,0,0.6)]"
+          height={264}
           src={buildingImage(building)}
-          width={110}
+          width={264}
         />
-        <Col className="justify-center gap-2 flex-1 min-w-0">
-          <Row className="justify-between items-center gap-2">
-            <h2 className="font-display text-[17px] font-bold leading-tight">{building.name}</h2>
-            {!info.maxed && !inQueue && (
-              <TextImage imgAlt="time cost" imgSrc={time} size="small" title={formatDuration(info.seconds * 1000)} />
-            )}
-          </Row>
-          <Text color="gray" size="small">
-            {building.description}
-          </Text>
-
-          {inQueue ? (
-            <Col className="gap-1">
-              <Text size="small">
-                Upgrading to level {inQueue.toLevel} · {formatDuration(inQueue.endsAt - now)} left
-              </Text>
-              <div className="h-2 w-full bg-panel2 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-gold to-ember rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(100, ((now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) * 100)}%`,
-                  }}
-                />
-              </div>
-            </Col>
-          ) : (
-            !info.maxed && (
-              <Col className="gap-1">
-                <Text color="gray" size="tiny">
-                  Upgrade cost (level {info.from} → {info.from + 1})
-                </Text>
-                <Row className="flex-wrap gap-x-2 gap-y-1">
-                  {RESOURCES.map((r) => (
-                    <span
-                      key={r.id}
-                      className={clsx(state.resources[r.id] < info.cost && "text-[#F08A6C]")}
-                    >
-                      <TextImage imgAlt={r.name} imgSrc={r.img} size="small" title={compact(info.cost)} />
-                    </span>
-                  ))}
-                  <TextImage
-                    imgAlt="population growth"
-                    imgSrc={population}
-                    size="small"
-                    title={`+${GROWTH_PER_BUILDING_LEVEL}/h`}
-                  />
-                  <span className="text-[#F08A6C]">
-                    <TextImage
-                      imgAlt="crop upkeep"
-                      imgSrc={RESOURCES[3].img}
-                      size="small"
-                      title={`-${CROP_UPKEEP_PER_BUILDING_LEVEL}/h`}
-                    />
-                  </span>
-                </Row>
-              </Col>
-            )
-          )}
-        </Col>
-      </Row>
-      {!inQueue && (
-        <div className="mt-2">
-          <Button isFull disabled={disabled} size="small" onClick={onUpgrade}>
-            {label}
-          </Button>
+        <div className="relative flex items-center gap-2">
+          <Chip color="primary" label={String(level)} />
+          <h2 className="title-screen !text-[21px]">{building.name}</h2>
         </div>
+        <p className="relative text-[13px] text-sub leading-snug max-w-[300px]">{building.description}</p>
+      </div>
+
+      {inQueue ? (
+        <div className="inset p-3 flex flex-col gap-2">
+          <div className="flex justify-between text-sm font-bold">
+            <span>Upgrading to level {inQueue.toLevel}</span>
+            <span className="text-goldtext tabular-nums">{formatDuration(inQueue.endsAt - now)}</span>
+          </div>
+          <div className="bar"><span className="bar-fill" style={{ width: `${progress * 100}%` }} /></div>
+        </div>
+      ) : (
+        !info.maxed && (
+          <div className="flex flex-col gap-2">
+            <SectionTitle right={<span className="flex items-center gap-1"><Image alt="" className="w-3.5 h-3.5 rounded-sm" src={time} />{formatDuration(info.seconds * 1000)}</span>}>
+              Level {info.from} → {info.from + 1}
+            </SectionTitle>
+            <div className="inset grid grid-cols-4 divide-x divide-line/50 py-2">
+              {RESOURCES.map((r) => {
+                const short = state.resources[r.id] < info.cost;
+
+                return (
+                  <span key={r.id} className="flex flex-col items-center gap-0.5">
+                    <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
+                    <span className={clsx("text-xs font-extrabold tabular-nums", short ? "text-bad" : "text-parch")}>{compact(info.cost)}</span>
+                  </span>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="pill pill-good">
+                <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={population} />+{GROWTH_PER_BUILDING_LEVEL}/h people
+              </span>
+              <span className="pill pill-bad">
+                <Image alt="" className="w-3.5 h-3.5" src={RESOURCES[3].img} />−{CROP_UPKEEP_PER_BUILDING_LEVEL}/h crop
+              </span>
+            </div>
+          </div>
+        )
       )}
-    </Col>
+
+      {!inQueue && (
+        <Button isFull disabled={disabled} size="large" onClick={onUpgrade}>
+          {label}
+        </Button>
+      )}
+    </div>
   );
 };

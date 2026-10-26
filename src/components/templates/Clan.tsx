@@ -40,8 +40,7 @@ type Member = Mine["members"][number];
 type BrowseTab = "browse" | "found";
 type ClanTab = "members" | "treasury" | "banner" | "chronicle";
 
-const inputCls =
-  "w-full h-10 rounded-lg bg-panel border border-line px-3 font-bold text-parch placeholder:text-muted focus:outline-none focus:border-gold";
+const inputCls = "inset w-full h-10 px-3 text-sm font-bold text-parch placeholder:text-muted/70 outline-none focus:border-gold";
 
 const TREASURY_ICON: Record<TreasuryKey, React.ReactNode> = {
   ...(Object.fromEntries(RESOURCES.map((r) => [r.id, <Image key={r.id} alt={r.name} className="w-4 h-4" src={r.img} />])) as Record<
@@ -57,21 +56,21 @@ const ROLE_ICON: Record<ClanRole, string> = { leader: "👑", officer: "🪓", m
 const ROLE_ORDER: Record<ClanRole, number> = { leader: 0, officer: 1, member: 2 };
 
 const Tag = ({ tag }: { tag: string }) => (
-  <span className="rounded-md bg-gold/15 border border-gold/40 px-1.5 py-0.5 text-[11px] font-extrabold text-goldtext">
+  <span className="pill pill-gold h-5 px-1.5 rounded-md text-[11px]">
     [{tag}]
   </span>
 );
 
 const Stat = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="flex flex-col items-center rounded-xl bg-panel border border-line py-1.5">
+  <div className="inset flex flex-col items-center py-1.5">
     <span className="text-sm font-extrabold text-parch">{value}</span>
-    <span className="text-[10px] font-bold text-muted">{label}</span>
+    <span className="label !text-micro">{label}</span>
   </div>
 );
 
 const SectionTitle = ({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) => (
-  <div className="flex items-center justify-between">
-    <div className="font-display text-parch text-lg font-bold">{children}</div>
+  <div className="flex items-center gap-3">
+    <h2 className="title-section flex-1">{children}</h2>
     {right}
   </div>
 );
@@ -128,7 +127,7 @@ const KeyPicker = ({ value, onChange }: { value: TreasuryKey; onChange: (k: Trea
         key={k}
         className={clsx(
           "flex flex-col items-center gap-0.5 rounded-lg border py-1.5 text-[10px] font-bold",
-          value === k ? "border-gold bg-gold/10 text-goldtext" : "border-line bg-panel text-sub"
+          value === k ? "border-gold bg-gold/10 text-goldtext" : "border-line bg-ink/50 text-sub"
         )}
         type="button"
         onClick={() => onChange(k)}
@@ -154,7 +153,7 @@ const AmountInput = ({ value, onChange, max }: { value: string; onChange: (v: st
       {[0.1, 0.25, 0.5, 1].map((f) => (
         <button
           key={f}
-          className="h-7 rounded-md bg-panel2 border border-line text-[11px] font-bold text-sub"
+          className="btn btn-wood btn-sm h-7 text-[11px] font-sans font-extrabold"
           type="button"
           onClick={() => onChange(String(Math.floor(max * f)))}
         >
@@ -188,7 +187,7 @@ const ClanSkeleton = ({ inClan }: { inClan: boolean }) => (
     )}
     <Bone className="h-11 rounded-xl" />
     {[0, 1, 2, 3].map((i) => (
-      <div key={i} className="flex items-center gap-3 rounded-2xl border border-line bg-buildingBg p-3">
+      <div key={i} className="card flex items-center gap-3 p-3">
         <Bone className={inClan ? "h-9 w-9" : "h-11 w-9"} />
         <div className="flex flex-1 flex-col gap-2">
           <Bone className="h-3.5 w-2/3" />
@@ -345,7 +344,7 @@ export const Clan: FunctionComponent = () => {
         </div>
 
         {confirmTransfer === m.id && (
-          <div className="flex flex-col gap-2 rounded-xl bg-panel border border-line p-2.5">
+          <div className="flex flex-col gap-2 inset p-2.5">
             <p className="text-sm text-parch">
               Hand the clan to {m.name}? You'll become a {ROLE_NAMES.officer}.
             </p>
@@ -369,7 +368,7 @@ export const Clan: FunctionComponent = () => {
           </div>
         )}
 
-        <div className="flex flex-col gap-2 rounded-xl bg-panel border border-line p-2.5">
+        <div className="flex flex-col gap-2 inset p-2.5">
           <span className="text-xs font-bold text-sub"><GameIcon e="📦" /> Send aid from the treasury</span>
           <KeyPicker value={aidKey} onChange={setAidKey} />
           <AmountInput max={mine.treasury[aidKey]} value={aidAmount} onChange={setAidAmount} />
@@ -498,7 +497,7 @@ export const Clan: FunctionComponent = () => {
       <SectionTitle>Treasury</SectionTitle>
       <div className="grid grid-cols-5 gap-1.5">
         {TREASURY_KEYS.map((k) => (
-          <div key={k} className="flex flex-col items-center gap-0.5 rounded-xl bg-panel border border-line py-1.5">
+          <div key={k} className="flex flex-col items-center gap-0.5 inset py-1.5">
             {TREASURY_ICON[k]}
             <span className="text-xs font-extrabold text-parch">{compact(mine.treasury[k])}</span>
           </div>
@@ -644,7 +643,7 @@ export const Clan: FunctionComponent = () => {
                 key={m.id}
                 className={clsx(
                   "flex flex-col items-center rounded-lg border px-1 py-1.5",
-                  mine.joinMode === m.id ? "border-gold bg-gold/10" : "border-line bg-panel"
+                  mine.joinMode === m.id ? "border-gold bg-gold/10" : "border-line bg-ink/50"
                 )}
                 disabled={busy != null}
                 type="button"
@@ -688,7 +687,7 @@ export const Clan: FunctionComponent = () => {
         const { icon, text } = logText(e);
 
         return (
-          <div key={e.id} className="flex items-start gap-2 rounded-xl bg-buildingBg border border-line px-3 py-2">
+          <div key={e.id} className="flex items-start gap-2 card-flat px-3 py-2">
             <span className="text-base leading-5"><GameIcon e={icon} /></span>
             <span className="flex-1 text-sm text-parch leading-5">{text}</span>
             <span className="text-[10px] text-muted whitespace-nowrap leading-5">{ago(now, e.at)}</span>
@@ -731,7 +730,7 @@ export const Clan: FunctionComponent = () => {
   return (
     <>
       <div className="relative flex flex-col w-full px-3 pt-8 pb-28 gap-4">
-        <div className="bg-buildingBg border border-line min-h-[100px] w-full flex rounded-2xl">
+        <div className={clsx("min-h-[104px] w-full flex", mine || badge ? "card" : "card-hero")}>
           {mine || badge ? (
             <div className="w-1/4 flex items-center justify-center py-2 pl-1">
               <ClanFlag
@@ -744,7 +743,7 @@ export const Clan: FunctionComponent = () => {
             <div className="w-2/6 flex flex-col justify-start relative">
               <Image
                 alt=""
-                className="absolute max-w-[130px] max-h-[130px] w-[120%] h-[120%] bottom-0 object-left-bottom object-contain"
+                className="absolute w-full max-w-[124px] h-[135%] bottom-0 left-0 object-left-bottom object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]"
                 src={viking}
               />
             </div>
@@ -754,7 +753,7 @@ export const Clan: FunctionComponent = () => {
               <>
                 <div className="flex items-center gap-2 min-w-0">
                   <Tag tag={badge.tag} />
-                  <span className="font-display text-parch text-lg font-bold truncate">{badge.name}</span>
+                  <span className="title-screen !text-[20px] truncate">{badge.name}</span>
                 </div>
                 {!error && (
                   <>
@@ -767,17 +766,17 @@ export const Clan: FunctionComponent = () => {
               <>
                 <div className="flex items-center gap-2 min-w-0">
                   <Tag tag={mine.tag} />
-                  <span className="font-display text-parch text-lg font-bold truncate">{mine.name}</span>
+                  <span className="title-screen !text-[20px] truncate">{mine.name}</span>
                 </div>
                 <div className="text-[11px] font-bold text-goldtext">
                   Level {mine.level} · {ROLE_ICON[role] && <GameIcon e={ROLE_ICON[role]} />} You are {role === "member" ? "a" : "the"} {ROLE_NAMES[role]}
                 </div>
-                <div className="text-[#D8C9AE] text-xs">{mine.description || "Stand together, raid together, rise together."}</div>
+                <div className="text-sub text-xs">{mine.description || "Stand together, raid together, rise together."}</div>
               </>
             ) : (
               <>
-                <div className="font-display text-parch text-lg font-bold">Join a Clan!</div>
-                <div className="text-[#D8C9AE] text-xs">
+                <h1 className="title-screen">Join a Clan!</h1>
+                <div className="text-sub text-xs">
                   Band together under one banner: share a treasury, raise clan techs, and never raid each other.
                 </div>
               </>
@@ -796,7 +795,7 @@ export const Clan: FunctionComponent = () => {
           </Card>
         )}
         {error && data && (
-          <button className="self-start text-xs font-bold text-[#F08A6C]" type="button" onClick={retry}>
+          <button className="self-start text-xs font-bold text-bad" type="button" onClick={retry}>
             {retrying ? "Reconnecting…" : "⚠️ Offline, showing the last update. Tap to retry"}
           </button>
         )}
@@ -820,7 +819,7 @@ export const Clan: FunctionComponent = () => {
                     key={t.id}
                     className={clsx(
                       "px-2 py-1 rounded-lg border",
-                      lvl ? "bg-[#1C2A14] border-good/60 text-good" : "bg-panel border-line text-muted"
+                      lvl ? "bg-[#1C2A14] border-good/60 text-good" : "bg-ink/50 border-line text-muted"
                     )}
                   >
                     <GameIcon e={t.icon} /> {lvl ? t.effect(lvl) : `${t.name}: none yet`}
@@ -937,7 +936,7 @@ export const Clan: FunctionComponent = () => {
                         key={m.id}
                         className={clsx(
                           "flex flex-col items-center rounded-lg border px-1 py-1.5",
-                          newMode === m.id ? "border-gold bg-gold/10" : "border-line bg-panel"
+                          newMode === m.id ? "border-gold bg-gold/10" : "border-line bg-ink/50"
                         )}
                         type="button"
                         onClick={() => setNewMode(m.id)}
@@ -958,11 +957,11 @@ export const Clan: FunctionComponent = () => {
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </label>
-                <div className="flex items-center justify-between rounded-xl bg-panel border border-line px-3 py-2 text-sm">
+                <div className="flex items-center justify-between inset px-3 py-2 text-sm">
                   <span className="text-sub">Cost</span>
                   <Coin amount={CLAN.createCost} />
                 </div>
-                {foundProblem && <p className="text-xs text-[#F08A6C]">{foundProblem}</p>}
+                {foundProblem && <p className="text-xs text-bad">{foundProblem}</p>}
                 <Button
                   disabled={!!foundProblem || busy != null}
                   isFull

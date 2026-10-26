@@ -175,7 +175,7 @@ export const Village: FunctionComponent<{
 
   return (
     <div
-      className="relative w-full rounded-2xl overflow-hidden border border-line shadow-[inset_0_0_40px_rgba(0,0,0,0.6)]"
+      className="relative isolate w-full rounded-2xl overflow-hidden border border-frame/60 shadow-card"
       style={{ aspectRatio: `100 / ${HEIGHT}` }}
     >
       <Ground />

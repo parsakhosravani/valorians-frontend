@@ -25,7 +25,7 @@ export const Header: React.FC = () => {
 
   return (
     <header
-      className="w-full flex flex-col gap-2 px-3 pb-2 z-20 bg-ground/80 backdrop-blur-sm"
+      className="w-full flex flex-col gap-2 px-3 pb-2 z-20 bg-gradient-to-b from-ink via-ground/95 to-ground/80 backdrop-blur-sm border-b border-line/40"
       // In full-screen Telegram (e.g. iPhones with a Dynamic Island) its Close and ⋯
       // buttons float over the top corners and swallow taps on the avatar and Trade.
       // Telegram reports that area in these CSS variables (0 when not full-screen).
@@ -34,7 +34,7 @@ export const Header: React.FC = () => {
       <div className="flex items-center gap-2">
         <User />
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5 bg-panel border border-line rounded-full pl-1.5 pr-3 h-8">
+        <div className="pill h-8 pl-1.5 pr-3 border-frame/70">
           <Coin amount={Math.floor(state.coins)} />
         </div>
         <Link
@@ -42,8 +42,8 @@ export const Header: React.FC = () => {
           className={clsx(
             "relative h-8 pl-2 pr-2.5 rounded-full border flex items-center gap-1 text-xs font-extrabold [&_img]:w-[20px] [&_img]:h-[20px]",
             onMarket
-              ? "bg-gold border-gold text-[#1A120B]"
-              : "bg-panel border-line text-goldtext",
+              ? "btn-gold"
+              : "pill-gold",
           )}
           href="/market"
         >
@@ -61,7 +61,7 @@ export const Header: React.FC = () => {
       </div>
 
       {showResources && (
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="inset grid grid-cols-4 divide-x divide-line/50 py-1">
           {RESOURCES.map((r) => {
             const full = state.resources[r.id] >= rates.capacity;
             const perHour = rates.productionPerHour[r.id];
@@ -69,9 +69,9 @@ export const Header: React.FC = () => {
             return (
               <div
                 key={r.id}
-                className="bg-panel border border-line rounded-lg py-1 px-1 flex items-center gap-1 justify-center"
+                className="px-1 flex items-center gap-1.5 justify-center"
               >
-                <Image alt={r.name} className="w-4 h-4" src={r.img} />
+                <Image alt={r.name} className="w-5 h-5 object-contain" src={r.img} />
                 <div className="flex flex-col leading-none">
                   <span
                     className={

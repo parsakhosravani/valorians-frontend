@@ -37,7 +37,7 @@ export const Navbar = () => {
   return (
     <nav
       className={clsx(
-        "max-w-md w-full grid grid-cols-5 bg-panel border-t border-line pt-2 fixed bottom-0 z-30",
+        "max-w-md w-full grid grid-cols-5 pt-2 fixed bottom-0 z-30 border-t border-frame/60 shadow-[0_-8px_24px_rgba(0,0,0,0.55)] bg-gradient-to-b from-panel2 to-ink",
         telegram?.WebApp.platform === "ios" ? "pb-6" : "pb-3",
       )}
     >
@@ -48,13 +48,16 @@ export const Navbar = () => {
           <Link
             key={item.name}
             className={clsx(
-              "flex flex-col items-center gap-0.5 text-[11px]",
+              "relative flex flex-col items-center gap-0.5 text-[11px] tracking-wide",
               active
                 ? "text-goldtext font-extrabold [&_img]:scale-110 [&_img]:drop-shadow-[0_0_6px_rgba(227,169,72,0.75)]"
                 : "text-muted font-bold [&_img]:opacity-70 [&_img]:saturate-50",
             )}
             href={item.link}
           >
+            {active && (
+              <span aria-hidden className="absolute -top-2 h-[3px] w-8 rounded-b-full bg-gradient-to-r from-golddeep via-goldhi to-golddeep" />
+            )}
             {item.icon}
             {item.name}
           </Link>

@@ -5,3 +5,4 @@ export * from "./Text";
 export * from "./Row";
 export * from "./Col";
 export * from "./GameIcon";
+export * from "./Ui";

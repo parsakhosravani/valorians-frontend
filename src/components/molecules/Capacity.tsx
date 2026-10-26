@@ -21,7 +21,7 @@ export const Capacity: React.FC<CapacityProps> = ({
 
   return (
     <Row className={`flex gap-1 font-bold ${fontSizeClasses[size]}`}>
-      <p className={clsx(value >= totalValue && "text-[#F08A6C]")}>
+      <p className={clsx(value >= totalValue && "text-bad")}>
         {value < totalValue
           ? value.toLocaleString("en-US")
           : totalValue.toLocaleString("en-US")}

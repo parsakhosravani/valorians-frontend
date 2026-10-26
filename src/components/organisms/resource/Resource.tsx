@@ -27,7 +27,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      className="flex flex-col w-full shadow-xl bg-[#1E1610] rounded p-[3px]"
+      className="flex flex-col w-full shadow-xl bg-panel rounded p-[3px]"
       style={
         isActive
           ? {
@@ -52,7 +52,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
         </Text>
 
         <ProgressBar size="small" totalValue={resourceCapacity} value={count} />
-        <Text className={perHour < 0 ? "!text-[#F08A6C]" : ""} color={isActive ? "dark" : "white"} size="tiny">
+        <Text className={perHour < 0 ? "!text-bad" : ""} color={isActive ? "dark" : "white"} size="tiny">
           {formatPerHour(perHour)}
         </Text>
       </Col>

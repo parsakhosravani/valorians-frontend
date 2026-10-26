@@ -40,7 +40,7 @@ export const PlusDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =
 
       <ul className="flex flex-col gap-2 mt-4">
         {PERKS.map((p) => (
-          <li key={p.title} className="flex items-center gap-3 bg-panel2 border border-line rounded-xl px-3 py-2.5">
+          <li key={p.title} className="flex items-center gap-3 card px-3 py-2.5">
             <span aria-hidden className="text-2xl w-8 text-center">
               <GameIcon e={p.icon} />
             </span>

@@ -8,6 +8,7 @@ import { Drawer } from "@/components";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
+import { EmptyState } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Item = {
@@ -34,25 +35,29 @@ export const ReportsTab = () => {
 
   return (
     <div className="flex flex-col gap-2">
-      {!items && <p className="text-sm text-[#B19C80]">Loading…</p>}
-      {items?.length === 0 && <p className="text-sm text-[#B19C80]">No battles yet.</p>}
+      {!items && <p className="text-sm text-muted text-center py-6">Loading…</p>}
+      {items?.length === 0 && (
+        <EmptyState e="⚔️" title="No battles yet">
+          Raid a barbarian camp or a rival tribe from the map. Every fight is recorded here.
+        </EmptyState>
+      )}
       {items?.map((it) => {
         const loot = RESOURCES.reduce((s, r) => s + (it.report.loot[r.id] ?? 0), 0);
 
         return (
           <button key={it.id} className="text-left" onClick={() => setOpen(it)}>
             <Card className="flex items-center gap-3">
-              <div className="text-2xl"><GameIcon e={it.role === "defender" ? "🛡️" : "⚔️"} /></div>
+              <div className="text-[30px] leading-none"><GameIcon e={it.role === "defender" ? "🛡️" : "⚔️"} /></div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold truncate">
                   {it.role === "attacker" ? `You attacked ${it.opponent}` : `${it.opponent} attacked you`}
                 </div>
-                <div className="text-xs text-[#B19C80]">
+                <div className="text-xs text-muted">
                   {formatDuration(now - it.at)} ago
                   {loot > 0 && ` · ${it.role === "attacker" ? "+" : "−"}${fmt(loot)} resources`}
                 </div>
               </div>
-              <span className={it.won ? "text-good font-bold text-sm" : "text-[#F08A6C] font-bold text-sm"}>
+              <span className={it.won ? "pill pill-good" : "pill pill-bad"}>
                 {it.won ? "Won" : "Lost"}
               </span>
             </Card>

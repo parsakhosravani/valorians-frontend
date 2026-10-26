@@ -21,6 +21,7 @@ import {
   upgradeOptions,
 } from "@/lib/game/advice";
 import { compact, formatDuration } from "@/lib/format";
+import { Bar, Segmented, SectionTitle } from "@/components/atoms/Ui";
 
 const RES_IMG = Object.fromEntries(RESOURCES.map((r) => [r.id, r.img])) as Record<ResourceId, (typeof RESOURCES)[number]["img"]>;
 
@@ -28,23 +29,14 @@ const BuildingThumb = ({ b, level, size = 52 }: { b: BuildingDef; level: number;
   <div className="relative shrink-0" style={{ width: size, height: size }}>
     <Image
       alt=""
-      className={clsx("w-full h-full object-contain rounded-xl bg-panel2", level === 0 && "opacity-50 grayscale")}
+      className={clsx("w-full h-full object-contain drop-shadow-[0_3px_4px_rgba(0,0,0,0.55)]", level === 0 && "opacity-50 grayscale")}
       height={size * 2}
       src={buildingImage(b)}
       width={size * 2}
     />
-    <span className="absolute -top-1.5 -left-1.5 min-w-[22px] h-[22px] px-1 rounded-full bg-gold text-[#1A120B] font-display font-black text-[11px] flex items-center justify-center shadow">
+    <span className="absolute -top-1 -left-1 min-w-[22px] h-[22px] px-1 rounded-full bg-gradient-to-b from-goldhi to-gold border border-golddeep text-[#1A120B] font-display font-black text-[11px] flex items-center justify-center shadow">
       {level}
     </span>
-  </div>
-);
-
-const Bar = ({ value, max }: { value: number; max: number }) => (
-  <div className="h-2 w-full bg-ground/80 rounded-full overflow-hidden border border-line/60">
-    <div
-      className="h-full bg-gradient-to-r from-gold to-ember rounded-full transition-[width] duration-500"
-      style={{ width: `${Math.max(0, Math.min(100, (value / max) * 100))}%` }}
-    />
   </div>
 );
 
@@ -92,7 +84,7 @@ const UpgradeRow = ({
   const startable = canStart(o) && freeBuilder;
 
   return (
-    <div className="flex items-center gap-3 bg-panel border border-line rounded-2xl px-3 py-2.5">
+    <div className="card flex items-center gap-3 px-3 py-2.5">
       <button aria-label={`${o.building.name} details`} className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={onOpen}>
         <BuildingThumb b={o.building} level={o.level} />
         <span className="flex flex-col gap-0.5 min-w-0">
@@ -110,11 +102,7 @@ const UpgradeRow = ({
         </span>
       </button>
       {startable ? (
-        <button
-          className="shrink-0 h-9 px-3.5 rounded-[10px] bg-gold text-[#1A120B] font-display font-black text-sm active:scale-95 transition-transform disabled:opacity-60"
-          disabled={busy}
-          onClick={onUpgrade}
-        >
+        <button className="btn btn-sm btn-gold shrink-0" disabled={busy} onClick={onUpgrade}>
           {o.level === 0 ? "Build" : "Upgrade"}
         </button>
       ) : canStart(o) && !freeBuilder ? (
@@ -180,11 +168,11 @@ export const Tribe: FunctionComponent = () => {
   return (
     <div className="flex flex-col gap-4 px-3 pt-1 pb-4">
       {/* Builders and what they are doing */}
-      <section className="bg-panel border border-line rounded-2xl p-3 flex flex-col gap-2.5">
+      <section className="card p-3 flex flex-col gap-2.5">
         <div className="flex items-center gap-2">
           <Image alt="" className="w-6 h-6" src={builderImg} />
-          <h2 className="font-display font-bold text-[17px] flex-1">
-            Builders <span className="text-muted text-sm font-sans font-bold">· {freeBuilders} of {rates.builders} free</span>
+          <h2 className="title-section flex-1">
+            Builders <span className="text-muted text-xs font-sans font-bold normal-case tracking-normal">{freeBuilders} of {rates.builders} free</span>
           </h2>
           <InfoDrawer
             content="Each builder works on one building at a time. Upgrade your Town Hall to hire more builders at levels 5, 10 and 15, and to build faster."
@@ -210,8 +198,8 @@ export const Tribe: FunctionComponent = () => {
           );
         })}
         {Array.from({ length: Math.max(0, freeBuilders) }, (_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl border border-dashed border-gold/60 px-3 py-2 text-sm text-sub">
-            <span className="w-2 h-2 rounded-full bg-good" />
+          <div key={i} className="inset flex items-center gap-3 border-dashed !border-gold/50 px-3 py-2 text-sm text-sub">
+            <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)]" />
             Free builder · {advice ? "start the upgrade below" : ready.length ? "pick an upgrade below" : "save up for an upgrade"}
           </div>
         ))}
@@ -219,8 +207,8 @@ export const Tribe: FunctionComponent = () => {
 
       {/* The one best next step */}
       {best && advice && (
-        <section className="relative rounded-2xl p-3 border border-gold bg-gradient-to-br from-[#3A2915] to-panel shadow-[0_0_22px_rgba(227,169,72,0.2)] flex flex-col gap-2.5">
-          <span className="text-[10px] font-extrabold tracking-[0.14em] text-goldtext">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
+        <section className="card-hero p-3 flex flex-col gap-2.5">
+          <span className="pill-gold pill self-start text-micro tracking-[0.12em]">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
           <button className="flex items-center gap-3 text-left" onClick={() => setOpen(best.building)}>
             <BuildingThumb b={best.building} level={best.level} size={68} />
             <span className="flex flex-col gap-0.5 min-w-0">
@@ -231,40 +219,35 @@ export const Tribe: FunctionComponent = () => {
               <CostLine o={best} />
             </span>
           </button>
-          <button
-            className="h-11 rounded-xl bg-gold text-[#1A120B] font-display font-black text-base active:scale-[0.98] transition-transform disabled:opacity-60"
-            disabled={busy === best.building.id}
-            onClick={() => upgrade(best.building.id)}
-          >
+          <button className="btn btn-gold btn-lg w-full" disabled={busy === best.building.id} onClick={() => upgrade(best.building.id)}>
             {best.level === 0 ? "Build" : "Upgrade"} {best.building.name}
           </button>
         </section>
       )}
 
       {/* Village / List switch */}
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display font-bold text-lg">{view === "village" ? "Your village" : "All buildings"}</h2>
-        <div className="flex p-0.5 rounded-full bg-panel border border-line">
-          {(["village", "list"] as View[]).map((v) => (
-            <button
-              key={v}
-              className={clsx("h-7 px-3.5 rounded-full text-xs font-bold", view === v ? "bg-gold text-[#1A120B]" : "text-sub")}
-              onClick={() => pickView(v)}
-            >
-              {v === "village" ? "Village" : "List"}
-            </button>
-          ))}
-        </div>
-      </div>
+      <SectionTitle
+        right={
+          <Segmented
+            className="!w-auto !p-0.5 [&_.seg-btn]:h-7 [&_.seg-btn]:px-3.5 [&_.seg-btn]:text-xs"
+            tabs={[
+              { id: "village" as View, label: "Village" },
+              { id: "list" as View, label: "List" },
+            ]}
+            value={view}
+            onChange={pickView}
+          />
+        }
+      >
+        {view === "village" ? "Your village" : "All buildings"}
+      </SectionTitle>
 
       {view === "village" && <Village freeBuilder={freeBuilders > 0} now={now} options={options} onOpen={setOpen} />}
 
       {/* A few quick wins you can start right now */}
       {view === "list" && ready.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-display font-bold text-lg">
-            Quick upgrades <span className="text-muted text-base">· {ready.length} ready</span>
-          </h2>
+          <SectionTitle right={`${ready.length} ready`}>Quick upgrades</SectionTitle>
           {ready.slice(0, 3).map((o) => (
             <UpgradeRow
               key={o.building.id}
@@ -285,10 +268,7 @@ export const Tribe: FunctionComponent = () => {
             {(["all", "economy", "military", "defense"] as Filter[]).map((f) => (
               <button
                 key={f}
-                className={clsx(
-                  "h-8 px-3.5 rounded-full text-sm font-bold border shrink-0",
-                  filter === f ? "bg-gold text-[#1A120B] border-gold" : "bg-panel text-sub border-line"
-                )}
+                className={clsx("pill h-8 px-3.5 text-sm shrink-0", filter === f ? "pill-gold !border-gold" : "text-sub")}
                 onClick={() => setFilter(f)}
               >
                 {f === "all" ? "All" : GROUP_LABEL[f]}

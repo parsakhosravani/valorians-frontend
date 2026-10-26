@@ -66,12 +66,22 @@ const config: Config = {
         "touch-animation": "scale .2s linear infinite",
         "mine-animation": "moveUpAndFade 0.6s forwards ease-out",
       },
+      /*
+       * Valorians v2 design tokens. Surfaces go ink → ground → panel → panel2 (darkest to
+       * lightest wood); gold is the only accent for "do this", ember for danger/heat, good/bad
+       * for gains and shortfalls, sea for anything naval. Component classes built on these
+       * live in src/styles/globals.css (.card, .btn, .seg, .pill, .bar, .title-*).
+       */
       colors: {
+        ink: "#0B0806",
         ground: "#120D09",
         panel: "#1E1610",
         panel2: "#2A1F16",
         line: "#4A3624",
+        frame: "#7A5A30",
         gold: "#E3A948",
+        goldhi: "#FBE3A6",
+        golddeep: "#9E6A1E",
         goldtext: "#F2C66D",
         ember: "#E8612C",
         parch: "#EFE3CC",
@@ -79,9 +89,20 @@ const config: Config = {
         muted: "#B19C80",
         good: "#9DD07F",
         bad: "#F08A6C",
+        sea: "#7FB3D0",
       },
       fontFamily: {
         display: ["Cinzel", "Georgia", "serif"],
+      },
+      fontSize: {
+        micro: ["10px", { lineHeight: "12px" }],
+        caption: ["12px", { lineHeight: "16px" }],
+      },
+      boxShadow: {
+        card: "0 6px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,226,170,0.06)",
+        raised: "0 10px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,226,170,0.1)",
+        glow: "0 0 0 1px rgba(227,169,72,0.9), 0 0 22px rgba(227,169,72,0.25)",
+        inset: "inset 0 2px 6px rgba(0,0,0,0.55)",
       },
       backgroundColor: {
         buildingBg: "rgba(30, 22, 16, 0.92)",

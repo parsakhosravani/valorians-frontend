@@ -273,7 +273,7 @@ const SeaNote = ({
   const bonus = Math.round((landingFactorFor(harbor) - 1) * 100);
 
   return (
-    <div className="rounded-xl border border-[#4F86A3]/60 bg-[#14222A] px-2.5 py-2 text-xs text-[#A9D3EA] flex flex-col gap-1">
+    <div className="rounded-xl border border-sea/50 bg-[#14222A]/90 px-2.5 py-2 text-xs text-[#A9D3EA] flex flex-col gap-1">
       {coastal ? (
         <span>
           <GameIcon e="⚓" /> <b>Your shore is your wall.</b> Armies from across the sea must land on your beach and fight at{" "}
@@ -285,7 +285,7 @@ const SeaNote = ({
             <GameIcon e="🌊" /> <b>Across the sea.</b> Your army sails on Longships, one for every 20 foot soldiers
             {camp ? "." : <>, then lands on their beach: <b>+{bonus}%</b> to their defense.</>}
           </span>
-          <span className="text-[#7FB3D0]">
+          <span className="text-sea">
             {myHarbor === 0
               ? "Build a Harbor to make Longships."
               : <IconText text={`⛵ ${fmt(ships)} Longship${ships === 1 ? "" : "s"} at home.`} />}
@@ -834,7 +834,7 @@ export const WarMap = ({
           {mine.map((m) => (
             <div
               key={m.id}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 bg-panel border border-gold/60 text-sm"
+              className="flex items-center gap-2 card px-3 py-2 !border-gold/60 text-sm"
             >
               <span className="text-lg"><GameIcon e="⚔️" /></span>
               <span className="flex-1 min-w-0 truncate">
@@ -847,7 +847,7 @@ export const WarMap = ({
                 {formatDuration(m.arrivesAt - now)}
               </span>
               <button
-                className="shrink-0 h-8 px-2.5 rounded-lg bg-panel2 border border-line text-xs font-bold"
+                className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs"
                 onClick={() => doRecall(m.id)}
               >
                 Recall
@@ -857,7 +857,7 @@ export const WarMap = ({
           {returning.map((m) => (
             <div
               key={m.id}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 bg-panel border border-line text-sm"
+              className="flex items-center gap-2 card px-3 py-2 text-sm"
             >
               <span className="text-lg">↩️</span>
               <span className="flex-1 min-w-0 truncate">
@@ -875,7 +875,7 @@ export const WarMap = ({
             <div
               key={c.id}
               className={clsx(
-                "flex items-center gap-2 rounded-xl px-3 py-2 bg-panel border text-sm",
+                "flex items-center gap-2 card px-3 py-2 text-sm",
                 c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
               )}
             >
@@ -921,7 +921,7 @@ export const WarMap = ({
           </p>
         )}
         {error && !data && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-[#F08A6C]">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-sm text-bad">
             {error}
             <Button size="small" variant="outline" onClick={load}>
               Try again
@@ -1085,7 +1085,7 @@ export const WarMap = ({
                       )}
                       <span
                         className={clsx(
-                          "relative w-12 h-12 rounded-full flex items-center justify-center border-[3px] bg-[#1E1610]/70",
+                          "relative w-12 h-12 rounded-full flex items-center justify-center border-[3px] bg-panel/70",
                           t.isMe
                             ? "border-gold shadow-[0_0_16px_rgba(227,169,72,0.8)]"
                             : t.ally
@@ -1094,7 +1094,7 @@ export const WarMap = ({
                               ? "border-good"
                               : s === "stronger"
                                 ? "border-[#F08A6C]"
-                                : "border-[#E3A948]/70",
+                                : "border-gold/70",
                         )}
                       >
                         <Image
@@ -1124,7 +1124,7 @@ export const WarMap = ({
                           "mt-0.5 max-w-[84px] truncate px-1.5 rounded-full text-[10px] font-extrabold",
                           t.isMe
                             ? "bg-gold text-[#1A120B]"
-                            : "bg-[#1E1610]/90 text-parch border border-line",
+                            : "bg-panel/90 text-parch border border-line",
                         )}
                       >
                         {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
@@ -1202,24 +1202,24 @@ export const WarMap = ({
           <div className="absolute right-2 bottom-2 flex flex-col gap-1.5 z-10">
             <button
               aria-label="Zoom in"
-              className="w-11 h-11 rounded-xl bg-panel/95 border border-line text-xl font-black text-goldtext shadow-lg"
+              className="btn btn-wood w-11 h-11 px-0 text-xl text-goldtext"
               onClick={() => zoomTo(zoomNow() * 1.4)}
             >
               +
             </button>
             <button
               aria-label="Zoom out"
-              className="w-11 h-11 rounded-xl bg-panel/95 border border-line text-xl font-black text-goldtext shadow-lg"
+              className="btn btn-wood w-11 h-11 px-0 text-xl text-goldtext"
               onClick={() => zoomTo(zoomNow() / 1.4)}
             >
               −
             </button>
             <button
               aria-label="Back to my tribe"
-              className="w-11 h-11 rounded-xl bg-panel/95 border border-line shadow-lg flex items-center justify-center active:scale-95 transition-transform"
+              className="btn btn-wood w-11 h-11 px-0"
               onClick={recentre}
             >
-              <span className="w-9 h-9 rounded-full border-2 border-gold bg-[#1E1610]/70 shadow-[0_0_10px_rgba(227,169,72,0.7)] flex items-center justify-center">
+              <span className="w-9 h-9 rounded-full border-2 border-gold bg-panel/70 shadow-[0_0_10px_rgba(227,169,72,0.7)] flex items-center justify-center">
                 <Image
                   draggable={false}
                   alt=""
@@ -1232,11 +1232,11 @@ export const WarMap = ({
             </button>
           </div>
         )}
-        <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5 bg-panel/90 border border-line rounded-xl px-2 py-1">
+        <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5 card-flat !bg-ink/80 px-2 py-1">
           <span className="text-[11px] font-bold text-sub">
             <span className="text-good">●</span> weaker{" "}
-            <span className="text-[#E3A948]">●</span> even{" "}
-            <span className="text-[#F08A6C]">●</span> stronger
+            <span className="text-gold">●</span> even{" "}
+            <span className="text-bad">●</span> stronger
           </span>
           <InfoDrawer
             content={
@@ -1321,25 +1321,25 @@ export const WarMap = ({
                       <ClanFlag flag={t.clan.flag} size={20} />[{t.clan.tag}]{t.ally && !t.isMe ? " · your clan" : ""}
                     </span>
                   )}
-                  <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                  <span className="pill h-7 px-2">
                     <GameIcon e={TERRAIN_ICON[t.terrain]} /> {ground.name}
                     {ground.defense > 0 &&
                       ` · +${ground.defense * 100}% defense`}
                   </span>
                   {!t.isMe && (
-                    <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                    <span className="pill h-7 px-2">
                       <GameIcon e="📍" /> {t.distance} tiles
                     </span>
                   )}
-                  <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                  <span className="pill h-7 px-2">
                     🏛 Town Hall {t.townHall}
                   </span>
                   {t.coastal && (
-                    <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
+                    <span className="pill pill-sea h-7 px-2">
                       <GameIcon e="⚓" /> Coastal{t.harbor ? ` · Harbor ${t.harbor}` : ""}
                     </span>
                   )}
-                  <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                  <span className="pill h-7 px-2">
                     <GameIcon e="👥" /> {fmt(t.population)}
                   </span>
                   <span
@@ -1350,7 +1350,7 @@ export const WarMap = ({
                         : s === "weaker"
                           ? "bg-[#1C2A14] border-good text-good"
                           : s === "stronger"
-                            ? "bg-[#2A140E] border-[#8A3B23] text-[#F08A6C]"
+                            ? "bg-[#2A140E] border-[#8A3B23] text-bad"
                             : "bg-panel2 border-gold text-goldtext",
                     )}
                   >
@@ -1378,7 +1378,7 @@ export const WarMap = ({
                   <>
                     {seaRoute(data!.home, t).naval && <SeaNote harbor={t.harbor ?? 0} myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />}
                     {sc ? (
-                      <div className="bg-[#1E1610] rounded-xl p-2.5 flex flex-col gap-1.5 text-sm">
+                      <div className="inset p-2.5 flex flex-col gap-1.5 text-sm">
                         <div className="text-[10px] font-extrabold tracking-[0.12em] text-muted">
                           SCOUT REPORT · {formatDuration(now - sc.at)} AGO
                         </div>
@@ -1420,7 +1420,7 @@ export const WarMap = ({
                       )
                     )}
                     {shielded && (
-                      <p className="text-sm font-bold text-[#E3A948]">
+                      <p className="text-sm font-bold text-gold">
                         <GameIcon e="🛡️" /> Shielded for {formatDuration(t.shieldUntil - now)}.
                         You can't attack until it ends.
                       </p>
@@ -1470,15 +1470,15 @@ export const WarMap = ({
             return (
               <div className="flex flex-col gap-3 pt-2">
                 <div className="flex flex-wrap gap-2 text-xs font-bold">
-                  <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                  <span className="pill h-7 px-2">
                     <GameIcon e={TERRAIN_ICON[c.terrain]} /> {ground.name}
                     {ground.defense > 0 &&
                       ` · +${ground.defense * 100}% defense`}
                   </span>
-                  <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                  <span className="pill h-7 px-2">
                     <GameIcon e="📍" /> {c.distance} tiles
                   </span>
-                  <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                  <span className="pill h-7 px-2">
                     <GameIcon e="🛡️" /> {fmt(c.defense * (1 + ground.defense))}
                   </span>
                 </div>

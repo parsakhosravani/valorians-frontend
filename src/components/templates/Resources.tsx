@@ -61,10 +61,10 @@ const Upgrade = ({
   const cost = skillUpgradeCost(level);
 
   return (
-    <div className="bg-panel border border-line rounded-2xl p-3 flex flex-col gap-1.5">
-      <div className="flex justify-between items-baseline">
-        <span className="font-display font-bold text-sm">{title}</span>
-        <span className="text-xs text-muted font-bold">Lv {level}</span>
+    <div className="inset p-2.5 flex flex-col gap-1.5">
+      <div className="flex justify-between items-center gap-1">
+        <span className="font-display font-bold text-[13px] leading-tight">{title}</span>
+        <span className="pill h-5 px-1.5 text-micro">Lv {level}</span>
       </div>
       <span className="text-xs text-sub leading-snug">{desc}</span>
       {/* mt-auto keeps the button on the card's bottom edge, so both cards line up when one title wraps */}
@@ -153,7 +153,7 @@ export const Resources = () => {
     <div className={clsx("relative min-h-full flex flex-col", frenzy && "animate-frenzy")}>
       <Image
         alt=""
-        className="fixed inset-0 w-full h-full object-cover opacity-20 -z-10"
+        className="fixed inset-0 w-full h-full object-cover opacity-35 -z-10"
         src={activeResource.bg}
       />
       <div
@@ -174,13 +174,13 @@ export const Resources = () => {
             <button
               key={r.id}
               className={clsx(
-                "flex flex-col items-center gap-0.5 py-2 rounded-xl border-2",
-                active ? "bg-panel2 border-gold shadow-[0_0_18px_rgba(227,169,72,0.25)]" : "bg-panel border-line"
+                "flex flex-col items-center gap-0.5 py-2 transition-transform active:scale-95",
+                active ? "card-hero" : "card-flat opacity-80"
               )}
               onClick={() => setActiveResource(r)}
             >
-              <Image alt="" className="w-6 h-6" src={r.img} />
-              <span className="font-display font-bold text-[11px] tracking-wider">{r.name.toUpperCase()}</span>
+              <Image alt="" className="w-7 h-7 object-contain" src={r.img} />
+              <span className={clsx("font-display font-bold text-[11px] tracking-wider", active ? "text-goldtext" : "text-sub")}>{r.name.toUpperCase()}</span>
               <span className={clsx("font-extrabold text-sm", state.resources[r.id] >= rates.capacity && "text-bad")}>
                 {compact(state.resources[r.id])}
               </span>
@@ -190,9 +190,9 @@ export const Resources = () => {
       </div>
 
       {/* Combo & Frenzy */}
-      <div className="flex items-center gap-3 px-5 pt-4">
+      <div className="card-flat mx-3 mt-3 px-3 py-2.5 flex items-center gap-3 bg-ink/60">
         <div className="flex flex-col min-w-[78px]">
-          <span className="font-display font-black text-[28px] leading-none text-goldtext">
+          <span className="title-screen !text-[28px] leading-none">
             ×{(combo.multiplier * (frenzy ? 2 : 1)).toFixed(1)}
           </span>
           <span className="text-[11px] font-extrabold tracking-[0.12em] text-muted">COMBO {combo.count}</span>
@@ -202,11 +202,8 @@ export const Resources = () => {
             <span className={frenzy ? "text-[#FFB27A]" : ""}>{frenzy ? "FRENZY! ×2, NO STAMINA" : "FRENZY"}</span>
             <span>{meterPct}%</span>
           </div>
-          <div className="h-2.5 rounded-full bg-panel2 border border-line overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-gold to-ember transition-[width] duration-200"
-              style={{ width: `${meterPct}%` }}
-            />
+          <div className="bar h-2.5">
+            <span className="bar-fill duration-200" style={{ width: `${meterPct}%` }} />
           </div>
         </div>
       </div>
@@ -277,8 +274,9 @@ export const Resources = () => {
         </p>
       </div>
 
-      {/* Stamina */}
-      <div className="px-4 flex items-center gap-3">
+      {/* Stamina and mining upgrades */}
+      <div className="card mx-3 mb-2 p-3 flex flex-col gap-3">
+      <div className="flex items-center gap-3">
         <svg aria-hidden="true" className="text-goldtext shrink-0" fill="none" height="22" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="22">
           <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
         </svg>
@@ -289,14 +287,14 @@ export const Resources = () => {
             </span>
             <span className="text-muted text-xs font-bold self-end">refills in {formatDuration(msToUtcMidnight(now))}</span>
           </div>
-          <div className="h-1.5 rounded-full bg-panel2 overflow-hidden">
-            <div className="h-full bg-gold rounded-full" style={{ width: `${(state.energy / rates.energyCapacity) * 100}%` }} />
+          <div className="bar h-2">
+            <span className="bar-fill" style={{ width: `${(state.energy / rates.energyCapacity) * 100}%` }} />
           </div>
         </div>
       </div>
 
       {/* Upgrades */}
-      <div className="grid grid-cols-2 gap-2 px-4 pt-3 pb-2">
+      <div className="grid grid-cols-2 gap-2">
         <Upgrade
           coins={state.coins}
           desc={`${tapPowerForLevel(state.skills.tap)} → ${tapPowerForLevel(state.skills.tap + 1)} per strike`}
@@ -311,6 +309,7 @@ export const Resources = () => {
           title="Stronger miners"
           onUpgrade={() => upgradeSkill("energy")}
         />
+      </div>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ const Shell = ({
 }) => (
   <div
     className={clsx(
-      "text-parch mx-auto overflow-hidden h-svh fixed inset-x-0 w-full flex flex-col items-center bg-ground",
+      "text-parch mx-auto overflow-hidden h-svh fixed inset-x-0 w-full flex flex-col items-center bg-ground bg-[radial-gradient(120%_70%_at_50%_0%,#22180F_0%,#120D09_60%,#0B0806_100%)]",
       "transition-[max-width] duration-500 ease-out",
       // The war map grows with the window (Telegram Desktop); other pages stay phone-width.
       wide ? "max-w-6xl" : "max-w-md",

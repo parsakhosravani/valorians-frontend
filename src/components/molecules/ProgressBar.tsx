@@ -1,34 +1,12 @@
+import { Bar } from "@/components/atoms/Ui";
+
 interface ProgressBarProps {
   value: number;
   totalValue: number;
   size?: "small" | "medium" | "large";
 }
 
-export const ProgressBar: React.FC<ProgressBarProps> = ({
-  value,
-  totalValue,
-  size = "medium",
-}) => {
-  const sizeClasses = {
-    small: "h-1 w-full",
-    medium: "h-2 w-[290px]",
-    large: "px-6 py-3 text-lg",
-  };
-  const percentage =
-    value < totalValue ? Math.floor((value * 100) / totalValue) + "%" : "100%";
-  return (
-    <div className={`relative ${sizeClasses[size]}`}>
-      <div className="h-full bg-panel2 rounded-[10px] relative" />
-      <div
-        style={{
-          width: percentage,
-        }}
-        className="h-full rounded-[10px] top-0 absolute bg-[#E3A948] flex items-center justify-center"
-      >
-        <p className="text-[8px] font-bold text-center">
-          {size == "medium" && percentage}
-        </p>
-      </div>
-    </div>
-  );
-};
+/** Kept for older call sites; draws the v2 bar. */
+export const ProgressBar: React.FC<ProgressBarProps> = ({ value, totalValue, size = "medium" }) => (
+  <Bar className={size === "small" ? "h-1.5" : "h-2.5"} max={totalValue} value={value} />
+);

@@ -206,7 +206,7 @@ export const ArmyToken = ({
           "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
           incoming
             ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
-            : "bg-[#1E1610]/90 text-goldtext border-line",
+            : "bg-panel/90 text-goldtext border-line",
         )}
       >
         {formatDuration(left)}
@@ -258,7 +258,7 @@ export const CaravanToken = ({
             "-mt-0.5 flex items-center gap-0.5 pl-0.5 pr-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
             kind === "coming"
               ? "bg-[#1C2A14]/95 text-good border-[#5E7F45]"
-              : "bg-[#1E1610]/90 text-sub border-line",
+              : "bg-panel/90 text-sub border-line",
           )}
         >
           {img && (

@@ -20,6 +20,7 @@ import { PlusDrawer } from "@/components/organisms/PlusDrawer";
 import { ShieldDrawer } from "@/components/organisms/ShieldDrawer";
 import { plusActive } from "@/lib/game/engine";
 import { GameIcon } from "@/components/atoms/GameIcon";
+import { Bar, SectionTitle } from "@/components/atoms/Ui";
 
 type ReportItem = {
   id: number;
@@ -50,7 +51,7 @@ const TaskRow = ({ t }: { t: Task }) => {
       <span
         className={clsx(
           "w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-2",
-          done ? "bg-good border-good text-[#1A120B]" : t.state === "wait" ? "border-muted border-dashed" : "border-gold"
+          done ? "bg-good border-good text-[#1A120B]" : t.state === "wait" ? "border-muted/70 border-dashed" : "border-gold shadow-[0_0_8px_rgba(227,169,72,0.35)]"
         )}
       >
         {done && (
@@ -59,7 +60,7 @@ const TaskRow = ({ t }: { t: Task }) => {
           </svg>
         )}
       </span>
-      <Image alt="" className="w-9 h-9 object-contain shrink-0 rounded-lg" height={72} src={t.img} width={72} />
+      <Image alt="" className="w-10 h-10 object-contain shrink-0 rounded-lg" height={80} src={t.img} width={80} />
       <span className="flex-1 min-w-0 flex flex-col">
         <span className={clsx("font-bold leading-tight", done && "line-through decoration-muted")}>{t.title}</span>
         {t.sub && <span className={clsx("text-xs font-bold", t.tone === "danger" ? "text-[#FFB27A]" : "text-muted")}>{t.sub}</span>}
@@ -69,19 +70,15 @@ const TaskRow = ({ t }: { t: Task }) => {
         (t.action.href ? (
           <Link
             className={clsx(
-              "shrink-0 h-9 px-3.5 rounded-[10px] font-display font-black text-sm flex items-center active:scale-95 transition-transform",
-              t.tone === "danger" ? "bg-ember text-[#FFF4EA]" : t.tone === "gold" ? "bg-gold text-[#1A120B]" : "bg-panel2 text-goldtext border border-line"
+              "btn btn-sm shrink-0",
+              t.tone === "danger" ? "btn-ember" : t.tone === "gold" ? "btn-gold" : "btn-wood text-goldtext"
             )}
             href={t.action.href as any}
           >
             {t.action.label}
           </Link>
         ) : (
-          <button
-            className="shrink-0 h-9 px-3.5 rounded-[10px] font-display font-black text-sm bg-gold text-[#1A120B] active:scale-95 transition-transform disabled:opacity-60"
-            disabled={t.action.busy}
-            onClick={t.action.onClick}
-          >
+          <button className="btn btn-sm btn-gold shrink-0" disabled={t.action.busy} onClick={t.action.onClick}>
             {t.action.label}
           </button>
         ))}
@@ -308,40 +305,75 @@ export const Hall = () => {
   const plusOn = plusActive(state);
 
   return (
-    <div className="flex flex-col gap-3 px-3 pt-1 pb-4">
-      {/* Who you are */}
-      <section className="flex items-center gap-3 bg-panel border border-line rounded-2xl p-3">
+    <div className="flex flex-col gap-3 px-3 pt-2 pb-4">
+      {/* Your tribe */}
+      <section className="card-hero p-3 pr-2 flex items-center gap-3 overflow-hidden">
+        <span aria-hidden className="absolute -left-6 -top-6 w-36 h-36 rounded-full bg-gold/10 blur-2xl" />
         <Image
           alt=""
-          className="w-16 h-16 object-contain rounded-xl bg-panel2 shrink-0"
-          height={128}
+          className="relative w-[84px] h-[84px] object-contain shrink-0 drop-shadow-[0_6px_8px_rgba(0,0,0,0.6)]"
+          height={168}
+          priority
           src={buildingImage(BUILDING_BY_ID["town-hall"])}
-          width={128}
+          width={168}
         />
-        <div className="flex-1 min-w-0">
-          <h1 className="font-display font-black text-[22px] leading-tight truncate">{me.firstName || "Your tribe"}</h1>
-          <p className="text-sm font-bold text-sub">
-            Town Hall {state.buildings["town-hall"] ?? 0} · Power {compact(powerScore(state))} · Pop. {compact(state.population)}
-          </p>
+        <div className="relative flex-1 min-w-0 flex flex-col gap-1.5">
+          <h1 className="title-screen truncate">{me.firstName || "Your tribe"}</h1>
+          <div className="flex flex-wrap gap-1">
+            <span className="pill">Hall {state.buildings["town-hall"] ?? 0}</span>
+            <span className="pill"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
+            <span className="pill"><GameIcon e="👥" /> {compact(state.population)}</span>
+          </div>
         </div>
-        <Link className="shrink-0 flex flex-col items-center px-3 py-1.5 rounded-xl bg-panel2 border border-gold" href="/leaderboard">
-          <span className="text-[10px] font-extrabold tracking-[0.12em] text-muted">RANK</span>
-          <span className="font-display font-black text-lg leading-none text-goldtext">#{me.rank}</span>
+        <Link
+          aria-label={`Rank ${me.rank}, open the leaderboard`}
+          className="relative shrink-0 w-[62px] h-[62px] rounded-full flex flex-col items-center justify-center border-2 border-gold bg-ink/70 shadow-[inset_0_0_12px_rgba(227,169,72,0.25)] active:scale-95 transition-transform"
+          href="/leaderboard"
+        >
+          <span className="text-micro font-extrabold tracking-[0.14em] text-muted">RANK</span>
+          <span className="font-display font-black text-lg leading-none text-goldtext">#{compact(me.rank)}</span>
         </Link>
       </section>
 
-      {/* Today */}
-      <section className="bg-panel border border-line rounded-2xl px-3 pt-3 pb-1">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-display font-bold text-lg">Today</h2>
-          <span className="text-xs font-extrabold text-muted">
-            {doneCount} of {tasks.length} done
+      {/* Protection and Plus at a glance */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          className={clsx(
+            "card p-2.5 flex items-center gap-2 text-left active:scale-[0.98] transition-transform",
+            !shielded && "!border-bad/60 bg-[linear-gradient(180deg,rgba(80,28,16,0.9),rgba(30,22,16,0.94))]"
+          )}
+          onClick={() => setShieldOpen(true)}
+        >
+          <span aria-hidden className="text-[28px] leading-none shrink-0"><GameIcon e="🛡️" /></span>
+          <span className="flex flex-col min-w-0">
+            <span className="font-display font-black text-[15px] leading-tight">Shield</span>
+            <span className={clsx("flex items-center gap-1 text-caption font-bold truncate", shielded ? "text-good" : "text-bad")}>
+              {shielded && <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={timeImg} />}
+              {shielded ? formatDuration(state.shieldUntil - now) : "Not protected"}
+            </span>
           </span>
-        </div>
-        <div className="h-1.5 mt-2 rounded-full bg-ground overflow-hidden">
-          <div className="h-full bg-good rounded-full transition-[width] duration-500" style={{ width: `${(doneCount / tasks.length) * 100}%` }} />
-        </div>
-        <ul className="divide-y divide-line/60">
+        </button>
+        <button
+          className={clsx("p-2.5 flex items-center gap-2 text-left active:scale-[0.98] transition-transform", plusOn ? "card" : "card-hero")}
+          onClick={() => setPlusOpen(true)}
+        >
+          <span aria-hidden className="text-[28px] leading-none shrink-0"><GameIcon e="👑" /></span>
+          <span className="flex flex-col min-w-0">
+            <span className="font-display font-black text-[15px] leading-tight">Plus</span>
+            <span className={clsx("text-caption font-bold truncate", plusOn ? "text-good" : "text-goldtext")}>
+              {plusOn ? `${formatDuration(state.plus.until - now)} left` : state.plus.trialUsed ? "+1 builder & more" : "Try it free"}
+            </span>
+          </span>
+        </button>
+      </div>
+      <PlusDrawer isOpen={plusOpen} onClose={() => setPlusOpen(false)} />
+      <ShieldDrawer isOpen={shieldOpen} onClose={() => setShieldOpen(false)} onOpenPlus={() => setPlusOpen(true)} />
+
+      {/* Today */}
+      <section className="card px-3 pt-3 pb-1">
+        <SectionTitle right={`${doneCount} of ${tasks.length} done`}>Today</SectionTitle>
+        <Bar className="mt-2.5 h-1.5" max={tasks.length} value={doneCount} />
+        <ul className="divide-y divide-line/50 mt-1">
           {tasks.map((t) => (
             <TaskRow key={t.key} t={t} />
           ))}
@@ -349,94 +381,48 @@ export const Hall = () => {
       </section>
 
       {/* Production at a glance */}
-      <section className="bg-panel border border-line rounded-2xl p-3 flex flex-col gap-2.5">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-display font-bold text-lg">Production</h2>
-          <span className="flex items-center gap-1 text-xs font-extrabold text-goldtext">
-            <Image alt="" className="w-4 h-4" src={coinImg} />+{compact(rates.coinsPerHour)}/h
-          </span>
-        </div>
-        {RESOURCES.map((r) => {
-          const have = state.resources[r.id];
-          const perHour = rates.productionPerHour[r.id];
-          const full = have >= rates.capacity;
-          const hoursToFull = perHour > 0 && !full ? (rates.capacity - have) / perHour : null;
+      <section className="card p-3 flex flex-col gap-2.5">
+        <SectionTitle
+          right={
+            <span className="flex items-center gap-1 text-goldtext font-extrabold">
+              <Image alt="" className="w-4 h-4" src={coinImg} />+{compact(rates.coinsPerHour)}/h
+            </span>
+          }
+        >
+          Production
+        </SectionTitle>
+        <div className="grid grid-cols-2 gap-2">
+          {RESOURCES.map((r) => {
+            const have = state.resources[r.id];
+            const perHour = rates.productionPerHour[r.id];
+            const full = have >= rates.capacity;
+            const hoursToFull = perHour > 0 && !full ? (rates.capacity - have) / perHour : null;
 
-          return (
-            <div key={r.id} className="flex items-center gap-2.5">
-              <Image alt={r.name} className="w-6 h-6 shrink-0" src={r.img} />
-              <div className="flex-1 min-w-0 flex flex-col gap-1">
-                <div className="flex justify-between text-xs font-bold">
-                  <span>
-                    {compact(have)} <span className="text-muted">/ {compact(rates.capacity)}</span>
-                  </span>
-                  <span className={perHour < 0 ? "text-bad" : "text-good"}>
-                    {perHour >= 0 ? "+" : ""}
-                    {compact(perHour)}/h
-                    <span className="text-muted font-bold">
-                      {full ? " · full" : hoursToFull !== null && hoursToFull < 24 ? ` · full in ${formatDuration(hoursToFull * 3600e3)}` : ""}
-                    </span>
-                  </span>
+            return (
+              <div key={r.id} className="inset p-2 flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Image alt={r.name} className="w-6 h-6 shrink-0 object-contain" src={r.img} />
+                  <span className={clsx("font-extrabold text-sm tabular-nums", full && "text-bad")}>{compact(have)}</span>
+                  <span className="text-micro font-bold text-muted">/ {compact(rates.capacity)}</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-ground overflow-hidden">
-                  <div
-                    className={clsx("h-full rounded-full", full ? "bg-bad" : "bg-gold")}
+                <div className="bar h-1.5">
+                  <span
+                    className={clsx("bar-fill", full && "!bg-none bg-bad")}
                     style={{ width: `${Math.min(100, (have / rates.capacity) * 100)}%` }}
                   />
                 </div>
+                <span className={clsx("text-micro font-extrabold", perHour < 0 ? "text-bad" : "text-good")}>
+                  {perHour >= 0 ? "+" : ""}
+                  {compact(perHour)}/h
+                  <span className="text-muted font-bold">
+                    {full ? " · full" : hoursToFull !== null && hoursToFull < 24 ? ` · full in ${formatDuration(hoursToFull * 3600e3)}` : ""}
+                  </span>
+                </span>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </section>
-
-      {/* Valorians Plus */}
-      <button
-        className={clsx(
-          "flex items-center gap-3 rounded-2xl p-3 text-left border active:scale-[0.99] transition-transform",
-          plusOn ? "bg-panel border-line" : "bg-gradient-to-r from-[#3A2814] to-panel border-gold"
-        )}
-        onClick={() => setPlusOpen(true)}
-      >
-        <span aria-hidden className="text-3xl w-12 h-12 rounded-xl bg-panel2 flex items-center justify-center shrink-0">
-          <GameIcon e="👑" />
-        </span>
-        <span className="flex-1 min-w-0 flex flex-col">
-          <span className="font-display font-black text-lg leading-tight">Valorians Plus</span>
-          <span className="text-xs font-bold text-muted">
-            {plusOn
-              ? `Active · ${formatDuration(state.plus.until - now)} left`
-              : state.plus.trialUsed
-                ? "+1 builder, +2 training slots, weekly shield"
-                : "+1 builder, +2 slots, weekly shield · try free"}
-          </span>
-        </span>
-        <span className={clsx("shrink-0 text-sm font-display font-black", plusOn ? "text-good" : "text-goldtext")}>
-          {plusOn ? "✓" : "›"}
-        </span>
-      </button>
-      <PlusDrawer isOpen={plusOpen} onClose={() => setPlusOpen(false)} />
-
-      {/* Shield */}
-      <button
-        className="flex items-center gap-3 rounded-2xl p-3 text-left border bg-panel border-line active:scale-[0.99] transition-transform"
-        onClick={() => setShieldOpen(true)}
-      >
-        <span aria-hidden className="text-3xl w-12 h-12 rounded-xl bg-panel2 flex items-center justify-center shrink-0">
-          <GameIcon e="🛡️" />
-        </span>
-        <span className="flex-1 min-w-0 flex flex-col">
-          <span className="font-display font-black text-lg leading-tight">Shield</span>
-          <span className={clsx("flex items-center gap-1 text-xs font-bold", shielded ? "text-muted" : "text-bad")}>
-            {shielded && <Image alt="" className="w-3.5 h-3.5" src={timeImg} />}
-            {shielded ? `Protected for ${formatDuration(state.shieldUntil - now)}` : "Not protected · rivals can raid you"}
-          </span>
-        </span>
-        <span className={clsx("shrink-0 text-sm font-display font-black", shielded ? "text-good" : "text-goldtext")}>
-          {shielded ? "✓" : "›"}
-        </span>
-      </button>
-      <ShieldDrawer isOpen={shieldOpen} onClose={() => setShieldOpen(false)} onOpenPlus={() => setPlusOpen(true)} />
     </div>
   );
 };

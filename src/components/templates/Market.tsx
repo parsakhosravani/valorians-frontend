@@ -27,6 +27,7 @@ import {
 } from "@/lib/game/trade";
 import type { MarketView } from "@/server/trade";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
+import { ScreenHeader } from "@/components/atoms/Ui";
 
 type Tab = "buy" | "sell" | "mine";
 
@@ -73,10 +74,10 @@ const ResourcePicker = ({
         key={r.id}
         aria-pressed={value === r.id}
         className={clsx(
-          "flex flex-col items-center gap-0.5 rounded-xl border py-1.5 text-[11px] font-bold transition",
+          "flex flex-col items-center gap-0.5 rounded-xl border py-1.5 text-[11px] font-bold transition active:scale-95",
           value === r.id
-            ? "border-gold bg-gold/15 text-goldtext"
-            : "border-line bg-panel text-muted",
+            ? "border-gold bg-gold/15 text-goldtext shadow-glow"
+            : "border-line bg-ink/50 text-muted",
           disabled === r.id && "opacity-30",
         )}
         disabled={disabled === r.id}
@@ -110,7 +111,7 @@ const AmountInput = ({
       onChange={(e) => onChange(Number(e.target.value))}
     />
     <input
-      className="w-20 h-9 rounded-lg bg-panel border border-line text-center font-extrabold text-parch"
+      className="inset w-20 h-9 text-center font-extrabold text-parch tabular-nums outline-none focus:border-gold"
       inputMode="numeric"
       value={value || ""}
       onChange={(e) =>
@@ -244,7 +245,11 @@ export const Market = () => {
   return (
     <>
       <div className="w-full flex flex-col gap-2 px-3 pt-1 pb-4">
-        <h1 className="font-display text-2xl font-black text-center">Market</h1>
+        <ScreenHeader
+          className="pt-1"
+          subtitle="Swap your extra resources with other tribes"
+          title="Market"
+        />
         <Tabs
           tabs={[
             { id: "buy", label: "Buy" },
@@ -289,7 +294,7 @@ export const Market = () => {
             <b className="text-parch">{fmt(maxAmount)}</b> per load
           </p>
         )}
-        {error && <p className="text-sm text-[#F08A6C]">{error}</p>}
+        {error && <p className="text-sm text-bad">{error}</p>}
         {!data && !error && (
           <p className="text-sm text-muted">Opening the market…</p>
         )}
@@ -300,12 +305,7 @@ export const Market = () => {
               {(["all", ...RESOURCES.map((r) => r.id)] as const).map((f) => (
                 <button
                   key={f}
-                  className={clsx(
-                    "shrink-0 h-8 px-3 rounded-full border text-xs font-bold",
-                    filter === f
-                      ? "border-gold bg-gold/15 text-goldtext"
-                      : "border-line bg-panel text-muted",
-                  )}
+                  className={clsx("pill shrink-0 h-8 px-3", filter === f ? "pill-gold !border-gold" : "text-muted")}
                   onClick={() => setFilter(f)}
                 >
                   {f === "all" ? "Everything" : `Get ${RESOURCE_NAMES[f]}`}
@@ -346,12 +346,8 @@ export const Market = () => {
                     </span>
                     <span
                       className={clsx(
-                        "text-[11px] font-extrabold rounded-full px-2 py-0.5",
-                        deal >= 1.2
-                          ? "bg-good/20 text-good"
-                          : deal < 0.85
-                            ? "bg-[#F08A6C]/15 text-[#F08A6C]"
-                            : "bg-panel text-sub",
+                        "pill h-5 text-[11px]",
+                        deal >= 1.2 ? "pill-good" : deal < 0.85 ? "pill-bad" : "text-sub",
                       )}
                     >
                       {deal >= 1.2
@@ -376,7 +372,7 @@ export const Market = () => {
                       </span>
                       <Res
                         amount={o.wantAmount}
-                        className={short ? "text-[#F08A6C]" : ""}
+                        className={short ? "text-bad" : ""}
                         id={o.want}
                       />
                     </div>
@@ -395,7 +391,7 @@ export const Market = () => {
                     </Button>
                   </div>
                   {level >= 1 && (short || tooBig) && (
-                    <p className="text-[11px] text-[#F08A6C]">
+                    <p className="text-[11px] text-bad">
                       {short
                         ? `You need ${fmt(o.wantAmount - state.resources[o.want])} more ${RESOURCE_NAMES[o.want].toLowerCase()}`
                         : `Too heavy for your merchants (max ${fmt(maxAmount)})`}
@@ -441,12 +437,12 @@ export const Market = () => {
                 onChange={setWantAmount}
               />
             </div>
-            <div className="flex items-center justify-between rounded-xl bg-panel border border-line px-3 py-2 text-sm">
+            <div className="inset flex items-center justify-between px-3 py-2 text-sm">
               <span className="text-sub">Rate</span>
               <span
                 className={clsx(
                   "font-extrabold",
-                  ratioOk ? "text-parch" : "text-[#F08A6C]",
+                  ratioOk ? "text-parch" : "text-bad",
                 )}
               >
                 1 {RESOURCE_NAMES[give].toLowerCase()} : {ratio.toFixed(2)}{" "}
@@ -460,7 +456,7 @@ export const Market = () => {
               caps what you receive ({fmt(rates.capacity)}).
             </p>
             {sellProblem && (
-              <p className="text-xs text-[#F08A6C]">{sellProblem}</p>
+              <p className="text-xs text-bad">{sellProblem}</p>
             )}
             <Button
               disabled={!!sellProblem || busy != null}
@@ -500,10 +496,10 @@ export const Market = () => {
                   <div className="flex items-center gap-2 text-xs">
                     <span
                       className={clsx(
-                        "font-extrabold rounded-full px-2 py-0.5",
-                        t.status === "open" && "bg-gold/15 text-goldtext",
-                        travelling && "bg-[#3B5D8A]/30 text-[#9CC3F0]",
-                        t.status === "delivered" && "bg-good/20 text-good",
+                        "pill h-5",
+                        t.status === "open" && "pill-gold",
+                        travelling && "pill-sea",
+                        t.status === "delivered" && "pill-good",
                       )}
                     >
                       {t.status === "open"
@@ -561,7 +557,7 @@ export const Market = () => {
       <Image
         priority
         alt=""
-        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-20"
+        className="fixed h-full top-0 left-0 w-full -z-10 object-cover opacity-30"
         src={bg}
       />
     </>

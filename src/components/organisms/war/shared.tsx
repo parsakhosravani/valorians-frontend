@@ -2,12 +2,13 @@
 import clsx from "clsx";
 
 import { UNITS, UnitId, UNIT_BY_ID } from "@/lib/game/config";
+import { Segmented } from "@/components/atoms/Ui";
 import type { Army } from "@/lib/game/engine";
 
 export const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
 
 export const Card = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={clsx("bg-buildingBg rounded-2xl border border-line p-3", className)}>
+  <div className={clsx("card p-3", className)}>
     {children}
   </div>
 );
@@ -28,7 +29,7 @@ export const UnitEmoji = ({ unit }: { unit: UnitId }) => (
 
 export const UnitBadge = ({ unit, size = 36, rank = 0 }: { unit: UnitId; size?: number; rank?: number }) => (
   <div
-    className="relative rounded-full bg-[#1E1610] border-2 border-[#E3A948] shrink-0"
+    className="relative rounded-full bg-panel border-2 border-gold shrink-0"
     style={{ width: size, height: size }}
   >
     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -41,7 +42,7 @@ export const UnitBadge = ({ unit, size = 36, rank = 0 }: { unit: UnitId; size?: 
     {/* One star per rank, on a little gold tab under the badge. */}
     {rank > 0 && (
       <span
-        className="absolute left-1/2 -translate-x-1/2 rounded-full bg-[#E3A948] text-[#1A120B] leading-none px-1 py-px whitespace-nowrap"
+        className="absolute left-1/2 -translate-x-1/2 rounded-full bg-gold text-[#1A120B] leading-none px-1 py-px whitespace-nowrap"
         style={{ bottom: -size * 0.16, fontSize: Math.max(7, size * 0.17) }}
       >
         {"★".repeat(rank)}
@@ -54,7 +55,7 @@ export const UnitBadge = ({ unit, size = 36, rank = 0 }: { unit: UnitId; size?: 
 export const ArmyLine = ({ army, className }: { army: Army; className?: string }) => {
   const parts = UNITS.filter((u) => (army[u.id] ?? 0) > 0);
 
-  if (!parts.length) return <span className={clsx("text-[#B19C80]", className)}>none</span>;
+  if (!parts.length) return <span className={clsx("text-muted", className)}>none</span>;
 
   return (
     <span className={clsx("inline-flex flex-wrap gap-x-2", className)}>
@@ -67,35 +68,8 @@ export const ArmyLine = ({ army, className }: { army: Army; className?: string }
   );
 };
 
-export const Tabs = <T extends string>({
-  tabs,
-  value,
-  onChange,
-}: {
-  tabs: { id: T; label: string; badge?: number }[];
-  value: T;
-  onChange: (t: T) => void;
-}) => (
-  <div className="flex w-full bg-panel border border-line rounded-xl p-1 gap-1">
-    {tabs.map((t) => (
-      <button
-        key={t.id}
-        className={clsx(
-          "flex-1 h-9 rounded-[9px] text-sm font-bold relative",
-          value === t.id ? "bg-gold text-[#1A120B] font-extrabold" : "text-muted"
-        )}
-        onClick={() => onChange(t.id)}
-      >
-        {t.label}
-        {!!t.badge && (
-          <span className="absolute -top-1 -right-1 flex items-center justify-center bg-ember text-[#FFF4EA] text-[10px] leading-none tabular-nums rounded-full min-w-4 h-4 px-1">
-            {t.badge}
-          </span>
-        )}
-      </button>
-    ))}
-  </div>
-);
+/** War screen tabs: the shared v2 segmented control. */
+export const Tabs = Segmented;
 
 export const Stepper = ({
   value,
@@ -110,19 +84,19 @@ export const Stepper = ({
 
   return (
     <div className="flex items-center gap-1">
-      <button className="w-7 h-7 rounded bg-[#1E1610] font-bold" onClick={() => set(value - 1)}>
+      <button aria-label="One less" className="btn btn-wood btn-sm w-8 px-0" type="button" onClick={() => set(value - 1)}>
         −
       </button>
       <input
-        className="w-12 h-7 rounded bg-[#1E1610] text-center text-sm font-bold outline-none"
+        className="inset w-12 h-8 text-center text-sm font-extrabold tabular-nums outline-none focus:border-gold"
         inputMode="numeric"
         value={value}
         onChange={(e) => set(Number(e.target.value.replace(/\D/g, "")))}
       />
-      <button className="w-7 h-7 rounded bg-[#1E1610] font-bold" onClick={() => set(value + 1)}>
+      <button aria-label="One more" className="btn btn-wood btn-sm w-8 px-0" type="button" onClick={() => set(value + 1)}>
         +
       </button>
-      <button className="h-7 px-2 rounded bg-[#1E1610] text-xs font-bold" onClick={() => set(max)}>
+      <button className="btn btn-ghost btn-sm px-2.5" type="button" onClick={() => set(max)}>
         Max
       </button>
     </div>
