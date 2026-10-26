@@ -527,6 +527,7 @@ export function receiveRaidReport(
       loot: report.loot,
       coins: report.coins,
       returnsAt: report.returnsAt,
+      leftAt: now,
       ...(from ? { from } : {}),
     });
   }
@@ -600,6 +601,7 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
       loot,
       coins,
       returnsAt,
+      leftAt: now,
       ...(opts.from ? { from: opts.from } : {}),
     });
   }
@@ -623,10 +625,19 @@ export function raidCamp(s0: GameState, level: number, units: Army, now: number,
 }
 
 /** Troops that turned back before a battle walk home with nothing. */
-export function returnHome(s0: GameState, units: Army, target: string, returnsAt: number, now: number, rand: number, from?: Point) {
+export function returnHome(
+  s0: GameState,
+  units: Army,
+  target: string,
+  returnsAt: number,
+  now: number,
+  rand: number,
+  from?: Point,
+  leftAt = now
+) {
   const s = cloneState(s0);
   if (armySize(units) > 0) {
-    s.marches.push({ id: marchId(now, rand), target, units: { ...units }, loot: emptyLoot(), coins: 0, returnsAt, ...(from ? { from } : {}) });
+    s.marches.push({ id: marchId(now, rand), target, units: { ...units }, loot: emptyLoot(), coins: 0, returnsAt, leftAt, ...(from ? { from } : {}) });
   }
   return s;
 }

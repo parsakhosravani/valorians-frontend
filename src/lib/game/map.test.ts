@@ -71,6 +71,7 @@ test("camp battle brings survivors home after the march back", () => {
   expect(r.report.attackerWon).toBe(true);
   expect(r.state.marches[0].returnsAt).toBe(arrive + 60_000);
   expect(r.state.marches[0].from).toEqual({ x: 1, y: 1 });
+  expect(r.state.marches[0].leftAt).toBe(arrive);
   s = E.advance(r.state, arrive + 61_000);
   expect(s.army.spearman).toBeGreaterThan(40);
   expect(s.camps.cleared).toBe(1);
