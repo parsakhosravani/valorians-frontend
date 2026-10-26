@@ -156,7 +156,7 @@ export const SendArmyDrawer = ({
             </span>
             {route?.detour && (
               <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                🛤️ {route.climbed ? "No road: a hard climb" : naval ? "Sea road" : "Road winds around"} · {Math.round(route.length)} tiles
+                <GameIcon e="🛤️" /> {route.climbed ? "No road: a hard climb" : naval ? "Sea road" : "Road winds around"} · {Math.round(route.length)} tiles
               </span>
             )}
             {naval && (

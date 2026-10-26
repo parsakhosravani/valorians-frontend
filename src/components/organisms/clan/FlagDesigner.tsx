@@ -2,7 +2,8 @@
 import clsx from "clsx";
 
 import { ClanFlag } from "@/components/molecules/ClanFlag";
-import { ClanFlag as Flag, FLAG_COLORS, FLAG_EMBLEMS, FLAG_PATTERNS, defaultFlag } from "@/lib/game/clan";
+import { ClanFlag as Flag, FLAG_COLORS, FLAG_EMBLEMS, FLAG_PATTERNS, defaultFlag, emblemImage } from "@/lib/game/clan";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 const Label = ({ children }: { children: React.ReactNode }) => (
   <span className="text-[11px] font-extrabold tracking-[0.08em] text-muted uppercase">{children}</span>
@@ -47,7 +48,7 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
             type="button"
             onClick={() => onChange(defaultFlag(seed + Math.floor(Math.random() * 1e6)))}
           >
-            🎲 Surprise me
+            <GameIcon e="🎲" /> Surprise me
           </button>
         </div>
       </div>
@@ -95,13 +96,14 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
               key={e}
               aria-pressed={value.emblem === i}
               className={clsx(
-                "aspect-square rounded-lg border text-lg leading-none",
+                "aspect-square rounded-lg border p-1 flex items-center justify-center",
                 value.emblem === i ? "border-gold bg-gold/10" : "border-line bg-panel"
               )}
               type="button"
               onClick={() => set({ emblem: i })}
             >
-              {e}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img alt={e} className="w-full h-full object-contain" draggable={false} src={emblemImage(i) ?? ""} />
             </button>
           ))}
         </div>

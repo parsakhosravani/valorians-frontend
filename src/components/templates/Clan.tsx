@@ -787,7 +787,7 @@ export const Clan: FunctionComponent = () => {
 
         {error && !data && (
           <Card className="flex flex-col items-center gap-2 py-5 text-center">
-            <span className="text-3xl">🏚️</span>
+            <span className="text-3xl"><GameIcon e="🏚️" /></span>
             <span className="font-display text-parch font-bold">Couldn't reach the clan hall</span>
             <span className="text-xs text-sub">Your connection dropped. Your clan is safe, try again in a moment.</span>
             <Button className="mt-1" disabled={retrying} size="small" onClick={retry}>
