@@ -128,8 +128,6 @@ export type BuildingDef = {
   baseTime: number;
   effect: BuildingEffect;
   description: string;
-  /** Emoji shown instead of a painting while the building has no artwork yet. */
-  icon?: string;
 };
 
 const def = (
@@ -172,10 +170,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Saves 4% of troops lost in battle per level (max 50%)."),
   def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
   def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
-  {
-    ...def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
-    icon: "⚓",
-  },
+  def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
 ];
 
 export type BuildingId = string;
@@ -184,28 +179,8 @@ export const BUILDING_BY_ID: Record<BuildingId, BuildingDef> = Object.fromEntrie
   BUILDINGS.map((b) => [b.id, b])
 );
 
-/**
- * A drawn emblem for buildings that don't have a painting yet (the Harbor's
- * anchor over the waves). Drop `<Name>.webp` into /public/images/buildings and
- * remove the building's `icon` to use a painting instead.
- */
-const EMBLEMS: Record<string, string> = {
-  harbor: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-<defs><radialGradient id="g" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#3A2A1B"/><stop offset="1" stop-color="#1A120B"/></radialGradient>
-</defs>
-<circle cx="50" cy="50" r="46" fill="url(#g)" stroke="#E3A948" stroke-width="4"/>
-<path d="M14 70 q9-7 18 0 t18 0 t18 0 t18 0 V84 a46 46 0 0 1 -72 0Z" fill="#2F6A86"/>
-<path d="M14 70 q9-7 18 0 t18 0 t18 0 t18 0" fill="none" stroke="#9FD0E6" stroke-width="2.5"/>
-<g fill="none" stroke="#E9B95A" stroke-width="6" stroke-linecap="round">
-<circle cx="50" cy="22" r="6"/><path d="M50 28 V74"/><path d="M36 38 H64"/>
-<path d="M26 56 Q28 74 50 76 Q72 74 74 56"/></g>
-<path d="M20 58 l6 -8 l6 8Z M68 58 l6 -8 l6 8Z" fill="#E3A948"/></svg>`,
-};
-
 export const buildingImage = (b: BuildingDef) =>
-  EMBLEMS[b.id]
-    ? `data:image/svg+xml;utf8,${encodeURIComponent(EMBLEMS[b.id].replace(/\n/g, ""))}`
-    : `/images/buildings/${encodeURIComponent(b.name)}.webp`;
+  `/images/buildings/${encodeURIComponent(b.name)}.webp`;
 
 /** Every building level adds this much population growth per hour… */
 export const GROWTH_PER_BUILDING_LEVEL = 2;
