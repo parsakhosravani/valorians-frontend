@@ -236,7 +236,7 @@ async function init(): Promise<Client> {
     CREATE TABLE IF NOT EXISTS payments (
       charge_id     TEXT PRIMARY KEY,              -- telegram_payment_charge_id
       user_id       INTEGER NOT NULL,
-      product       TEXT NOT NULL,                 -- 'plus'
+      product       TEXT NOT NULL,                 -- 'plus' or 'shield:<option>'
       stars         INTEGER NOT NULL,
       recurring     INTEGER NOT NULL DEFAULT 0,    -- a monthly renewal, not the first payment
       expires_at    INTEGER,                       -- subscription end Telegram reported (ms)

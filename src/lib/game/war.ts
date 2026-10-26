@@ -36,6 +36,7 @@ import {
   Army,
   GameError,
   GameState,
+  breakShield,
   cloneState,
   emptyArmy,
   getRates,
@@ -399,12 +400,12 @@ const marchId = (now: number, rand: number) => `${now.toString(36)}${Math.floor(
 
 // ─── Raids on other players ──────────────────────────────────────────────────
 
-/** Step 1: troops leave home. Attacking ends your own new-player shield. */
+/** Step 1: troops leave home. Attacking ends your own shield, bought ones too. */
 export function dispatchRaid(s0: GameState, units: Army, now: number) {
   const s = cloneState(s0);
   const sent = validateSend(s, units);
   for (const u of UNIT_IDS) s.army[u] -= sent[u];
-  s.shieldUntil = Math.min(s.shieldUntil, now);
+  breakShield(s, now);
   return { state: s, sent };
 }
 

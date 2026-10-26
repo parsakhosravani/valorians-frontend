@@ -3,6 +3,7 @@ import "server-only";
 import { getDb } from "./db";
 import { mutatePlayer } from "./players";
 import { appUrl, tg } from "./bot";
+import { checkShieldCheckout, endRefundedShield, parseShieldPayload, recordShieldPayment } from "./shields";
 
 import { PLUS } from "@/lib/game/config";
 import { GameError, grantPlus } from "@/lib/game/engine";
@@ -39,7 +40,7 @@ const userFromPayload = (payload: string | undefined) => {
 export async function createPlusInvoice(userId: number): Promise<string> {
   const r = await tg("createInvoiceLink", {
     title: "Valorians Plus",
-    description: "+1 builder, +2 training slots and the 👑 Plus crown. Renews monthly, cancel anytime in Telegram.",
+    description: `+1 builder, +2 training slots, a free ${PLUS.weeklyShieldHours}h shield every week and the 👑 Plus crown. Renews monthly, cancel anytime in Telegram.`,
     payload: payloadFor(userId),
     currency: "XTR",
     prices: [{ label: "Valorians Plus · 1 month", amount: plusPrice() }],
@@ -85,18 +86,27 @@ export type RefundedPayment = {
 
 /** Telegram waits up to 10 seconds for this answer before the payment fails. */
 export async function answerPreCheckout(q: PreCheckoutQuery) {
-  const userId = userFromPayload(q.invoice_payload);
-  const ok = userId === q.from.id && q.currency === "XTR" && q.total_amount === plusPrice();
+  let error: string | null;
+
+  if (parseShieldPayload(q.invoice_payload)) {
+    error = await checkShieldCheckout(q).catch(() => "Shields are unavailable right now, try again later");
+  } else {
+    const userId = userFromPayload(q.invoice_payload);
+    const ok = userId === q.from.id && q.currency === "XTR" && q.total_amount === plusPrice();
+
+    error = ok ? null : "This offer has changed. Please reopen Plus in the game and try again.";
+  }
 
   await tg("answerPreCheckoutQuery", {
     pre_checkout_query_id: q.id,
-    ok,
-    ...(ok ? {} : { error_message: "This offer has changed. Please reopen Plus in the game and try again." }),
+    ok: !error,
+    ...(error ? { error_message: error } : {}),
   });
 }
 
 /** Records a payment (first or renewal) and extends Plus. Returns false if it was already counted. */
 export async function recordPayment(payerId: number, p: SuccessfulPayment, now = Date.now()) {
+  if (parseShieldPayload(p.invoice_payload)) return recordShieldPayment(payerId, p, now);
   const userId = userFromPayload(p.invoice_payload) ?? payerId;
 
   if (p.currency !== "XTR") return false;
@@ -118,7 +128,8 @@ export async function recordPayment(payerId: number, p: SuccessfulPayment, now =
     text: renewal
       ? `👑 <b>Valorians Plus renewed.</b> Thank you for backing the saga, chief!`
       : `👑 <b>Welcome to Valorians Plus!</b>\n\n` +
-        `🔨 +${PLUS.extraBuilders} builder\n⚔️ +${PLUS.extraTrainBatches} training slots\n👑 The Plus crown next to your name\n\n` +
+        `🔨 +${PLUS.extraBuilders} builder\n⚔️ +${PLUS.extraTrainBatches} training slots\n` +
+        `🛡️ A free ${PLUS.weeklyShieldHours}h shield every week\n👑 The Plus crown next to your name\n\n` +
         `It renews every month. You can cancel anytime from your Telegram subscription settings.`,
     reply_markup: { inline_keyboard: [[{ text: "⚔️ Back to my tribe", web_app: { url: `${appUrl()}/tribe` } }]] },
   });
@@ -126,7 +137,7 @@ export async function recordPayment(payerId: number, p: SuccessfulPayment, now =
   return true;
 }
 
-/** A refunded payment (sent by Telegram when the bot refunds Stars) ends Plus. */
+/** A refunded payment (sent by Telegram when the bot refunds Stars) ends Plus, or drops the shield. */
 export async function recordRefund(payerId: number, r: RefundedPayment, now = Date.now()) {
   const db = await getDb();
   const rs = await db.execute({
@@ -135,6 +146,9 @@ export async function recordRefund(payerId: number, r: RefundedPayment, now = Da
   });
 
   if (rs.rowsAffected !== 1) return;
+  const shield = parseShieldPayload(r.invoice_payload);
+
+  if (shield) return endRefundedShield(shield.userId, now);
   const userId = userFromPayload(r.invoice_payload) ?? payerId;
 
   await mutatePlayer(userId, now, (s) => ({ ...s, plus: { ...s.plus, until: Math.min(s.plus.until, now), paid: false } }));

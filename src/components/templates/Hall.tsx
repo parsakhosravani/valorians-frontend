@@ -17,6 +17,7 @@ import { campReward, campStatus, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
 import { PlusDrawer } from "@/components/organisms/PlusDrawer";
+import { ShieldDrawer } from "@/components/organisms/ShieldDrawer";
 import { plusActive } from "@/lib/game/engine";
 
 type ReportItem = {
@@ -94,10 +95,14 @@ export const Hall = () => {
   const [news, setNews] = useState<ReportItem | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
+  const [shieldOpen, setShieldOpen] = useState(false);
 
-  // The bot's /plus button opens the game on /hall?plus=1.
+  // The bot's /plus button opens the game on /hall?plus=1 (and /hall?shield=1 for shields).
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("plus")) setPlusOpen(true);
+    const q = new URLSearchParams(window.location.search);
+
+    if (q.get("plus")) setPlusOpen(true);
+    else if (q.get("shield")) setShieldOpen(true);
   }, []);
 
   useEffect(() => {
@@ -401,8 +406,8 @@ export const Hall = () => {
             {plusOn
               ? `Active · ${formatDuration(state.plus.until - now)} left`
               : state.plus.trialUsed
-                ? "+1 builder, +2 training slots, the crown"
-                : "+1 builder, +2 training slots · try it free"}
+                ? "+1 builder, +2 training slots, weekly shield"
+                : "+1 builder, +2 slots, weekly shield · try free"}
           </span>
         </span>
         <span className={clsx("shrink-0 text-sm font-display font-black", plusOn ? "text-good" : "text-goldtext")}>
@@ -411,12 +416,26 @@ export const Hall = () => {
       </button>
       <PlusDrawer isOpen={plusOpen} onClose={() => setPlusOpen(false)} />
 
-      {shielded && (
-        <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-muted">
-          <Image alt="" className="w-4 h-4" src={timeImg} />
-          Protected by a shield for {formatDuration(state.shieldUntil - now)}
-        </p>
-      )}
+      {/* Shield */}
+      <button
+        className="flex items-center gap-3 rounded-2xl p-3 text-left border bg-panel border-line active:scale-[0.99] transition-transform"
+        onClick={() => setShieldOpen(true)}
+      >
+        <span aria-hidden className="text-3xl w-12 h-12 rounded-xl bg-panel2 flex items-center justify-center shrink-0">
+          🛡️
+        </span>
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="font-display font-black text-lg leading-tight">Shield</span>
+          <span className={clsx("flex items-center gap-1 text-xs font-bold", shielded ? "text-muted" : "text-bad")}>
+            {shielded && <Image alt="" className="w-3.5 h-3.5" src={timeImg} />}
+            {shielded ? `Protected for ${formatDuration(state.shieldUntil - now)}` : "Not protected · rivals can raid you"}
+          </span>
+        </span>
+        <span className={clsx("shrink-0 text-sm font-display font-black", shielded ? "text-good" : "text-goldtext")}>
+          {shielded ? "✓" : "›"}
+        </span>
+      </button>
+      <ShieldDrawer isOpen={shieldOpen} onClose={() => setShieldOpen(false)} onOpenPlus={() => setPlusOpen(true)} />
     </div>
   );
 };

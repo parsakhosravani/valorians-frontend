@@ -231,6 +231,7 @@ async function plusInfo(chatId: number, userId: number) {
     `👑 <b>Valorians Plus</b>\n\n` +
       `🔨 +${PLUS.extraBuilders} builder, so one more building goes up at a time\n` +
       `⚔️ +${PLUS.extraTrainBatches} training slots in the barracks queue\n` +
+      `🛡️ A free ${PLUS.weeklyShieldHours}h shield every week\n` +
       `👑 The Plus crown next to your name\n\n` +
       (active
         ? `✅ Your Plus is active for ${days} more day${days === 1 ? "" : "s"}.`
