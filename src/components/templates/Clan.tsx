@@ -535,7 +535,7 @@ export const Clan: FunctionComponent = () => {
         return (
           <Card key={t.id} className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">{def.icon}</span>
+              <span className="text-2xl"><GameIcon e={def.icon} /></span>
               <div className="flex flex-col flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-parch">{def.name}</span>
@@ -823,7 +823,7 @@ export const Clan: FunctionComponent = () => {
                       lvl ? "bg-[#1C2A14] border-good/60 text-good" : "bg-panel border-line text-muted"
                     )}
                   >
-                    {t.icon} {lvl ? t.effect(lvl) : `${t.name}: none yet`}
+                    <GameIcon e={t.icon} /> {lvl ? t.effect(lvl) : `${t.name}: none yet`}
                   </span>
                 );
               })}
