@@ -6,7 +6,7 @@ import { Player, avatarUrl } from "./players";
 import { storedFlag } from "@/lib/game/clan";
 import { advance, normalizeState } from "@/lib/game/engine";
 import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
-import { Point, campPosition, distance, homeSlot, terrainAt } from "@/lib/game/map";
+import { Point, campPosition, distance, homeSlot, isCoastal, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutEstimate } from "@/lib/game/war";
 
 /** A tribe's home tile, settling it on the map the first time it is needed. */
@@ -101,6 +101,10 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       population: Math.floor(Number(row.population)),
       power: Math.round(Number(row.power)),
       townHall: s.buildings["town-hall"] ?? 0,
+      /** On the sea's edge: can be attacked from the sea, and fights better there. */
+      coastal: isCoastal(p),
+      /** Harbors are seen from afar; each level makes landings harder. */
+      harbor: s.buildings["harbor"] ?? 0,
       shieldUntil: Number(row.shield_until),
       terrain: terrainAt(p.x, p.y),
       distance: Math.round(distance(home, p) * 10) / 10,

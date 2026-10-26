@@ -28,14 +28,16 @@ const leadUnit = (army: Army | null): UnitId | null => {
   let best: UnitId | null = null;
 
   for (const u of UNITS) {
+    if (u.transport) continue;
     if ((army[u.id] ?? 0) > (best ? (army[best] ?? 0) : 0)) best = u.id;
   }
 
   return best;
 };
 
+/** Troops in an army (ships don't count). */
 const total = (army: Army | null) =>
-  army ? UNITS.reduce((s, u) => s + (army[u.id] ?? 0), 0) : 0;
+  army ? UNITS.reduce((s, u) => s + (u.transport ? 0 : (army[u.id] ?? 0)), 0) : 0;
 
 export const ROUTE_COLORS = {
   outgoing: "#F2C66D",
@@ -147,6 +149,7 @@ export const ArmyToken = ({
   units,
   incoming,
   left,
+  atSea = false,
 }: {
   from: Pt;
   to: Pt;
@@ -154,6 +157,8 @@ export const ArmyToken = ({
   units: Army | null;
   incoming: boolean;
   left: number;
+  /** Out on the water right now: the army shows as a Longship. */
+  atSea?: boolean;
 }) => {
   const lead = leadUnit(units);
   const n = total(units);
@@ -172,7 +177,9 @@ export const ArmyToken = ({
               : "bg-gradient-to-b from-[#3A2A1B] to-[#1E1610] border-gold",
           )}
         >
-          <span className="animate-trot">{lead ? <UnitEmoji unit={lead} /> : "⚔️"}</span>
+          <span className={atSea ? "animate-sail" : "animate-trot"}>
+            {atSea ? "⛵" : lead ? <UnitEmoji unit={lead} /> : "⚔️"}
+          </span>
           {n > 0 && (
             <span
               className={clsx(

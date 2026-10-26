@@ -37,7 +37,8 @@ import {
   UnitId,
   buildingImage,
 } from "@/lib/game/config";
-import { TERRAIN, Terrain, scoutCost, terrainAt } from "@/lib/game/map";
+import { TERRAIN, Terrain, scoutCost, seaAt, seaRoute, terrainAt } from "@/lib/game/map";
+import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
@@ -54,6 +55,9 @@ type Tribe = {
   population: number;
   power: number;
   townHall: number;
+  /** On the sea's edge (older servers don't send it). */
+  coastal?: boolean;
+  harbor?: number;
   shieldUntil: number;
   terrain: Terrain;
   distance: number;
@@ -131,14 +135,18 @@ const TERRAIN_FILL: Record<Terrain, string[]> = {
   forest: ["#34492A", "#36502B", "#314527"],
   hills: ["#7B6848", "#81704E", "#76633F"],
   lake: ["#2F5664", "#315A69", "#2D5260"],
+  sea: ["#1E4258", "#20465D", "#1C3F54"],
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
   plains: "🌾",
   forest: "🌲",
   hills: "⛰️",
-  lake: "🌊",
+  lake: "💧",
+  sea: "🌊",
 };
+
+const SAND = "#C8B27A";
 
 const Ground = memo(function Ground({
   ox,
@@ -192,6 +200,24 @@ const Ground = memo(function Ground({
               strokeWidth="1.5"
             />
           )}
+          {t === "sea" && v === 0 && (
+            <path
+              d={`M${px + 6} ${py + 16} q6 -5 12 0 t12 0 M${px + 18} ${py + 32} q6 -5 12 0 t12 0`}
+              fill="none"
+              opacity="0.35"
+              stroke="#9FD0E6"
+              strokeWidth="1.5"
+            />
+          )}
+          {/* Beaches: a strip of sand on every side of the land that meets the sea. */}
+          {t !== "sea" && (
+            <>
+              {seaAt(x, y - 1) && <rect fill={SAND} height={4} opacity="0.85" width={T} x={px} y={py} />}
+              {seaAt(x, y + 1) && <rect fill={SAND} height={4} opacity="0.85" width={T} x={px} y={py + T - 4} />}
+              {seaAt(x - 1, y) && <rect fill={SAND} height={T} opacity="0.85" width={4} x={px} y={py} />}
+              {seaAt(x + 1, y) && <rect fill={SAND} height={T} opacity="0.85" width={4} x={px + T - 4} y={py} />}
+            </>
+          )}
         </g>,
       );
     }
@@ -199,6 +225,52 @@ const Ground = memo(function Ground({
 
   return <>{tiles}</>;
 });
+
+// ─── The sea ─────────────────────────────────────────────────────────────────
+
+/**
+ * What the sea means for a fight: for your own coastal tribe, the beach is on
+ * your side; for a target across the water, you need Longships and land
+ * against that advantage.
+ */
+const SeaNote = ({
+  coastal,
+  camp,
+  harbor = 0,
+  myHarbor = 0,
+  ships = 0,
+}: {
+  coastal?: boolean;
+  camp?: boolean;
+  harbor?: number;
+  myHarbor?: number;
+  ships?: number;
+}) => {
+  const bonus = Math.round((landingFactorFor(harbor) - 1) * 100);
+
+  return (
+    <div className="rounded-xl border border-[#4F86A3]/60 bg-[#14222A] px-2.5 py-2 text-xs text-[#A9D3EA] flex flex-col gap-1">
+      {coastal ? (
+        <span>
+          ⚓ <b>Your shore is your wall.</b> Armies from across the sea must land on your beach and fight at{" "}
+          <b>+{bonus}%</b> to your defense{harbor ? "" : ". A Harbor makes it stronger"}.
+        </span>
+      ) : (
+        <>
+          <span>
+            🌊 <b>Across the sea.</b> Your army sails on Longships, one for every 20 foot soldiers
+            {camp ? "." : <>, then lands on their beach: <b>+{bonus}%</b> to their defense.</>}
+          </span>
+          <span className="text-[#7FB3D0]">
+            {myHarbor === 0
+              ? "Build a Harbor to make Longships."
+              : `⛵ ${fmt(ships)} Longship${ships === 1 ? "" : "s"} at home.`}
+          </span>
+        </>
+      )}
+    </div>
+  );
+};
 
 // ─── The map ─────────────────────────────────────────────────────────────────
 
@@ -617,6 +689,9 @@ export const WarMap = ({
         : t.defense!,
       distance: t.distance,
       terrain: t.terrain,
+      from: data!.home,
+      at: { x: t.x, y: t.y },
+      harbor: t.harbor ?? 0,
       note:
         state.shieldUntil > now ? "Attacking ends your own shield." : undefined,
     });
@@ -630,6 +705,8 @@ export const WarMap = ({
       defense: { min: c.defense, max: c.defense, exact: true },
       distance: c.distance,
       terrain: c.terrain,
+      from: data!.home,
+      at: { x: c.x, y: c.y },
     });
   };
 
@@ -916,6 +993,13 @@ export const WarMap = ({
                       }}
                       onClick={() => setSelected({ kind: "tribe", tribe: t })}
                     >
+                      {t.terrain === "sea" && (
+                        // Settled before the seas were charted: a little island of their own.
+                        <span
+                          className="absolute rounded-[50%] border-2 border-[#E6D3A0]/70"
+                          style={{ left: 4, top: 6, width: 56, height: 44, background: SAND }}
+                        />
+                      )}
                       <span
                         className={clsx(
                           "relative w-12 h-12 rounded-full flex items-center justify-center border-[3px] bg-[#1E1610]/70",
@@ -990,6 +1074,14 @@ export const WarMap = ({
                     p={progress(now, m.sentAt, m.arrivesAt)}
                     to={{ x: px(m.to.x), y: py(m.to.y) }}
                     units={m.units}
+                    atSea={(() => {
+                      const f = progress(now, m.sentAt, m.arrivesAt);
+
+                      return seaAt(
+                        Math.round(m.from.x + (m.to.x - m.from.x) * f),
+                        Math.round(m.from.y + (m.to.y - m.from.y) * f),
+                      );
+                    })()}
                   />
                 ))}
               </div>
@@ -1123,6 +1215,11 @@ export const WarMap = ({
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
                     🏛 Town Hall {t.townHall}
                   </span>
+                  {t.coastal && (
+                    <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
+                      ⚓ Coastal{t.harbor ? ` · Harbor ${t.harbor}` : ""}
+                    </span>
+                  )}
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
                     👥 {fmt(t.population)}
                   </span>
@@ -1149,14 +1246,18 @@ export const WarMap = ({
                   </span>
                 </div>
                 {t.isMe ? (
-                  <p className="text-sm text-sub">
-                    Your home on {ground.name.toLowerCase()}. {ground.note}{" "}
-                    {incoming.length
-                      ? `${incoming.length} army marching on you.`
-                      : "No enemies on the way."}
-                  </p>
+                  <>
+                    <p className="text-sm text-sub">
+                      Your home on {ground.name.toLowerCase()}. {t.terrain === "sea" ? "An island of your own." : ground.note}{" "}
+                      {incoming.length
+                        ? `${incoming.length} army marching on you.`
+                        : "No enemies on the way."}
+                    </p>
+                    {t.coastal && <SeaNote coastal harbor={t.harbor ?? 0} />}
+                  </>
                 ) : (
                   <>
+                    {seaRoute(data!.home, t).naval && <SeaNote harbor={t.harbor ?? 0} myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />}
                     {sc ? (
                       <div className="bg-[#1E1610] rounded-xl p-2.5 flex flex-col gap-1.5 text-sm">
                         <div className="text-[10px] font-extrabold tracking-[0.12em] text-muted">
@@ -1261,6 +1362,9 @@ export const WarMap = ({
                     🛡️ {fmt(c.defense * (1 + ground.defense))}
                   </span>
                 </div>
+                {seaRoute(data!.home, c).naval && (
+                  <SeaNote camp myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />
+                )}
                 <p className="text-sm text-sub">
                   🎁 {fmt(c.reward.resources)} of each resource + 🪙{" "}
                   {fmt(c.reward.coins)}

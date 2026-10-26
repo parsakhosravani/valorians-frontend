@@ -55,6 +55,8 @@ export const nextLevelGain = (b: BuildingDef): string => {
           return `${e.perLevel}% faster return`;
         case "heal":
           return `Saves ${e.perLevel}% more troops`;
+        case "seaDefense":
+          return `+${e.perLevel}% vs sea landings`;
         default:
           return b.description;
       }

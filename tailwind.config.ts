@@ -40,6 +40,10 @@ const config: Config = {
           "0%, 100%": { translate: "0 0" },
           "50%": { translate: "0 -2px" },
         },
+        sail: {
+          "0%, 100%": { rotate: "-6deg", translate: "0 0" },
+          "50%": { rotate: "6deg", translate: "0 -1px" },
+        },
         scale: {
           "0%, 100%": { transform: "scale(1)" },
           "50%": { transform: "scale(1.02)" },
@@ -48,6 +52,7 @@ const config: Config = {
       animation: {
         route: "route 1.2s linear infinite",
         trot: "trot 0.6s ease-in-out infinite",
+        sail: "sail 1.8s ease-in-out infinite",
         float: "float 2.2s ease-in-out infinite",
         flame: "flame 0.9s ease-in-out infinite alternate",
         kenburns: "kenburns 24s ease-in-out infinite alternate",

@@ -20,12 +20,13 @@ import {
 } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
 
-type Group = "all" | "infantry" | "cavalry" | "siege";
+type Group = "all" | "infantry" | "cavalry" | "siege" | "fleet";
 
 const GROUP_OF: Record<string, Exclude<Group, "all">> = {
   barracks: "infantry",
   stable: "cavalry",
   "siege-workshop": "siege",
+  harbor: "fleet",
 };
 
 const GROUPS: { id: Group; label: string }[] = [
@@ -33,6 +34,7 @@ const GROUPS: { id: Group; label: string }[] = [
   { id: "infantry", label: "Infantry" },
   { id: "cavalry", label: "Cavalry" },
   { id: "siege", label: "Siege" },
+  { id: "fleet", label: "Fleet" },
 ];
 
 /** Rank name, XP bar and how to earn the next rank. */
@@ -120,12 +122,20 @@ const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onTog
               <span className="text-[10px] font-bold px-1.5 rounded bg-[#E3A948]/15 text-[#E3A948] shrink-0">{t.rankName}</span>
             )}
           </div>
-          <div className="flex gap-2.5 text-xs text-sub mt-0.5">
-            <span>⚔️ {fmt(unitAttack(state, unit.id))}</span>
-            <span>🛡️ {fmt(unitDefense(state, unit.id))}</span>
-            <span>🎒 {unit.carry}</span>
-            <span className="text-[#B19C80]">⏱ {unit.speed}s/tile</span>
-          </div>
+          {unit.transport ? (
+            <div className="flex gap-2.5 text-xs text-sub mt-0.5">
+              <span>👥 {unit.transport} troops</span>
+              <span>🎒 {unit.carry}</span>
+              <span className="text-[#B19C80]">🌊 {unit.speed}s/tile</span>
+            </div>
+          ) : (
+            <div className="flex gap-2.5 text-xs text-sub mt-0.5">
+              <span>⚔️ {fmt(unitAttack(state, unit.id))}</span>
+              <span>🛡️ {fmt(unitDefense(state, unit.id))}</span>
+              <span>🎒 {unit.carry}</span>
+              <span className="text-[#B19C80]">⏱ {unit.speed}s/tile</span>
+            </div>
+          )}
         </div>
         <div className="text-right shrink-0">
           <div className="font-bold text-lg leading-none">{fmt(state.army[unit.id])}</div>
@@ -141,7 +151,8 @@ const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onTog
           <p className="text-xs text-[#B19C80]">
             {unit.description} <span className="text-[#F08A6C]">Eats {unit.upkeep} crop/h.</span>
           </p>
-          <RankBar unit={unit} />
+          {/* Ships never fight, so they never earn ranks. */}
+          {!unit.transport && <RankBar unit={unit} />}
           <TrainPanel unit={unit} />
         </div>
       )}
