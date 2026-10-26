@@ -17,7 +17,7 @@ test("tribes settle on distinct dry land", () => {
     let p = homeSlot(n);
 
     while (seen.has(`${p.x},${p.y}`)) p = homeSlot(++n);
-    expect(terrainAt(p.x, p.y)).not.toBe("lake");
+    expect(terrainAt(p.x, p.y)).not.toBe("sea");
     seen.add(`${p.x},${p.y}`);
     n++;
   }
