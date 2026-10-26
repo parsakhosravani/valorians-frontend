@@ -51,6 +51,8 @@ Admins broadcast news from the bot chat. Put your Telegram user id in `BOT_ADMIN
 
 Sending runs at ~25 messages a second: a first batch right away, the rest from the cron (`/api/cron/battles`, every 5 minutes), picking up where it stopped. When it's done the bot messages you how many players got it. Each announcement carries a **Play now** button and a **Mute news** button; players can also toggle news with `/news`. Players who blocked the bot are skipped until they write to it again. Battle alerts are not affected by muting.
 
+**After each deploy** the cron notices the new version (Vercel's `VERCEL_GIT_COMMIT_SHA`) within a few minutes and sends every admin a ready-made draft listing the pull requests merged since the last version, with **Send**, **Players + news channel**, **Write my own** and **Cancel**. Nothing reaches players until an admin taps Send; once one admin sends it, the other admins' drafts are retired. The first deploy after this feature only remembers the version. What changed is read from the public GitHub API (`GITHUB_REPO`, default from Vercel's repo variables; set `GITHUB_TOKEN` for a private repo).
+
 ### API
 
 All routes need the `Authorization` header and return `{ serverTime, me, state }` unless noted.

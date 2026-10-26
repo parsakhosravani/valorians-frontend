@@ -139,17 +139,23 @@ export async function takeAdminPost(m: { chat: { id: number }; from?: { id: numb
 
     return true;
   }
-  const n = await audience();
-  const rows: object[][] = [[{ text: `📨 Send to ${fmt(n)} players`, callback_data: `ann:send:${id}` }]];
-
-  if (channelId()) rows.push([{ text: "📨 Players + news channel", callback_data: `ann:both:${id}` }]);
-  rows.push([{ text: "✖️ Cancel", callback_data: `ann:cancel:${id}` }]);
-  await say(m.chat.id, `👆 <b>Preview.</b> This is how players will see it.\n\nSend it?`, rows);
+  await say(m.chat.id, `👆 <b>Preview.</b> This is how players will see it.\n\nSend it?`, await controls(id));
 
   return true;
 }
 
-/** Buttons on the preview: ann:send:<id>, ann:both:<id>, ann:cancel:<id>. */
+/** Send / channel / (rewrite) / cancel buttons under a preview. */
+async function controls(id: number, rewrite = false) {
+  const rows: object[][] = [[{ text: `📨 Send to ${fmt(await audience())} players`, callback_data: `ann:send:${id}` }]];
+
+  if (channelId()) rows.push([{ text: "📨 Players + news channel", callback_data: `ann:both:${id}` }]);
+  if (rewrite) rows.push([{ text: "✏️ Write my own", callback_data: `ann:edit:${id}` }]);
+  rows.push([{ text: "✖️ Cancel", callback_data: `ann:cancel:${id}` }]);
+
+  return rows;
+}
+
+/** Buttons on the preview: ann:send|both|edit|cancel:<id>. */
 export async function announceButton(data: string, adminId: number, chatId: number) {
   if (!isAdmin(adminId)) return;
   const [, action, raw] = data.split(":");
@@ -165,6 +171,12 @@ export async function announceButton(data: string, adminId: number, chatId: numb
 
     return;
   }
+  if (action === "edit") {
+    // Drop the release draft and take the admin's own post instead.
+    await startAnnounce(chatId, adminId);
+
+    return;
+  }
   const toChannel = action === "both" && !!channelId();
   const total = await audience();
   // Only the first tap starts it, so a double tap or a webhook retry can't send twice.
@@ -175,6 +187,13 @@ export async function announceButton(data: string, adminId: number, chatId: numb
   });
 
   if (!rs.rowsAffected) return;
+  // A release draft goes to every admin; once one sends it, retire the others.
+  await db.execute({
+    sql: `UPDATE announcements SET status = 'cancelled'
+          WHERE status = 'draft' AND id != ? AND release IS NOT NULL
+            AND release = (SELECT release FROM announcements WHERE id = ?)`,
+    args: [id, id],
+  });
 
   if (toChannel) {
     const row = (await db.execute({ sql: "SELECT source_chat, source_msg FROM announcements WHERE id = ?", args: [id] }))
@@ -196,6 +215,118 @@ export async function announceButton(data: string, adminId: number, chatId: numb
   await say(chatId, `📨 Sending to ${fmt(total)} players… I'll message you when it's done.`);
   // A first batch now; the cron finishes the rest.
   await deliverAnnouncements(8_000);
+}
+
+// ─── New versions ────────────────────────────────────────────────────────────
+
+/**
+ * After a new version deploys, drafts an announcement from what changed and
+ * sends it to the admins for approval (nothing reaches players until an admin
+ * taps Send). Runs from the cron; a deploy is noticed within a few minutes.
+ *
+ * The version is Vercel's VERCEL_GIT_COMMIT_SHA. What changed comes from
+ * GitHub: the titles of the pull requests merged since the last announced
+ * version (or commit subjects for direct pushes). The very first run only
+ * remembers the version, so the whole history is never announced.
+ */
+const repo = () =>
+  process.env.GITHUB_REPO ||
+  (process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG
+    ? `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`
+    : "");
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** "What changed" between two commits: PR titles, else commit subjects. */
+async function changesBetween(from: string, to: string) {
+  const res = await fetch(`https://api.github.com/repos/${repo()}/compare/${from}...${to}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(8000),
+  });
+
+  if (!res.ok) throw new Error(`GitHub compare failed: ${res.status}`);
+  const data = (await res.json()) as { commits?: { commit: { message: string } }[] };
+  const messages = (data.commits ?? []).map((c) => c.commit.message);
+  // "Merge pull request #81 from …\n\nUpdate announcements in the Telegram bot"
+  const prs = messages
+    .filter((m) => /^Merge pull request #\d+/.test(m))
+    .map((m) => m.split("\n").slice(1).find((l) => l.trim())?.trim() ?? "")
+    .filter(Boolean);
+  // Squash merges look like "Title (#82)".
+  const squashed = messages.map((m) => m.split("\n")[0]).filter((l) => /\(#\d+\)$/.test(l)).map((l) => l.replace(/\s*\(#\d+\)$/, ""));
+  const titles = prs.length || squashed.length ? [...prs, ...squashed] : messages.map((m) => m.split("\n")[0]).filter((l) => !/^Merge /.test(l));
+
+  return Array.from(new Set(titles)).slice(0, 12);
+}
+
+export async function checkRelease() {
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+
+  if (!sha || !adminIds().length) return null;
+  const db = await getDb();
+
+  await db.execute({ sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('release_sha', '')", args: [] });
+  const last = String((await db.execute("SELECT value FROM meta WHERE key = 'release_sha'")).rows[0]?.value ?? "");
+
+  if (last === sha) return null;
+  // Claim this version, so two cron runs at once can't both draft it.
+  const claim = await db.execute({
+    sql: "UPDATE meta SET value = ? WHERE key = 'release_sha' AND value = ?",
+    args: [sha, last],
+  });
+
+  if (!claim.rowsAffected || !last || !repo()) return null;
+  let changes: string[] = [];
+
+  try {
+    changes = await changesBetween(last, sha);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("release notes failed", e);
+  }
+  const short = sha.slice(0, 7);
+  const post =
+    `🆕 <b>Valorians Legend has been updated!</b>\n\n` +
+    (changes.length ? changes.map((c) => `• ${esc(c)}`).join("\n") + "\n\n" : "") +
+    `Tap <b>Play now</b> to see what's new, chief! ⚔️`;
+
+  for (const admin of adminIds()) {
+    await db.execute({
+      sql: "UPDATE announcements SET status = 'cancelled' WHERE admin_id = ? AND status IN ('awaiting', 'draft')",
+      args: [admin],
+    });
+    await say(
+      admin,
+      `🚀 <b>New version deployed</b> (<code>${short}</code>)\n\n` +
+        (changes.length
+          ? `Here's a draft announcement from what changed. Want to change it? Tap <b>Write my own</b>.`
+          : `I couldn't read what changed, so here's a short draft. Tap <b>Write my own</b> to say more.`)
+    );
+    // The draft itself is the post players will get (copied when sent).
+    const draft = (await tg("sendMessage", {
+      chat_id: admin,
+      text: post,
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      reply_markup: playerMarkup(),
+    })) as TgResult & { result?: { message_id: number } };
+
+    if (!draft.ok || !draft.result) continue;
+    const row = await db.execute({
+      sql: `INSERT INTO announcements (admin_id, source_chat, source_msg, status, release, created_at)
+            VALUES (?, ?, ?, 'draft', ?, ?) RETURNING id`,
+      args: [admin, admin, draft.result.message_id, sha, Date.now()],
+    });
+    const id = Number(row.rows[0].id);
+
+    await say(admin, `Send it to players?`, await controls(id, true));
+  }
+
+  return { release: short, changes: changes.length };
 }
 
 // ─── Players ─────────────────────────────────────────────────────────────────
