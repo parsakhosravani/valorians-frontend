@@ -6,7 +6,6 @@ import type { InStatement, Row } from "@libsql/client";
 import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
 
-import { REFERRAL_REWARD } from "@/lib/game/config";
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 
@@ -27,8 +26,7 @@ export type Player = {
   /** The raw Telegram photo URL last checked (photoUrl is null if it was only a letter tile). */
   photoSrc: string | null;
   isPremium: boolean;
-  referralCode: string;
-  referredBy: number | null;
+  clanId: number | null;
   createdAt: number;
   version: number;
   state: GameState;
@@ -44,8 +42,7 @@ const toPlayer = (r: Row): Player => ({
   photoUrl: str(r.photo_url),
   photoSrc: str(r.photo_src),
   isPremium: Number(r.is_premium) === 1,
-  referralCode: String(r.referral_code),
-  referredBy: r.referred_by == null ? null : Number(r.referred_by),
+  clanId: r.clan_id == null ? null : Number(r.clan_id),
   createdAt: Number(r.created_at),
   version: Number(r.version),
   state: normalizeState(JSON.parse(String(r.state))),
@@ -57,13 +54,8 @@ export async function findById(id: number) {
   return rs.rows[0] ? toPlayer(rs.rows[0]) : null;
 }
 
-async function findIdByCode(code: string) {
-  const db = await getDb();
-  const rs = await db.execute({ sql: "SELECT id FROM users WHERE referral_code = ?", args: [code] });
-  return rs.rows[0] ? Number(rs.rows[0].id) : null;
-}
-
-const newReferralCode = () =>
+/** Value for the old (still NOT NULL UNIQUE) referral_code column. Unused by the game. */
+const newLegacyCode = () =>
   crypto.randomBytes(9).toString("base64url").replace(/[-_]/g, "").slice(0, 8);
 
 /**
@@ -98,48 +90,7 @@ const profileArgs = (u: TelegramAuthUser) => [
   u.is_premium ? 1 : 0,
 ];
 
-/** One log line per invite attempt, so missing friends can be traced in the logs. */
-const logReferral = (data: Record<string, unknown>) => {
-  // eslint-disable-next-line no-console
-  console.info(`[referral] ${JSON.stringify(data)}`);
-};
-
-/** New players can still be linked to an inviter this long after they first played. */
-const LATE_REFERRAL_MS = 48 * 3600 * 1000;
-
-/** Links an existing new-ish player to their inviter and pays both sides once. */
-async function linkLateReferral(player: Player, code: string, premium: boolean) {
-  const inviterId = await findIdByCode(code);
-
-  if (!inviterId || inviterId === player.id) return false;
-  const inviter = await findById(inviterId);
-
-  // No loops: you can't be invited by someone you invited.
-  if (!inviter || inviter.referredBy === player.id) return false;
-  const db = await getDb();
-  const bonus = premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins;
-  const credit = (id: number, coins: number, pop: number): InStatement => ({
-    sql: `UPDATE users SET
-            state = json_set(state,
-              '$.coins', json_extract(state, '$.coins') + ?,
-              '$.population', json_extract(state, '$.population') + ?),
-            population = population + ?,
-            version = version + 1
-          WHERE id = ?`,
-    args: [coins, pop, pop, id],
-  });
-  const claim = await db.execute({
-    sql: "UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL",
-    args: [inviterId, player.id],
-  });
-
-  if (claim.rowsAffected !== 1) return false; // linked by a parallel request
-  await db.batch([credit(player.id, bonus, 0), credit(inviterId, bonus, REFERRAL_REWARD.population)], "write");
-
-  return true;
-}
-
-/** Loads the player, creating them (and paying referral bonuses) on first visit. */
+/** Loads the player, creating them on first visit. */
 export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<Player> {
   const db = await getDb();
   const existing = await findById(auth.user.id);
@@ -158,53 +109,22 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
     });
     existing.photoUrl = photo;
     existing.photoSrc = src;
-    if (auth.startParam && existing.referredBy == null) {
-      const young = now - existing.createdAt < LATE_REFERRAL_MS;
-      // Opened the game once without the link (e.g. from the bot's menu
-      // button), then came back through a friend's invite: still count it.
-      const linked = young && (await linkLateReferral(existing, auth.startParam, !!auth.user.is_premium));
 
-      logReferral({ user: existing.id, code: auth.startParam, kind: "existing", ageH: (now - existing.createdAt) / 3.6e6, linked });
-      if (linked) return (await findById(existing.id))!;
-    }
     return existing;
   }
 
   const state = createInitialState(now);
-  const stmts: InStatement[] = [];
-  let referredBy: number | null = null;
-
-  const inviterId = auth.startParam ? await findIdByCode(auth.startParam) : null;
-
-  logReferral({ user: auth.user.id, code: auth.startParam ?? null, kind: "new", inviter: inviterId });
-  if (inviterId && inviterId !== auth.user.id) {
-    referredBy = inviterId;
-    const bonus = auth.user.is_premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins;
-    state.coins += bonus;
-    // Credit the inviter atomically in SQL, so it can't clash with their own saves.
-    stmts.push({
-      sql: `UPDATE users SET
-              state = json_set(state,
-                '$.coins', json_extract(state, '$.coins') + ?,
-                '$.population', json_extract(state, '$.population') + ?),
-              population = population + ?,
-              version = version + 1
-            WHERE id = ?`,
-      args: [bonus, REFERRAL_REWARD.population, REFERRAL_REWARD.population, inviterId],
-    });
-  }
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const insert: InStatement = {
       sql: `INSERT INTO users (username, first_name, last_name, photo_url, language_code, is_premium,
-              id, referral_code, referred_by, population, power, wins, shield_until, state, version,
+              id, referral_code, population, power, wins, shield_until, state, version,
               created_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       args: [
         ...profileArgs(auth.user),
         auth.user.id,
-        newReferralCode(),
-        referredBy,
+        newLegacyCode(),
         ...stateColumns(state),
         JSON.stringify(state),
         now,
@@ -212,9 +132,7 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
       ],
     };
     try {
-      // Insert first: if a parallel request already created this player, the
-      // whole batch fails and the inviter isn't paid twice.
-      await db.batch([insert, ...stmts], "write");
+      await db.execute(insert);
       break;
     } catch (e) {
       const msg = String((e as Error).message);
@@ -268,8 +186,17 @@ export async function rankOf(population: number) {
   return Number(rs.rows[0].rank);
 }
 
+/** The clan badge shown with the player: name and tag, or null. */
+async function clanBadge(clanId: number | null) {
+  if (clanId == null) return null;
+  const db = await getDb();
+  const rs = await db.execute({ sql: "SELECT id, name, tag, leader_id FROM clans WHERE id = ?", args: [clanId] });
+  const c = rs.rows[0];
+
+  return c ? { id: Number(c.id), name: String(c.name), tag: String(c.tag), leaderId: Number(c.leader_id) } : null;
+}
+
 export async function playerView(p: Player, now: number) {
-  const inviter = p.referredBy ? await findById(p.referredBy) : null;
 
   return {
     serverTime: now,
@@ -279,8 +206,7 @@ export async function playerView(p: Player, now: number) {
       firstName: p.firstName,
       lastName: p.lastName,
       photoUrl: avatarUrl(p.id),
-      referralCode: p.referralCode,
-      invitedBy: inviter ? inviter.firstName || (inviter.username ? `@${inviter.username}` : "a friend") : null,
+      clan: await clanBadge(p.clanId),
       rank: await rankOf(p.state.population),
     },
     state: p.state,
@@ -288,35 +214,3 @@ export async function playerView(p: Player, now: number) {
 }
 
 export type PlayerView = Awaited<ReturnType<typeof playerView>>;
-
-export async function listFriends(id: number) {
-  const db = await getDb();
-  const [count, rows] = await db.batch(
-    [
-      { sql: "SELECT COUNT(*) AS n FROM users WHERE referred_by = ?", args: [id] },
-      {
-        sql: `SELECT id, username, first_name, photo_url, is_premium, population, created_at
-              FROM users WHERE referred_by = ? ORDER BY created_at DESC LIMIT 200`,
-        args: [id],
-      },
-    ],
-    "read"
-  );
-  return {
-    total: Number(count.rows[0].n),
-    friends: rows.rows.map((f) => {
-      const premium = Number(f.is_premium) === 1;
-      return {
-        id: Number(f.id),
-        name: String(f.first_name || f.username || "Player"),
-        username: str(f.username),
-        photoUrl: avatarUrl(Number(f.id)),
-        isPremium: premium,
-        population: Math.floor(Number(f.population)),
-        bonusCoins: premium ? REFERRAL_REWARD.premiumCoins : REFERRAL_REWARD.coins,
-        bonusPopulation: REFERRAL_REWARD.population,
-        joinedAt: Number(f.created_at),
-      };
-    }),
-  };
-}

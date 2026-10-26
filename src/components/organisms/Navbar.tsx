@@ -42,11 +42,11 @@ export const NAV_ICONS = {
       <path d="M9.5 17.5 21 6V3h-3L6.5 14.5M11 19l-6-6M8 16l-4 4M5 21l-2-2" />
     </Svg>
   ),
-  friends: (
+  // Shield with a banner stripe
+  clan: (
     <Svg>
-      <circle cx="9" cy="8" r="3.5" />
-      <path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6" />
-      <path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14c2.4.6 4 2.8 4 6" />
+      <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" />
+      <path d="M12 2v20M4 11h16" />
     </Svg>
   ),
   trade: (
@@ -70,7 +70,7 @@ const items: { icon: React.ReactNode; name: string; link: Route }[] = [
   { icon: NAV_ICONS.hall, name: "Hall", link: "/hall" as Route },
   { icon: NAV_ICONS.build, name: "Build", link: "/tribe" },
   { icon: NAV_ICONS.war, name: "War", link: "/battle" },
-  { icon: NAV_ICONS.friends, name: "Friends", link: "/friends" },
+  { icon: NAV_ICONS.clan, name: "Clan", link: "/clan" as Route },
   { icon: NAV_ICONS.mine, name: "Mine", link: "/resources" },
 ];
 

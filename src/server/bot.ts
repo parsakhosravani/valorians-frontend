@@ -6,7 +6,7 @@ import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { displayName } from "./war";
 
-import { REFERRAL_REWARD, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
+import { CLAN, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
 import { advance } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 
@@ -45,18 +45,12 @@ export async function tg(method: string, body: object) {
 
 // ─── Links and buttons ───────────────────────────────────────────────────────
 
-const BOT = () => process.env.NEXT_PUBLIC_BOT_ADDRESS || "valorians_bot";
-const SHORT = () => process.env.NEXT_PUBLIC_APP_SHORT_NAME || "start";
 export const appUrl = () => (process.env.APP_URL || "https://valorians-legend.vercel.app").replace(/\/$/, "");
-
-/** Opens the Mini App; `param` reaches the game as start_param (referral codes). */
-const playLink = (param?: string) => `https://t.me/${BOT()}/${SHORT()}${param ? `?startapp=${encodeURIComponent(param)}` : ""}`;
 
 type Button = { text: string; url?: string; callback_data?: string; web_app?: { url: string } };
 
-/** In the bot's own chat a web_app button opens the game in place; links carry referral codes. */
-const playButton = (text = "⚔️ Play Valorians", param?: string): Button =>
-  param ? { text, url: playLink(param) } : { text, web_app: { url: appUrl() } };
+/** In the bot's own chat a web_app button opens the game in place. `path` opens a screen. */
+const playButton = (text = "⚔️ Play Valorians", path = ""): Button => ({ text, web_app: { url: `${appUrl()}${path}` } });
 
 const channel = () => questUrl("telegram", process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL);
 
@@ -66,7 +60,7 @@ const menuRows = (): Button[][] => [
     { text: "🏆 Top chiefs", callback_data: "top" },
   ],
   [
-    { text: "👥 Invite friends", callback_data: "invite" },
+    { text: "🛡️ My clan", callback_data: "clan" },
     { text: "📜 How to play", callback_data: "help" },
   ],
   ...(channel() ? [[{ text: "📢 News & events", url: channel()! }]] : []),
@@ -88,8 +82,7 @@ const send = (chatId: number, text: string, rows: Button[][]) =>
 
 // ─── Screens ─────────────────────────────────────────────────────────────────
 
-async function welcome(chatId: number, firstName: string, param?: string) {
-  const invited = !!param;
+async function welcome(chatId: number, firstName: string) {
   const caption =
     `⚔️ <b>Welcome to Valorians Legend, ${esc(firstName || "chief")}!</b>\n\n` +
     `The longships are ready and the dragons are restless. Raise your village, ` +
@@ -97,11 +90,11 @@ async function welcome(chatId: number, firstName: string, param?: string) {
     `🏰 Build and upgrade 24 buildings\n` +
     `⛏️ Mine resources every day\n` +
     `🗺️ March armies across a live world map\n` +
-    `🤝 Trade with other chiefs on the Market\n\n` +
+    `🤝 Trade with other chiefs on the Market\n` +
+    `🛡️ Found or join a clan\n\n` +
     `🎁 <b>Starter gift:</b> ${fmt(START.coins)} coins and ${fmt(START.resources)} of every resource` +
-    (invited ? `\n🤝 <b>A friend invited you</b>: you both get a bonus when you start playing.` : "") +
     `\n\nTap <b>Play</b> to claim your land.`;
-  const rows = [[playButton("⚔️ Play now", param)], ...menuRows()];
+  const rows = [[playButton("⚔️ Play now")], ...menuRows()];
   const photo = await tg("sendPhoto", {
     chat_id: chatId,
     photo: `${appUrl()}/bot/welcome.jpg`,
@@ -124,8 +117,9 @@ async function howToPlay(chatId: number) {
       `<b>3. Train an army.</b> Spearmen and swordsmen hold the line, archers and axemen hit hard, cavalry, paladins and knights ride fast, rams and catapults break defenses.\n\n` +
       `<b>4. Conquer the map.</b> Raid barbarian camps and rival tribes. Armies take time to march, so plan your strikes. ` +
       `Hills and forests help defenders; scout before you attack.\n\n` +
-      `<b>5. Trade.</b> Build a Trading Post and swap your extra resources with other chiefs.\n\n` +
-      `<b>6. Rise.</b> Climb the leaderboard by population, power and victories. Claim your login streak every day!`,
+      `<b>5. Join a clan.</b> Band together with other chiefs, or found your own clan and lead it up the clan ranks.\n\n` +
+      `<b>6. Trade.</b> Build a Trading Post and swap your extra resources with other chiefs.\n\n` +
+      `<b>7. Rise.</b> Climb the leaderboard by population, power and victories. Claim your login streak every day!`,
     [[playButton()], [{ text: "« Menu", callback_data: "menu" }]]
   );
 }
@@ -179,27 +173,44 @@ async function topChiefs(chatId: number, userId: number) {
   ]);
 }
 
-async function invite(chatId: number, userId: number) {
+async function myClan(chatId: number, userId: number) {
   const p = await findById(userId);
+  const back = { text: "« Menu", callback_data: "menu" };
 
-  if (!p) {
-    await send(chatId, `Start playing first, then come back for your personal invite link.`, [[playButton()]]);
+  if (!p?.clanId) {
+    await send(
+      chatId,
+      `🛡️ <b>Clans</b>\n\nYou're not in a clan yet. Join one of the strongest, or found your own ` +
+        `for ${fmt(CLAN.createCost)} coins and lead up to ${CLAN.maxMembers} chiefs.`,
+      [[playButton("🛡️ Find a clan", "/clan")], [back]]
+    );
 
     return;
   }
-  const link = playLink(p.referralCode);
-  const share = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(
-    "⚔️ Join my tribe in Valorians Legend! Build, raid and trade right inside Telegram."
-  )}`;
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT c.name, c.tag, c.leader_id, COUNT(u.id) AS members, COALESCE(SUM(u.population), 0) AS population
+          FROM clans c LEFT JOIN users u ON u.clan_id = c.id WHERE c.id = ? GROUP BY c.id`,
+    args: [p.clanId],
+  });
+  const c = rs.rows[0];
+
+  if (!c) return menu(chatId);
+  const top = await db.execute({
+    sql: "SELECT username, first_name, population FROM users WHERE clan_id = ? ORDER BY population DESC LIMIT 5",
+    args: [p.clanId],
+  });
+  const lines = top.rows
+    .map((r, i) => `${i + 1}. ${esc(String(r.first_name || (r.username ? `@${r.username}` : "Player")))} · ${compact(Number(r.population))} 👥`)
+    .join("\n");
 
   await send(
     chatId,
-    `👥 <b>Invite friends, grow stronger</b>\n\n` +
-      `For every friend who starts playing with your link:\n` +
-      `🪙 +${fmt(REFERRAL_REWARD.coins)} coins for you and for them (+${fmt(REFERRAL_REWARD.premiumCoins)} if they have Telegram Premium)\n` +
-      `👥 +${fmt(REFERRAL_REWARD.population)} population for you\n\n` +
-      `Your link:\n<code>${link}</code>`,
-    [[{ text: "📨 Share with friends", url: share }], [{ text: "« Menu", callback_data: "menu" }]]
+    `🛡️ <b>[${esc(String(c.tag))}] ${esc(String(c.name))}</b>\n\n` +
+      `👥 ${fmt(Number(c.members))}/${CLAN.maxMembers} members · ${compact(Number(c.population))} people\n` +
+      (Number(c.leader_id) === userId ? `👑 You lead this clan\n` : "") +
+      `\n<b>Strongest members</b>\n${lines}`,
+    [[playButton("🛡️ Open my clan", "/clan")], [back]]
   );
 }
 
@@ -227,10 +238,10 @@ export async function handleUpdate(u: Update) {
   const m = u.message;
 
   if (!m?.text || !m.from || m.chat.type !== "private") return;
-  const [cmd, ...rest] = m.text.trim().split(/\s+/);
+  const [cmd] = m.text.trim().split(/\s+/);
   const name = cmd.replace(/^\//, "").replace(/@.*$/, "").toLowerCase();
 
-  if (name === "start") return welcome(m.chat.id, m.from.first_name ?? "", rest[0]);
+  if (name === "start") return welcome(m.chat.id, m.from.first_name ?? "");
 
   return route(name, m.chat.id, m.from.id, m.from.first_name ?? "");
 }
@@ -245,9 +256,8 @@ function route(name: string, chatId: number, userId: number, firstName: string) 
     case "top":
     case "leaderboard":
       return topChiefs(chatId, userId);
-    case "invite":
-    case "friends":
-      return invite(chatId, userId);
+    case "clan":
+      return myClan(chatId, userId);
     case "help":
       return howToPlay(chatId);
     default:
@@ -278,7 +288,7 @@ export async function setupBot() {
       "⛏️ Mine resources every day\n" +
       "🗺️ March armies across a live world map\n" +
       "🤝 Trade with other chiefs\n" +
-      "👥 Invite friends for bonus coins\n\n" +
+      "🛡️ Found or join a clan\n\n" +
       "Free to play, right here in Telegram. Tap START to claim your land!",
   });
   await run("setMyCommands", {
@@ -287,7 +297,7 @@ export async function setupBot() {
       { command: "play", description: "🎮 Open the game" },
       { command: "tribe", description: "🏰 Your tribe at a glance" },
       { command: "top", description: "🏆 Top chiefs" },
-      { command: "invite", description: "👥 Invite friends, earn coins" },
+      { command: "clan", description: "🛡️ Your clan" },
       { command: "help", description: "📜 How to play" },
     ],
   });

@@ -19,7 +19,7 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 - **Saving** is safe under parallel requests: every save checks a version number and retries on a clash, so taps and upgrades sent at the same moment are never lost.
 - **Time-based progress** (energy refill, passive production, population growth, building timers, coin income) is computed from timestamps — nothing needs to run in the background.
 - **Taps** are applied instantly on screen and sent to the server in small batches. The server caps them by energy, warehouse space and a human tapping speed.
-- **Referrals:** each player gets an invite link `https://t.me/<bot>/<app>?startapp=<code>`. When a new player opens it, both get coins (more if the friend has Telegram Premium) and the inviter gets population.
+- **Clans:** players found a clan (costs coins, picks a name and a short tag) or join an open one, up to a member cap. The founder leads and can remove members; when the leader leaves, the longest-serving member takes over, and the last member out disbands the clan. Clans are ranked by their members' total population.
 - **Quests:** the Telegram quest checks real channel membership via the Bot API when `TELEGRAM_CHANNEL_ID` is set and the bot is an admin there. YouTube and X can't be verified by any bot, so they unlock after the player opens the link and waits a few seconds.
 
 ### Daily Mine and streak
@@ -54,7 +54,11 @@ All routes need the `Authorization` header and return `{ serverTime, me, state }
 | POST | `/api/buildings/upgrade` | `{ building: "iron-mine" }` (ids in `config.ts`) |
 | POST | `/api/quests/start` | `{ quest: "telegram" \| "youtube" \| "x" }` |
 | POST | `/api/quests/claim` | `{ quest }` |
-| GET | `/api/friends` | — returns `{ total, friends[] }` |
+| GET | `/api/clan?q=` | — returns `{ mine, clans[], limits }`: your clan with members, and clans to browse |
+| POST | `/api/clan/create` | `{ name, tag, description? }` — costs coins |
+| POST | `/api/clan/join` | `{ id }` |
+| POST | `/api/clan/leave` | — |
+| POST | `/api/clan/kick` | `{ id }` — leader only |
 | POST | `/api/war/train` | `{ unit, count }` (unit ids in `config.ts`) |
 | GET | `/api/war/targets` | — tribes you can raid now |
 | POST | `/api/war/raid` | `{ target: playerId, units }` — also returns `report` |
@@ -85,7 +89,7 @@ bun dev        # http://localhost:3000
 bun run test   # engine + auth tests
 ```
 
-Add `?dev_user=2` to the URL to play as a different test player, and `?startapp=<referral code>` to test invites.
+Add `?dev_user=2` to the URL to play as a different test player (handy for testing clans with several members).
 
 ## Go live on Telegram
 
@@ -121,5 +125,5 @@ Back up `/data/valorians.db` regularly.
 
 ## Tuning the game
 
-All balance numbers live in `src/lib/game/config.ts`: starting resources, production per hour, tap power and energy curves, building costs and times, quest rewards, referral bonuses. The server and client both read it, so a change there applies everywhere.
+All balance numbers live in `src/lib/game/config.ts`: starting resources, production per hour, tap power and energy curves, building costs and times, quest rewards, clan limits and founding cost. The server and client both read it, so a change there applies everywhere.
 
