@@ -3,13 +3,13 @@ import "server-only";
 import crypto from "crypto";
 
 import { getDb } from "./db";
-import { homeOf } from "./map";
+import { campSpots, homeOf } from "./map";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
-import { Point, campPosition, distance, routeMs, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
+import { Point, distance, routeMs, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   Promotion,
   RaidReport,
@@ -113,7 +113,7 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
 
   if (to.camp) {
     campLevel = Math.floor(Number(to.camp));
-    dest = campPosition(me.id, campLevel, home);
+    dest = (await campSpots(me.id, home, campLevel))[campLevel - 1];
     const busy = await db.execute({
       sql: "SELECT 1 FROM attacks WHERE attacker_id = ? AND camp_level = ? AND status IN ('marching','resolving') LIMIT 1",
       args: [me.id, campLevel],

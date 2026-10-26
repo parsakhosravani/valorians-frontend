@@ -6,7 +6,7 @@ import { Player, avatarUrl } from "./players";
 import { storedFlag } from "@/lib/game/clan";
 import { advance, normalizeState } from "@/lib/game/engine";
 import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
-import { Point, campPosition, distance, homeSlot, isCoastal, terrainAt } from "@/lib/game/map";
+import { CAMP_REACH, Point, campPositions, distance, homeSlot, isCoastal, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutEstimate } from "@/lib/game/war";
 
 /** A tribe's home tile, settling it on the map the first time it is needed. */
@@ -43,6 +43,23 @@ async function settleAll() {
   const rs = await db.execute("SELECT id FROM users WHERE map_x IS NULL ORDER BY created_at ASC LIMIT 100");
 
   for (const r of rs.rows) await homeOf(Number(r.id));
+}
+
+/**
+ * Where a player's camps 1..`upTo` sit. Tribes' tiles around home are
+ * off-limits, so a camp never hides under a village. Map and marches both
+ * use this, so they always agree.
+ */
+export async function campSpots(playerId: number, home: Point, upTo: number): Promise<Point[]> {
+  const db = await getDb();
+  const r = CAMP_REACH(MAX_CAMP_LEVEL);
+  const rs = await db.execute({
+    sql: "SELECT map_x, map_y FROM users WHERE map_x BETWEEN ? AND ? AND map_y BETWEEN ? AND ?",
+    args: [home.x - r, home.x + r, home.y - r, home.y + r],
+  });
+  const tribes = rs.rows.map((row) => ({ x: Number(row.map_x), y: Number(row.map_y) }));
+
+  return campPositions(playerId, home, upTo, tribes);
 }
 
 export const VIEW_RADIUS = 14;
@@ -120,8 +137,9 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
 
   // Your own barbarian camps: beaten ones, the next one, and two you can see beyond.
   const shown = Math.min(MAX_CAMP_LEVEL, me.state.camps.cleared + 3);
-  const camps = Array.from({ length: shown }, (_, i) => i + 1).map((level) => {
-    const p = campPosition(me.id, level, home);
+  const spots = await campSpots(me.id, home, shown);
+  const camps = spots.map((p, i) => {
+    const level = i + 1;
     const st = campStatus(me.state, level, now);
 
     return {
