@@ -134,19 +134,15 @@ const TERRAIN_FILL: Record<Terrain, string[]> = {
   plains: ["#5E6B37", "#627039", "#5A6734"],
   forest: ["#34492A", "#36502B", "#314527"],
   hills: ["#7B6848", "#81704E", "#76633F"],
-  lake: ["#2F5664", "#315A69", "#2D5260"],
-  sea: ["#1E4258", "#20465D", "#1C3F54"],
+  sea: ["#2F5664", "#315A69", "#2D5260"],
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
   plains: "🌾",
   forest: "🌲",
   hills: "⛰️",
-  lake: "💧",
   sea: "🌊",
 };
-
-const SAND = "#C8B27A";
 
 const Ground = memo(function Ground({
   ox,
@@ -191,7 +187,7 @@ const Ground = memo(function Ground({
               strokeWidth="2.5"
             />
           )}
-          {t === "lake" && (
+          {t === "sea" && (
             <path
               d={`M${px + 8} ${py + 20} q5 -4 10 0 t10 0 M${px + 16} ${py + 30} q5 -4 10 0 t10 0`}
               fill="none"
@@ -199,24 +195,6 @@ const Ground = memo(function Ground({
               stroke="#BFE0E8"
               strokeWidth="1.5"
             />
-          )}
-          {t === "sea" && v === 0 && (
-            <path
-              d={`M${px + 6} ${py + 16} q6 -5 12 0 t12 0 M${px + 18} ${py + 32} q6 -5 12 0 t12 0`}
-              fill="none"
-              opacity="0.35"
-              stroke="#9FD0E6"
-              strokeWidth="1.5"
-            />
-          )}
-          {/* Beaches: a strip of sand on every side of the land that meets the sea. */}
-          {t !== "sea" && (
-            <>
-              {seaAt(x, y - 1) && <rect fill={SAND} height={4} opacity="0.85" width={T} x={px} y={py} />}
-              {seaAt(x, y + 1) && <rect fill={SAND} height={4} opacity="0.85" width={T} x={px} y={py + T - 4} />}
-              {seaAt(x - 1, y) && <rect fill={SAND} height={T} opacity="0.85" width={4} x={px} y={py} />}
-              {seaAt(x + 1, y) && <rect fill={SAND} height={T} opacity="0.85" width={4} x={px + T - 4} y={py} />}
-            </>
           )}
         </g>,
       );
@@ -993,13 +971,6 @@ export const WarMap = ({
                       }}
                       onClick={() => setSelected({ kind: "tribe", tribe: t })}
                     >
-                      {t.terrain === "sea" && (
-                        // Settled before the seas were charted: a little island of their own.
-                        <span
-                          className="absolute rounded-[50%] border-2 border-[#E6D3A0]/70"
-                          style={{ left: 4, top: 6, width: 56, height: 44, background: SAND }}
-                        />
-                      )}
                       <span
                         className={clsx(
                           "relative w-12 h-12 rounded-full flex items-center justify-center border-[3px] bg-[#1E1610]/70",
@@ -1248,7 +1219,7 @@ export const WarMap = ({
                 {t.isMe ? (
                   <>
                     <p className="text-sm text-sub">
-                      Your home on {ground.name.toLowerCase()}. {t.terrain === "sea" ? "An island of your own." : ground.note}{" "}
+                      Your home on {ground.name.toLowerCase()}. {ground.note}{" "}
                       {incoming.length
                         ? `${incoming.length} army marching on you.`
                         : "No enemies on the way."}
