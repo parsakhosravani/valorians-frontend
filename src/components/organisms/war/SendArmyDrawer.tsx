@@ -149,7 +149,7 @@ export const SendArmyDrawer = ({
 
           {/* Where the fight will be */}
           <div className="flex flex-wrap gap-2 text-xs font-bold">
-            <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">📍 {target.distance} tiles away</span>
+            <span className="px-2 py-1 rounded-lg bg-panel2 border border-line"><GameIcon e="📍" /> {target.distance} tiles away</span>
             <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
               <GameIcon e={terrain === "mountains" || terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} /> {TERRAIN[terrain].name}
               {TERRAIN[terrain].defense > 0 && <span className="text-[#F08A6C]"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
