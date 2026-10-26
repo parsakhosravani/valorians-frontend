@@ -60,6 +60,7 @@ import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
+import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 // ─── Data from /api/war/map ──────────────────────────────────────────────────
 
@@ -275,19 +276,19 @@ const SeaNote = ({
     <div className="rounded-xl border border-[#4F86A3]/60 bg-[#14222A] px-2.5 py-2 text-xs text-[#A9D3EA] flex flex-col gap-1">
       {coastal ? (
         <span>
-          ⚓ <b>Your shore is your wall.</b> Armies from across the sea must land on your beach and fight at{" "}
+          <GameIcon e="⚓" /> <b>Your shore is your wall.</b> Armies from across the sea must land on your beach and fight at{" "}
           <b>+{bonus}%</b> to your defense{harbor ? "" : ". A Harbor makes it stronger"}.
         </span>
       ) : (
         <>
           <span>
-            🌊 <b>Across the sea.</b> Your army sails on Longships, one for every 20 foot soldiers
+            <GameIcon e="🌊" /> <b>Across the sea.</b> Your army sails on Longships, one for every 20 foot soldiers
             {camp ? "." : <>, then lands on their beach: <b>+{bonus}%</b> to their defense.</>}
           </span>
           <span className="text-[#7FB3D0]">
             {myHarbor === 0
               ? "Build a Harbor to make Longships."
-              : `⛵ ${fmt(ships)} Longship${ships === 1 ? "" : "s"} at home.`}
+              : <IconText text={`⛵ ${fmt(ships)} Longship${ships === 1 ? "" : "s"} at home.`} />}
           </span>
         </>
       )}
@@ -814,7 +815,7 @@ export const WarMap = ({
               key={m.id}
               className="flex items-center gap-2 rounded-xl px-3 py-2 bg-[#2A140E] border border-[#8A3B23] text-sm"
             >
-              <span className="text-lg animate-pulse">🔥</span>
+              <span className="text-lg animate-pulse"><GameIcon e="🔥" /></span>
               <span className="flex-1 min-w-0">
                 <b>{m.from.name}</b> is marching on you
                 <span className="block text-xs text-[#FFB27A]">
@@ -835,7 +836,7 @@ export const WarMap = ({
               key={m.id}
               className="flex items-center gap-2 rounded-xl px-3 py-2 bg-panel border border-gold/60 text-sm"
             >
-              <span className="text-lg">⚔️</span>
+              <span className="text-lg"><GameIcon e="⚔️" /></span>
               <span className="flex-1 min-w-0 truncate">
                 To <b>{m.to.name}</b>
                 <span className="block text-xs text-muted truncate">
@@ -878,7 +879,7 @@ export const WarMap = ({
                 c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
               )}
             >
-              <span className="text-lg">🐪</span>
+              <span className="text-lg"><GameIcon e="🐪" /></span>
               <span className="flex-1 min-w-0 truncate">
                 {c.kind === "coming" ? (
                   <>
@@ -1049,7 +1050,7 @@ export const WarMap = ({
                       )}
                     >
                       {c.state === "locked"
-                        ? "🔒"
+                        ? <GameIcon e="🔒" />
                         : c.state === "cooldown"
                           ? formatDuration(c.readyAt - now)
                           : `Camp ${c.level}`}
@@ -1106,7 +1107,7 @@ export const WarMap = ({
                         />
                         {shielded && !t.isMe && (
                           <span className="absolute -top-1 -right-1 text-sm">
-                            🛡️
+                            <GameIcon e="🛡️" />
                           </span>
                         )}
                         <span className="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-[#1A120B] text-[10px] font-black flex items-center justify-center">
@@ -1246,25 +1247,25 @@ export const WarMap = ({
                   catapults slowest). The battle happens when it arrives.
                 </span>
                 <span>
-                  ⛰️ Armies follow roads, not straight lines: they march around
+                  <GameIcon e="⛰️" /> Armies follow roads, not straight lines: they march around
                   mountains and lakes, and forests and hills slow them down. When
                   the way round is too long, they sail.
                 </span>
                 <span>
-                  ⛰️ Hills give the defender +20% defense, 🌲 forests +10%, and
+                  <GameIcon e="⛰️" /> Hills give the defender +20% defense, <GameIcon e="🌲" /> forests +10%, and
                   horsemen (light cavalry, paladins, knights) fight 25% weaker in forests.
                 </span>
                 <span>
-                  🛡️ Spearmen defend 50% better against horsemen. Rams
+                  <GameIcon e="🛡️" /> Spearmen defend 50% better against horsemen. Rams
                   break the City Gate, catapults the Watchtower. Mix your army
                   to match the target.
                 </span>
                 <span>
-                  🔭 With an Exploration Center you can scout a tribe for coins:
+                  <GameIcon e="🔭" /> With an Exploration Center you can scout a tribe for coins:
                   exact defense, troops at home and what you could loot.
                 </span>
                 <span>
-                  🗼 A Watchtower shows you which troops are marching on you, so
+                  <GameIcon e="🗼" /> A Watchtower shows you which troops are marching on you, so
                   you can train defenders in time.
                 </span>
                 <span>
@@ -1272,7 +1273,7 @@ export const WarMap = ({
                   2h shield.
                 </span>
                 <span>
-                  ⚔️ When armies meet, the battle lasts from 1 minute up to 30,
+                  <GameIcon e="⚔️" /> When armies meet, the battle lasts from 1 minute up to 30,
                   longer the more troops fight. Tap the crossed swords to watch it
                   round by round; the defenders are on the field until it ends.
                 </span>
@@ -1321,7 +1322,7 @@ export const WarMap = ({
                     </span>
                   )}
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                    {TERRAIN_ICON[t.terrain]} {ground.name}
+                    <GameIcon e={TERRAIN_ICON[t.terrain]} /> {ground.name}
                     {ground.defense > 0 &&
                       ` · +${ground.defense * 100}% defense`}
                   </span>
@@ -1335,11 +1336,11 @@ export const WarMap = ({
                   </span>
                   {t.coastal && (
                     <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
-                      ⚓ Coastal{t.harbor ? ` · Harbor ${t.harbor}` : ""}
+                      <GameIcon e="⚓" /> Coastal{t.harbor ? ` · Harbor ${t.harbor}` : ""}
                     </span>
                   )}
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                    👥 {fmt(t.population)}
+                    <GameIcon e="👥" /> {fmt(t.population)}
                   </span>
                   <span
                     className={clsx(
@@ -1353,7 +1354,7 @@ export const WarMap = ({
                             : "bg-panel2 border-gold text-goldtext",
                     )}
                   >
-                    💪 {fmt(t.power)}{" "}
+                    <GameIcon e="💪" /> {fmt(t.power)}{" "}
                     {t.isMe
                       ? ""
                       : s === "weaker"
@@ -1382,7 +1383,7 @@ export const WarMap = ({
                           SCOUT REPORT · {formatDuration(now - sc.at)} AGO
                         </div>
                         <div>
-                          🛡️ Defense <b>{fmt(sc.defense)}</b>{" "}
+                          <GameIcon e="🛡️" /> Defense <b>{fmt(sc.defense)}</b>{" "}
                           <span className="text-muted text-xs">
                             (terrain included)
                           </span>
@@ -1408,7 +1409,7 @@ export const WarMap = ({
                     ) : (
                       t.defense && (
                         <p className="text-sm text-sub">
-                          🛡️ Defense about{" "}
+                          <GameIcon e="🛡️" /> Defense about{" "}
                           <b>
                             {t.defense.exact
                               ? fmt(t.defense.min * (1 + ground.defense))
@@ -1420,7 +1421,7 @@ export const WarMap = ({
                     )}
                     {shielded && (
                       <p className="text-sm font-bold text-[#E3A948]">
-                        🛡️ Shielded for {formatDuration(t.shieldUntil - now)}.
+                        <GameIcon e="🛡️" /> Shielded for {formatDuration(t.shieldUntil - now)}.
                         You can't attack until it ends.
                       </p>
                     )}
@@ -1432,7 +1433,7 @@ export const WarMap = ({
                           variant="outline"
                           onClick={() => doScout(t)}
                         >
-                          🔭 Scout · {fmt(scoutCost(t.distance))} coins
+                          <GameIcon e="🔭" /> Scout · {fmt(scoutCost(t.distance))} coins
                         </Button>
                       ) : (
                         <p className="flex-1 text-xs text-muted self-center">
@@ -1441,7 +1442,7 @@ export const WarMap = ({
                       )}
                       {t.ally ? (
                         <p className="flex-1 text-xs font-bold text-[#A9D3EA] self-center">
-                          🤝 Clanmate. You fight side by side, not against each other.
+                          <GameIcon e="🤝" /> Clanmate. You fight side by side, not against each other.
                         </p>
                       ) : (
                         <Button
@@ -1449,7 +1450,7 @@ export const WarMap = ({
                           disabled={shielded}
                           onClick={() => attackTribe(t)}
                         >
-                          ⚔️ Attack
+                          <GameIcon e="⚔️" /> Attack
                         </Button>
                       )}
                     </div>
@@ -1470,7 +1471,7 @@ export const WarMap = ({
               <div className="flex flex-col gap-3 pt-2">
                 <div className="flex flex-wrap gap-2 text-xs font-bold">
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                    {TERRAIN_ICON[c.terrain]} {ground.name}
+                    <GameIcon e={TERRAIN_ICON[c.terrain]} /> {ground.name}
                     {ground.defense > 0 &&
                       ` · +${ground.defense * 100}% defense`}
                   </span>
@@ -1478,14 +1479,14 @@ export const WarMap = ({
                     📍 {c.distance} tiles
                   </span>
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                    🛡️ {fmt(c.defense * (1 + ground.defense))}
+                    <GameIcon e="🛡️" /> {fmt(c.defense * (1 + ground.defense))}
                   </span>
                 </div>
                 {seaRoute(data!.home, c).naval && (
                   <SeaNote camp myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />
                 )}
                 <p className="text-sm text-sub">
-                  🎁 {fmt(c.reward.resources)} of each resource + 🪙{" "}
+                  <GameIcon e="🎁" /> {fmt(c.reward.resources)} of each resource + <GameIcon e="🪙" />{" "}
                   {fmt(c.reward.coins)}
                   {c.reward.first
                     ? " for the first win"
@@ -1494,7 +1495,7 @@ export const WarMap = ({
                 </p>
                 {c.state === "locked" ? (
                   <p className="text-sm font-bold text-muted">
-                    🔒 Beat camp {c.level - 1} first.
+                    <GameIcon e="🔒" /> Beat camp {c.level - 1} first.
                   </p>
                 ) : c.state === "cooldown" ? (
                   <p className="text-sm font-bold text-muted">
@@ -1506,7 +1507,7 @@ export const WarMap = ({
                   </p>
                 ) : (
                   <Button isFull onClick={() => attackCamp(c)}>
-                    ⚔️ Attack camp {c.level}
+                    <GameIcon e="⚔️" /> Attack camp {c.level}
                   </Button>
                 )}
               </div>

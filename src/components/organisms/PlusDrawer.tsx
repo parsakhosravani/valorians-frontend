@@ -6,6 +6,7 @@ import { useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS } from "@/lib/game/config";
 import { plusActive } from "@/lib/game/engine";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 const PERKS = [
   { icon: "🔨", title: `+${PLUS.extraBuilders} builder`, sub: "One more building goes up at the same time" },
@@ -41,7 +42,7 @@ export const PlusDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () =
         {PERKS.map((p) => (
           <li key={p.title} className="flex items-center gap-3 bg-panel2 border border-line rounded-xl px-3 py-2.5">
             <span aria-hidden className="text-2xl w-8 text-center">
-              {p.icon}
+              <GameIcon e={p.icon} />
             </span>
             <span className="flex flex-col">
               <span className="font-extrabold leading-tight">{p.title}</span>

@@ -26,6 +26,7 @@ import {
   TRADING_POST,
 } from "@/lib/game/trade";
 import type { MarketView } from "@/server/trade";
+import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 type Tab = "buy" | "sell" | "mine";
 
@@ -283,7 +284,7 @@ export const Market = () => {
         )}
         {data && level >= 1 && (
           <p className="text-xs text-sub text-center">
-            🐪 Merchants free: <b className="text-parch">{freeMerchants}</b> of{" "}
+            <GameIcon e="🐪" /> Merchants free: <b className="text-parch">{freeMerchants}</b> of{" "}
             {data.limits.maxOffers} · carry up to{" "}
             <b className="text-parch">{fmt(maxAmount)}</b> per load
           </p>
@@ -382,7 +383,7 @@ export const Market = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="flex-1 text-xs text-sub">
-                      ⏱ Arrives in {formatDuration(o.travelMs)} · {o.tiles}{" "}
+                      <GameIcon e="⏱" /> Arrives in {formatDuration(o.travelMs)} · {o.tiles}{" "}
                       tiles away
                     </span>
                     <Button
@@ -508,7 +509,7 @@ export const Market = () => {
                       {t.status === "open"
                         ? "On the market"
                         : travelling
-                          ? "🐪 On the road"
+                          ? <IconText text="🐪 On the road" />
                           : "✓ Delivered"}
                     </span>
                     <span className="flex-1 min-w-0 truncate text-sub text-right">

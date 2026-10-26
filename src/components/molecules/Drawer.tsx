@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { CloseIcon } from "@/components";
+import { IconText } from "@/components/atoms/GameIcon";
 
 type DrawerPosition = "bottom" | "right" | "left";
 
@@ -71,7 +72,7 @@ export const Drawer: React.FC<DrawerProps> = ({ position, children, isOpen, titl
           style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
         >
           <div className="flex justify-between items-center gap-3">
-            <h2 className="font-display text-xl font-bold">{title}</h2>
+            <h2 className="font-display text-xl font-bold">{title && <IconText text={title} />}</h2>
             <CloseIcon className="shrink-0 cursor-pointer" onClick={onClose} />
           </div>
           {children}
