@@ -40,7 +40,7 @@ export const Header: React.FC = () => {
         <Link
           aria-label={trades ? `Market, ${trades} active trade${trades === 1 ? "" : "s"}` : "Market"}
           className={clsx(
-            "relative h-8 pl-2 pr-2.5 rounded-full border flex items-center gap-1 text-xs font-extrabold [&_svg]:w-[18px] [&_svg]:h-[18px]",
+            "relative h-8 pl-2 pr-2.5 rounded-full border flex items-center gap-1 text-xs font-extrabold [&_img]:w-[20px] [&_img]:h-[20px]",
             onMarket
               ? "bg-gold border-gold text-[#1A120B]"
               : "bg-panel border-line text-goldtext",
