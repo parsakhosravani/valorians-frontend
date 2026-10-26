@@ -411,6 +411,16 @@ export const RAIDED_SHIELD_MS = 2 * 3600 * 1000;
 /** Luck swings each battle by up to ±10%. */
 export const LUCK = 0.1;
 
+// Battles last a while once the armies meet, longer the more troops fight.
+export const BATTLE_MIN_MS = 60_000;
+export const BATTLE_MAX_MS = 30 * 60_000;
+/** Battle length grows with the square root of the troops on the field: 100 troops ≈ 3½ min, 1,000 ≈ 10½ min. */
+export const BATTLE_MS_PER_SQRT_TROOP = 20_000;
+export const BATTLE_MIN_ROUNDS = 3;
+export const BATTLE_MAX_ROUNDS = 10;
+/** Barbarians in a camp, for the battle's length: about one per 20 defense. */
+export const CAMP_DEFENSE_PER_TROOP = 20;
+
 // Barbarian camps (PvE)
 export const MAX_CAMP_LEVEL = 30;
 export const campDefense = (level: number) => Math.round(80 * Math.pow(1.35, level - 1));

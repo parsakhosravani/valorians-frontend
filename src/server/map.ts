@@ -8,6 +8,8 @@ import { advance, normalizeState } from "@/lib/game/engine";
 import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
 import { CAMP_REACH, Point, campPositions, distance, homeSlot, isCoastal, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutEstimate } from "@/lib/game/war";
+import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
+import type { StoredBattle } from "./war";
 
 /** A tribe's home tile, settling it on the map the first time it is needed. */
 export async function homeOf(id: number): Promise<Point> {
@@ -71,9 +73,22 @@ type Movement = {
   to: Point & { name: string };
   sentAt: number;
   arrivesAt: number;
-  /** Visible to defenders with a Watchtower; always for your own armies. */
+  /** Visible to defenders with a Watchtower; always for your own armies (and once the fight is on). */
   units: Record<string, number> | null;
   campLevel: number | null;
+  /** The army reached its target and the battle is being fought. */
+  battle: LiveBattle | null;
+};
+
+/** A battle under way, as far as it has gone: later rounds stay secret until they're fought. */
+type LiveBattle = {
+  startedAt: number;
+  endsAt: number;
+  totalRounds: number;
+  rounds: BattleRound[];
+  nextRoundAt: number | null;
+  /** The defenders on the field (none at a barbarian camp). */
+  defenders: Record<string, number> | null;
 };
 
 type Caravan = {
@@ -161,7 +176,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           FROM attacks a
           LEFT JOIN users au ON au.id = a.attacker_id
           LEFT JOIN users du ON du.id = a.defender_id
-          WHERE a.status IN ('marching', 'resolving') AND (a.attacker_id = ? OR a.defender_id = ?)
+          WHERE a.status IN ('marching', 'resolving', 'fighting') AND (a.attacker_id = ? OR a.defender_id = ?)
           ORDER BY a.arrives_at ASC`,
     args: [me.id, me.id],
   });
@@ -169,6 +184,17 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const movements: Movement[] = mv.rows.map((a) => {
     const outgoing = Number(a.attacker_id) === me.id;
     const campLevel = a.camp_level == null ? null : Number(a.camp_level);
+    const stored = a.status === "fighting" && a.battle != null ? (JSON.parse(String(a.battle)) as StoredBattle) : null;
+    const battle: LiveBattle | null = stored
+      ? {
+          startedAt: stored.plan.startedAt,
+          endsAt: stored.plan.endsAt,
+          totalRounds: stored.plan.rounds.length,
+          rounds: roundsSoFar(stored.plan, now),
+          nextRoundAt: nextRoundAt(stored.plan, now),
+          defenders: stored.engaged,
+        }
+      : null;
 
     return {
       id: Number(a.id),
@@ -181,8 +207,9 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       },
       sentAt: Number(a.sent_at),
       arrivesAt: Number(a.arrives_at),
-      units: outgoing || watch ? JSON.parse(String(a.units)) : null,
+      units: outgoing || watch || battle ? JSON.parse(String(a.units)) : null,
       campLevel,
+      battle,
     };
   });
 
