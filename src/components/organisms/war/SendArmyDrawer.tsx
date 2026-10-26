@@ -1,13 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
-import { Stepper, UnitBadge, fmt } from "./shared";
+import { UnitBadge, fmt } from "./shared";
 
 import { Button, Drawer } from "@/components";
 import { useGame, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
-import { Army, emptyArmy } from "@/lib/game/engine";
+import { Army, GameState, emptyArmy } from "@/lib/game/engine";
 import { TERRAIN, Terrain, armySpeed, marchMs } from "@/lib/game/map";
 import { armySize, battleNumbers } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
@@ -23,6 +23,36 @@ export type AttackTarget = {
   note?: string;
 };
 
+/** Attack must beat the top of the defense by this much to count as "enough". */
+const SAFETY = 1.25;
+
+/** The same share of every troop type at home. */
+const scaled = (home: Army, f: number): Army => {
+  const a = emptyArmy();
+
+  for (const u of UNITS) a[u.id] = f >= 1 ? home[u.id] : Math.round(home[u.id] * f);
+
+  return a;
+};
+
+/** Smallest share (in 5% steps) whose attack clears the defense with a margin, or null if even everything can't. */
+function enoughShare(s: GameState, terrain: Terrain, defMax: number): number | null {
+  for (let f = 0.05; f < 1.0001; f += 0.05) {
+    if (battleNumbers(s, scaled(s.army, f), null, terrain, 0).attack >= defMax * SAFETY) return Math.min(1, f);
+  }
+
+  return null;
+}
+
+const PRESETS = [
+  { label: "¼", f: 0.25 },
+  { label: "½", f: 0.5 },
+  { label: "¾", f: 0.75 },
+  { label: "All", f: 1 },
+];
+
+const sameArmy = (a: Army, b: Army) => UNITS.every((u) => a[u.id] === b[u.id]);
+
 export const SendArmyDrawer = ({
   target,
   onClose,
@@ -37,22 +67,44 @@ export const SendArmyDrawer = ({
   const [units, setUnits] = useState<Army>(emptyArmy());
   const [busy, setBusy] = useState(false);
 
-  // Default to sending everything at home.
-  useEffect(() => {
-    if (target) setUnits({ ...state.army });
-  }, [target?.title]);
-
   const terrain = target?.terrain ?? "plains";
   const ground = 1 + TERRAIN[terrain].defense;
-  const { attack: power } = battleNumbers(state, units, null, terrain, 0);
-  const carry = UNITS.reduce((s, u) => s + u.carry * units[u.id], 0);
   const d = target?.defense;
   const defMin = d ? d.min * ground : 0;
   const defMax = d ? d.max * ground : 0;
+
+  // Just enough to win comfortably, so the rest of the army stays home to defend.
+  const enough = useMemo(
+    () => (target ? enoughShare(state, terrain, defMax) : null),
+    // Recompute when a new target opens, not on every resource tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [target?.title, defMax]
+  );
+
+  // Open at half the army (never everything, so home stays defended), or at
+  // "enough" when half wouldn't win. Sending more also brings back more loot.
+  useEffect(() => {
+    if (target) setUnits(scaled(state.army, Math.max(0.5, enough ?? 0)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.title]);
+
+  const { attack: power } = battleNumbers(state, units, null, terrain, 0);
+  const carry = UNITS.reduce((s, u) => s + u.carry * units[u.id], 0);
   const verdict = !d ? "" : power > defMax * 1.1 ? "Likely victory" : power < defMin * 0.9 ? "Likely defeat" : "Close fight";
+  const tone = verdict === "Likely victory" ? "good" : verdict === "Likely defeat" ? "bad" : "even";
   const travel = target ? marchMs(units, target.distance, rates.marchMultiplier) : 0;
   const slowest = UNITS.find((u) => units[u.id] > 0 && u.speed === armySpeed(units));
   const hasCavalry = UNITS.some((u) => u.mounted && units[u.id] > 0);
+  const size = armySize(units);
+  const home = UNITS.filter((u) => state.army[u.id] > 0);
+  // Attack's share of attack + defense, for the balance bar.
+  const balance = power + defMax > 0 ? power / (power + (defMin + defMax) / 2) : 0;
+
+  const presets = [
+    // Skip "Enough" when it lands on one of the fixed picks anyway.
+    ...(enough != null && !PRESETS.some((p) => Math.abs(p.f - enough) < 0.01) ? [{ label: "Enough", f: enough }] : []),
+    ...PRESETS,
+  ];
 
   const send = async () => {
     if (!target) return;
@@ -65,6 +117,9 @@ export const SendArmyDrawer = ({
       onSent(march);
     }
   };
+
+  const setOne = (id: keyof Army, n: number) =>
+    setUnits((a) => ({ ...a, [id]: Math.max(0, Math.min(state.army[id], Math.floor(n || 0))) }));
 
   return (
     <Drawer isOpen={!!target} position="bottom" title={target?.title} onClose={onClose}>
@@ -84,58 +139,142 @@ export const SendArmyDrawer = ({
             )}
           </div>
 
-          {/* Only troop types you have at home. */}
-          {UNITS.filter((u) => state.army[u.id] > 0).map((u) => (
-            <div key={u.id} className="flex items-center gap-2">
-              <UnitBadge size={32} unit={u.id} />
-              <div className="flex-1 text-sm">
-                <div className="font-bold">{u.name}</div>
-                <div className="text-[10px] text-[#B19C80]">
-                  {fmt(state.army[u.id])} at home · {u.speed}s/tile
-                </div>
-              </div>
-              <Stepper max={state.army[u.id]} value={units[u.id]} onChange={(n) => setUnits((a) => ({ ...a, [u.id]: n }))} />
-            </div>
-          ))}
+          {/* Quick picks for the whole army */}
+          <div className="flex items-center gap-1 bg-panel border border-line rounded-xl p-1">
+            {presets.map((p) => {
+              const active = sameArmy(units, scaled(state.army, p.f));
 
-          <div className="grid grid-cols-4 text-center bg-[#1E1610] rounded-xl p-2 text-sm gap-1">
-            <div>
-              <div className="text-[10px] text-[#B19C80]">ATTACK</div>
-              <b>⚔️ {fmt(power)}</b>
-            </div>
-            <div>
-              <div className="text-[10px] text-[#B19C80]">DEFENSE</div>
-              <b>🛡️ {d.exact ? fmt(defMin) : `${fmt(defMin)}–${fmt(defMax)}`}</b>
-            </div>
-            <div>
-              <div className="text-[10px] text-[#B19C80]">CARRY</div>
-              <b>🎒 {fmt(carry)}</b>
-            </div>
-            <div>
-              <div className="text-[10px] text-[#B19C80]">MARCH</div>
-              <b>⏱ {armySize(units) ? formatDuration(travel) : "–"}</b>
-            </div>
+              return (
+                <button
+                  key={p.label}
+                  className={clsx(
+                    "flex-1 h-8 rounded-[9px] text-xs font-extrabold transition",
+                    active ? "bg-gold text-[#1A120B]" : "text-muted",
+                    p.label === "Enough" && !active && "text-good"
+                  )}
+                  onClick={() => setUnits(scaled(state.army, p.f))}
+                >
+                  {p.label === "Enough" ? `✓ Enough` : p.label}
+                </button>
+              );
+            })}
           </div>
-          {armySize(units) > 0 && (
-            <div className="flex flex-col items-center gap-0.5 text-center">
-              <p
+
+          {/* Only troop types you have at home. */}
+          <div className="flex flex-col gap-2">
+            {home.map((u) => {
+              const max = state.army[u.id];
+              const n = units[u.id];
+
+              return (
+                <div
+                  key={u.id}
+                  className={clsx(
+                    "rounded-xl border px-2.5 py-2 flex flex-col gap-1.5 transition-colors",
+                    n > 0 ? "bg-buildingBg border-line" : "bg-panel/60 border-line/60 opacity-70"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <UnitBadge size={30} unit={u.id} />
+                    <div className="flex-1 min-w-0 leading-tight">
+                      <div className="text-sm font-bold truncate">{u.name}</div>
+                      <div className="text-[10px] text-[#B19C80]">
+                        {fmt(max - n)} stay home · {u.speed}s/tile
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        aria-label={`fewer ${u.name}`}
+                        className="w-7 h-7 rounded-lg bg-[#1E1610] font-bold disabled:opacity-30"
+                        disabled={n <= 0}
+                        onClick={() => setOne(u.id, n - 1)}
+                      >
+                        −
+                      </button>
+                      <input
+                        aria-label={`${u.name} to send`}
+                        className="w-12 h-7 rounded-lg bg-[#1E1610] text-center text-sm font-extrabold outline-none focus:ring-1 focus:ring-gold"
+                        inputMode="numeric"
+                        value={n}
+                        onChange={(e) => setOne(u.id, Number(e.target.value.replace(/\D/g, "")))}
+                      />
+                      <button
+                        aria-label={`more ${u.name}`}
+                        className="w-7 h-7 rounded-lg bg-[#1E1610] font-bold disabled:opacity-30"
+                        disabled={n >= max}
+                        onClick={() => setOne(u.id, n + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      aria-label={`${u.name} slider`}
+                      className="flex-1 h-1.5 accent-[#E3A948]"
+                      max={max}
+                      min={0}
+                      type="range"
+                      value={n}
+                      onChange={(e) => setOne(u.id, Number(e.target.value))}
+                    />
+                    <span className="w-14 text-right text-[10px] font-bold text-muted">
+                      {n} / {fmt(max)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Attack vs defense */}
+          <div className="rounded-xl bg-panel border border-line p-2.5 flex flex-col gap-2">
+            <div className="flex justify-between items-baseline text-sm">
+              <span className="font-extrabold">⚔️ {fmt(power)}</span>
+              <span
                 className={clsx(
-                  "text-sm font-bold",
-                  verdict === "Likely victory" ? "text-good" : verdict === "Likely defeat" ? "text-[#F08A6C]" : "text-[#E3A948]"
+                  "text-xs font-extrabold",
+                  !size ? "text-muted" : tone === "good" ? "text-good" : tone === "bad" ? "text-[#F08A6C]" : "text-[#E3A948]"
                 )}
               >
-                {verdict} · luck can swing it ±10%
-              </p>
-              <p className="text-xs text-[#B19C80]">
-                Arrives in {formatDuration(travel)}
-                {slowest && armySize(units) > units[slowest.id] ? ` · ${UNIT_BY_ID[slowest.id].name} set the pace` : ""}. Back home{" "}
-                {formatDuration(travel * 2)} from now.
-                {!d.exact && " Defense is a guess; scout first to know."}
-              </p>
+                {size ? verdict : "Choose troops"}
+              </span>
+              <span className="font-extrabold">
+                {d.exact ? fmt(defMin) : `${fmt(defMin)}–${fmt(defMax)}`} 🛡️
+              </span>
             </div>
+            <div className="relative h-2 rounded-full bg-[#5A2A1E] overflow-hidden">
+              <div
+                className={clsx(
+                  "absolute inset-y-0 left-0 rounded-full transition-all",
+                  tone === "good" ? "bg-good" : tone === "bad" ? "bg-[#F08A6C]" : "bg-gold"
+                )}
+                style={{ width: `${Math.round(balance * 100)}%` }}
+              />
+              <div className="absolute inset-y-0 left-1/2 w-px bg-parch/50" />
+            </div>
+            <div className="grid grid-cols-3 text-center text-[11px] font-bold text-sub">
+              <span>👥 {fmt(size)} troops</span>
+              <span>🎒 {fmt(carry)} loot</span>
+              <span>⏱ {size ? formatDuration(travel) : "–"}</span>
+            </div>
+          </div>
+
+          {size > 0 && (
+            <p className="text-[11px] text-center text-[#B19C80] -mt-1">
+              Luck can swing it ±10%.
+              {slowest && size > units[slowest.id] ? ` ${UNIT_BY_ID[slowest.id].name} set the pace.` : ""} Back home in{" "}
+              {formatDuration(travel * 2)}.
+              {!d.exact && " Defense is a guess; scout first to know."}
+            </p>
           )}
-          <Button isFull disabled={busy || armySize(units) === 0} size="large" onClick={send}>
-            {armySize(units) === 0 ? "Choose troops" : `⚔️ March · arrives ${new Date(now + travel).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+
+          <Button isFull disabled={busy || size === 0} size="large" onClick={send}>
+            {size === 0
+              ? "Choose troops"
+              : busy
+                ? "Marching…"
+                : `⚔️ March · arrives ${new Date(now + travel).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
           </Button>
         </div>
       )}
