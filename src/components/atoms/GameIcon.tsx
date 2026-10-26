@@ -35,6 +35,7 @@ const ICON_BY_EMOJI: Record<string, string> = {
   "🥇": "gold",
   "🥈": "silver",
   "🥉": "bronze",
+  "📍": "compass",
   "🪙": "resources/coin",
   "⛵": "troops/longship",
   "🪓": "troops/axeman",

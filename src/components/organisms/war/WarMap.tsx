@@ -1328,7 +1328,7 @@ export const WarMap = ({
                   </span>
                   {!t.isMe && (
                     <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                      📍 {t.distance} tiles
+                      <GameIcon e="📍" /> {t.distance} tiles
                     </span>
                   )}
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
@@ -1476,7 +1476,7 @@ export const WarMap = ({
                       ` · +${ground.defense * 100}% defense`}
                   </span>
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-                    📍 {c.distance} tiles
+                    <GameIcon e="📍" /> {c.distance} tiles
                   </span>
                   <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
                     <GameIcon e="🛡️" /> {fmt(c.defense * (1 + ground.defense))}
