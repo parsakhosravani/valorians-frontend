@@ -22,7 +22,7 @@ const API = () => process.env.TELEGRAM_API_BASE || "https://api.telegram.org";
 export const botToken = () => process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN || "";
 
 /** Secrets derived from the bot token, so no extra env vars are needed. */
-const derive = (purpose: string) =>
+export const derive = (purpose: string) =>
   crypto.createHash("sha256").update(`${botToken()}:${purpose}`).digest("hex").slice(0, 32);
 export const webhookSecret = () => derive("webhook");
 

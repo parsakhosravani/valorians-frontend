@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getDb } from "./db";
-import { appUrl, tg } from "./bot";
+import { appUrl, botToken, derive, tg } from "./bot";
 
 /**
  * Update announcements broadcast from the bot chat.
@@ -32,12 +32,14 @@ export async function adminIds() {
 export const isAdmin = async (id: number) => (await adminIds()).includes(id);
 
 /**
- * The secret admin link: t.me/<bot>?start=admin_<BOT_ADMIN_CODE>. Opening it
+ * The secret admin link: t.me/<bot>?start=admin_<code>, where the code is
+ * BOT_ADMIN_CODE or, by default, derived from the bot token (so no extra
+ * setting is needed; a new token gives a new link). Opening it
  * makes that Telegram account an admin (no need to look up your user id), then
  * sends a test announcement of the version that's live right now.
  */
 export async function claimAdmin(chatId: number, userId: number, payload: string) {
-  const code = process.env.BOT_ADMIN_CODE || "";
+  const code = process.env.BOT_ADMIN_CODE || (botToken() ? derive("admin") : "");
 
   if (code.length < 16 || payload !== `admin_${code}`) return false;
   const db = await getDb();
