@@ -369,11 +369,27 @@ export async function maybeCheckRelease() {
   });
 }
 
+/**
+ * Release posts go straight to players by default. Set RELEASE_ANNOUNCE=draft
+ * to have admins approve each one instead, or =off for none.
+ */
+const releaseMode = () => {
+  const m = (process.env.RELEASE_ANNOUNCE || "auto").toLowerCase();
+
+  return m === "draft" || m === "off" ? m : "auto";
+};
+
+const releasePost = (changes: string[]) =>
+  `🆕 <b>Valorians Legend has been updated!</b>\n\n` +
+  (changes.length ? changes.map((c) => `• ${esc(c)}`).join("\n") + "\n\n" : "") +
+  `Tap <b>Play now</b> to see what's new, chief! ⚔️`;
+
 export async function checkRelease() {
   const sha = process.env.VERCEL_GIT_COMMIT_SHA;
+  const mode = releaseMode();
   const admins = await adminIds();
 
-  if (!sha || !admins.length) return null;
+  if (!sha || mode === "off" || (mode === "draft" && !admins.length)) return null;
   const db = await getDb();
 
   await db.execute({ sql: "INSERT OR IGNORE INTO meta (key, value) VALUES ('release_sha', '')", args: [] });
@@ -389,9 +405,39 @@ export async function checkRelease() {
   if (!claim.rowsAffected || !repo()) return null;
   const changes = await notesFor(sha, last);
 
-  await draftRelease(admins, sha, changes);
+  if (mode === "draft") {
+    await draftRelease(admins, sha, changes);
 
-  return { release: sha.slice(0, 7), changes: changes.length };
+    return { release: sha.slice(0, 7), changes: changes.length, mode };
+  }
+  // Nothing players would care to read (couldn't tell what changed): skip it.
+  if (!changes.length) return { release: sha.slice(0, 7), changes: 0, mode, skipped: true };
+  const total = await audience();
+  const now = Date.now();
+
+  await db.execute({
+    sql: `INSERT INTO announcements (admin_id, status, release, body, total, created_at, started_at)
+          VALUES (0, 'sending', ?, ?, ?, ?, ?)`,
+    args: [sha, releasePost(changes), total, now, now],
+  });
+  if (channelId()) {
+    await tg("sendMessage", {
+      chat_id: channelId(),
+      text: releasePost(changes),
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      ...(channelMarkup() ? { reply_markup: channelMarkup() } : {}),
+    });
+  }
+  for (const admin of admins) {
+    await say(
+      admin,
+      `🚀 <b>New version live</b> (<code>${sha.slice(0, 7)}</code>). Announcing it to ${fmt(total)} players now:\n\n` +
+        changes.map((c) => `• ${esc(c)}`).join("\n")
+    );
+  }
+
+  return { release: sha.slice(0, 7), changes: changes.length, mode, total };
 }
 
 /** What changed since `last` (or, the first time, in this version alone). */
@@ -411,10 +457,7 @@ async function notesFor(sha: string, last = "") {
 async function draftRelease(admins: number[], sha: string, changes: string[]) {
   const db = await getDb();
   const short = sha.slice(0, 7);
-  const post =
-    `🆕 <b>Valorians Legend has been updated!</b>\n\n` +
-    (changes.length ? changes.map((c) => `• ${esc(c)}`).join("\n") + "\n\n" : "") +
-    `Tap <b>Play now</b> to see what's new, chief! ⚔️`;
+  const post = releasePost(changes);
 
   for (const admin of admins) {
     await db.execute({
@@ -513,12 +556,20 @@ export async function deliverAnnouncements(budgetMs: number) {
         const started = Date.now();
         const results = (await Promise.all(
           ids.map((chatId) =>
-            tg("copyMessage", {
-              chat_id: chatId,
-              from_chat_id: Number(a.source_chat),
-              message_id: Number(a.source_msg),
-              reply_markup: playerMarkup(),
-            })
+            a.body
+              ? tg("sendMessage", {
+                  chat_id: chatId,
+                  text: String(a.body),
+                  parse_mode: "HTML",
+                  link_preview_options: { is_disabled: true },
+                  reply_markup: playerMarkup(),
+                })
+              : tg("copyMessage", {
+                  chat_id: chatId,
+                  from_chat_id: Number(a.source_chat),
+                  message_id: Number(a.source_msg),
+                  reply_markup: playerMarkup(),
+                })
           )
         )) as TgResult[];
         // Too fast: keep everyone from the first throttled player on for next time.
@@ -563,14 +614,18 @@ export async function deliverAnnouncements(budgetMs: number) {
       const r = (await db.execute({ sql: "SELECT sent, failed, started_at FROM announcements WHERE id = ?", args: [id] }))
         .rows[0];
       const mins = Math.max(1, Math.round((Date.now() - Number(r.started_at)) / 60_000));
+      // Automatic release posts have no admin of their own: tell them all.
+      const report = Number(a.admin_id) ? [Number(a.admin_id)] : await adminIds();
 
-      await say(
-        Number(a.admin_id),
-        `✅ <b>Announcement delivered</b>\n\n` +
-          `📨 ${fmt(Number(r.sent))} players got it\n` +
-          `🚫 ${fmt(Number(r.failed))} couldn't be reached (blocked or never started the bot)\n` +
-          `⏱️ ${mins} min`
-      );
+      for (const to of report) {
+        await say(
+          to,
+          `✅ <b>Announcement delivered</b>\n\n` +
+            `📨 ${fmt(Number(r.sent))} players got it\n` +
+            `🚫 ${fmt(Number(r.failed))} couldn't be reached (blocked or never started the bot)\n` +
+            `⏱️ ${mins} min`
+        );
+      }
     }
     if (Date.now() + 1_500 >= deadline) break;
   }

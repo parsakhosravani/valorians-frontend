@@ -220,6 +220,8 @@ async function init(): Promise<Client> {
   `);
   // Which deployed version a drafted announcement is about (null for /announce posts).
   await client.execute("ALTER TABLE announcements ADD COLUMN release TEXT").catch(() => {});
+  // Text of an automatic release post (sent as a message; others are copied from source_msg).
+  await client.execute("ALTER TABLE announcements ADD COLUMN body TEXT").catch(() => {});
   return client;
 }
 
