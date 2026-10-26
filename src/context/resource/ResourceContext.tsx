@@ -96,6 +96,13 @@ interface GameContextType {
     accept: (id: number) => Promise<boolean>;
     cancel: (id: number) => Promise<boolean>;
   };
+  /** Clans: found one, join one, leave yours, or (as leader) remove a member. */
+  clan: {
+    create: (c: { name: string; tag: string; description?: string }) => Promise<boolean>;
+    join: (id: number) => Promise<boolean>;
+    leave: () => Promise<boolean>;
+    kick: (id: number) => Promise<boolean>;
+  };
   authHeader: string | null;
 }
 
@@ -379,6 +386,12 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       post: (o) => act("trade/offer", o, "Offer posted on the market"),
       accept: (id) => act("trade/accept", { id }, "Deal! Merchants are on their way"),
       cancel: (id) => act("trade/cancel", { id }, "Offer cancelled, goods returned"),
+    },
+    clan: {
+      create: (c) => act("clan/create", c, "Clan founded!"),
+      join: (id) => act("clan/join", { id }, "Welcome to the clan!"),
+      leave: () => act("clan/leave", {}, "You left the clan"),
+      kick: (id) => act("clan/kick", { id }, "Member removed"),
     },
     authHeader,
   };

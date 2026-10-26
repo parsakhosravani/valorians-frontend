@@ -4,18 +4,6 @@ import type { PlayerView } from "@/server/players";
 
 export type { PlayerView };
 
-export type Friend = {
-  id: number;
-  name: string;
-  username: string | null;
-  photoUrl: string | null;
-  isPremium: boolean;
-  population: number;
-  bonusCoins: number;
-  bonusPopulation: number;
-  joinedAt: number;
-};
-
 export class ApiError extends Error {
   constructor(
     message: string,

@@ -225,13 +225,18 @@ export const questUrl = (id: QuestId, value: string | undefined) => {
   return `https://x.com/${handle}`;
 };
 
-// ─── Referrals ───────────────────────────────────────────────────────────────
+// ─── Clans ───────────────────────────────────────────────────────────────────
 
-export const REFERRAL_REWARD = {
-  coins: 100,
-  premiumCoins: 500,
-  /** Population the inviter gains for each friend. */
-  population: 100,
+export const CLAN = {
+  /** Coins it costs to found a clan. */
+  createCost: 500,
+  maxMembers: 30,
+  nameMin: 3,
+  nameMax: 24,
+  /** Tag shown next to member names, e.g. [WOLF]. Letters and digits only. */
+  tagMin: 2,
+  tagMax: 5,
+  descriptionMax: 160,
 };
 
 // ─── War ─────────────────────────────────────────────────────────────────────

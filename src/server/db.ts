@@ -84,6 +84,8 @@ async function init(): Promise<Client> {
     "map_x INTEGER",
     "map_y INTEGER",
     "photo_src TEXT",
+    "clan_id INTEGER",
+    "clan_joined_at INTEGER",
   ]) {
     await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
   }
@@ -92,6 +94,18 @@ async function init(): Promise<Client> {
     CREATE INDEX IF NOT EXISTS users_power ON users(power DESC);
     CREATE INDEX IF NOT EXISTS users_wins ON users(wins DESC);
     CREATE INDEX IF NOT EXISTS users_map ON users(map_x, map_y);
+    CREATE INDEX IF NOT EXISTS users_clan ON users(clan_id);
+
+    -- Clans: players band together under a name and tag. Membership lives in
+    -- users.clan_id; the leader is the only one who can remove members.
+    CREATE TABLE IF NOT EXISTS clans (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      tag           TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      description   TEXT NOT NULL DEFAULT '',
+      leader_id     INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL
+    );
 
     -- Armies marching across the world map. The battle happens when they arrive.
     CREATE TABLE IF NOT EXISTS attacks (
