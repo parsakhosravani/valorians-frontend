@@ -42,16 +42,17 @@ function overLand(): { a: Point; b: Point } {
   throw new Error("no land near the middle of the map");
 }
 
-test("the map keeps its water", () => {
+test("the world has seas, but not too much of it, and the heart of the map is land", () => {
   let wet = 0;
   for (let y = 0; y < MAP_SIZE; y++) for (let x = 0; x < MAP_SIZE; x++) if (seaAt(x, y)) wet++;
   const share = wet / (MAP_SIZE * MAP_SIZE);
-  expect(share).toBeGreaterThan(0.05);
-  expect(share).toBeLessThan(0.2);
+  expect(share).toBeGreaterThan(0.12);
+  expect(share).toBeLessThan(0.45);
+  expect(seaAt(60, 60)).toBe(false);
   // Something to sail across within reach of the first tribes.
   let near = 0;
   for (let y = 45; y < 75; y++) for (let x = 45; x < 75; x++) if (seaAt(x, y)) near++;
-  expect(near).toBeGreaterThan(10);
+  expect(near).toBeGreaterThan(20);
 });
 
 test("new tribes never settle in the sea", () => {

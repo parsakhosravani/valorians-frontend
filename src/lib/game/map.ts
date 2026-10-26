@@ -18,13 +18,14 @@ import type { Army } from "./engine";
 
 export type Point = { x: number; y: number };
 
-export type Terrain = "plains" | "forest" | "hills" | "sea";
+export type Terrain = "plains" | "forest" | "hills" | "lake" | "sea";
 
 export const TERRAIN: Record<Terrain, { name: string; defense: number; note: string }> = {
   plains: { name: "Plains", defense: 0, note: "Open ground, no bonus." },
   forest: { name: "Forest", defense: 0.1, note: "+10% defense. Cavalry fights 25% weaker here." },
   hills: { name: "Hills", defense: 0.2, note: "+20% defense." },
-  sea: { name: "Sea", defense: 0, note: "Water. Nobody settles here, and armies need Longships to cross it." },
+  lake: { name: "Lake", defense: 0, note: "Water. Nobody settles here." },
+  sea: { name: "Sea", defense: 0, note: "Open water. Armies need Longships to cross it." },
 };
 
 const hash = (a: number, b: number, seed = 0) => {
@@ -46,13 +47,15 @@ const noise = (x: number, y: number, seed: number, cell = 6) => {
   return lerp(top, bottom, fy);
 };
 
-/** The map's water (the same patches it has always had). */
-export const seaAt = (x: number, y: number) => noise(x, y, 3) > 0.82;
+/** Seas: big, slow noise for the coastline's shape, a little fine noise to make it ragged. */
+export const seaAt = (x: number, y: number) => noise(x, y, 13, 14) * 0.75 + noise(x, y, 14, 4) * 0.25 > 0.62;
 
 export function terrainAt(x: number, y: number): Terrain {
   if (seaAt(x, y)) return "sea";
+  const water = noise(x, y, 3);
   const n = noise(x, y, 7) * 0.7 + hash(x, y, 9) * 0.3;
 
+  if (water > 0.82) return "lake";
   if (n > 0.62) return "hills";
   if (n < 0.36) return "forest";
 
@@ -62,11 +65,12 @@ export function terrainAt(x: number, y: number): Terrain {
 export const inMap = (p: Point) => p.x >= 0 && p.y >= 0 && p.x < MAP_SIZE && p.y < MAP_SIZE;
 
 /** Land nobody can settle or camp on. */
-const isWater = (t: Terrain) => t === "sea";
+const isWater = (t: Terrain) => t === "lake" || t === "sea";
 
 /**
- * On the sea's edge: next to a sea tile. Coastal tribes can be attacked from
- * the sea, where they fight with the beach on their side.
+ * On the sea's edge: next to a sea tile (or, for the few tribes that settled
+ * before the seas were charted, on an island in it). Coastal tribes can be
+ * attacked from the sea, where they fight with the beach on their side.
  */
 export function isCoastal(p: Point) {
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (seaAt(p.x + dx, p.y + dy)) return true;
@@ -114,7 +118,7 @@ function spiral(i: number): Point {
   return { x: off, y: -ring };
 }
 
-/** Where the n-th tribe to join settles: spread out on a spiral, never on the water. */
+/** Where the n-th tribe to join settles: spread out on a spiral, never on a lake. */
 export function homeSlot(n: number): Point {
   const mid = Math.floor(MAP_SIZE / 2);
 
