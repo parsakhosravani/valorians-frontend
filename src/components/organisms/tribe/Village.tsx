@@ -6,7 +6,6 @@ import { FunctionComponent } from "react";
 import { BuildingDef, buildingImage } from "@/lib/game/config";
 import { UpgradeOption, canStart } from "@/lib/game/advice";
 import { formatDuration } from "@/lib/format";
-import { GameIcon } from "@/components/atoms/GameIcon";
 
 /**
  * Where each building stands. Rows alternate 3 and 2 buildings like a honeycomb,
@@ -26,23 +25,23 @@ const ROWS: string[][] = [
 ];
 
 /** The village is drawn in units where its width is 100. */
-const ROW_GAP = 25;
-const TOP = 17;
-const HEIGHT = TOP + (ROWS.length - 1) * ROW_GAP + 19;
+const ROW_GAP = 19;
+const TOP = 15;
+const HEIGHT = TOP + (ROWS.length - 1) * ROW_GAP + 13;
 
 const rowY = (r: number) => TOP + r * ROW_GAP;
 
 const PLOTS: Record<string, { x: number; y: number }> = Object.fromEntries(
   ROWS.flatMap((row, r) => {
-    const xs = row.length === 3 ? [18, 50, 82] : [34, 66];
+    const xs = row.length === 3 ? [20, 50, 80] : [35, 65];
 
     return row.map((id, i) => [id, { x: xs[i], y: rowY(r) }]);
   }),
 );
 
 /** Building width in village units; a few landmarks are bigger. */
-const SIZE = 30;
-const BIG: Record<string, number> = { "town-hall": 1.25, "city-gate": 1.1 };
+const SIZE = 22;
+const BIG: Record<string, number> = { "town-hall": 1.2 };
 
 const TOWN_HALL_Y = PLOTS["town-hall"].y;
 
@@ -68,18 +67,15 @@ const Ground = () => (
       </filter>
     </defs>
     <rect fill="url(#v-grass)" height={HEIGHT} width="100" />
-    {/* Dirt roads under each row of buildings, joined by a main road down the middle */}
+    {/* One dirt road down the middle */}
     <g fill="none" stroke="#7A5C38" strokeLinecap="round" strokeOpacity="0.7">
-      {ROWS.map((_, r) => (
-        <path key={r} d={`M6 ${rowY(r) + 9} Q50 ${rowY(r) + 11} 94 ${rowY(r) + 9}`} strokeWidth="1.4" />
-      ))}
-      <path d={`M50 4 L50 ${HEIGHT - 4}`} strokeWidth="3" />
+      <path d={`M50 4 L50 ${HEIGHT - 4}`} strokeOpacity="0.45" strokeWidth="2.4" />
     </g>
     {/* Plaza in front of the Town Hall */}
-    <ellipse cx="50" cy={TOWN_HALL_Y + 8} fill="url(#v-plaza)" opacity="0.8" rx="26" ry="9" />
+    <ellipse cx="50" cy={TOWN_HALL_Y + 4} fill="url(#v-plaza)" opacity="0.6" rx="20" ry="7" />
     {/* Shore by the Harbor */}
     <path
-      d={`M0 ${HEIGHT - 34} Q14 ${HEIGHT - 30} 20 ${HEIGHT - 18} Q26 ${HEIGHT - 6} 34 ${HEIGHT} L0 ${HEIGHT} Z`}
+      d={`M0 ${HEIGHT - 26} Q12 ${HEIGHT - 22} 17 ${HEIGHT - 13} Q22 ${HEIGHT - 4} 28 ${HEIGHT} L0 ${HEIGHT} Z`}
       fill="url(#v-sea)"
     />
     {/* Palisade around the village */}
@@ -113,12 +109,10 @@ const Art = ({ o, now, onOpen }: PlotProps) => {
   return (
     <button
       aria-label={`${o.building.name}, level ${o.level}`}
-      className="absolute -translate-x-1/2 -translate-y-[62%] aspect-square active:scale-95 transition-transform"
+      className="absolute -translate-x-1/2 -translate-y-[64%] aspect-square active:scale-95 transition-transform"
       style={{ ...at(x, y), width: `${size}%`, zIndex: Math.round(y) }}
       onClick={() => onOpen(o.building)}
     >
-      {/* Shadow on the ground */}
-      <span className="absolute left-[12%] right-[12%] bottom-[4%] h-[14%] rounded-[50%] bg-black/35 blur-[3px]" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         alt=""
@@ -131,11 +125,11 @@ const Art = ({ o, now, onOpen }: PlotProps) => {
       />
       {/* Under construction: time left and progress, over the roof */}
       {o.job && (
-        <span className="absolute left-[10%] right-[10%] top-0 flex flex-col items-center gap-0.5">
-          <span className="px-1.5 rounded-md bg-[#1A120B]/85 border border-gold/70 text-[10px] font-bold text-goldtext whitespace-nowrap">
-            <GameIcon e="🔨" /> {formatDuration(o.job.endsAt - now)}
+        <span className="absolute left-[14%] right-[14%] top-[2%] flex flex-col items-center gap-0.5">
+          <span className="px-1 rounded bg-[#1A120B]/85 text-[9px] font-bold text-goldtext whitespace-nowrap">
+            {formatDuration(o.job.endsAt - now)}
           </span>
-          <span className="w-full h-1.5 rounded-full bg-[#1A120B]/85 overflow-hidden border border-line/60">
+          <span className="w-full h-1 rounded-full bg-[#1A120B]/85 overflow-hidden">
             <span className="block h-full bg-gradient-to-r from-gold to-ember" style={{ width: `${progress * 100}%` }} />
           </span>
         </span>
@@ -144,8 +138,8 @@ const Art = ({ o, now, onOpen }: PlotProps) => {
   );
 };
 
-/** Name tag with the level, drawn above every building so none get covered. */
-const Tag = ({ o, freeBuilder, onOpen }: PlotProps) => {
+/** A small level badge at each building's foot; green ↑ when it can be upgraded now. */
+const Badge = ({ o, freeBuilder, onOpen }: PlotProps) => {
   const { x, y } = PLOTS[o.building.id];
   const built = o.level > 0;
   const ready = !o.job && freeBuilder && canStart(o);
@@ -154,22 +148,18 @@ const Tag = ({ o, freeBuilder, onOpen }: PlotProps) => {
     <button
       aria-hidden="true"
       className={clsx(
-        "absolute -translate-x-1/2 translate-y-[55%] z-[1000] flex items-center gap-1 max-w-[31%] pl-0.5 pr-1.5 py-px rounded-full border text-[10px] leading-tight font-bold whitespace-nowrap",
-        ready ? "bg-[#1E2A14]/90 border-good text-parch" : "bg-[#1A120B]/85 border-line text-parch",
+        "absolute -translate-x-1/2 translate-y-[10%] z-[1000] min-w-[20px] h-5 px-1 rounded-full border-2 flex items-center justify-center font-display font-black text-[10px] leading-none shadow-[0_1px_3px_rgba(0,0,0,0.7)]",
+        ready
+          ? "bg-good text-[#14210E] border-[#E6F5D9]"
+          : built
+            ? "bg-gold text-[#1A120B] border-[#FBE3A6]"
+            : "bg-panel2 text-muted border-line",
       )}
       style={at(x, y)}
       tabIndex={-1}
       onClick={() => onOpen(o.building)}
     >
-      <span
-        className={clsx(
-          "shrink-0 min-w-[16px] h-[16px] px-0.5 rounded-full flex items-center justify-center font-display font-black text-[9px]",
-          ready ? "bg-good text-[#14210E]" : built ? "bg-gold text-[#1A120B]" : "bg-panel2 text-muted",
-        )}
-      >
-        {ready ? "↑" : o.maxed ? "★" : o.level}
-      </span>
-      <span className="truncate">{built || o.job ? o.building.name : `Build ${o.building.name}`}</span>
+      {ready ? (built ? "↑" : "+") : o.maxed ? "★" : built ? o.level : "+"}
     </button>
   );
 };
@@ -193,7 +183,7 @@ export const Village: FunctionComponent<{
         <Art key={o.building.id} freeBuilder={freeBuilder} now={now} o={o} onOpen={onOpen} />
       ))}
       {placed.map((o) => (
-        <Tag key={o.building.id} freeBuilder={freeBuilder} now={now} o={o} onOpen={onOpen} />
+        <Badge key={o.building.id} freeBuilder={freeBuilder} now={now} o={o} onOpen={onOpen} />
       ))}
     </div>
   );
