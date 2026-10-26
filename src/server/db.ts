@@ -211,7 +211,15 @@ async function init(): Promise<Client> {
       finished_at   INTEGER
     );
     CREATE INDEX IF NOT EXISTS announcements_status ON announcements(status);
+
+    -- Small settings the server keeps, e.g. the last version announced.
+    CREATE TABLE IF NOT EXISTS meta (
+      key           TEXT PRIMARY KEY,
+      value         TEXT NOT NULL
+    );
   `);
+  // Which deployed version a drafted announcement is about (null for /announce posts).
+  await client.execute("ALTER TABLE announcements ADD COLUMN release TEXT").catch(() => {});
   return client;
 }
 

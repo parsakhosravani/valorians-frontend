@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDueAttacks } from "@/server/war";
 import { resolveDueTrades } from "@/server/trade";
 import { ensureBotSetup } from "@/server/bot";
-import { deliverAnnouncements } from "@/server/announce";
+import { checkRelease, deliverAnnouncements } from "@/server/announce";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -34,11 +34,18 @@ export async function GET(req: NextRequest) {
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
   const bot = await ensureBotSetup().catch(() => null);
+  // A new version went live: draft an announcement for the admins to approve.
+  const release = await checkRelease().catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error("release check failed", e);
+
+    return null;
+  });
   // Announcements still going out: keep sending for the rest of this run.
   await deliverAnnouncements(Math.max(0, 45_000 - (Date.now() - started))).catch((e) =>
     // eslint-disable-next-line no-console
     console.error("announcements failed", e)
   );
 
-  return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}) });
+  return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}), ...(release ? { release } : {}) });
 }
