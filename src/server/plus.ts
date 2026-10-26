@@ -45,7 +45,7 @@ export async function createPlusInvoice(userId: number): Promise<string> {
     currency: "XTR",
     prices: [{ label: "Valorians Plus · 1 month", amount: plusPrice() }],
     subscription_period: PERIOD_SECONDS,
-    photo_url: `${appUrl()}/bot/welcome.jpg`,
+    photo_url: `${appUrl()}/bot/plus.jpg`,
   });
 
   if (!r.ok || typeof r.result !== "string") {
