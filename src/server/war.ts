@@ -531,13 +531,15 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   const db = await getDb();
   const [top, mine] = await db.batch(
     [
-      `SELECT id, username, first_name, photo_url, population, power, wins FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
+      `SELECT id, username, first_name, photo_url, population, power, wins, plus_until FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
       { sql: `SELECT ${col} AS v FROM users WHERE id = ?`, args: [me.id] },
     ],
     "read"
   );
   const myValue = Number(mine.rows[0]?.v ?? 0);
   const rankRs = await db.execute({ sql: `SELECT COUNT(*) + 1 AS r FROM users WHERE ${col} > ?`, args: [myValue] });
+  const now = Date.now();
+
   return {
     metric,
     me: { rank: Number(rankRs.rows[0].r), value: Math.floor(myValue) },
@@ -548,6 +550,7 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
       photoUrl: avatarUrl(Number(r.id)),
       value: Math.floor(Number(r[col])),
       isMe: Number(r.id) === me.id,
+      plus: Number(r.plus_until ?? 0) > now,
     })),
   };
 }

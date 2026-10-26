@@ -45,6 +45,8 @@ import {
   hiddenResources,
   RANKS,
   RANK_BONUS,
+  MAX_TRAIN_BATCHES,
+  PLUS,
 } from "./config";
 import { ClanPerks, NO_PERKS } from "./clan";
 
@@ -147,6 +149,11 @@ export type GameState = {
   troops: Record<UnitId, TroopRecord>;
   /** Bonuses from the player's clan techs (percent). Set by the server when the clan changes. */
   clanPerks: ClanPerks;
+  /**
+   * Valorians Plus: active until this time; trialUsed once the free trial was
+   * taken; paid once a Stars subscription has been bought (it renews by itself).
+   */
+  plus: { until: number; trialUsed: boolean; paid: boolean };
 };
 
 export type Rates = {
@@ -212,6 +219,7 @@ export function createInitialState(now: number): GameState {
     war: { attacksWon: 0, attacksLost: 0, defensesWon: 0, defensesLost: 0, resourcesLooted: 0 },
     troops: emptyTroops(),
     clanPerks: { ...NO_PERKS },
+    plus: { until: 0, trialUsed: false, paid: false },
   };
 }
 
@@ -239,6 +247,7 @@ export function normalizeState(saved: GameState): GameState {
     frenzy: { ...fresh.frenzy, ...s.frenzy },
     streak: { ...fresh.streak, ...s.streak },
     clanPerks: { ...fresh.clanPerks, ...s.clanPerks },
+    plus: { ...fresh.plus, ...s.plus },
     troops: Object.fromEntries(
       UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
@@ -253,6 +262,38 @@ export function totalArmy(s: GameState): Army {
 }
 
 const level = (s: GameState, id: BuildingId) => s.buildings[id] ?? 0;
+
+// ─── Valorians Plus ──────────────────────────────────────────────────────────
+
+/** True while the player's Plus subscription (or trial) runs, at the state's own time. */
+export const plusActive = (s: GameState) => (s.plus?.until ?? 0) > s.updatedAt;
+
+/** How many training batches the player may queue. */
+export const maxTrainBatches = (s: GameState) => MAX_TRAIN_BATCHES + (plusActive(s) ? PLUS.extraTrainBatches : 0);
+
+/** Starts the one free Plus trial. */
+export function startPlusTrial(s0: GameState, now: number): GameState {
+  if (s0.plus.trialUsed) throw new GameError("You already used your free trial", "trial_used");
+  if (s0.plus.until > now) throw new GameError("Plus is already active", "plus_active");
+  const s = cloneState(s0);
+
+  s.plus = { until: now + PLUS.trialMs, trialUsed: true, paid: false };
+
+  return s;
+}
+
+/**
+ * Applies a paid period: Plus runs until `until` (Telegram's renewal date), or
+ * for one more period from whatever is left when that isn't known. Never shortens it.
+ */
+export function grantPlus(s0: GameState, now: number, until?: number): GameState {
+  const s = cloneState(s0);
+  const end = until && until > now ? Math.max(until, s.plus.until) : Math.max(now, s.plus.until) + PLUS.periodMs;
+
+  s.plus = { until: end, trialUsed: true, paid: true };
+
+  return s;
+}
 
 export function getRates(s: GameState): Rates {
   let townHall = 0;
@@ -324,7 +365,7 @@ export function getRates(s: GameState): Rates {
     tapPower: Math.round(tapPowerForLevel(s.skills.tap) * (1 + tapBoost)),
     coinsPerHour: coins,
     growthPerHour: growth,
-    builders: 1 + Math.floor(townHall / 5),
+    builders: 1 + Math.floor(townHall / 5) + (plusActive(s) ? PLUS.extraBuilders : 0),
     buildSpeedMultiplier: Math.max(0.2, 1 - TOWN_HALL_SPEEDUP_PER_LEVEL * townHall),
     troopUpkeep,
     trainSpeedMultiplier: Math.max(0.25, 1 - mil.trainSpeed / 100),
@@ -439,6 +480,7 @@ function structuredCloneState(s: GameState): GameState {
     fullEnergy: { ...s.fullEnergy },
     buildings: { ...s.buildings },
     queue: s.queue.map((q) => ({ ...q })),
+    plus: { ...s.plus },
     quests: Object.fromEntries(Object.entries(s.quests).map(([k, v]) => [k, { ...v }])),
     army: { ...s.army },
     training: s.training.map((t) => ({ ...t })),

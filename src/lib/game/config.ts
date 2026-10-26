@@ -259,6 +259,25 @@ export const CLAN = {
   logSize: 40,
 };
 
+// ─── Valorians Plus ──────────────────────────────────────────────────────────
+
+/**
+ * The monthly Plus subscription, paid in Telegram Stars. It sells convenience,
+ * never raw power: more queue room and a badge, no troops, resources or stats.
+ */
+export const PLUS = {
+  /** Default monthly price in Stars (the server's PLUS_PRICE_STARS overrides it). */
+  priceStars: 150,
+  /** Telegram Stars subscriptions always renew every 30 days. */
+  periodMs: 30 * 24 * 3600e3,
+  /** One free trial per player. */
+  trialMs: 3 * 24 * 3600e3,
+  /** Extra builders while Plus is active. */
+  extraBuilders: 1,
+  /** Extra training batches while Plus is active. */
+  extraTrainBatches: 2,
+};
+
 // ─── War ─────────────────────────────────────────────────────────────────────
 
 export const UNIT_IDS = ["spearman", "swordsman", "archer", "axeman", "cavalry", "paladin", "knight", "ram", "catapult", "longship"] as const;

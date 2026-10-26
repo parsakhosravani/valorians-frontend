@@ -228,6 +228,23 @@ async function init(): Promise<Client> {
   await client.execute("ALTER TABLE announcements ADD COLUMN release TEXT").catch(() => {});
   // Text of an automatic release post (sent as a message; others are copied from source_msg).
   await client.execute("ALTER TABLE announcements ADD COLUMN body TEXT").catch(() => {});
+
+  // Valorians Plus: copy of state.plus.until for badges in SQL lists, and
+  // every Telegram Stars payment (the charge id makes each one count once).
+  await client.execute("ALTER TABLE users ADD COLUMN plus_until INTEGER NOT NULL DEFAULT 0").catch(() => {});
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS payments (
+      charge_id     TEXT PRIMARY KEY,              -- telegram_payment_charge_id
+      user_id       INTEGER NOT NULL,
+      product       TEXT NOT NULL,                 -- 'plus'
+      stars         INTEGER NOT NULL,
+      recurring     INTEGER NOT NULL DEFAULT 0,    -- a monthly renewal, not the first payment
+      expires_at    INTEGER,                       -- subscription end Telegram reported (ms)
+      refunded_at   INTEGER,
+      created_at    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS payments_user ON payments(user_id, created_at DESC);
+  `);
   return client;
 }
 

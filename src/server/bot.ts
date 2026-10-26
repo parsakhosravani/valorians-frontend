@@ -5,11 +5,12 @@ import crypto from "crypto";
 import { adminIds, announceButton, cancelAnnounce, claimAdmin, markReachable, newsIsOn, setNews, startAnnounce, takeAdminPost } from "./announce";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
+import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
 import { displayName } from "./war";
 
 import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from "@/lib/game/clan";
-import { CLAN, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
-import { advance } from "@/lib/game/engine";
+import { CLAN, PLUS, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
+import { advance, plusActive } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 
 /**
@@ -219,6 +220,26 @@ async function myClan(chatId: number, userId: number) {
   );
 }
 
+async function plusInfo(chatId: number, userId: number) {
+  const p = await findById(userId);
+  const now = Date.now();
+  const active = p ? plusActive(advance(p.state, now)) : false;
+  const days = p && active ? Math.ceil((p.state.plus.until - now) / 86400e3) : 0;
+
+  await send(
+    chatId,
+    `👑 <b>Valorians Plus</b>\n\n` +
+      `🔨 +${PLUS.extraBuilders} builder, so one more building goes up at a time\n` +
+      `⚔️ +${PLUS.extraTrainBatches} training slots in the barracks queue\n` +
+      `👑 The Plus crown next to your name\n\n` +
+      (active
+        ? `✅ Your Plus is active for ${days} more day${days === 1 ? "" : "s"}.`
+        : `⭐ ${fmt(plusPrice())} Stars a month, cancel anytime.` +
+          (p && !p.state.plus.trialUsed ? ` Try it free for ${Math.round(PLUS.trialMs / 86400e3)} days first.` : "")),
+    [[playButton(active ? "⚔️ Open my tribe" : "👑 Get Plus", "/hall?plus=1")], [{ text: "« Menu", callback_data: "menu" }]]
+  );
+}
+
 async function menu(chatId: number) {
   await send(chatId, `⚔️ <b>Valorians Legend</b>\n\nWhat would you like to do, chief?`, [[playButton()], ...menuRows()]);
 }
@@ -231,11 +252,22 @@ type Update = {
     chat: { id: number; type: string };
     from?: { id: number; first_name?: string };
     text?: string;
+    successful_payment?: SuccessfulPayment;
+    refunded_payment?: RefundedPayment;
   };
+  pre_checkout_query?: PreCheckoutQuery;
   callback_query?: { id: string; from: { id: number; first_name?: string }; message?: { chat: { id: number } }; data?: string };
 };
 
 export async function handleUpdate(u: Update) {
+  // Stars payments come first: Telegram cancels a checkout left unanswered for 10s.
+  if (u.pre_checkout_query) return answerPreCheckout(u.pre_checkout_query);
+  if (u.message?.from && u.message.successful_payment) {
+    await recordPayment(u.message.from.id, u.message.successful_payment);
+
+    return;
+  }
+  if (u.message?.from && u.message.refunded_payment) return recordRefund(u.message.from.id, u.message.refunded_payment);
   if (u.callback_query) {
     const q = u.callback_query;
     const chatId = q.message?.chat.id ?? q.from.id;
@@ -307,12 +339,17 @@ function route(name: string, chatId: number, userId: number, firstName: string) 
       return myClan(chatId, userId);
     case "help":
       return howToPlay(chatId);
+    case "plus":
+      return plusInfo(chatId, userId);
     default:
       return menu(chatId);
   }
 }
 
 // ─── One-time setup: profile texts, command menu, Play button, webhook ──────
+
+/** Update kinds the webhook receives; pre_checkout_query is needed for Stars payments. */
+const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query"];
 
 export async function setupBot() {
   const base = appUrl();
@@ -346,6 +383,7 @@ export async function setupBot() {
       { command: "top", description: "🏆 Top chiefs" },
       { command: "clan", description: "🛡️ Your clan" },
       { command: "help", description: "📜 How to play" },
+      { command: "plus", description: "👑 Valorians Plus" },
       { command: "news", description: "🔔 Update news on/off" },
     ],
   });
@@ -368,7 +406,7 @@ export async function setupBot() {
   await run("setWebhook", {
     url: `${base}/api/bot`,
     secret_token: webhookSecret(),
-    allowed_updates: ["message", "callback_query"],
+    allowed_updates: ALLOWED_UPDATES,
     drop_pending_updates: true,
   });
 
@@ -385,9 +423,14 @@ let lastCheck = 0;
 export async function ensureBotSetup() {
   if (!botToken() || Date.now() - lastCheck < 10 * 60_000) return null;
   lastCheck = Date.now();
-  const info = (await tg("getWebhookInfo", {})) as { ok: boolean; result?: { url?: string } };
+  const info = (await tg("getWebhookInfo", {})) as { ok: boolean; result?: { url?: string; allowed_updates?: string[] } };
 
-  if (!info.ok || info.result?.url === `${appUrl()}/api/bot`) return null;
+  if (!info.ok) return null;
+  // Also re-run when the webhook is missing an update kind added later (e.g. payments).
+  const kinds = info.result?.allowed_updates ?? ["message", "callback_query"];
+  const upToDate = info.result?.url === `${appUrl()}/api/bot` && ALLOWED_UPDATES.every((k) => kinds.includes(k));
+
+  if (upToDate) return null;
 
   return setupBot();
 }

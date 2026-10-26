@@ -16,6 +16,8 @@ import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
+import { PlusDrawer } from "@/components/organisms/PlusDrawer";
+import { plusActive } from "@/lib/game/engine";
 
 type ReportItem = {
   id: number;
@@ -91,6 +93,12 @@ export const Hall = () => {
   const { state, rates, now, me, authHeader, claimStreak, upgradeBuilding } = useGame();
   const [news, setNews] = useState<ReportItem | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [plusOpen, setPlusOpen] = useState(false);
+
+  // The bot's /plus button opens the game on /hall?plus=1.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("plus")) setPlusOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!authHeader) return;
@@ -291,6 +299,7 @@ export const Hall = () => {
   tasks.sort((a, b) => order[a.state] - order[b.state]);
   const doneCount = tasks.filter((t) => t.state === "done").length;
   const shielded = state.shieldUntil > now;
+  const plusOn = plusActive(state);
 
   return (
     <div className="flex flex-col gap-3 px-3 pt-1 pb-4">
@@ -374,6 +383,33 @@ export const Hall = () => {
           );
         })}
       </section>
+
+      {/* Valorians Plus */}
+      <button
+        className={clsx(
+          "flex items-center gap-3 rounded-2xl p-3 text-left border active:scale-[0.99] transition-transform",
+          plusOn ? "bg-panel border-line" : "bg-gradient-to-r from-[#3A2814] to-panel border-gold"
+        )}
+        onClick={() => setPlusOpen(true)}
+      >
+        <span aria-hidden className="text-3xl w-12 h-12 rounded-xl bg-panel2 flex items-center justify-center shrink-0">
+          👑
+        </span>
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="font-display font-black text-lg leading-tight">Valorians Plus</span>
+          <span className="text-xs font-bold text-muted">
+            {plusOn
+              ? `Active · ${formatDuration(state.plus.until - now)} left`
+              : state.plus.trialUsed
+                ? "+1 builder, +2 training slots, the crown"
+                : "+1 builder, +2 training slots · try it free"}
+          </span>
+        </span>
+        <span className={clsx("shrink-0 text-sm font-display font-black", plusOn ? "text-good" : "text-goldtext")}>
+          {plusOn ? "✓" : "›"}
+        </span>
+      </button>
+      <PlusDrawer isOpen={plusOpen} onClose={() => setPlusOpen(false)} />
 
       {shielded && (
         <p className="flex items-center justify-center gap-1.5 text-xs font-bold text-muted">
