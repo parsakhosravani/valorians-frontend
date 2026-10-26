@@ -8,6 +8,7 @@ import { resolveDueAttacks } from "./war";
 import { resolveDueTrades } from "./trade";
 
 import { GameError, GameState } from "@/lib/game/engine";
+import { maybeCheckRelease } from "./announce";
 
 export type ApiError = { error: string; code: string };
 
@@ -39,6 +40,7 @@ export function handler(
           // eslint-disable-next-line no-console
           console.error("resolveDueTrades", e);
         });
+        await maybeCheckRelease();
       }
       const player = await getOrCreatePlayer(auth, now);
       let body: any = {};
