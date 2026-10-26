@@ -186,7 +186,7 @@ export const ArmyToken = ({
           )}
         >
           <span className={atSea ? "animate-sail" : "animate-trot"}>
-            {atSea ? "⛵" : lead ? <UnitEmoji unit={lead} /> : "⚔️"}
+            {atSea ? <UnitEmoji unit="longship" /> : lead ? <UnitEmoji unit={lead} /> : "⚔️"}
           </span>
           {n > 0 && (
             <span
