@@ -1,6 +1,6 @@
 import React, { useId } from "react";
 
-import { ClanFlag as Flag, FLAG_COLORS, FLAG_EMBLEMS, FlagPattern } from "@/lib/game/clan";
+import { ClanFlag as Flag, FLAG_COLORS, FlagPattern, emblemImage } from "@/lib/game/clan";
 
 /** The pattern drawn over the field, in a 40×44 box (the banner cloth). */
 const PATTERN: Record<FlagPattern, (fg: string) => React.ReactNode> = {
@@ -46,7 +46,7 @@ export const ClanFlag = ({
   const id = useId().replace(/:/g, "");
   const bg = FLAG_COLORS[flag.bg] ?? FLAG_COLORS[0];
   const fg = FLAG_COLORS[flag.fg] ?? FLAG_COLORS[2];
-  const emblem = flag.emblem >= 0 ? FLAG_EMBLEMS[flag.emblem] : null;
+  const emblem = flag.emblem >= 0 ? emblemImage(flag.emblem) : null;
   // Cloth shape: square top, notched (swallow-tail) bottom.
   const cloth = "M0 0 H40 V44 L20 37 L0 44 Z";
 
@@ -86,9 +86,7 @@ export const ClanFlag = ({
       {emblem && (
         <>
           <circle cx="20" cy="19" fill={bg} r="10" stroke={fg} strokeWidth="1.6" />
-          <text dominantBaseline="central" fontSize="12.5" textAnchor="middle" x="20" y="20">
-            {emblem}
-          </text>
+          <image height="16" href={emblem} preserveAspectRatio="xMidYMid meet" width="16" x="12" y="11" />
         </>
       )}
     </svg>

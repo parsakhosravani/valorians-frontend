@@ -43,6 +43,15 @@ export const FLAG_EMBLEMS = [
   "🔥", "⚡", "🌙", "☀️", "❄️", "🌲", "⛰️", "🌊",
 ] as const;
 
+/** Painted crest for each emblem, same order as FLAG_EMBLEMS (public/images/emblems/<name>.webp). */
+const EMBLEM_IMAGES = [
+  "wolf", "bear", "eagle", "dragon", "lion", "boar", "serpent", "stag",
+  "swords", "axe", "bow", "shield", "hammer", "anchor", "crown", "skull",
+  "flame", "lightning", "moon", "sun", "snowflake", "pine", "mountain", "wave",
+] as const;
+
+export const emblemImage = (i: number) => (EMBLEM_IMAGES[i] ? `/images/emblems/${EMBLEM_IMAGES[i]}.webp` : null);
+
 export type ClanFlag = {
   /** Field colour (index into FLAG_COLORS). */
   bg: number;
