@@ -15,6 +15,7 @@ import {
   ArmyToken,
   CaravanToken,
   ROUTE_COLORS,
+  Road,
   Route,
   progress,
 } from "./MapTravellers";
@@ -37,7 +38,17 @@ import {
   UnitId,
   buildingImage,
 } from "@/lib/game/config";
-import { TERRAIN, Terrain, routeMs, scoutCost, seaAt, seaRoute, terrainAt } from "@/lib/game/map";
+import {
+  TERRAIN,
+  Terrain,
+  marchRoute,
+  pointAlong,
+  routeMs,
+  routeTimeline,
+  scoutCost,
+  seaRoute,
+  terrainAt,
+} from "@/lib/game/map";
 import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
@@ -134,6 +145,7 @@ const TERRAIN_FILL: Record<Terrain, string[]> = {
   plains: ["#5E6B37", "#627039", "#5A6734"],
   forest: ["#34492A", "#36502B", "#314527"],
   hills: ["#7B6848", "#81704E", "#76633F"],
+  mountains: ["#5E554B", "#635A4F", "#595046"],
   lake: ["#2F5664", "#315A69", "#2D5260"],
   sea: ["#1E4258", "#20465D", "#1C3F54"],
 };
@@ -142,6 +154,7 @@ const TERRAIN_ICON: Record<Terrain, string> = {
   plains: "🌾",
   forest: "🌲",
   hills: "⛰️",
+  mountains: "🏔️",
   lake: "💧",
   sea: "🌊",
 };
@@ -190,6 +203,28 @@ const Ground = memo(function Ground({
               strokeLinejoin="round"
               strokeWidth="2.5"
             />
+          )}
+          {t === "mountains" && (
+            <g>
+              <polygon
+                fill="#3F382F"
+                points={`${px + 3},${py + 40} ${px + 17},${py + 12} ${px + 31},${py + 40}`}
+              />
+              <polygon
+                fill="#4A4238"
+                points={`${px + 15},${py + 40} ${px + 30},${py + 6} ${px + 44},${py + 40}`}
+              />
+              <polygon
+                fill="#E8E1D0"
+                opacity="0.9"
+                points={`${px + 25},${py + 17} ${px + 30},${py + 6} ${px + 35},${py + 17} ${px + 31},${py + 14} ${px + 28},${py + 18}`}
+              />
+              <polygon
+                fill="#D9D1BE"
+                opacity="0.75"
+                points={`${px + 13},${py + 20} ${px + 17},${py + 12} ${px + 21},${py + 20} ${px + 17},${py + 18}`}
+              />
+            </g>
           )}
           {t === "lake" && (
             <path
@@ -364,6 +399,34 @@ export const WarMap = ({
   const oy = data ? data.center.y - data.radius : 0;
   const px = (x: number) => (x - ox) * T + T / 2;
   const py = (y: number) => (y - oy) * T + T / 2;
+
+  /**
+   * The road an army takes on the map (around mountains, lakes, over the
+   * sea), in px, timed for its troops, plus where it is `f` of the way in.
+   */
+  const roadOf = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    units: Army | null,
+    f: number,
+  ): { road: Road; atSea: boolean } => {
+    const r = marchRoute(from, to);
+    const stops = routeTimeline(r, units);
+    const points: Road["points"] = [];
+    const kept: number[] = [];
+
+    // Only the corners: drop tiles where the road runs straight on.
+    r.path.forEach((q, k) => {
+      const prev = r.path[k - 1];
+      const next = r.path[k + 1];
+
+      if (prev && next && q.x - prev.x === next.x - q.x && q.y - prev.y === next.y - q.y && r.wet[k] === r.wet[k - 1]) return;
+      points.push({ x: px(q.x), y: py(q.y) });
+      kept.push(stops[k]);
+    });
+
+    return { road: { points, stops: kept }, atSea: pointAlong(r, stops, f).atSea };
+  };
 
   // A bigger window loads a bigger area: keep the same spot in view.
   const origin = useRef<{ ox: number; oy: number } | null>(null);
@@ -914,24 +977,34 @@ export const WarMap = ({
                       />
                     ))}
                   {/* Marches */}
-                  {data.movements.map((m) => (
-                    <Route
-                      key={`r${m.id}`}
-                      color={ROUTE_COLORS[m.kind]}
-                      from={{ x: px(m.from.x), y: py(m.from.y) }}
-                      p={progress(now, m.sentAt, m.arrivesAt)}
-                      to={{ x: px(m.to.x), y: py(m.to.y) }}
-                    />
-                  ))}
-                  {homeward.map((m) => (
-                    <Route
-                      key={`b${m.id}`}
-                      color={ROUTE_COLORS.outgoing}
-                      from={{ x: px(m.from.x), y: py(m.from.y) }}
-                      p={progress(now, m.leftAt, m.returnsAt)}
-                      to={{ x: px(data.home.x), y: py(data.home.y) }}
-                    />
-                  ))}
+                  {data.movements.map((m) => {
+                    const f = progress(now, m.sentAt, m.arrivesAt);
+
+                    return (
+                      <Route
+                        key={`r${m.id}`}
+                        color={ROUTE_COLORS[m.kind]}
+                        from={{ x: px(m.from.x), y: py(m.from.y) }}
+                        p={f}
+                        road={roadOf(m.from, m.to, m.units, f).road}
+                        to={{ x: px(m.to.x), y: py(m.to.y) }}
+                      />
+                    );
+                  })}
+                  {homeward.map((m) => {
+                    const f = progress(now, m.leftAt, m.returnsAt);
+
+                    return (
+                      <Route
+                        key={`b${m.id}`}
+                        color={ROUTE_COLORS.outgoing}
+                        from={{ x: px(m.from.x), y: py(m.from.y) }}
+                        p={f}
+                        road={roadOf(m.from, data.home, m.units, f).road}
+                        to={{ x: px(data.home.x), y: py(data.home.y) }}
+                      />
+                    );
+                  })}
                 </svg>
 
                 {/* Barbarian camps */}
@@ -1065,42 +1138,40 @@ export const WarMap = ({
                   ))}
                 {homeward.map((m) => {
                   const f = progress(now, m.leftAt, m.returnsAt);
+                  const { road, atSea } = roadOf(m.from, data.home, m.units, f);
 
                   return (
                     <ArmyToken
                       key={`b${m.id}`}
+                      atSea={atSea}
                       from={{ x: px(m.from.x), y: py(m.from.y) }}
                       incoming={false}
                       left={Math.max(0, m.returnsAt - now)}
                       p={f}
+                      road={road}
                       to={{ x: px(data.home.x), y: py(data.home.y) }}
                       units={m.units}
-                      atSea={seaAt(
-                        Math.round(m.from.x + (data.home.x - m.from.x) * f),
-                        Math.round(m.from.y + (data.home.y - m.from.y) * f),
-                      )}
                     />
                   );
                 })}
-                {data.movements.map((m) => (
-                  <ArmyToken
-                    key={`t${m.id}`}
-                    from={{ x: px(m.from.x), y: py(m.from.y) }}
-                    incoming={m.kind === "incoming"}
-                    left={Math.max(0, m.arrivesAt - now)}
-                    p={progress(now, m.sentAt, m.arrivesAt)}
-                    to={{ x: px(m.to.x), y: py(m.to.y) }}
-                    units={m.units}
-                    atSea={(() => {
-                      const f = progress(now, m.sentAt, m.arrivesAt);
+                {data.movements.map((m) => {
+                  const f = progress(now, m.sentAt, m.arrivesAt);
+                  const { road, atSea } = roadOf(m.from, m.to, m.units, f);
 
-                      return seaAt(
-                        Math.round(m.from.x + (m.to.x - m.from.x) * f),
-                        Math.round(m.from.y + (m.to.y - m.from.y) * f),
-                      );
-                    })()}
-                  />
-                ))}
+                  return (
+                    <ArmyToken
+                      key={`t${m.id}`}
+                      atSea={atSea}
+                      from={{ x: px(m.from.x), y: py(m.from.y) }}
+                      incoming={m.kind === "incoming"}
+                      left={Math.max(0, m.arrivesAt - now)}
+                      p={f}
+                      road={road}
+                      to={{ x: px(m.to.x), y: py(m.to.y) }}
+                      units={m.units}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1153,6 +1224,11 @@ export const WarMap = ({
                   Armies march across the map; farther targets take longer. An
                   army moves at the speed of its slowest unit (light cavalry fastest,
                   catapults slowest). The battle happens when it arrives.
+                </span>
+                <span>
+                  🏔️ Armies follow roads, not straight lines: they march around
+                  mountains and lakes, and forests and hills slow them down. When
+                  the way round is too long, they sail.
                 </span>
                 <span>
                   ⛰️ Hills give the defender +20% defense, 🌲 forests +10%, and

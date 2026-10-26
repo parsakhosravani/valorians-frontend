@@ -19,12 +19,16 @@ import {
 const T0 = Date.UTC(2026, 9, 26, 10);
 const army = (a: Partial<E.Army>) => ({ ...E.emptyArmy(), ...a });
 
-/** A pair of land tiles with open sea between them, near the middle of the map. */
+/** A pair of land tiles with open sea between them and no sensible way round on foot. */
 function acrossTheSea(): { a: Point; b: Point } {
   for (let y = 40; y < 80; y++) {
     for (let x = 40; x < 80; x++) {
       if (seaAt(x, y) || !seaAt(x + 1, y)) continue;
-      for (let k = 3; k < 12; k++) if (!seaAt(x + k, y)) return { a: { x, y }, b: { x: x + k, y } };
+      for (let k = 3; k < 12; k++) {
+        if (seaAt(x + k, y)) continue;
+        const b = { x: x + k, y };
+        if (seaRoute({ x, y }, b).naval) return { a: { x, y }, b };
+      }
     }
   }
   throw new Error("no sea near the middle of the map");
@@ -62,12 +66,13 @@ test("new tribes never settle in the sea", () => {
   }
 });
 
-test("a straight line over water is a sea route; over land it isn't", () => {
+test("a road over water is a sea route; over land it isn't", () => {
   const sea = acrossTheSea();
   const r = seaRoute(sea.a, sea.b);
   expect(r.naval).toBe(true);
   expect(r.sea).toBeGreaterThan(0);
-  expect(r.sea + r.land).toBeCloseTo(r.distance);
+  // The road is never shorter than the straight line.
+  expect(r.sea + r.land).toBeGreaterThanOrEqual(r.distance - 1e-9);
   expect(isCoastal(sea.a)).toBe(true);
 
   const land = overLand();
@@ -112,11 +117,11 @@ test("sea travel goes at sailing speed; walking speed only on land", () => {
   const r = seaRoute(sea.a, sea.b);
   const expected = (r.land * UNIT_BY_ID.ram.speed + r.sea * UNIT_BY_ID.longship.speed) * 1000;
   expect(routeMs(units, sea.a, sea.b)).toBe(Math.round(Math.max(20_000, expected)));
-  // Rams crawl on land: sailing the same distance is quicker than walking it.
-  expect(routeMs(units, sea.a, sea.b)).toBeLessThanOrEqual(marchMs(units, r.distance));
-  // Over land the route time is the old march time.
+  // Over land it's all walking: rough ground counts extra, so never quicker than the straight line.
   const land = overLand();
-  expect(routeMs(units, land.a, land.b)).toBe(marchMs(units, seaRoute(land.a, land.b).distance));
+  const lr = seaRoute(land.a, land.b);
+  expect(routeMs(units, land.a, land.b)).toBe(Math.round(lr.land * UNIT_BY_ID.ram.speed * 1000));
+  expect(routeMs(units, land.a, land.b)).toBeGreaterThanOrEqual(marchMs(units, lr.distance));
 });
 
 test("landing from the sea: defenders fight better, harbor adds more, ships never die", () => {
