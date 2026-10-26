@@ -33,12 +33,21 @@ const config: Config = {
           "0%": { transform: "translateY(0)", opacity: "1" },
           "100%": { transform: "translateY(-70px)", opacity: "0" },
         },
+        route: {
+          to: { strokeDashoffset: "-18" },
+        },
+        trot: {
+          "0%, 100%": { translate: "0 0" },
+          "50%": { translate: "0 -2px" },
+        },
         scale: {
           "0%, 100%": { transform: "scale(1)" },
           "50%": { transform: "scale(1.02)" },
         },
       },
       animation: {
+        route: "route 1.2s linear infinite",
+        trot: "trot 0.6s ease-in-out infinite",
         float: "float 2.2s ease-in-out infinite",
         flame: "flame 0.9s ease-in-out infinite alternate",
         kenburns: "kenburns 24s ease-in-out infinite alternate",
