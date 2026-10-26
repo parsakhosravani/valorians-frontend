@@ -100,7 +100,7 @@ async function welcome(chatId: number, firstName: string) {
   const rows = [[playButton("⚔️ Play now")], ...menuRows()];
   const photo = await tg("sendPhoto", {
     chat_id: chatId,
-    photo: `${appUrl()}/bot/welcome.jpg`,
+    photo: `${appUrl()}/bot/welcome-v2.jpg`,
     caption,
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: rows },

@@ -43,7 +43,7 @@ export async function createShieldInvoice(userId: number, id: unknown): Promise<
     payload: payloadFor(userId, option.id),
     currency: "XTR",
     prices: [{ label: `Shield · ${hoursLabel(option.hours)}`, amount: option.stars }],
-    photo_url: `${appUrl()}/bot/welcome.jpg`,
+    photo_url: `${appUrl()}/bot/welcome-v2.jpg`,
   });
 
   if (!r.ok || typeof r.result !== "string") {
