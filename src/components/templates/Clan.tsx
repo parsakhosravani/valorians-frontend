@@ -164,11 +164,48 @@ const AmountInput = ({ value, onChange, max }: { value: string; onChange: (v: st
   </div>
 );
 
+/** The last clan screen loaded, so coming back to the tab is instant. */
+let cache: { playerId: number; view: ClanView } | null = null;
+
+const cachedView = (playerId: number, clanId: number | null) =>
+  cache && cache.playerId === playerId && (cache.view.mine?.id ?? null) === clanId ? cache.view : null;
+
+/** A placeholder block that gently pulses while content loads. */
+const Bone = ({ className }: { className?: string }) => (
+  <div className={clsx("rounded-lg bg-panel2 animate-pulse", className)} />
+);
+
+/** The shape of the clan screen, shown until it loads. */
+const ClanSkeleton = ({ inClan }: { inClan: boolean }) => (
+  <div aria-busy="true" aria-label="Loading clan" className="flex flex-col gap-3">
+    {inClan && (
+      <div className="grid grid-cols-4 gap-2">
+        {[0, 1, 2, 3].map((i) => (
+          <Bone key={i} className="h-[52px] rounded-xl" />
+        ))}
+      </div>
+    )}
+    <Bone className="h-11 rounded-xl" />
+    {[0, 1, 2, 3].map((i) => (
+      <div key={i} className="flex items-center gap-3 rounded-2xl border border-line bg-buildingBg p-3">
+        <Bone className={inClan ? "h-9 w-9" : "h-11 w-9"} />
+        <div className="flex flex-1 flex-col gap-2">
+          <Bone className="h-3.5 w-2/3" />
+          <Bone className="h-2.5 w-1/2" />
+        </div>
+        <Bone className="h-8 w-14" />
+      </div>
+    ))}
+  </div>
+);
+
 export const Clan: FunctionComponent = () => {
   useBackButton();
   const { authHeader, me, state, now, clan } = useGame();
-  const [data, setData] = useState<ClanView | null>(null);
+  // Start from the last view of this screen (if it's still about the same clan) so it opens instantly.
+  const [data, setData] = useState<ClanView | null>(() => cachedView(me.id, me.clan?.id ?? null));
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const [browseTab, setBrowseTab] = useState<BrowseTab>("browse");
   const [tab, setTab] = useState<ClanTab>("members");
   const [query, setQuery] = useState("");
@@ -198,14 +235,29 @@ export const Clan: FunctionComponent = () => {
   const load = useCallback(
     async (q = query) => {
       if (!authHeader) return;
-      try {
-        setData(await apiRequest<ClanView>(authHeader, `clan${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`));
-        setError(null);
-      } catch (e) {
-        setError((e as Error).message);
+      const path = `clan${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`;
+
+      // Mobile connections drop requests now and then: try a few times before giving up.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const view = await apiRequest<ClanView>(authHeader, path);
+
+          setData(view);
+          if (!q.trim()) cache = { playerId: me.id, view };
+          setError(null);
+
+          return;
+        } catch (e) {
+          if (attempt >= 2) {
+            setError((e as Error).message);
+
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        }
       }
     },
-    [authHeader, query]
+    [authHeader, query, me.id]
   );
 
   // Reload when membership changes (join, leave, found) and as the search changes.
@@ -214,6 +266,12 @@ export const Clan: FunctionComponent = () => {
 
     return () => clearTimeout(t);
   }, [load, me.clan?.id, query]);
+
+  const retry = async () => {
+    setRetrying(true);
+    await load();
+    setRetrying(false);
+  };
 
   const run = async (key: string, fn: () => Promise<boolean>) => {
     setBusy(key);
@@ -666,13 +724,20 @@ export const Clan: FunctionComponent = () => {
     );
   };
 
+  // Before the clan has loaded, the player's badge already says which clan they're in.
+  const badge = !data && me.clan ? me.clan : null;
+
   return (
     <>
       <div className="relative flex flex-col w-full px-3 pt-8 pb-28 gap-4">
         <div className="bg-buildingBg border border-line min-h-[100px] w-full flex rounded-2xl">
-          {mine ? (
+          {mine || badge ? (
             <div className="w-1/4 flex items-center justify-center py-2 pl-1">
-              <ClanFlag flag={flagDraft ?? mine.flag} size={88} title={`${mine.name} flag`} />
+              <ClanFlag
+                flag={mine ? (flagDraft ?? mine.flag) : badge!.flag}
+                size={88}
+                title={`${mine?.name ?? badge!.name} flag`}
+              />
             </div>
           ) : (
             <div className="w-2/6 flex flex-col justify-start relative">
@@ -683,8 +748,21 @@ export const Clan: FunctionComponent = () => {
               />
             </div>
           )}
-          <div className={clsx("flex flex-col justify-center gap-1 py-2.5 pr-2", mine ? "w-3/4 pl-2" : "w-4/6 pl-3")}>
-            {mine ? (
+          <div className={clsx("flex flex-col justify-center gap-1 py-2.5 pr-2", mine || badge ? "w-3/4 pl-2" : "w-4/6 pl-3")}>
+            {badge ? (
+              <>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Tag tag={badge.tag} />
+                  <span className="font-display text-parch text-lg font-bold truncate">{badge.name}</span>
+                </div>
+                {!error && (
+                  <>
+                    <Bone className="h-3 w-32" />
+                    <Bone className="h-3 w-48" />
+                  </>
+                )}
+              </>
+            ) : mine ? (
               <>
                 <div className="flex items-center gap-2 min-w-0">
                   <Tag tag={mine.tag} />
@@ -706,8 +784,22 @@ export const Clan: FunctionComponent = () => {
           </div>
         </div>
 
-        {error && <p className="text-sm text-[#F08A6C]">{error}</p>}
-        {!data && !error && <p className="text-sm text-[#B19C80]">Loading…</p>}
+        {error && !data && (
+          <Card className="flex flex-col items-center gap-2 py-5 text-center">
+            <span className="text-3xl">🏚️</span>
+            <span className="font-display text-parch font-bold">Couldn't reach the clan hall</span>
+            <span className="text-xs text-sub">Your connection dropped. Your clan is safe, try again in a moment.</span>
+            <Button className="mt-1" disabled={retrying} size="small" onClick={retry}>
+              {retrying ? "Trying…" : "Try again"}
+            </Button>
+          </Card>
+        )}
+        {error && data && (
+          <button className="self-start text-xs font-bold text-[#F08A6C]" type="button" onClick={retry}>
+            {retrying ? "Reconnecting…" : "⚠️ Offline, showing the last update. Tap to retry"}
+          </button>
+        )}
+        {!data && !error && <ClanSkeleton inClan={!!me.clan} />}
 
         {mine && (
           <>
