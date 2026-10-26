@@ -1003,10 +1003,19 @@ export const WarMap = ({
             </button>
             <button
               aria-label="Back to my tribe"
-              className="w-11 h-11 rounded-xl bg-panel/95 border border-line text-lg shadow-lg"
+              className="w-11 h-11 rounded-xl bg-panel/95 border border-line shadow-lg flex items-center justify-center active:scale-95 transition-transform"
               onClick={recentre}
             >
-              🏠
+              <span className="w-9 h-9 rounded-full border-2 border-gold bg-[#1E1610]/70 shadow-[0_0_10px_rgba(227,169,72,0.7)] flex items-center justify-center">
+                <Image
+                  draggable={false}
+                  alt=""
+                  className="w-7 h-7 object-contain"
+                  height={56}
+                  src={buildingImage(BUILDING_BY_ID["town-hall"])}
+                  width={56}
+                />
+              </span>
             </button>
           </div>
         )}
