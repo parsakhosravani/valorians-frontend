@@ -86,6 +86,43 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
   return s;
 }
 
+/** Resources handed back when a batch is cancelled: the full cost of every unit not yet trained. */
+export function trainingRefund(t: { unit: UnitId; count: number; done: number }) {
+  const left = t.count - t.done;
+  const cost = UNIT_BY_ID[t.unit].cost;
+
+  return Object.fromEntries(RESOURCE_IDS.map((r) => [r, cost[r] * left])) as Record<ResourceId, number>;
+}
+
+/**
+ * Cancels a training batch (found by its start time). Units already trained stay in the army,
+ * the rest are refunded up to the storage limit, and the batches behind it move up the queue.
+ */
+export function cancelTraining(s0: GameState, startsAt: number, now: number): GameState {
+  const i = s0.training.findIndex((t) => t.startsAt === startsAt);
+  if (i < 0) throw new GameError("That training has already finished", "not_found");
+
+  const s = cloneState(s0);
+  const [batch] = s.training.splice(i, 1);
+  const refund = trainingRefund(batch);
+  const cap = getRates(s).capacity;
+  for (const r of RESOURCE_IDS) {
+    if (refund[r] > 0) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
+  }
+
+  // Batches that haven't started yet close the gap; ones already running keep their timing.
+  let cursor = now;
+  for (const t of s.training) {
+    if (t.startsAt <= now) cursor = Math.max(cursor, trainingEndsAt(t));
+    else {
+      t.startsAt = cursor;
+      cursor = trainingEndsAt(t);
+    }
+  }
+
+  return s;
+}
+
 // ─── Battle maths ────────────────────────────────────────────────────────────
 
 /** Attack of one troop of this type, with its rank and upgrades (before buildings). */
