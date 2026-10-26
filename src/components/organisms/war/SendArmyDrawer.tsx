@@ -165,13 +165,16 @@ export const SendArmyDrawer = ({
           {/* Quick picks for the whole army */}
           <div className="flex items-center gap-1 bg-panel border border-line rounded-xl p-1">
             {presets.map((p) => {
-              const active = sameArmy(units, scaled(state.army, p.f));
+              // An empty pick matches every preset when nobody is home, so only a real selection counts.
+              const active = size > 0 && sameArmy(units, scaled(state.army, p.f));
+              const disabled = home.length === 0;
 
               return (
                 <button
                   key={p.label}
+                  disabled={disabled}
                   className={clsx(
-                    "flex-1 h-8 rounded-[9px] text-xs font-extrabold transition",
+                    "flex-1 h-8 rounded-[9px] text-xs font-extrabold transition disabled:opacity-40",
                     active ? "bg-gold text-[#1A120B]" : "text-muted",
                     p.label === "Enough" && !active && "text-good"
                   )}
