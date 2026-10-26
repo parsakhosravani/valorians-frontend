@@ -25,6 +25,11 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
         <div className="text-sm text-[#B19C80]">
           {report.attackerName} ⚔️ {report.defenderName}
         </div>
+        {report.battleMs != null && report.rounds?.length ? (
+          <div className="text-xs text-muted">
+            Fought over {report.rounds.length} rounds · {formatDuration(report.battleMs)}
+          </div>
+        ) : null}
       </div>
       <div className="grid grid-cols-3 text-center bg-[#1E1610] rounded p-2 text-sm">
         <div>

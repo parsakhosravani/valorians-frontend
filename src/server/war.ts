@@ -8,21 +8,27 @@ import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
-import { MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS } from "@/lib/game/config";
+import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, campDefense } from "@/lib/game/config";
+import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, routeMs, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
+  BattleOutcome,
   Promotion,
   RaidReport,
   armySize,
   battleNumbers,
   campBattle,
+  campOutcome,
   cancelRaid,
   defendRaid,
   dispatchCamp,
   dispatchRaid,
   embark,
+  engageDefenders,
   powerScore,
+  raidOutcome,
   receiveRaidReport,
+  releaseDefenders,
   returnHome,
   scoutEstimate,
 } from "@/lib/game/war";
@@ -30,6 +36,9 @@ import type { Army } from "@/lib/game/engine";
 
 /** Most armies one tribe can have out at once. */
 const MAX_MARCHES = 5;
+
+/** Attacks still under way: on the road, or fighting at the target. */
+export const ACTIVE_ATTACK = "('marching','resolving','fighting')";
 
 const rand = () => crypto.randomInt(0, 1_000_000) / 1_000_000;
 
@@ -101,7 +110,7 @@ async function saveReport(
 export async function marchTo(me: Player, to: { target?: number; camp?: number }, units: Army, now: number) {
   const db = await getDb();
   const out = await db.execute({
-    sql: "SELECT COUNT(*) AS n FROM attacks WHERE attacker_id = ? AND status IN ('marching','resolving')",
+    sql: `SELECT COUNT(*) AS n FROM attacks WHERE attacker_id = ? AND status IN ${ACTIVE_ATTACK}`,
     args: [me.id],
   });
 
@@ -115,7 +124,7 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
     campLevel = Math.floor(Number(to.camp));
     dest = (await campSpots(me.id, home, campLevel))[campLevel - 1];
     const busy = await db.execute({
-      sql: "SELECT 1 FROM attacks WHERE attacker_id = ? AND camp_level = ? AND status IN ('marching','resolving') LIMIT 1",
+      sql: `SELECT 1 FROM attacks WHERE attacker_id = ? AND camp_level = ? AND status IN ${ACTIVE_ATTACK} LIMIT 1`,
       args: [me.id, campLevel],
     });
 
@@ -177,6 +186,16 @@ type AttackRow = {
   to: Point;
   sentAt: number;
   arrivesAt: number;
+  endsAt: number | null;
+  battle: StoredBattle | null;
+};
+
+/** A battle under way: decided when the armies met, played out until plan.endsAt. */
+export type StoredBattle = {
+  plan: BattlePlan;
+  outcome: BattleOutcome;
+  /** Defenders on the field (null at a barbarian camp). */
+  engaged: Army | null;
 };
 
 const toAttack = (r: Record<string, unknown>): AttackRow => ({
@@ -189,6 +208,8 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   to: { x: Number(r.to_x), y: Number(r.to_y) },
   sentAt: Number(r.sent_at),
   arrivesAt: Number(r.arrives_at),
+  endsAt: r.ends_at == null ? null : Number(r.ends_at),
+  battle: r.battle == null ? null : (JSON.parse(String(r.battle)) as StoredBattle),
 });
 
 /** Troop types whose rank went up from one state to the next. */
@@ -198,27 +219,113 @@ const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, a
     rank: rankForXp(after.troops[u].xp),
   }));
 
-/** The battle at the end of one march. Times use the arrival moment. */
-async function resolveAttack(a: AttackRow, now: number) {
+/** Nobody to fight: the army turns round and walks home the way it came. */
+async function turnBack(a: AttackRow, attackerId: number, name: string | null, now: number) {
   const at = a.arrivesAt;
+
+  await mutatePlayer(attackerId, now, (s) =>
+    returnHome(s, a.units, name ?? "Abandoned land", at + (a.arrivesAt - a.sentAt), now, rand(), a.to, at)
+  );
+  await notify.turnedBack(attackerId, name ?? "The target");
+}
+
+/**
+ * The armies meet. The fight is decided right away (from both sides as they
+ * are now) but lasts a while: defenders leave home for the field, and the
+ * result comes out when the last round ends (finishBattle).
+ * Returns false when there was no battle and the army went home.
+ */
+async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
+  const at = a.arrivesAt;
+  const db = await getDb();
+  const terrain = terrainAt(a.to.x, a.to.y);
+  const attacker = await findById(a.attackerId);
+
+  if (!attacker) return false;
+
+  let outcome!: BattleOutcome;
+  let engaged: Army | null = null;
+  let troops = troopsOnField(a.units);
+
+  if (a.campLevel) {
+    outcome = campOutcome(attacker.state, a.campLevel, a.units, rand(), { terrain });
+    troops += Math.round(campDefense(a.campLevel) / CAMP_DEFENSE_PER_TROOP);
+  } else {
+    const defender = a.defenderId ? await findById(a.defenderId) : null;
+
+    if (!defender) {
+      await turnBack(a, attacker.id, null, now);
+
+      return false;
+    }
+    const landing = seaRoute(a.from, a.to).naval;
+
+    try {
+      await mutatePlayer(defender.id, now, (s) => {
+        if (s.shieldUntil > at) throw new GameError("This tribe is protected by a shield right now", "shielded");
+        const r = raidOutcome(s, attacker.state, a.units, rand(), { terrain, landing });
+
+        outcome = r.outcome;
+        engaged = r.defenders;
+
+        return engageDefenders(s, r.defenders);
+      });
+    } catch (e) {
+      if (!(e instanceof GameError)) throw e;
+      await turnBack(a, attacker.id, displayName(defender), now); // shielded by the time we got there
+
+      return false;
+    }
+    troops += troopsOnField(engaged!);
+  }
+
+  const plan = planBattle(outcome, at, troops, rand());
+  const battle: StoredBattle = { plan, outcome, engaged };
+
+  try {
+    await db.execute({
+      sql: "UPDATE attacks SET status = 'fighting', ends_at = ?, battle = ? WHERE id = ?",
+      args: [plan.endsAt, JSON.stringify(battle), a.id],
+    });
+  } catch (e) {
+    // The defenders already left home for the field: send them back.
+    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, engaged!)).catch(() => {});
+    throw e;
+  }
+  if (a.defenderId && plan.endsAt > now) {
+    await notify.battleBegun(a.defenderId, displayName(attacker), plan.endsAt - now).catch(() => {});
+  }
+
+  return true;
+}
+
+/** The last round is over: the decided result is applied to both tribes. Times use the battle's end. */
+async function finishBattle(a: AttackRow, now: number) {
+  const { plan, outcome, engaged } = a.battle!;
+  const at = plan.endsAt;
   const travelMs = a.arrivesAt - a.sentAt;
   const terrain = terrainAt(a.to.x, a.to.y);
   const landing = seaRoute(a.from, a.to).naval;
+  const story = { battleMs: plan.endsAt - plan.startedAt, rounds: plan.rounds };
   const attacker = await findById(a.attackerId);
 
-  if (!attacker) return;
+  if (!attacker) {
+    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, engaged));
+
+    return;
+  }
 
   if (a.campLevel) {
     let report!: RaidReport;
 
     await mutatePlayer(attacker.id, now, (s) => {
-      const r = campBattle(s, a.campLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to });
+      const r = campBattle(s, a.campLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to, outcome });
 
       report = r.report;
 
       return r.state;
     });
-    const full: StoredReport = { ...report, attackerName: displayName(attacker), defenderName: `Barbarian camp ${a.campLevel}` };
+    const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: `Barbarian camp ${a.campLevel}` };
 
     await saveReport(attacker.id, null, a.campLevel, full, at, a.id);
     await notify.attackResult(attacker.id, full.defenderName, report, now);
@@ -227,39 +334,33 @@ async function resolveAttack(a: AttackRow, now: number) {
   }
 
   const defender = a.defenderId ? await findById(a.defenderId) : null;
-  let report: RaidReport | null = null;
 
-  if (defender) {
-    try {
-      await mutatePlayer(defender.id, now, (s) => {
-        const r = defendRaid(s, attacker.state, a.units, at, rand(), { terrain, travelMs, from: a.to, landing });
-
-        report = r.report;
-
-        return r.state;
-      });
-    } catch (e) {
-      if (!(e instanceof GameError)) throw e;
-      report = null; // shielded by the time we got there
-    }
-  }
-
-  if (!report || !defender) {
-    // Nobody to fight: the army turns round and walks home.
-    await mutatePlayer(attacker.id, now, (s) =>
-      returnHome(s, a.units, defender ? displayName(defender) : "Abandoned land", at + travelMs, now, rand(), a.to, at)
-    );
-    await notify.turnedBack(attacker.id, defender ? displayName(defender) : "The target");
+  if (!defender) {
+    await turnBack(a, attacker.id, null, now);
 
     return;
   }
-  const r: RaidReport = report;
-  const full: StoredReport = { ...r, attackerName: displayName(attacker), defenderName: displayName(defender) };
+  let report!: RaidReport;
 
+  await mutatePlayer(defender.id, now, (s) => {
+    const r = defendRaid(s, attacker.state, a.units, at, rand(), {
+      terrain,
+      travelMs,
+      from: a.to,
+      landing,
+      outcome,
+      engaged: engaged ?? undefined,
+    });
+
+    report = r.report;
+
+    return r.state;
+  });
+  const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: displayName(defender) };
   let promoted: Promotion[] = [];
 
   await mutatePlayer(attacker.id, now, (s) => {
-    const next = receiveRaidReport(s, r, full.defenderName, at, rand(), a.to);
+    const next = receiveRaidReport(s, report, full.defenderName, at, rand(), a.to);
 
     promoted = promotionsBetween(s, next);
 
@@ -269,22 +370,35 @@ async function resolveAttack(a: AttackRow, now: number) {
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
   await Promise.all([
     notify.attackResult(attacker.id, full.defenderName, full, now),
-    r.attackerWon ? notify.raided(defender.id, full.attackerName, r, attacker.id) : notify.defended(defender.id, full.attackerName, r),
+    report.attackerWon
+      ? notify.raided(defender.id, full.attackerName, report, attacker.id)
+      : notify.defended(defender.id, full.attackerName, report),
   ]);
 }
 
+/** Something went wrong: everyone goes home with nothing, so no troops are lost to a bug. */
+async function abandon(a: AttackRow, now: number, e: unknown) {
+  // eslint-disable-next-line no-console
+  console.error("battle failed, sending the armies home", a.id, e);
+  await mutatePlayer(a.attackerId, now, (s) => returnHome(s, a.units, "a failed march", now + 60_000, now, rand())).catch(() => {});
+  if (a.defenderId && a.battle?.engaged) {
+    await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, a.battle!.engaged!)).catch(() => {});
+  }
+}
+
 /**
- * Fights every battle whose army has arrived. Called at the start of war
- * requests and sign-in, so results appear the next time anyone looks.
+ * Starts the battles whose armies have arrived and finishes the ones whose
+ * last round is over. Called at the start of war requests, at sign-in and by
+ * the cron, so results appear the next time anyone looks.
  */
 export async function resolveDueAttacks(now: number) {
   const db = await getDb();
-  const rs = await db.execute({
+  const arrived = await db.execute({
     sql: "SELECT * FROM attacks WHERE status = 'marching' AND arrives_at <= ? ORDER BY arrives_at ASC LIMIT 20",
     args: [now],
   });
 
-  for (const row of rs.rows) {
+  for (const row of arrived.rows) {
     const a = toAttack(row as Record<string, unknown>);
     const claim = await db.execute({
       sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'marching'",
@@ -292,12 +406,33 @@ export async function resolveDueAttacks(now: number) {
     });
 
     if (claim.rowsAffected !== 1) continue; // another request took it
+    let fighting = false;
+
     try {
-      await resolveAttack(a, now);
+      fighting = await beginBattle(a, now);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("battle failed, sending the army home", a.id, e);
-      await mutatePlayer(a.attackerId, now, (s) => returnHome(s, a.units, "a failed march", now + 60_000, now, rand())).catch(() => {});
+      await abandon(a, now, e);
+    }
+    if (!fighting) await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
+  }
+
+  const ended = await db.execute({
+    sql: "SELECT * FROM attacks WHERE status = 'fighting' AND ends_at <= ? ORDER BY ends_at ASC LIMIT 20",
+    args: [now],
+  });
+
+  for (const row of ended.rows) {
+    const a = toAttack(row as Record<string, unknown>);
+    const claim = await db.execute({
+      sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'fighting'",
+      args: [a.id],
+    });
+
+    if (claim.rowsAffected !== 1) continue;
+    try {
+      await finishBattle(a, now);
+    } catch (e) {
+      await abandon(a, now, e);
     }
     await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
   }

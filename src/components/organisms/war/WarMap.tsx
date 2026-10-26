@@ -20,6 +20,13 @@ import {
   progress,
 } from "./MapTravellers";
 import { AttackTarget } from "./SendArmyDrawer";
+import {
+  BattleMovement,
+  BattleRow,
+  BattleToken,
+  LiveBattleData,
+  LiveBattleDrawer,
+} from "./LiveBattle";
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 
 import { Button, Drawer, InfoDrawer } from "@/components";
@@ -99,6 +106,8 @@ type Movement = {
   arrivesAt: number;
   units: Army | null;
   campLevel: number | null;
+  /** Arrived: the battle is being fought (older servers don't send it). */
+  battle?: LiveBattleData | null;
 };
 
 type Caravan = {
@@ -304,6 +313,7 @@ export const WarMap = ({
   const [selected, setSelected] = useState<Selected>(null);
   const [scouts, setScouts] = useState<Record<number, ScoutReport>>({});
   const [busy, setBusy] = useState(false);
+  const [watching, setWatching] = useState<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const radius = useRef(0);
@@ -367,11 +377,16 @@ export const WarMap = ({
 
     return () => clearInterval(t);
   }, [load]);
+  // ...and when a battle's next round (or the battle) ends.
   const nextArrival = data
-    ? [...data.movements, ...(data.caravans ?? [])].reduce(
-        (m, x) => (x.arrivesAt > Date.now() ? Math.min(m, x.arrivesAt) : m),
-        Infinity,
-      )
+    ? [
+        ...data.movements.flatMap((m) =>
+          m.battle
+            ? [m.battle.nextRoundAt ?? m.battle.endsAt, m.battle.endsAt]
+            : [m.arrivesAt],
+        ),
+        ...(data.caravans ?? []).map((c) => c.arrivesAt),
+      ].reduce((m, t) => (t > Date.now() ? Math.min(m, t) : m), Infinity)
     : Infinity;
 
   useEffect(() => {
@@ -723,8 +738,12 @@ export const WarMap = ({
             m.leftAt ?? m.returnsAt - routeMs(m.units, m.from!, data.home),
         }))
     : [];
-  const incoming = data?.movements.filter((m) => m.kind === "incoming") ?? [];
-  const mine = data?.movements.filter((m) => m.kind === "outgoing") ?? [];
+  // Armies still on the road, and the ones fighting where they arrived.
+  const marching = data?.movements.filter((m) => !m.battle) ?? [];
+  const battles = (data?.movements.filter((m) => m.battle) ?? []) as BattleMovement[];
+  const incoming = marching.filter((m) => m.kind === "incoming");
+  const mine = marching.filter((m) => m.kind === "outgoing");
+  const watched = battles.find((m) => m.id === watching) ?? null;
   const merchants =
     data?.caravans?.filter((c) => c.kind !== "other" && c.arrivesAt > now) ??
     [];
@@ -783,9 +802,13 @@ export const WarMap = ({
       {/* Armies on the move */}
       {(incoming.length > 0 ||
         mine.length > 0 ||
+        battles.length > 0 ||
         returning.length > 0 ||
         merchants.length > 0) && (
         <div className="flex flex-col gap-1.5">
+          {battles.map((m) => (
+            <BattleRow key={`f${m.id}`} m={m} now={now} onWatch={() => setWatching(m.id)} />
+          ))}
           {incoming.map((m) => (
             <div
               key={m.id}
@@ -965,7 +988,7 @@ export const WarMap = ({
                       />
                     ))}
                   {/* Marches */}
-                  {data.movements.map((m) => {
+                  {marching.map((m) => {
                     const f = progress(now, m.sentAt, m.arrivesAt);
 
                     return (
@@ -1142,7 +1165,16 @@ export const WarMap = ({
                     />
                   );
                 })}
-                {data.movements.map((m) => {
+                {battles.map((m) => (
+                  <BattleToken
+                    key={`f${m.id}`}
+                    at={{ x: px(m.to.x), y: py(m.to.y) }}
+                    m={m}
+                    now={now}
+                    onClick={() => setWatching(m.id)}
+                  />
+                ))}
+                {marching.map((m) => {
                   const f = progress(now, m.sentAt, m.arrivesAt);
                   const { road, atSea } = roadOf(m.from, m.to, m.units, f);
 
@@ -1238,6 +1270,11 @@ export const WarMap = ({
                 <span>
                   You can recall an army before it arrives. Raided tribes get a
                   2h shield.
+                </span>
+                <span>
+                  ⚔️ When armies meet, the battle lasts from 1 minute up to 30,
+                  longer the more troops fight. Tap the crossed swords to watch it
+                  round by round; the defenders are on the field until it ends.
                 </span>
                 <span>🖱️ Scroll or pinch to zoom, drag to move around.</span>
               </span>
@@ -1426,7 +1463,8 @@ export const WarMap = ({
           (() => {
             const c = selected.camp;
             const ground = TERRAIN[c.terrain];
-            const busyCamp = mine.some((m) => m.campLevel === c.level);
+            const fightingCamp = battles.some((m) => m.kind === "outgoing" && m.campLevel === c.level);
+            const busyCamp = fightingCamp || mine.some((m) => m.campLevel === c.level);
 
             return (
               <div className="flex flex-col gap-3 pt-2">
@@ -1464,7 +1502,7 @@ export const WarMap = ({
                   </p>
                 ) : busyCamp ? (
                   <p className="text-sm font-bold text-goldtext">
-                    Your army is already on its way.
+                    {fightingCamp ? "Your army is fighting here right now." : "Your army is already on its way."}
                   </p>
                 ) : (
                   <Button isFull onClick={() => attackCamp(c)}>
@@ -1475,6 +1513,7 @@ export const WarMap = ({
             );
           })()}
       </Drawer>
+      <LiveBattleDrawer m={watched} now={now} onClose={() => setWatching(null)} />
     </div>
   );
 };

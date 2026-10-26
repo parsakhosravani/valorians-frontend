@@ -97,6 +97,16 @@ export const notify = {
     );
   },
 
+  battleBegun(defenderId: number, attacker: string, durationMs: number) {
+    return sendToPlayer(
+      defenderId,
+      `⚔️ <b>${esc(attacker)}</b> is at your walls! Your troops are on the field.\n\n` +
+        `The battle lasts <b>${inMinutes(durationMs)}</b>. Watch it on the map.`,
+      "🗺️ Watch the battle",
+      "/battle?tab=map"
+    );
+  },
+
   defended(defenderId: number, attacker: string, r: RaidReport) {
     return sendToPlayer(
       defenderId,

@@ -47,6 +47,7 @@ import {
   unitRank,
 } from "./engine";
 import { Point, SHIP_ID, TERRAIN, Terrain, shipsNeeded } from "./map";
+import type { BattleRound } from "./battle";
 
 /** Troops that fight (everything but ships). */
 const FIGHTERS = UNIT_IDS.filter((u) => !UNIT_BY_ID[u].transport);
@@ -420,6 +421,9 @@ export type RaidReport = BattleOutcome & {
   loot: Record<ResourceId, number>;
   coins: number;
   returnsAt: number;
+  /** How long the fight lasted and how it went, round by round (timed battles only). */
+  battleMs?: number;
+  rounds?: BattleRound[];
 };
 
 /**
@@ -434,7 +438,66 @@ export type MapOpts = {
   from?: Point;
   /** The attackers came by sea and have to land on the beach. */
   landing?: boolean;
+  /**
+   * The battle was already decided when the armies met (see battle.ts); apply
+   * this result instead of fighting again.
+   */
+  outcome?: BattleOutcome;
+  /** Defenders who left home to fight this battle; survivors go back home. */
+  engaged?: Army;
 };
+
+/** Only the troops that fight (ships stay out of it). */
+const fightersOf = (a: Army) => {
+  const out = emptyArmy();
+  for (const u of FIGHTERS) out[u] = a[u] ?? 0;
+  return out;
+};
+
+/**
+ * Decides a raid the moment the armies meet, without changing anything:
+ * the outcome and the defenders who take the field.
+ */
+export function raidOutcome(
+  defender: GameState,
+  attacker: GameState,
+  sent: Army,
+  rand: number,
+  opts: Pick<MapOpts, "terrain" | "landing"> = {}
+) {
+  const defenders = fightersOf(defender.army);
+  const nums = battleNumbers(attacker, sent, defender, opts.terrain, 0, opts.landing);
+  const outcome = resolve(
+    nums.attack,
+    nums.defense,
+    luckFrom(rand),
+    sent,
+    defenders,
+    getRates(attacker).healShare,
+    getRates(defender).healShare
+  );
+  return { outcome, defenders };
+}
+
+/** Defenders leave home for the battlefield while the fight lasts. */
+export function engageDefenders(s0: GameState, engaged: Army): GameState {
+  const s = cloneState(s0);
+  for (const u of UNIT_IDS) s.army[u] = Math.max(0, s.army[u] - (engaged[u] ?? 0));
+  return s;
+}
+
+/** Puts defenders back home untouched (the battle couldn't be finished). */
+export function releaseDefenders(s0: GameState, engaged: Army): GameState {
+  const s = cloneState(s0);
+  for (const u of UNIT_IDS) s.army[u] += engaged[u] ?? 0;
+  return s;
+}
+
+/** Decides a camp battle the moment the army arrives, without changing anything. */
+export function campOutcome(s: GameState, level: number, sent: Army, rand: number, opts: Pick<MapOpts, "terrain"> = {}) {
+  const nums = battleNumbers(s, sent, null, opts.terrain, campDefense(level));
+  return resolve(nums.attack, nums.defense, luckFrom(rand), sent, emptyArmy(), getRates(s).healShare, 0);
+}
 
 export function defendRaid(
   defender0: GameState,
@@ -444,32 +507,31 @@ export function defendRaid(
   rand: number,
   opts: MapOpts = {}
 ): { state: GameState; report: RaidReport } {
-  if (defender0.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
+  // A battle that already started is fought to the end, shield or not.
+  if (!opts.outcome && defender0.shieldUntil > now) {
+    throw new GameError("This tribe is protected by a shield right now", "shielded");
+  }
   const d = cloneState(defender0);
   const ar = getRates(attacker);
   const dr = getRates(d);
 
-  const defenders = { ...d.army };
-  const nums = battleNumbers(attacker, sent, d, opts.terrain, 0, opts.landing);
-  const outcome = resolve(
-    nums.attack,
-    nums.defense,
-    luckFrom(rand),
-    sent,
-    defenders,
-    ar.healShare,
-    dr.healShare
-  );
+  const engaged = opts.engaged;
+  const defenders = engaged ? { ...emptyArmy(), ...engaged } : { ...d.army };
+  const outcome = opts.outcome ?? raidOutcome(d, attacker, sent, rand, opts).outcome;
 
   // Experience: the defenders learn from the fight, the attackers' share is
   // carried in the report and applied when they get it (receiveRaidReport).
   const won = !outcome.attackerWon;
   const defenderXp = battleXp(d, defenders, outcome.attack, won, "defense");
   const attackerXp = battleXp(attacker, sent, outcome.defense, outcome.attackerWon, "attack");
-  const defenderPromoted = applyBattleXp(d, totalArmy(d), outcome.defenderLosses, defenderXp);
+  const regiment = engaged ? regimentWith(d, engaged) : totalArmy(d);
+  const defenderPromoted = applyBattleXp(d, regiment, outcome.defenderLosses, defenderXp);
 
   // Healed defenders recover at home straight away, so only real losses go.
-  for (const u of UNIT_IDS) d.army[u] -= outcome.defenderLosses[u];
+  for (const u of UNIT_IDS) {
+    if (engaged) d.army[u] += (engaged[u] ?? 0) - outcome.defenderLosses[u];
+    else d.army[u] -= outcome.defenderLosses[u];
+  }
 
   const loot = emptyLoot();
   if (outcome.attackerWon) {
@@ -571,8 +633,7 @@ export function dispatchCamp(s0: GameState, level: number, units: Army, now: num
 export function campBattle(s0: GameState, level: number, sent: Army, now: number, rand: number, opts: MapOpts = {}) {
   const s = cloneState(s0);
   const r = getRates(s);
-  const nums = battleNumbers(s, sent, null, opts.terrain, campDefense(level));
-  const outcome = resolve(nums.attack, nums.defense, luckFrom(rand), sent, emptyArmy(), r.healShare, 0);
+  const outcome = opts.outcome ?? campOutcome(s, level, sent, rand, opts);
   const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack");
   const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp);
   const home = survivorsOf(sent, outcome.attackerLosses);

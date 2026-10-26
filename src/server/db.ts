@@ -120,7 +120,7 @@ async function init(): Promise<Client> {
       to_y          INTEGER NOT NULL,
       sent_at       INTEGER NOT NULL,
       arrives_at    INTEGER NOT NULL,
-      status        TEXT NOT NULL DEFAULT 'marching' -- marching | resolving | done | recalled
+      status        TEXT NOT NULL DEFAULT 'marching' -- marching | resolving | fighting | done | recalled
     );
     CREATE INDEX IF NOT EXISTS attacks_due ON attacks(status, arrives_at);
     CREATE INDEX IF NOT EXISTS attacks_attacker ON attacks(attacker_id, status);
@@ -190,6 +190,12 @@ async function init(): Promise<Client> {
   ]) {
     await client.execute(`ALTER TABLE ${table} ADD COLUMN ${col}`).catch(() => {});
   }
+  // Timed battles: once an army arrives the fight lasts until ends_at; the
+  // decided result and its rounds are kept in battle (JSON) meanwhile.
+  for (const col of ["ends_at INTEGER", "battle TEXT"]) {
+    await client.execute(`ALTER TABLE attacks ADD COLUMN ${col}`).catch(() => {});
+  }
+  await client.execute("CREATE INDEX IF NOT EXISTS attacks_fighting ON attacks(status, ends_at)");
   await client.executeMultiple(`
     -- Update announcements an admin broadcasts from the bot chat. The post is
     -- copied from the admin's own message (text, photo, video...) to every
