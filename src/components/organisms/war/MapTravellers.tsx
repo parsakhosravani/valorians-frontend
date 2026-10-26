@@ -22,6 +22,28 @@ const lerp = (a: Pt, b: Pt, p: number) => ({
   y: a.y + (b.y - a.y) * p,
 });
 
+/**
+ * A road on the map: its corners (px) and, for each corner, how far through
+ * the trip (0..1, in time) the traveller reaches it.
+ */
+export type Road = { points: Pt[]; stops: number[] };
+
+const straight = (from: Pt, to: Pt): Road => ({ points: [from, to], stops: [0, 1] });
+
+/** Where on the road the traveller is at `p`, and which corner it last passed. */
+const along = (road: Road, p: number) => {
+  const { points, stops } = road;
+  let k = 0;
+
+  while (k < stops.length - 2 && stops[k + 1] < p) k++;
+  const span = stops[k + 1] - stops[k] || 1;
+  const t = Math.min(1, Math.max(0, (p - stops[k]) / span));
+
+  return { at: lerp(points[k], points[k + 1] ?? points[k], t), k };
+};
+
+const poly = (pts: Pt[]) => pts.map((q) => `${q.x},${q.y}`).join(" ");
+
 /** The troop that makes up most of an army, to carry its banner. */
 const leadUnit = (army: Army | null): UnitId | null => {
   if (!army) return null;
@@ -54,6 +76,7 @@ export const ROUTE_COLORS = {
 export const Route = ({
   from,
   to,
+  road,
   p,
   color,
   merchant,
@@ -61,55 +84,37 @@ export const Route = ({
 }: {
   from: Pt;
   to: Pt;
+  /** The winding road; a straight line when left out. */
+  road?: Road;
   p: number;
   color: string;
   merchant?: boolean;
   faint?: boolean;
 }) => {
-  const at = lerp(from, to, p);
+  const r = road ?? straight(from, to);
+  const { at, k } = along(r, p);
+  const walked = [...r.points.slice(0, k + 1), at];
+  const ahead = [at, ...r.points.slice(k + 1)];
 
   return (
-    <g opacity={faint ? 0.45 : 1}>
+    <g fill="none" opacity={faint ? 0.45 : 1} strokeLinecap="round" strokeLinejoin="round">
       {/* road bed */}
-      <line
-        stroke="#1A120B"
-        strokeLinecap="round"
-        strokeOpacity="0.35"
-        strokeWidth={merchant ? 6 : 7}
-        x1={from.x}
-        x2={to.x}
-        y1={from.y}
-        y2={to.y}
-      />
+      <polyline points={poly(r.points)} stroke="#1A120B" strokeOpacity="0.35" strokeWidth={merchant ? 6 : 7} />
       {/* walked */}
-      <line
-        stroke={color}
-        strokeLinecap="round"
-        strokeOpacity="0.35"
-        strokeWidth={merchant ? 2 : 3}
-        x1={from.x}
-        x2={at.x}
-        y1={from.y}
-        y2={at.y}
-      />
+      <polyline points={poly(walked)} stroke={color} strokeOpacity="0.35" strokeWidth={merchant ? 2 : 3} />
       {/* ahead */}
-      <line
+      <polyline
         className="animate-route"
+        points={poly(ahead)}
         stroke={color}
         strokeDasharray={merchant ? "1.5 7.5" : "5 4"}
-        strokeLinecap="round"
         strokeWidth={merchant ? 3.5 : 3}
-        x1={at.x}
-        x2={to.x}
-        y1={at.y}
-        y2={to.y}
       />
       {/* destination */}
       {!faint && (
         <circle
           cx={to.x}
           cy={to.y}
-          fill="none"
           r={merchant ? 9 : 12}
           stroke={color}
           strokeDasharray={merchant ? "2 4" : undefined}
@@ -145,6 +150,7 @@ const Rider = ({
 export const ArmyToken = ({
   from,
   to,
+  road,
   p,
   units,
   incoming,
@@ -153,6 +159,8 @@ export const ArmyToken = ({
 }: {
   from: Pt;
   to: Pt;
+  /** The winding road; a straight line when left out. */
+  road?: Road;
   p: number;
   units: Army | null;
   incoming: boolean;
@@ -164,7 +172,7 @@ export const ArmyToken = ({
   const n = total(units);
 
   return (
-    <Rider at={lerp(from, to, p)} z={5}>
+    <Rider at={along(road ?? straight(from, to), p).at} z={5}>
       <span className="relative flex items-center justify-center">
         {incoming && (
           <span className="absolute inset-0 rounded-full bg-[#F06A44]/50 animate-ping" />

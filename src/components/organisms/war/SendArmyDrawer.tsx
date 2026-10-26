@@ -8,7 +8,7 @@ import { Button, Drawer } from "@/components";
 import { useGame, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy } from "@/lib/game/engine";
-import { Point, TERRAIN, Terrain, armySpeed, routeMs, seaRoute, shipsNeeded } from "@/lib/game/map";
+import { Point, TERRAIN, Terrain, armySpeed, marchRoute, routeMs, shipsNeeded } from "@/lib/game/map";
 import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
 
@@ -73,7 +73,7 @@ export const SendArmyDrawer = ({
   const [busy, setBusy] = useState(false);
 
   const terrain = target?.terrain ?? "plains";
-  const route = target ? seaRoute(target.from, target.at) : null;
+  const route = target ? marchRoute(target.from, target.at) : null;
   const naval = !!route?.naval;
   // Landing on a tribe's beach favours them; barbarian camps have no harbor to defend.
   const landing = naval && target?.to.target ? landingFactorFor(target.harbor ?? 0) : 1;
@@ -143,9 +143,14 @@ export const SendArmyDrawer = ({
           <div className="flex flex-wrap gap-2 text-xs font-bold">
             <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">📍 {target.distance} tiles away</span>
             <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-              {terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} {TERRAIN[terrain].name}
+              {terrain === "mountains" ? "🏔️" : terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} {TERRAIN[terrain].name}
               {TERRAIN[terrain].defense > 0 && <span className="text-[#F08A6C]"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
             </span>
+            {route?.detour && (
+              <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
+                🛤️ {route.climbed ? "No road: a hard climb" : naval ? "Sea road" : "Road winds around"} · {Math.round(route.length)} tiles
+              </span>
+            )}
             {naval && (
               <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
                 🌊 Across the sea
