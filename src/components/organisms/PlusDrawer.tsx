@@ -10,6 +10,7 @@ import { plusActive } from "@/lib/game/engine";
 const PERKS = [
   { icon: "🔨", title: `+${PLUS.extraBuilders} builder`, sub: "One more building goes up at the same time" },
   { icon: "⚔️", title: `+${PLUS.extraTrainBatches} training slots`, sub: "Queue more batches in the barracks" },
+  { icon: "🛡️", title: `Free ${PLUS.weeklyShieldHours}h shield every week`, sub: "Raise it from the Hall whenever you're away" },
   { icon: "👑", title: "The Plus crown", sub: "Shown next to your name and on the leaderboard" },
 ];
 

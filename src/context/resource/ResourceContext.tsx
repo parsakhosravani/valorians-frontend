@@ -30,6 +30,7 @@ import {
   RESOURCE_NAMES,
   ResourceId,
   QuestId,
+  ShieldId,
   UnitId,
   comboMultiplier,
 } from "@/lib/game/config";
@@ -123,6 +124,12 @@ interface GameContextType {
     trial: () => Promise<boolean>;
     /** Opens Telegram's payment sheet; resolves true once the payment went through. */
     subscribe: () => Promise<boolean>;
+  };
+  /** Shields: bought with Telegram Stars, or the free weekly one that comes with Plus. */
+  shields: {
+    /** Opens Telegram's payment sheet; resolves true once the shield is up. */
+    buy: (id: ShieldId) => Promise<boolean>;
+    claimPlus: () => Promise<boolean>;
   };
   authHeader: string | null;
 }
@@ -365,6 +372,49 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
   const state = useMemo(() => (base ? advance(base, now) : null), [base, tick]);
   const rates = useMemo(() => (state ? getRates(state) : null), [state]);
 
+  /**
+   * Telegram Stars checkout: gets an invoice link from `endpoint`, opens the
+   * payment sheet, then waits for the bot to record the payment (Telegram
+   * tells the server a moment after the sheet closes) until `done` is true.
+   */
+  const payWithStars = async (endpoint: string, body: object, success: string, done: (res: PlayerView) => boolean) => {
+    if (!authHeader) return false;
+    const webApp = (window as any).Telegram?.WebApp;
+
+    if (!webApp?.openInvoice) {
+      showError(new Error("Open the game inside Telegram to pay with Stars"));
+
+      return false;
+    }
+    let link: string;
+
+    try {
+      link = (await apiRequest<{ link: string }>(authHeader, endpoint, body)).link;
+    } catch (e) {
+      showError(e);
+
+      return false;
+    }
+    const status = await new Promise<string>((resolve) => webApp.openInvoice(link, resolve));
+
+    if (status === "failed") showError(new Error("The payment didn't go through"));
+    if (status !== "paid") return false;
+    webApp.HapticFeedback?.notificationOccurred("success");
+    toast.dismiss();
+    toast.success(success);
+    for (let i = 0; i < 10; i++) {
+      try {
+        const res = await apiRequest<PlayerView>(authHeader, "me");
+
+        accept(res);
+        if (done(res)) break;
+      } catch {}
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+
+    return true;
+  };
+
   const value: GameContextType = {
     status,
     error,
@@ -434,44 +484,17 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     },
     plus: {
       trial: () => act("plus/trial", {}, "👑 Plus is on! Enjoy your free days"),
-      subscribe: async () => {
-        if (!authHeader) return false;
-        const webApp = (window as any).Telegram?.WebApp;
+      subscribe: () =>
+        payWithStars("plus/invoice", {}, "👑 Welcome to Valorians Plus!", (res) => res.state.plus.until > res.serverTime),
+    },
+    shields: {
+      buy: (id) => {
+        // A raised shield always moves the cooldown forward, so that's the sign it landed.
+        const before = baseRef.current?.shield?.cooldownUntil ?? 0;
 
-        if (!webApp?.openInvoice) {
-          showError(new Error("Open the game inside Telegram to pay with Stars"));
-
-          return false;
-        }
-        let link: string;
-
-        try {
-          link = (await apiRequest<{ link: string }>(authHeader, "plus/invoice", {})).link;
-        } catch (e) {
-          showError(e);
-
-          return false;
-        }
-        const status = await new Promise<string>((resolve) => webApp.openInvoice(link, resolve));
-
-        if (status === "failed") showError(new Error("The payment didn't go through"));
-        if (status !== "paid") return false;
-        webApp.HapticFeedback?.notificationOccurred("success");
-        toast.dismiss();
-        toast.success("👑 Welcome to Valorians Plus!");
-        // Telegram tells the server a moment after the sheet closes; wait for it.
-        for (let i = 0; i < 10; i++) {
-          try {
-            const res = await apiRequest<PlayerView>(authHeader, "me");
-
-            accept(res);
-            if (res.state.plus.until > res.serverTime) break;
-          } catch {}
-          await new Promise((r) => setTimeout(r, 1500));
-        }
-
-        return true;
+        return payWithStars("shield/invoice", { shield: id }, "🛡️ Shield raised!", (res) => res.state.shield.cooldownUntil > before);
       },
+      claimPlus: () => act("shield/plus", {}, "🛡️ Weekly shield raised!"),
     },
     authHeader,
   };

@@ -47,6 +47,7 @@ import {
   RANK_BONUS,
   MAX_TRAIN_BATCHES,
   PLUS,
+  SHIELDS,
 } from "./config";
 import { ClanPerks, NO_PERKS } from "./clan";
 
@@ -154,6 +155,11 @@ export type GameState = {
    * taken; paid once a Stars subscription has been bought (it renews by itself).
    */
   plus: { until: number; trialUsed: boolean; paid: boolean };
+  /**
+   * Raised shields (bought or Plus): no new one before cooldownUntil, and the
+   * last free weekly Plus shield was claimed at plusClaimedAt.
+   */
+  shield: { cooldownUntil: number; plusClaimedAt: number };
 };
 
 export type Rates = {
@@ -220,6 +226,7 @@ export function createInitialState(now: number): GameState {
     troops: emptyTroops(),
     clanPerks: { ...NO_PERKS },
     plus: { until: 0, trialUsed: false, paid: false },
+    shield: { cooldownUntil: 0, plusClaimedAt: 0 },
   };
 }
 
@@ -248,6 +255,7 @@ export function normalizeState(saved: GameState): GameState {
     streak: { ...fresh.streak, ...s.streak },
     clanPerks: { ...fresh.clanPerks, ...s.clanPerks },
     plus: { ...fresh.plus, ...s.plus },
+    shield: { ...fresh.shield, ...s.shield },
     troops: Object.fromEntries(
       UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
@@ -293,6 +301,61 @@ export function grantPlus(s0: GameState, now: number, until?: number): GameState
   s.plus = { until: end, trialUsed: true, paid: true };
 
   return s;
+}
+
+// ─── Shields ─────────────────────────────────────────────────────────────────
+
+/**
+ * Raises a shield for `hours` from now. Refused while the last raised shield
+ * is still cooling down, or when the tribe is already shielded for longer.
+ */
+export function raiseShield(s0: GameState, hours: number, now: number): GameState {
+  if (s0.shield.cooldownUntil > now) {
+    throw new GameError(`Your shield is recharging. Next one in ${Math.ceil((s0.shield.cooldownUntil - now) / 3600e3)}h`, "shield_cooldown");
+  }
+  const end = now + hours * HOUR;
+
+  if (s0.shieldUntil >= end) throw new GameError("You're already shielded for longer than that", "already_shielded");
+  const s = cloneState(s0);
+
+  s.shieldUntil = end;
+  s.shield.cooldownUntil = end + SHIELDS.cooldownMs;
+
+  return s;
+}
+
+/** Why a shield of `hours` can't be raised now, or null if it can. */
+export function shieldBlocked(s: GameState, hours: number, now: number): string | null {
+  try {
+    raiseShield(s, hours, now);
+
+    return null;
+  } catch (e) {
+    return e instanceof GameError ? e.message : "Shields are unavailable right now";
+  }
+}
+
+/** When the next free weekly Plus shield can be claimed. */
+export const plusShieldReadyAt = (s: GameState) => (s.shield.plusClaimedAt ? s.shield.plusClaimedAt + PLUS.weeklyShieldEveryMs : 0);
+
+/** Plus players raise one free shield a week. */
+export function claimPlusShield(s0: GameState, now: number): GameState {
+  if (!plusActive(s0)) throw new GameError("The weekly shield comes with Valorians Plus", "plus_required");
+  if (plusShieldReadyAt(s0) > now) {
+    throw new GameError(`Your weekly shield is back in ${Math.ceil((plusShieldReadyAt(s0) - now) / 86400e3)}d`, "plus_shield_used");
+  }
+  const s = raiseShield(s0, PLUS.weeklyShieldHours, now);
+
+  s.shield.plusClaimedAt = now;
+
+  return s;
+}
+
+/** Drops a shield early (attacking, or a refunded purchase); its cooldown starts now. */
+export function breakShield(s: GameState, now: number) {
+  if (s.shieldUntil <= now) return;
+  s.shieldUntil = now;
+  if (s.shield.cooldownUntil > now) s.shield.cooldownUntil = now + SHIELDS.cooldownMs;
 }
 
 export function getRates(s: GameState): Rates {
@@ -481,6 +544,7 @@ function structuredCloneState(s: GameState): GameState {
     buildings: { ...s.buildings },
     queue: s.queue.map((q) => ({ ...q })),
     plus: { ...s.plus },
+    shield: { ...s.shield },
     quests: Object.fromEntries(Object.entries(s.quests).map(([k, v]) => [k, { ...v }])),
     army: { ...s.army },
     training: s.training.map((t) => ({ ...t })),

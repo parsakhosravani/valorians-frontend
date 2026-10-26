@@ -276,7 +276,30 @@ export const PLUS = {
   extraBuilders: 1,
   /** Extra training batches while Plus is active. */
   extraTrainBatches: 2,
+  /** Plus players can raise one free shield of this many hours each week. */
+  weeklyShieldHours: 8,
+  weeklyShieldEveryMs: 7 * 24 * 3600e3,
 };
+
+// ─── Shields for sale ────────────────────────────────────────────────────────
+
+/**
+ * Shields bought with Telegram Stars. They protect a tribe that is away, but
+ * they can't turn into a fortress: attacking anyone breaks your shield, the
+ * longest one is 3 days, and after one ends another can't be raised for a day.
+ */
+export const SHIELDS = {
+  options: [
+    { id: "8h", hours: 8, stars: 25 },
+    { id: "24h", hours: 24, stars: 60 },
+    { id: "3d", hours: 72, stars: 150 },
+  ],
+  /** After a raised shield ends (or breaks), the next one has to wait this long. */
+  cooldownMs: 24 * 3600e3,
+} as const;
+
+export type ShieldId = (typeof SHIELDS.options)[number]["id"];
+export const shieldOption = (id: unknown) => SHIELDS.options.find((o) => o.id === id) ?? null;
 
 // ─── War ─────────────────────────────────────────────────────────────────────
 
