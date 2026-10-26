@@ -11,6 +11,13 @@ import {
 import Image from "next/image";
 import clsx from "clsx";
 
+import {
+  ArmyToken,
+  CaravanToken,
+  ROUTE_COLORS,
+  Route,
+  progress,
+} from "./MapTravellers";
 import { AttackTarget } from "./SendArmyDrawer";
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 
@@ -74,6 +81,17 @@ type Movement = {
   campLevel: number | null;
 };
 
+type Caravan = {
+  id: string;
+  kind: "coming" | "going" | "other";
+  from: { x: number; y: number; name: string };
+  to: { x: number; y: number; name: string };
+  resource: ResourceId;
+  amount: number;
+  sentAt: number;
+  arrivesAt: number;
+};
+
 export type MapData = {
   home: { x: number; y: number };
   center: { x: number; y: number };
@@ -81,6 +99,7 @@ export type MapData = {
   tribes: Tribe[];
   camps: Camp[];
   movements: Movement[];
+  caravans?: Caravan[];
   myPower: number;
 };
 
@@ -199,6 +218,7 @@ export const WarMap = ({
   const radius = useRef(0);
   const outgoing = useRef<Set<number>>(new Set());
   const centred = useRef(false);
+  const goods = useRef<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!authHeader) return;
@@ -216,7 +236,15 @@ export const WarMap = ({
       );
 
       outgoing.current = ids;
+      // Merchants got home with our goods: show the new stock.
+      const coming = new Set(
+        (d.caravans ?? []).filter((c) => c.kind === "coming").map((c) => c.id),
+      );
+      const delivered = Array.from(goods.current).some((id) => !coming.has(id));
+
+      goods.current = coming;
       setData(d);
+      if (delivered && !finished.length) refresh();
       setError(null);
       if (finished.length) {
         // A battle was fought: bring the tribe up to date and show the result.
@@ -248,9 +276,12 @@ export const WarMap = ({
 
     return () => clearInterval(t);
   }, [load]);
-  const nextArrival =
-    data?.movements.reduce((m, x) => Math.min(m, x.arrivesAt), Infinity) ??
-    Infinity;
+  const nextArrival = data
+    ? [...data.movements, ...(data.caravans ?? [])].reduce(
+        (m, x) => (x.arrivesAt > Date.now() ? Math.min(m, x.arrivesAt) : m),
+        Infinity,
+      )
+    : Infinity;
 
   useEffect(() => {
     if (!Number.isFinite(nextArrival)) return;
@@ -561,6 +592,9 @@ export const WarMap = ({
   const returning = state.marches;
   const incoming = data?.movements.filter((m) => m.kind === "incoming") ?? [];
   const mine = data?.movements.filter((m) => m.kind === "outgoing") ?? [];
+  const merchants =
+    data?.caravans?.filter((c) => c.kind !== "other" && c.arrivesAt > now) ??
+    [];
 
   const attackTribe = (t: Tribe) => {
     const s = scouts[t.id];
@@ -609,7 +643,10 @@ export const WarMap = ({
   return (
     <div className="flex flex-col gap-2">
       {/* Armies on the move */}
-      {(incoming.length > 0 || mine.length > 0 || returning.length > 0) && (
+      {(incoming.length > 0 ||
+        mine.length > 0 ||
+        returning.length > 0 ||
+        merchants.length > 0) && (
         <div className="flex flex-col gap-1.5">
           {incoming.map((m) => (
             <div
@@ -669,6 +706,42 @@ export const WarMap = ({
               </span>
               <span className="font-display font-black text-sub shrink-0">
                 {formatDuration(m.returnsAt - now)}
+              </span>
+            </div>
+          ))}
+          {merchants.map((c) => (
+            <div
+              key={c.id}
+              className={clsx(
+                "flex items-center gap-2 rounded-xl px-3 py-2 bg-panel border text-sm",
+                c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
+              )}
+            >
+              <span className="text-lg">🐪</span>
+              <span className="flex-1 min-w-0 truncate">
+                {c.kind === "coming" ? (
+                  <>
+                    <b>
+                      {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
+                    </b>{" "}
+                    coming from {c.from.name}
+                  </>
+                ) : (
+                  <>
+                    <b>
+                      {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
+                    </b>{" "}
+                    on its way to {c.to.name}
+                  </>
+                )}
+              </span>
+              <span
+                className={clsx(
+                  "font-display font-black shrink-0",
+                  c.kind === "coming" ? "text-good" : "text-sub",
+                )}
+              >
+                {formatDuration(c.arrivesAt - now)}
               </span>
             </div>
           ))}
@@ -739,39 +812,30 @@ export const WarMap = ({
                       </g>
                     ))}
                   </g>
+                  {/* Merchant roads, under the armies' */}
+                  {(data.caravans ?? [])
+                    .filter((c) => c.arrivesAt > now)
+                    .map((c) => (
+                      <Route
+                        key={`r${c.id}`}
+                        merchant
+                        color={ROUTE_COLORS[c.kind]}
+                        faint={c.kind === "other"}
+                        from={{ x: px(c.from.x), y: py(c.from.y) }}
+                        p={progress(now, c.sentAt, c.arrivesAt)}
+                        to={{ x: px(c.to.x), y: py(c.to.y) }}
+                      />
+                    ))}
                   {/* Marches */}
-                  {data.movements.map((m) => {
-                    const p = Math.min(
-                      1,
-                      Math.max(0, (now - m.sentAt) / (m.arrivesAt - m.sentAt)),
-                    );
-                    const x = px(m.from.x) + (px(m.to.x) - px(m.from.x)) * p;
-                    const y = py(m.from.y) + (py(m.to.y) - py(m.from.y)) * p;
-                    const c = m.kind === "incoming" ? "#F06A44" : "#F2C66D";
-
-                    return (
-                      <g key={m.id}>
-                        <line
-                          stroke={c}
-                          strokeDasharray="6 6"
-                          strokeLinecap="round"
-                          strokeWidth="3"
-                          x1={px(m.from.x)}
-                          x2={px(m.to.x)}
-                          y1={py(m.from.y)}
-                          y2={py(m.to.y)}
-                        />
-                        <circle
-                          cx={x}
-                          cy={y}
-                          fill={c}
-                          r="7"
-                          stroke="#1A120B"
-                          strokeWidth="2"
-                        />
-                      </g>
-                    );
-                  })}
+                  {data.movements.map((m) => (
+                    <Route
+                      key={`r${m.id}`}
+                      color={ROUTE_COLORS[m.kind]}
+                      from={{ x: px(m.from.x), y: py(m.from.y) }}
+                      p={progress(now, m.sentAt, m.arrivesAt)}
+                      to={{ x: px(m.to.x), y: py(m.to.y) }}
+                    />
+                  ))}
                   {returning
                     .filter((m) => m.from && data)
                     .map((m) => (
@@ -889,6 +953,33 @@ export const WarMap = ({
                     </button>
                   );
                 })}
+
+                {/* Caravans and armies on the road */}
+                {(data.caravans ?? [])
+                  .filter((c) => c.arrivesAt > now)
+                  .map((c) => (
+                    <CaravanToken
+                      key={`t${c.id}`}
+                      amount={c.amount}
+                      from={{ x: px(c.from.x), y: py(c.from.y) }}
+                      kind={c.kind}
+                      left={c.arrivesAt - now}
+                      p={progress(now, c.sentAt, c.arrivesAt)}
+                      resource={c.resource}
+                      to={{ x: px(c.to.x), y: py(c.to.y) }}
+                    />
+                  ))}
+                {data.movements.map((m) => (
+                  <ArmyToken
+                    key={`t${m.id}`}
+                    from={{ x: px(m.from.x), y: py(m.from.y) }}
+                    incoming={m.kind === "incoming"}
+                    left={Math.max(0, m.arrivesAt - now)}
+                    p={progress(now, m.sentAt, m.arrivesAt)}
+                    to={{ x: px(m.to.x), y: py(m.to.y) }}
+                    units={m.units}
+                  />
+                ))}
               </div>
             </div>
           </div>

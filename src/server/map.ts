@@ -58,6 +58,18 @@ type Movement = {
   campLevel: number | null;
 };
 
+type Caravan = {
+  id: string;
+  /** Relative to you: goods coming home, your goods going out, or someone else's. */
+  kind: "coming" | "going" | "other";
+  from: Point & { name: string };
+  to: Point & { name: string };
+  resource: string;
+  amount: number;
+  sentAt: number;
+  arrivesAt: number;
+};
+
 /** Everything the War map shows around a point (your home by default). */
 export async function mapView(me: Player, now: number, center?: Point, radius = VIEW_RADIUS) {
   await settleAll();
@@ -143,6 +155,49 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     };
   });
 
+  // Merchant caravans on the road: every accepted trade sends two loads, one
+  // each way. Yours always show; other tribes' show when they pass through view.
+  const tr = await db.execute({
+    sql: `SELECT t.id, t.seller_id, t.buyer_id, t.give, t.give_amount, t.want, t.want_amount,
+                 t.accepted_at, t.arrives_at,
+                 su.first_name AS s_name, su.map_x AS s_x, su.map_y AS s_y,
+                 bu.first_name AS b_name, bu.map_x AS b_x, bu.map_y AS b_y
+          FROM trades t
+          JOIN users su ON su.id = t.seller_id
+          JOIN users bu ON bu.id = t.buyer_id
+          WHERE t.status IN ('accepted', 'delivering') AND su.map_x IS NOT NULL AND bu.map_x IS NOT NULL
+            AND (t.seller_id = ? OR t.buyer_id = ?
+                 OR (su.map_x BETWEEN ? AND ? AND su.map_y BETWEEN ? AND ?)
+                 OR (bu.map_x BETWEEN ? AND ? AND bu.map_y BETWEEN ? AND ?))
+          ORDER BY t.arrives_at ASC LIMIT 40`,
+    args: [me.id, me.id, c.x - r, c.x + r, c.y - r, c.y + r, c.x - r, c.x + r, c.y - r, c.y + r],
+  });
+  const caravans: Caravan[] = tr.rows.flatMap((t) => {
+    const seller = { id: Number(t.seller_id), x: Number(t.s_x), y: Number(t.s_y), name: String(t.s_name || "A tribe") };
+    const buyer = { id: Number(t.buyer_id), x: Number(t.b_x), y: Number(t.b_y), name: String(t.b_name || "A tribe") };
+    const leg = (
+      from: typeof seller,
+      to: typeof seller,
+      resource: string,
+      amount: number,
+      side: "a" | "b",
+    ): Caravan => ({
+      id: `${t.id}${side}`,
+      kind: to.id === me.id ? "coming" : from.id === me.id ? "going" : "other",
+      from: { x: from.x, y: from.y, name: from.id === me.id ? "Your tribe" : from.name },
+      to: { x: to.x, y: to.y, name: to.id === me.id ? "Your tribe" : to.name },
+      resource,
+      amount: Number(amount),
+      sentAt: Number(t.accepted_at),
+      arrivesAt: Number(t.arrives_at),
+    });
+
+    return [
+      leg(seller, buyer, String(t.give), Number(t.give_amount), "a"),
+      leg(buyer, seller, String(t.want), Number(t.want_amount), "b"),
+    ];
+  });
+
   return {
     home,
     center: c,
@@ -150,6 +205,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     tribes,
     camps,
     movements,
+    caravans,
     myPower: powerScore(me.state),
   };
 }
