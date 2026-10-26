@@ -19,6 +19,7 @@ import {
   unitUnlocked,
 } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Group = "all" | "infantry" | "cavalry" | "siege" | "fleet";
 
@@ -46,7 +47,7 @@ const RankBar = ({ unit }: { unit: UnitDef }) => {
     <div className="flex flex-col gap-1">
       <div className="flex justify-between text-xs">
         <span>
-          🎖️ <b className="text-[#E3A948]">{t.rankName}</b>
+          <GameIcon e="🎖️" /> <b className="text-[#E3A948]">{t.rankName}</b>
           {t.rank > 0 && <span className="text-good"> +{Math.round(t.rank * RANK_BONUS * 100)}% attack &amp; defense</span>}
         </span>
         <span className="text-[#B19C80]">
@@ -93,7 +94,7 @@ const TrainPanel = ({ unit }: { unit: UnitDef }) => {
             {fmt(unit.cost[r.id] * count)}
           </span>
         ))}
-        <span className="text-[#B19C80]">⏱ {formatDuration(seconds * 1000)}</span>
+        <span className="text-[#B19C80]"><GameIcon e="⏱" /> {formatDuration(seconds * 1000)}</span>
       </div>
       <div className="flex items-center justify-between gap-2">
         <Stepper max={Math.max(1, affordable)} value={count} onChange={(n) => setCount(Math.max(1, n))} />
@@ -124,16 +125,16 @@ const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onTog
           </div>
           {unit.transport ? (
             <div className="flex gap-2.5 text-xs text-sub mt-0.5">
-              <span>👥 {unit.transport} troops</span>
-              <span>🎒 {unit.carry}</span>
-              <span className="text-[#B19C80]">🌊 {unit.speed}s/tile</span>
+              <span><GameIcon e="👥" /> {unit.transport} troops</span>
+              <span><GameIcon e="🎒" /> {unit.carry}</span>
+              <span className="text-[#B19C80]"><GameIcon e="🌊" /> {unit.speed}s/tile</span>
             </div>
           ) : (
             <div className="flex gap-2.5 text-xs text-sub mt-0.5">
-              <span>⚔️ {fmt(unitAttack(state, unit.id))}</span>
-              <span>🛡️ {fmt(unitDefense(state, unit.id))}</span>
-              <span>🎒 {unit.carry}</span>
-              <span className="text-[#B19C80]">⏱ {unit.speed}s/tile</span>
+              <span><GameIcon e="⚔️" /> {fmt(unitAttack(state, unit.id))}</span>
+              <span><GameIcon e="🛡️" /> {fmt(unitDefense(state, unit.id))}</span>
+              <span><GameIcon e="🎒" /> {unit.carry}</span>
+              <span className="text-[#B19C80]"><GameIcon e="⏱" /> {unit.speed}s/tile</span>
             </div>
           )}
         </div>
@@ -168,7 +169,7 @@ const LockedRow = ({ unit }: { unit: UnitDef }) => (
     </span>
     <span className="flex-1 text-sm font-bold">{unit.name}</span>
     <span className="text-[11px] text-[#E3A948]">
-      🔒 {BUILDING_BY_ID[unit.requires.building].name} {unit.requires.level}
+      <GameIcon e="🔒" /> {BUILDING_BY_ID[unit.requires.building].name} {unit.requires.level}
     </span>
   </div>
 );
@@ -259,11 +260,11 @@ export const ArmyTab = () => {
       <Card className="grid grid-cols-3 text-center">
         <div>
           <div className="text-[10px] text-[#B19C80]">ATTACK</div>
-          <div className="font-bold">⚔️ {fmt(attackPower(state, home))}</div>
+          <div className="font-bold"><GameIcon e="⚔️" /> {fmt(attackPower(state, home))}</div>
         </div>
         <div>
           <div className="text-[10px] text-[#B19C80]">DEFENSE</div>
-          <div className="font-bold">🛡️ {fmt(defensePower(state))}</div>
+          <div className="font-bold"><GameIcon e="🛡️" /> {fmt(defensePower(state))}</div>
         </div>
         <div>
           <div className="text-[10px] text-[#B19C80]">UPKEEP</div>

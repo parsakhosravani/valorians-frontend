@@ -10,6 +10,7 @@ import { Avatar } from "@/components";
 import { useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import useBackButton from "@/hooks/useBackButton";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Metric = "population" | "power" | "wins";
 type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean; plus?: boolean };
@@ -50,7 +51,7 @@ export const Leaderboard = () => {
           <div className="bg-gold text-[#1A120B] rounded-xl px-3 py-2 flex justify-between font-extrabold">
             <span>Your rank: #{data.me.rank.toLocaleString("en-US")}</span>
             <span>
-              {LABEL[metric]} {data.me.value.toLocaleString("en-US")}
+              <GameIcon e={LABEL[metric]} /> {data.me.value.toLocaleString("en-US")}
             </span>
           </div>
         )}
@@ -65,15 +66,15 @@ export const Leaderboard = () => {
                 r.isMe && "!border-gold"
               )}
             >
-              <span className="w-8 text-center font-bold">{MEDAL[r.rank - 1] ?? r.rank}</span>
+              <span className="w-8 text-center font-bold">{MEDAL[r.rank - 1] ? <GameIcon className="w-7 h-7" e={MEDAL[r.rank - 1]} /> : r.rank}</span>
               <Avatar className="rounded" size={32} src={r.photoUrl} />
               <span className="flex-1 truncate font-bold">
                 {r.name}
-                {r.plus && <span aria-label="Plus" className="ml-1" title="Valorians Plus">👑</span>}
+                {r.plus && <span aria-label="Plus" className="ml-1" title="Valorians Plus"><GameIcon e="👑" /></span>}
                 {r.isMe && " (you)"}
               </span>
               <span className="font-bold">
-                {LABEL[metric]} {r.value.toLocaleString("en-US")}
+                <GameIcon e={LABEL[metric]} /> {r.value.toLocaleString("en-US")}
               </span>
             </div>
           ))}

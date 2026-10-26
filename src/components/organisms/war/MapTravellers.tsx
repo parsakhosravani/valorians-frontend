@@ -8,6 +8,7 @@ import { RESOURCES } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { UNITS, UnitId } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Pt = { x: number; y: number };
 
@@ -186,7 +187,7 @@ export const ArmyToken = ({
           )}
         >
           <span className={atSea ? "animate-sail" : "animate-trot"}>
-            {atSea ? <UnitEmoji unit="longship" /> : lead ? <UnitEmoji unit={lead} /> : "⚔️"}
+            {atSea ? <UnitEmoji unit="longship" /> : lead ? <UnitEmoji unit={lead} /> : <GameIcon e="⚔️" />}
           </span>
           {n > 0 && (
             <span
@@ -248,7 +249,7 @@ export const CaravanToken = ({
           className="inline-block animate-trot"
           style={{ transform: to.x > from.x ? "scaleX(-1)" : undefined }}
         >
-          🐪
+          <GameIcon e="🐪" />
         </span>
       </span>
       {mine && (

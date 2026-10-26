@@ -8,6 +8,7 @@ import { formatDuration } from "@/lib/format";
 import { UNITS } from "@/lib/game/config";
 import type { BattleRound } from "@/lib/game/battle";
 import type { Army } from "@/lib/game/engine";
+import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 /** A battle under way, as /api/war/map sends it: only the rounds fought so far. */
 export type LiveBattleData = {
@@ -98,7 +99,7 @@ export const BattleToken = ({
               : "bg-gradient-to-b from-[#4A2A16] to-[#1E1610] border-gold",
           )}
         >
-          <span className="animate-clash">⚔️</span>
+          <span className="animate-clash"><GameIcon e="⚔️" /></span>
         </span>
       </span>
       <span
@@ -125,7 +126,7 @@ export const BattleRow = ({ m, now, onWatch }: { m: BattleMovement; now: number;
         incoming ? "bg-[#2A140E] border-[#8A3B23]" : "bg-panel border-gold/60",
       )}
     >
-      <span className="text-lg animate-clash">⚔️</span>
+      <span className="text-lg animate-clash"><GameIcon e="⚔️" /></span>
       <span className="flex-1 min-w-0 truncate">
         {incoming ? (
           <>
@@ -156,7 +157,7 @@ export const BattleRow = ({ m, now, onWatch }: { m: BattleMovement; now: number;
 const StrengthBar = ({ label, left, color }: { label: string; left: number; color: string }) => (
   <div className="flex flex-col gap-0.5">
     <div className="flex justify-between text-xs">
-      <span className="font-bold truncate">{label}</span>
+      <span className="font-bold truncate"><IconText text={label} /></span>
       <span className="text-muted tabular-nums">{Math.round(left * 100)}%</span>
     </div>
     <div className="h-2.5 rounded-full bg-[#120D09] overflow-hidden border border-line">
@@ -189,7 +190,7 @@ export const LiveBattleDrawer = ({
       {m && b && names && (
         <div className="flex flex-col gap-3">
           <div className="text-center">
-            <div className="text-4xl animate-clash inline-block">⚔️</div>
+            <div className="text-4xl animate-clash inline-block"><GameIcon e="⚔️" /></div>
             <div className="text-sm text-muted">
               {names.attacker} attacking {names.defender === "Your troops" ? "you" : names.defender}
             </div>

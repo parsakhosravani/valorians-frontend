@@ -10,6 +10,7 @@ import React, {
   useState,
 } from "react";
 import toast from "react-hot-toast";
+import { IconText } from "@/components/atoms/GameIcon";
 import { StaticImageData } from "next/image";
 
 import iron from "~/images/resources/iron.webp";
@@ -354,7 +355,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
         accept(res);
         if (success) {
           toast.dismiss();
-          toast.success(success);
+          toast.success(<IconText text={success} />);
         }
 
         return res;
@@ -401,7 +402,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (status !== "paid") return false;
     webApp.HapticFeedback?.notificationOccurred("success");
     toast.dismiss();
-    toast.success(success);
+    toast.success(<IconText text={success} />);
     for (let i = 0; i < 10; i++) {
       try {
         const res = await apiRequest<PlayerView>(authHeader, "me");

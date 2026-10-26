@@ -11,6 +11,7 @@ import { Army, GameState, emptyArmy } from "@/lib/game/engine";
 import { Point, TERRAIN, Terrain, armySpeed, marchRoute, routeMs, shipsNeeded } from "@/lib/game/map";
 import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
+import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 export type AttackTarget = {
   title: string;
@@ -150,7 +151,7 @@ export const SendArmyDrawer = ({
           <div className="flex flex-wrap gap-2 text-xs font-bold">
             <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">📍 {target.distance} tiles away</span>
             <span className="px-2 py-1 rounded-lg bg-panel2 border border-line">
-              {terrain === "mountains" || terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} {TERRAIN[terrain].name}
+              <GameIcon e={terrain === "mountains" || terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} /> {TERRAIN[terrain].name}
               {TERRAIN[terrain].defense > 0 && <span className="text-[#F08A6C]"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
             </span>
             {route?.detour && (
@@ -160,7 +161,7 @@ export const SendArmyDrawer = ({
             )}
             {naval && (
               <span className="px-2 py-1 rounded-lg bg-[#14222A] border border-[#4F86A3] text-[#A9D3EA]">
-                🌊 Across the sea
+                <GameIcon e="🌊" /> Across the sea
                 {landing > 1 && <span className="text-[#F08A6C]"> · +{Math.round((landing - 1) * 100)}% their defense (beach)</span>}
               </span>
             )}
@@ -273,7 +274,7 @@ export const SendArmyDrawer = ({
                 shortOfShips ? "bg-[#2A140E] border-[#8A3B23] text-[#FFB27A]" : "bg-[#14222A] border-[#4F86A3] text-[#A9D3EA]"
               )}
             >
-              <span className="text-xl animate-sail">⛵</span>
+              <span className="text-xl animate-sail"><GameIcon e="⛵" /></span>
               <span className="flex-1">
                 {(state.buildings["harbor"] ?? 0) === 0 ? (
                   <>Build a <b>Harbor</b> and Longships to cross the sea.</>
@@ -294,7 +295,7 @@ export const SendArmyDrawer = ({
           {/* Attack vs defense */}
           <div className="rounded-xl bg-panel border border-line p-2.5 flex flex-col gap-2">
             <div className="flex justify-between items-baseline text-sm">
-              <span className="font-extrabold">⚔️ {fmt(power)}</span>
+              <span className="font-extrabold"><GameIcon e="⚔️" /> {fmt(power)}</span>
               <span
                 className={clsx(
                   "text-xs font-extrabold",
@@ -304,7 +305,7 @@ export const SendArmyDrawer = ({
                 {size ? verdict : "Choose troops"}
               </span>
               <span className="font-extrabold">
-                {d.exact ? fmt(defMin) : `${fmt(defMin)}–${fmt(defMax)}`} 🛡️
+                {d.exact ? fmt(defMin) : `${fmt(defMin)}–${fmt(defMax)}`} <GameIcon e="🛡️" />
               </span>
             </div>
             <div className="relative h-2 rounded-full bg-[#5A2A1E] overflow-hidden">
@@ -318,9 +319,9 @@ export const SendArmyDrawer = ({
               <div className="absolute inset-y-0 left-1/2 w-px bg-parch/50" />
             </div>
             <div className="grid grid-cols-3 text-center text-[11px] font-bold text-sub">
-              <span>👥 {fmt(size)} troops</span>
-              <span>🎒 {fmt(carry)} loot</span>
-              <span>⏱ {size ? formatDuration(travel) : "–"}</span>
+              <span><GameIcon e="👥" /> {fmt(size)} troops</span>
+              <span><GameIcon e="🎒" /> {fmt(carry)} loot</span>
+              <span><GameIcon e="⏱" /> {size ? formatDuration(travel) : "–"}</span>
             </div>
           </div>
 
@@ -340,7 +341,7 @@ export const SendArmyDrawer = ({
                 ? `Need ${fmt(ships)} Longships`
               : busy
                 ? "Marching…"
-                : `${naval ? "⛵ Sail" : "⚔️ March"} · arrives ${new Date(now + travel).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                : <IconText text={`${naval ? "⛵ Sail" : "⚔️ March"} · arrives ${new Date(now + travel).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`} />}
           </Button>
         </div>
       )}

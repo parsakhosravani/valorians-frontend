@@ -8,6 +8,7 @@ import { BattleReport, RESOURCES, useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";
 import { RANKS, UNIT_BY_ID } from "@/lib/game/config";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 export const BattleSummary = ({ report, asDefender = false }: { report: BattleReport; asDefender?: boolean }) => {
   const won = asDefender ? !report.attackerWon : report.attackerWon;
@@ -18,12 +19,12 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
   return (
     <div className="flex flex-col gap-3">
       <div className="text-center">
-        <div className="text-5xl">{won ? "🏆" : "💀"}</div>
+        <div className="text-5xl"><GameIcon e={won ? "🏆" : "💀"} /></div>
         <div className={won ? "text-2xl font-black text-good" : "text-2xl font-black text-[#F08A6C]"}>
           {won ? "Victory!" : "Defeat"}
         </div>
         <div className="text-sm text-[#B19C80]">
-          {report.attackerName} ⚔️ {report.defenderName}
+          {report.attackerName} <GameIcon e="⚔️" /> {report.defenderName}
         </div>
         {report.battleMs != null && report.rounds?.length ? (
           <div className="text-xs text-muted">
@@ -75,7 +76,7 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
       )}
       {promoted.map((p) => (
         <div key={p.unit} className="text-center font-bold text-[#E3A948]">
-          🎖️ {UNIT_BY_ID[p.unit].name}s promoted to {RANKS[p.rank].name}!
+          <GameIcon e="🎖️" /> {UNIT_BY_ID[p.unit].name}s promoted to {RANKS[p.rank].name}!
         </div>
       ))}
       {lootTotal > 0 || report.coins > 0 ? (
@@ -88,7 +89,7 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
                 {fmt(report.loot[r.id] ?? 0)}
               </span>
             ))}
-            {report.coins > 0 && <span>🪙 {fmt(report.coins)}</span>}
+            {report.coins > 0 && <span><GameIcon e="🪙" /> {fmt(report.coins)}</span>}
           </div>
         </div>
       ) : null}

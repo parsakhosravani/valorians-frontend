@@ -7,6 +7,7 @@ import { useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS, SHIELDS, ShieldId } from "@/lib/game/config";
 import { plusActive, plusShieldReadyAt, shieldBlocked } from "@/lib/game/engine";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 const label = (hours: number) => (hours >= 48 ? `${hours / 24} days` : `${hours} hours`);
 const cooldownHours = Math.round(SHIELDS.cooldownMs / 3600e3);
@@ -55,7 +56,7 @@ export const ShieldDrawer = ({
       {/* Free weekly shield with Plus */}
       <div className="flex items-center gap-3 bg-panel2 border border-gold rounded-xl px-3 py-2.5 mt-4">
         <span aria-hidden className="text-2xl w-8 text-center">
-          👑
+          <GameIcon e="👑" />
         </span>
         <span className="flex-1 min-w-0 flex flex-col">
           <span className="font-extrabold leading-tight">Weekly Plus shield · {PLUS.weeklyShieldHours}h</span>
@@ -89,7 +90,7 @@ export const ShieldDrawer = ({
           return (
             <li key={o.id} className="flex items-center gap-3 bg-panel2 border border-line rounded-xl px-3 py-2.5">
               <span aria-hidden className="text-2xl w-8 text-center">
-                🛡️
+                <GameIcon e="🛡️" />
               </span>
               <span className="flex-1 min-w-0 flex flex-col">
                 <span className="font-extrabold leading-tight">{label(o.hours)}</span>
@@ -104,12 +105,12 @@ export const ShieldDrawer = ({
       </ul>
 
       <ul className="mt-4 flex flex-col gap-1 text-xs font-bold text-muted">
-        <li>⚔️ Sending an army against another tribe breaks your shield.</li>
+        <li><GameIcon e="⚔️" /> Sending an army against another tribe breaks your shield.</li>
         <li>
-          ⏳ After a shield ends, the next one needs {cooldownHours}h to recharge
+          <GameIcon e="⏳" /> After a shield ends, the next one needs {cooldownHours}h to recharge
           {recharging && !shielded ? ` (${formatDuration(state.shield.cooldownUntil - now)} left)` : ""}.
         </li>
-        <li>🔥 Being raided always gives you a short free shield.</li>
+        <li><GameIcon e="🔥" /> Being raided always gives you a short free shield.</li>
       </ul>
     </Drawer>
   );

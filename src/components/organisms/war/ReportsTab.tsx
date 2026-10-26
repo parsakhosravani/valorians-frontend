@@ -8,6 +8,7 @@ import { Drawer } from "@/components";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Item = {
   id: number;
@@ -41,7 +42,7 @@ export const ReportsTab = () => {
         return (
           <button key={it.id} className="text-left" onClick={() => setOpen(it)}>
             <Card className="flex items-center gap-3">
-              <div className="text-2xl">{it.role === "defender" ? "🛡️" : "⚔️"}</div>
+              <div className="text-2xl"><GameIcon e={it.role === "defender" ? "🛡️" : "⚔️"} /></div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold truncate">
                   {it.role === "attacker" ? `You attacked ${it.opponent}` : `${it.opponent} attacked you`}

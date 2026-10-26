@@ -19,6 +19,7 @@ import useBackButtonReset from "@/hooks/useBackButtonReset";
 import { PlusDrawer } from "@/components/organisms/PlusDrawer";
 import { ShieldDrawer } from "@/components/organisms/ShieldDrawer";
 import { plusActive } from "@/lib/game/engine";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 type ReportItem = {
   id: number;
@@ -398,7 +399,7 @@ export const Hall = () => {
         onClick={() => setPlusOpen(true)}
       >
         <span aria-hidden className="text-3xl w-12 h-12 rounded-xl bg-panel2 flex items-center justify-center shrink-0">
-          👑
+          <GameIcon e="👑" />
         </span>
         <span className="flex-1 min-w-0 flex flex-col">
           <span className="font-display font-black text-lg leading-tight">Valorians Plus</span>
@@ -422,7 +423,7 @@ export const Hall = () => {
         onClick={() => setShieldOpen(true)}
       >
         <span aria-hidden className="text-3xl w-12 h-12 rounded-xl bg-panel2 flex items-center justify-center shrink-0">
-          🛡️
+          <GameIcon e="🛡️" />
         </span>
         <span className="flex-1 min-w-0 flex flex-col">
           <span className="font-display font-black text-lg leading-tight">Shield</span>

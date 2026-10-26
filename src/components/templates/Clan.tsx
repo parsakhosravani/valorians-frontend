@@ -33,6 +33,7 @@ import {
   defaultFlag,
 } from "@/lib/game/clan";
 import type { ClanView } from "@/server/clans";
+import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 type Mine = NonNullable<ClanView["mine"]>;
 type Member = Mine["members"][number];
@@ -333,7 +334,7 @@ export const Clan: FunctionComponent = () => {
           )}
           {can.settings(role) && (
             <Button disabled={busy != null} size="small" variant="secondary" onClick={() => setConfirmTransfer(m.id)}>
-              👑 Make {ROLE_NAMES.leader}
+              <GameIcon e="👑" /> Make {ROLE_NAMES.leader}
             </Button>
           )}
           {canKick(role, m.role) && (
@@ -369,7 +370,7 @@ export const Clan: FunctionComponent = () => {
         )}
 
         <div className="flex flex-col gap-2 rounded-xl bg-panel border border-line p-2.5">
-          <span className="text-xs font-bold text-sub">📦 Send aid from the treasury</span>
+          <span className="text-xs font-bold text-sub"><GameIcon e="📦" /> Send aid from the treasury</span>
           <KeyPicker value={aidKey} onChange={setAidKey} />
           <AmountInput max={mine.treasury[aidKey]} value={aidAmount} onChange={setAidAmount} />
           <Button
@@ -400,7 +401,7 @@ export const Clan: FunctionComponent = () => {
                 <span className="font-bold truncate leading-none">{r.name}</span>
                 <div className="flex items-center gap-3 text-[11px] font-bold text-sub">
                   <TextImage direction="row" imgAlt="population" imgSrc={population} size="small" title={fmt(r.population)} />
-                  <span>💪 {fmt(r.power)}</span>
+                  <span><GameIcon e="💪" /> {fmt(r.power)}</span>
                   <span className="text-muted">{ago(now, r.at)}</span>
                 </div>
               </div>
@@ -434,7 +435,7 @@ export const Clan: FunctionComponent = () => {
               <Avatar className="rounded" size={34} src={m.photoUrl} />
               <div className="flex flex-col min-w-0 flex-1 gap-1">
                 <div className="flex items-center gap-1.5 leading-none font-bold truncate">
-                  {ROLE_ICON[m.role] && <span aria-label={ROLE_NAMES[m.role]}>{ROLE_ICON[m.role]}</span>}
+                  {ROLE_ICON[m.role] && <span aria-label={ROLE_NAMES[m.role]}><GameIcon e={ROLE_ICON[m.role]} /></span>}
                   <span className={clsx("truncate", m.id === me.id && "text-goldtext")}>
                     {m.name}
                     {m.id === me.id ? " (you)" : ""}
@@ -443,8 +444,8 @@ export const Clan: FunctionComponent = () => {
                 </div>
                 <div className="flex items-center gap-3 text-[11px] font-bold text-sub">
                   <TextImage direction="row" imgAlt="population" imgSrc={population} size="small" title={fmt(m.population)} />
-                  <span>💪 {fmt(m.power)}</span>
-                  <span>🏆 {fmt(m.wins)}</span>
+                  <span><GameIcon e="💪" /> {fmt(m.power)}</span>
+                  <span><GameIcon e="🏆" /> {fmt(m.wins)}</span>
                 </div>
               </div>
               <div className="flex flex-col items-end">
@@ -688,7 +689,7 @@ export const Clan: FunctionComponent = () => {
 
         return (
           <div key={e.id} className="flex items-start gap-2 rounded-xl bg-buildingBg border border-line px-3 py-2">
-            <span className="text-base leading-5">{icon}</span>
+            <span className="text-base leading-5"><GameIcon e={icon} /></span>
             <span className="flex-1 text-sm text-parch leading-5">{text}</span>
             <span className="text-[10px] text-muted whitespace-nowrap leading-5">{ago(now, e.at)}</span>
           </div>
@@ -769,7 +770,7 @@ export const Clan: FunctionComponent = () => {
                   <span className="font-display text-parch text-lg font-bold truncate">{mine.name}</span>
                 </div>
                 <div className="text-[11px] font-bold text-goldtext">
-                  Level {mine.level} · {ROLE_ICON[role]} You are {role === "member" ? "a" : "the"} {ROLE_NAMES[role]}
+                  Level {mine.level} · {ROLE_ICON[role] && <GameIcon e={ROLE_ICON[role]} />} You are {role === "member" ? "a" : "the"} {ROLE_NAMES[role]}
                 </div>
                 <div className="text-[#D8C9AE] text-xs">{mine.description || "Stand together, raid together, rise together."}</div>
               </>
@@ -885,11 +886,11 @@ export const Clan: FunctionComponent = () => {
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-bold text-sub">
                         <span className="text-goldtext">Lv {c.level}</span>
                         <span>
-                          👥 {c.members}/{c.maxMembers}
+                          <GameIcon e="👥" /> {c.members}/{c.maxMembers}
                         </span>
                         <TextImage direction="row" imgAlt="population" imgSrc={population} size="small" title={compact(c.population)} />
                         {c.joinMode !== "open" && (
-                          <span className="text-muted">{c.joinMode === "request" ? "✉️ By request" : "🔒 Closed"}</span>
+                          <span className="text-muted"><IconText text={c.joinMode === "request" ? "✉️ By request" : "🔒 Closed"} /></span>
                         )}
                         {c.minPopulation > 0 && <span className="text-muted">min {compact(c.minPopulation)}</span>}
                       </div>
