@@ -6,9 +6,17 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  # Vercel reports each deploy to GitHub; a finished production deploy runs
+  # this right away, so the bot drafts the update announcement in seconds
+  # (GitHub's schedule above often runs hours late).
+  deployment_status:
 
 jobs:
   resolve:
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Production')
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

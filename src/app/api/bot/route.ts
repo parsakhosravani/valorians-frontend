@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { handleUpdate, webhookSecret } from "@/server/bot";
+import { maybeCheckRelease } from "@/server/announce";
 
 export const dynamic = "force-dynamic";
 // Starting an announcement sends a first batch before answering.
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
   }
   try {
     await handleUpdate(await req.json());
+    await maybeCheckRelease();
   } catch (e) {
     // Always answer 200 so Telegram doesn't retry a broken update forever.
     // eslint-disable-next-line no-console

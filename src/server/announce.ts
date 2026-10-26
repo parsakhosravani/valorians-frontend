@@ -226,8 +226,8 @@ export async function announceButton(data: string, adminId: number, chatId: numb
  *
  * The version is Vercel's VERCEL_GIT_COMMIT_SHA. What changed comes from
  * GitHub: the titles of the pull requests merged since the last announced
- * version (or commit subjects for direct pushes). The very first run only
- * remembers the version, so the whole history is never announced.
+ * version (or commit subjects for direct pushes). The very first run drafts
+ * only that version's own changes, so the whole history is never announced.
  */
 const repo = () =>
   process.env.GITHUB_REPO ||
@@ -239,14 +239,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 
 /** "What changed" between two commits: PR titles, else commit subjects. */
 async function changesBetween(from: string, to: string) {
-  const res = await fetch(`https://api.github.com/repos/${repo()}/compare/${from}...${to}`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(8000),
-  });
+  const res = await github(`compare/${from}...${to}`);
 
   if (!res.ok) throw new Error(`GitHub compare failed: ${res.status}`);
   const data = (await res.json()) as { commits?: { commit: { message: string } }[] };
@@ -261,6 +254,41 @@ async function changesBetween(from: string, to: string) {
   const titles = prs.length || squashed.length ? [...prs, ...squashed] : messages.map((m) => m.split("\n")[0]).filter((l) => !/^Merge /.test(l));
 
   return Array.from(new Set(titles)).slice(0, 12);
+}
+
+const github = (path: string) =>
+  fetch(`https://api.github.com/repos/${repo()}/${path}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(8000),
+  });
+
+async function parentOf(sha: string) {
+  const res = await github(`commits/${sha}`);
+
+  if (!res.ok) throw new Error(`GitHub commit failed: ${res.status}`);
+  const data = (await res.json()) as { parents?: { sha: string }[] };
+
+  return data.parents?.[0]?.sha ?? sha;
+}
+
+/**
+ * checkRelease from busy paths (players opening the game, the bot webhook):
+ * one cheap SELECT at most once a minute per server instance, so a new
+ * version is noticed even when the scheduled cron runs late.
+ */
+let lastReleaseCheck = 0;
+
+export async function maybeCheckRelease() {
+  if (Date.now() - lastReleaseCheck < 60_000) return;
+  lastReleaseCheck = Date.now();
+  await checkRelease().catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error("release check failed", e);
+  });
 }
 
 export async function checkRelease() {
@@ -279,11 +307,12 @@ export async function checkRelease() {
     args: [sha, last],
   });
 
-  if (!claim.rowsAffected || !last || !repo()) return null;
+  if (!claim.rowsAffected || !repo()) return null;
   let changes: string[] = [];
 
   try {
-    changes = await changesBetween(last, sha);
+    // First time: just this version's own changes, not the whole history.
+    changes = await changesBetween(last || (await parentOf(sha)), sha);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error("release notes failed", e);
