@@ -112,7 +112,7 @@ export const Tabs = <T extends string>({
       >
         {t.label}
         {!!t.badge && (
-          <span className="absolute -top-1 -right-1 bg-ember text-[#FFF4EA] text-[10px] rounded-full min-w-4 h-4 px-1">
+          <span className="absolute -top-1 -right-1 flex items-center justify-center bg-ember text-[#FFF4EA] text-[10px] leading-none tabular-nums rounded-full min-w-4 h-4 px-1">
             {t.badge}
           </span>
         )}
