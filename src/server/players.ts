@@ -8,6 +8,7 @@ import type { AuthResult, TelegramAuthUser } from "./auth";
 
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
+import { storedFlag } from "@/lib/game/clan";
 
 /** Columns copied out of the state so they can be sorted and filtered in SQL. */
 const stateColumns = (s: GameState) => [
@@ -186,14 +187,16 @@ export async function rankOf(population: number) {
   return Number(rs.rows[0].rank);
 }
 
-/** The clan badge shown with the player: name and tag, or null. */
+/** The clan badge shown with the player: name, tag and flag, or null. */
 async function clanBadge(clanId: number | null) {
   if (clanId == null) return null;
   const db = await getDb();
-  const rs = await db.execute({ sql: "SELECT id, name, tag, leader_id FROM clans WHERE id = ?", args: [clanId] });
+  const rs = await db.execute({ sql: "SELECT id, name, tag, leader_id, flag FROM clans WHERE id = ?", args: [clanId] });
   const c = rs.rows[0];
 
-  return c ? { id: Number(c.id), name: String(c.name), tag: String(c.tag), leaderId: Number(c.leader_id) } : null;
+  return c
+    ? { id: Number(c.id), name: String(c.name), tag: String(c.tag), leaderId: Number(c.leader_id), flag: storedFlag(c.flag, Number(c.id)) }
+    : null;
 }
 
 /** Trades still in play for the player: their open offers plus deals whose merchants are on the road. */

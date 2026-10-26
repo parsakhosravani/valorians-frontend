@@ -3,6 +3,7 @@ import "server-only";
 import { getDb } from "./db";
 import { Player, avatarUrl } from "./players";
 
+import { storedFlag } from "@/lib/game/clan";
 import { advance, normalizeState } from "@/lib/game/engine";
 import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
 import { Point, campPosition, distance, homeSlot, terrainAt } from "@/lib/game/map";
@@ -79,8 +80,10 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const r = Math.max(8, Math.min(30, Math.round(radius) || VIEW_RADIUS));
 
   const rs = await db.execute({
-    sql: `SELECT id, username, first_name, photo_url, population, power, shield_until, map_x, map_y, state
-          FROM users WHERE map_x BETWEEN ? AND ? AND map_y BETWEEN ? AND ?`,
+    sql: `SELECT u.id, u.username, u.first_name, u.photo_url, u.population, u.power, u.shield_until, u.map_x, u.map_y, u.state,
+                 u.clan_id, c.tag AS clan_tag, c.flag AS clan_flag
+          FROM users u LEFT JOIN clans c ON c.id = u.clan_id
+          WHERE u.map_x BETWEEN ? AND ? AND u.map_y BETWEEN ? AND ?`,
     args: [c.x - r, c.x + r, c.y - r, c.y + r],
   });
   const tribes = rs.rows.map((row) => {
@@ -102,6 +105,12 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       terrain: terrainAt(p.x, p.y),
       distance: Math.round(distance(home, p) * 10) / 10,
       defense: id === me.id ? null : scoutEstimate(s, me.state),
+      clan:
+        row.clan_id == null
+          ? null
+          : { id: Number(row.clan_id), tag: String(row.clan_tag ?? ""), flag: storedFlag(row.clan_flag, Number(row.clan_id)) },
+      /** In the viewer's clan: can't be attacked. */
+      ally: id !== me.id && me.clanId != null && Number(row.clan_id) === me.clanId,
     };
   });
 
