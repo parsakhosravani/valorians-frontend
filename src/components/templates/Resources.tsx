@@ -67,7 +67,9 @@ const Upgrade = ({
         <span className="text-xs text-muted font-bold">Lv {level}</span>
       </div>
       <span className="text-xs text-sub leading-snug">{desc}</span>
+      {/* mt-auto keeps the button on the card's bottom edge, so both cards line up when one title wraps */}
       <Button
+        className="mt-auto"
         disabled={busy || maxed || coins < cost}
         size="small"
         onClick={async () => {
