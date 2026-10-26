@@ -50,7 +50,7 @@ const TREASURY_ICON: Record<TreasuryKey, React.ReactNode> = {
   coins: <Image alt="coins" className="w-4 h-4" src={coinImg} />,
 };
 
-const keyName = (k: TreasuryKey) => (k === "coins" ? "coins" : RESOURCE_NAMES[k].toLowerCase());
+const keyName = (k: TreasuryKey) => (k === "coins" ? "coins" : (RESOURCE_NAMES[k] ?? String(k)).toLowerCase());
 
 const ROLE_ICON: Record<ClanRole, string> = { leader: "👑", officer: "🪓", member: "" };
 const ROLE_ORDER: Record<ClanRole, number> = { leader: 0, officer: 1, member: 2 };
@@ -81,7 +81,8 @@ const ago = (now: number, at: number) => (now - at < 60_000 ? "just now" : `${fo
 function logText(e: Mine["log"][number]) {
   const a = e.actor ?? "Someone";
   const t = e.target ?? "a chief";
-  const amount = `${fmt(Number(e.data.amount ?? 0))} ${keyName(String(e.data.key) as TreasuryKey)}`;
+  // Only donations and aid carry an amount; build it when needed.
+  const amount = () => `${fmt(Number(e.data?.amount ?? 0))} ${keyName(String(e.data?.key ?? "") as TreasuryKey)}`;
 
   switch (e.kind) {
     case "founded":
@@ -101,14 +102,14 @@ function logText(e: Mine["log"][number]) {
     case "leader":
       return { icon: "👑", text: e.actor ? `${a} passed the clan to ${t}` : `${t} is the new ${ROLE_NAMES.leader}` };
     case "donated":
-      return { icon: "💰", text: `${a} donated ${amount}` };
+      return { icon: "💰", text: `${a} donated ${amount()}` };
     case "tech": {
       const tech = TECH_BY_ID[String(e.data.tech) as TechId];
 
       return { icon: tech?.icon ?? "🏛️", text: `${a} raised ${tech?.name ?? "a tech"} to level ${e.data.level}` };
     }
     case "aid":
-      return { icon: "📦", text: `${a} sent ${amount} to ${t}` };
+      return { icon: "📦", text: `${a} sent ${amount()} to ${t}` };
     case "flag":
       return { icon: "🚩", text: `${a} raised a new banner` };
     case "settings":
