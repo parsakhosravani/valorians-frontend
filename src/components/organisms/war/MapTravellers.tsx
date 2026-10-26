@@ -2,16 +2,18 @@
 import Image from "next/image";
 import clsx from "clsx";
 
-import { UnitEmoji, fmt } from "./shared";
+import { fmt } from "./shared";
 
 import { RESOURCES } from "@/context";
 import { formatDuration } from "@/lib/format";
-import { UNITS, UnitId } from "@/lib/game/config";
+import { BUILDING_BY_ID, UNITS, buildingImage } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 
 type Pt = { x: number; y: number };
 
 const IMG = Object.fromEntries(RESOURCES.map((r) => [r.id, r.img]));
+const ARMY_ART = buildingImage(BUILDING_BY_ID["military-command"]);
+const MERCHANT_ART = buildingImage(BUILDING_BY_ID["trading-post"]);
 
 /** How far along its road something is (0 at home, 1 on arrival). */
 export const progress = (now: number, sentAt: number, arrivesAt: number) =>
@@ -21,18 +23,6 @@ const lerp = (a: Pt, b: Pt, p: number) => ({
   x: a.x + (b.x - a.x) * p,
   y: a.y + (b.y - a.y) * p,
 });
-
-/** The troop that makes up most of an army, to carry its banner. */
-const leadUnit = (army: Army | null): UnitId | null => {
-  if (!army) return null;
-  let best: UnitId | null = null;
-
-  for (const u of UNITS) {
-    if ((army[u.id] ?? 0) > (best ? (army[best] ?? 0) : 0)) best = u.id;
-  }
-
-  return best;
-};
 
 const total = (army: Army | null) =>
   army ? UNITS.reduce((s, u) => s + (army[u.id] ?? 0), 0) : 0;
@@ -155,39 +145,41 @@ export const ArmyToken = ({
   incoming: boolean;
   left: number;
 }) => {
-  const lead = leadUnit(units);
   const n = total(units);
 
   return (
     <Rider at={lerp(from, to, p)} z={5}>
-      <span className="relative flex items-center justify-center">
+      <span className="relative flex items-center justify-center w-12 h-12">
         {incoming && (
-          <span className="absolute inset-0 rounded-full bg-[#F06A44]/50 animate-ping" />
+          <span className="absolute inset-1 rounded-full bg-[#F06A44]/45 blur-[6px] animate-pulse" />
         )}
-        <span
+        <Image
+          alt=""
           className={clsx(
-            "relative w-9 h-9 rounded-full flex items-center justify-center text-lg border-[3px] shadow-[0_3px_6px_rgba(0,0,0,0.6)]",
+            "relative w-12 h-12 object-contain animate-trot",
             incoming
-              ? "bg-gradient-to-b from-[#5A1E12] to-[#2A140E] border-[#F06A44]"
-              : "bg-gradient-to-b from-[#3A2A1B] to-[#1E1610] border-gold",
+              ? "drop-shadow-[0_0_6px_rgba(240,106,68,0.95)]"
+              : "drop-shadow-[0_3px_3px_rgba(0,0,0,0.65)]",
           )}
-        >
-          <span className="animate-trot">{lead ? <UnitEmoji unit={lead} /> : "⚔️"}</span>
-          {n > 0 && (
-            <span
-              className={clsx(
-                "absolute -bottom-1.5 -right-2 min-w-[18px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center",
-                incoming ? "bg-[#F06A44] text-[#FFF4EA]" : "bg-gold text-[#1A120B]",
-              )}
-            >
-              {n >= 1000 ? `${Math.floor(n / 1000)}k` : n}
-            </span>
-          )}
-        </span>
+          draggable={false}
+          height={96}
+          src={ARMY_ART}
+          width={96}
+        />
+        {n > 0 && (
+          <span
+            className={clsx(
+              "absolute bottom-0 -right-1 min-w-[18px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center",
+              incoming ? "bg-[#F06A44] text-[#FFF4EA]" : "bg-gold text-[#1A120B]",
+            )}
+          >
+            {n >= 1000 ? `${Math.floor(n / 1000)}k` : n}
+          </span>
+        )}
       </span>
       <span
         className={clsx(
-          "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
+          "-mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
           incoming
             ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
             : "bg-[#1E1610]/90 text-goldtext border-line",
@@ -199,7 +191,7 @@ export const ArmyToken = ({
   );
 };
 
-/** A merchant's camel carrying a load across the map. */
+/** A merchant caravan (the Trading Post) carrying a load across the map. */
 export const CaravanToken = ({
   from,
   to,
@@ -222,20 +214,17 @@ export const CaravanToken = ({
 
   return (
     <Rider at={lerp(from, to, p)} z={mine ? 4 : 3}>
-      <span
+      <Image
+        alt=""
         className={clsx(
-          "relative leading-none drop-shadow-[0_3px_3px_rgba(0,0,0,0.7)]",
-          mine ? "text-[26px]" : "text-[20px] opacity-80",
+          "object-contain animate-trot drop-shadow-[0_3px_3px_rgba(0,0,0,0.65)]",
+          mine ? "w-10 h-10" : "w-8 h-8 opacity-75",
         )}
-      >
-        {/* The camel emoji faces left: turn it to face where it's going. */}
-        <span
-          className="inline-block animate-trot"
-          style={{ transform: to.x > from.x ? "scaleX(-1)" : undefined }}
-        >
-          🐪
-        </span>
-      </span>
+        draggable={false}
+        height={80}
+        src={MERCHANT_ART}
+        width={80}
+      />
       {mine && (
         <span
           className={clsx(

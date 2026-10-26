@@ -717,7 +717,14 @@ export const WarMap = ({
                 c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
               )}
             >
-              <span className="text-lg">🐪</span>
+              <Image
+                alt=""
+                className="w-7 h-7 object-contain shrink-0"
+                draggable={false}
+                height={56}
+                src={buildingImage(BUILDING_BY_ID["trading-post"])}
+                width={56}
+              />
               <span className="flex-1 min-w-0 truncate">
                 {c.kind === "coming" ? (
                   <>
