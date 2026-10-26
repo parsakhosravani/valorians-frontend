@@ -135,30 +135,72 @@ export function homeSlot(n: number): Point {
   return { x: mid, y: mid };
 }
 
+const key = (p: Point) => `${p.x},${p.y}`;
+
 /**
- * Each player's own barbarian camps, scattered further out the higher the
- * level. Camps prefer land you can walk to; only when there is none around
- * (an island) do they sit across the water.
+ * Where a player's level-`level` barbarian camp sits, scattered further out
+ * the higher the level. Camps prefer land you can walk to; only when there
+ * is none around (an island) do they sit across the water. A camp never sits
+ * on the player's own tribe or on any tile in `taken` (other tribes, lower
+ * camps), so it can't hide under a village on the map.
  */
-export function campPosition(playerId: number, level: number, home: Point): Point {
+export function campPosition(playerId: number, level: number, home: Point, taken: ReadonlySet<string> = new Set()): Point {
   const angle = hash(playerId, level, 5) * Math.PI * 2;
-  const dist = 2 + level * 0.9;
+  const base = 2 + level * 0.9;
+  const free = (p: Point) =>
+    inMap(p) && !isWater(terrainAt(p.x, p.y)) && !(p.x === home.x && p.y === home.y) && !taken.has(key(p));
   let overSea: Point | null = null;
 
-  for (let t = 0; t < 13; t++) {
-    const a = angle + t * 0.5;
-    const p = {
-      x: Math.round(home.x + Math.cos(a) * dist),
-      y: Math.round(home.y + Math.sin(a) * dist),
-    };
+  // Ring by ring outwards: the ideal distance first, then a little further if crowded.
+  for (let ring = 0; ring < 4; ring++) {
+    const dist = base + ring;
 
-    if (!inMap(p) || isWater(terrainAt(p.x, p.y)) || (p.x === home.x && p.y === home.y)) continue;
-    if (!seaRoute(home, p).naval) return p;
-    overSea ??= p;
+    for (let t = 0; t < 13; t++) {
+      const a = angle + t * 0.5;
+      const p = {
+        x: Math.round(home.x + Math.cos(a) * dist),
+        y: Math.round(home.y + Math.sin(a) * dist),
+      };
+
+      if (!free(p)) continue;
+      if (!seaRoute(home, p).naval) return p;
+      overSea ??= p;
+    }
+    if (overSea) return overSea;
   }
 
-  return overSea ?? { x: Math.min(MAP_SIZE - 1, home.x + 1), y: home.y };
+  // Last resort: the nearest free tile around home.
+  for (let r = 1; r < MAP_SIZE; r++)
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        const p = { x: home.x + dx, y: home.y + dy };
+
+        if (Math.max(Math.abs(dx), Math.abs(dy)) === r && free(p)) return p;
+      }
+
+  return { x: Math.min(MAP_SIZE - 1, home.x + 1), y: home.y };
 }
+
+/**
+ * All of a player's camps from level 1 to `upTo`, each kept off tribes'
+ * tiles and off the lower camps, so no two things share a tile.
+ */
+export function campPositions(playerId: number, home: Point, upTo: number, tribes: Point[] = []): Point[] {
+  const taken = new Set(tribes.map(key));
+  const out: Point[] = [];
+
+  for (let level = 1; level <= upTo; level++) {
+    const p = campPosition(playerId, level, home, taken);
+
+    taken.add(key(p));
+    out.push(p);
+  }
+
+  return out;
+}
+
+/** How far out the furthest camp can land, for loading the tribes around it. */
+export const CAMP_REACH = (maxLevel: number) => Math.ceil(2 + maxLevel * 0.9 + 4);
 
 export const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 

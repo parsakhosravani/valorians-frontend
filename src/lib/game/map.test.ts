@@ -3,7 +3,7 @@ import { test, expect } from "bun:test";
 import * as E from "./engine";
 import * as W from "./war";
 import { MIN_MARCH_SECONDS } from "./config";
-import { campPosition, distance, homeSlot, marchMs, terrainAt } from "./map";
+import { campPosition, campPositions, distance, homeSlot, marchMs, terrainAt } from "./map";
 
 const T0 = Date.UTC(2026, 9, 25, 10);
 const army = (a: Partial<E.Army>) => ({ ...E.emptyArmy(), ...a });
@@ -74,4 +74,18 @@ test("camp battle brings survivors home after the march back", () => {
   s = E.advance(r.state, arrive + 61_000);
   expect(s.army.spearman).toBeGreaterThan(40);
   expect(s.camps.cleared).toBe(1);
+});
+
+test("camps never share a tile with a tribe or with each other", () => {
+  const tribes = Array.from({ length: 200 }, (_, n) => homeSlot(n));
+  const homeKeys = new Set(tribes.map((p) => `${p.x},${p.y}`));
+
+  for (let id = 1; id <= 60; id++) {
+    const home = tribes[id % tribes.length];
+    const camps = campPositions(id, home, 30, tribes);
+    const keys = camps.map((p) => `${p.x},${p.y}`);
+
+    expect(new Set(keys).size).toBe(camps.length);
+    for (const k of keys) expect(homeKeys.has(k)).toBe(false);
+  }
 });
