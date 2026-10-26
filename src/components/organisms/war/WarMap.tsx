@@ -722,7 +722,7 @@ export const WarMap = ({
                 c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
               )}
             >
-              <span className="text-lg">🐪</span>
+              <span className="text-lg">🐂</span>
               <span className="flex-1 min-w-0 truncate">
                 {c.kind === "coming" ? (
                   <>

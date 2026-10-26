@@ -283,7 +283,7 @@ export const Market = () => {
         )}
         {data && level >= 1 && (
           <p className="text-xs text-sub text-center">
-            🐪 Merchants free: <b className="text-parch">{freeMerchants}</b> of{" "}
+            🐂 Merchants free: <b className="text-parch">{freeMerchants}</b> of{" "}
             {data.limits.maxOffers} · carry up to{" "}
             <b className="text-parch">{fmt(maxAmount)}</b> per load
           </p>
@@ -508,7 +508,7 @@ export const Market = () => {
                       {t.status === "open"
                         ? "On the market"
                         : travelling
-                          ? "🐪 On the road"
+                          ? "🐂 On the road"
                           : "✓ Delivered"}
                     </span>
                     <span className="flex-1 min-w-0 truncate text-sub text-right">

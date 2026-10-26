@@ -199,7 +199,7 @@ export const ArmyToken = ({
   );
 };
 
-/** A merchant's camel carrying a load across the map. */
+/** A merchant's ox carrying a load across the map. */
 export const CaravanToken = ({
   from,
   to,
@@ -228,12 +228,12 @@ export const CaravanToken = ({
           mine ? "text-[26px]" : "text-[20px] opacity-80",
         )}
       >
-        {/* The camel emoji faces left: turn it to face where it's going. */}
+        {/* The ox emoji faces left: turn it to face where it's going. */}
         <span
           className="inline-block animate-trot"
           style={{ transform: to.x > from.x ? "scaleX(-1)" : undefined }}
         >
-          🐪
+          🐂
         </span>
       </span>
       {mine && (
