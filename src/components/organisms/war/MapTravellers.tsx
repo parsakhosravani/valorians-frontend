@@ -1,19 +1,7 @@
 "use client";
-import Image from "next/image";
 import clsx from "clsx";
 
-import { fmt } from "./shared";
-
-import { RESOURCES } from "@/context";
-import { formatDuration } from "@/lib/format";
-import { BUILDING_BY_ID, UNITS, buildingImage } from "@/lib/game/config";
-import type { Army } from "@/lib/game/engine";
-
 type Pt = { x: number; y: number };
-
-const IMG = Object.fromEntries(RESOURCES.map((r) => [r.id, r.img]));
-const ARMY_ART = buildingImage(BUILDING_BY_ID["military-command"]);
-const MERCHANT_ART = buildingImage(BUILDING_BY_ID["trading-post"]);
 
 /** How far along its road something is (0 at home, 1 on arrival). */
 export const progress = (now: number, sentAt: number, arrivesAt: number) =>
@@ -23,9 +11,6 @@ const lerp = (a: Pt, b: Pt, p: number) => ({
   x: a.x + (b.x - a.x) * p,
   y: a.y + (b.y - a.y) * p,
 });
-
-const total = (army: Army | null) =>
-  army ? UNITS.reduce((s, u) => s + (army[u.id] ?? 0), 0) : 0;
 
 export const ROUTE_COLORS = {
   outgoing: "#F2C66D",
@@ -129,117 +114,95 @@ const Rider = ({
   </div>
 );
 
-/** An army on the march: a war banner with its lead troop, size and time left. */
+/** Crossed swords. */
+const Swords = () => (
+  <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" viewBox="0 0 24 24" width="14">
+    <path d="M4 4l11 11M20 4L9 15" />
+    <path d="M13 17l4-4M11 17l-4-4M16 16l4 4M8 16l-4 4" />
+  </svg>
+);
+
+/** A tied sack of goods. */
+export const Sack = () => (
+  <svg aria-hidden="true" fill="currentColor" height="14" viewBox="0 0 24 24" width="14">
+    <path d="M9 2.5h6l-1.6 3.2h-2.8z" />
+    <path d="M10.2 7h3.6c3.9 2.2 6.2 5.8 6.2 9.4 0 3.2-2.6 5.1-8 5.1s-8-1.9-8-5.1C4 12.8 6.3 9.2 10.2 7z" />
+  </svg>
+);
+
+/** A small round marker on the road. */
+const Dot = ({
+  ring,
+  fill,
+  color,
+  pulse,
+  dim,
+  children,
+}: {
+  ring: string;
+  fill: string;
+  color: string;
+  pulse?: boolean;
+  dim?: boolean;
+  children: React.ReactNode;
+}) => (
+  <span className={clsx("relative flex", dim && "opacity-60 scale-90")}>
+    {pulse && (
+      <span className="absolute inset-0 rounded-full animate-ping" style={{ background: ring, opacity: 0.5 }} />
+    )}
+    <span
+      className="relative w-6 h-6 rounded-full flex items-center justify-center border-2 shadow-[0_2px_4px_rgba(0,0,0,0.6)]"
+      style={{ background: fill, borderColor: ring, color }}
+    >
+      {children}
+    </span>
+  </span>
+);
+
+/** An army on the march. */
 export const ArmyToken = ({
   from,
   to,
   p,
-  units,
   incoming,
-  left,
 }: {
   from: Pt;
   to: Pt;
   p: number;
-  units: Army | null;
   incoming: boolean;
-  left: number;
-}) => {
-  const n = total(units);
+}) => (
+  <Rider at={lerp(from, to, p)} z={5}>
+    <Dot
+      color={incoming ? "#FFE3D6" : "#1A120B"}
+      fill={incoming ? "#C2432A" : "#E3A948"}
+      pulse={incoming}
+      ring={incoming ? "#F06A44" : "#1A120B"}
+    >
+      <Swords />
+    </Dot>
+  </Rider>
+);
 
-  return (
-    <Rider at={lerp(from, to, p)} z={5}>
-      <span className="relative flex items-center justify-center w-12 h-12">
-        {incoming && (
-          <span className="absolute inset-1 rounded-full bg-[#F06A44]/45 blur-[6px] animate-pulse" />
-        )}
-        <Image
-          alt=""
-          className={clsx(
-            "relative w-12 h-12 object-contain animate-trot",
-            incoming
-              ? "drop-shadow-[0_0_6px_rgba(240,106,68,0.95)]"
-              : "drop-shadow-[0_3px_3px_rgba(0,0,0,0.65)]",
-          )}
-          draggable={false}
-          height={96}
-          src={ARMY_ART}
-          width={96}
-        />
-        {n > 0 && (
-          <span
-            className={clsx(
-              "absolute bottom-0 -right-1 min-w-[18px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center",
-              incoming ? "bg-[#F06A44] text-[#FFF4EA]" : "bg-gold text-[#1A120B]",
-            )}
-          >
-            {n >= 1000 ? `${Math.floor(n / 1000)}k` : n}
-          </span>
-        )}
-      </span>
-      <span
-        className={clsx(
-          "-mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
-          incoming
-            ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
-            : "bg-[#1E1610]/90 text-goldtext border-line",
-        )}
-      >
-        {formatDuration(left)}
-      </span>
-    </Rider>
-  );
-};
-
-/** A merchant caravan (the Trading Post) carrying a load across the map. */
+/** A merchant carrying a load across the map. */
 export const CaravanToken = ({
   from,
   to,
   p,
-  resource,
-  amount,
   kind,
-  left,
 }: {
   from: Pt;
   to: Pt;
   p: number;
-  resource: string;
-  amount: number;
   kind: "coming" | "going" | "other";
-  left: number;
-}) => {
-  const mine = kind !== "other";
-  const img = IMG[resource];
-
-  return (
-    <Rider at={lerp(from, to, p)} z={mine ? 4 : 3}>
-      <Image
-        alt=""
-        className={clsx(
-          "object-contain animate-trot drop-shadow-[0_3px_3px_rgba(0,0,0,0.65)]",
-          mine ? "w-10 h-10" : "w-8 h-8 opacity-75",
-        )}
-        draggable={false}
-        height={80}
-        src={MERCHANT_ART}
-        width={80}
-      />
-      {mine && (
-        <span
-          className={clsx(
-            "-mt-0.5 flex items-center gap-0.5 pl-0.5 pr-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
-            kind === "coming"
-              ? "bg-[#1C2A14]/95 text-good border-[#5E7F45]"
-              : "bg-[#1E1610]/90 text-sub border-line",
-          )}
-        >
-          {img && (
-            <Image alt="" className="w-3.5 h-3.5 object-contain" draggable={false} height={28} src={img} width={28} />
-          )}
-          {fmt(amount)} · {formatDuration(left)}
-        </span>
-      )}
-    </Rider>
-  );
-};
+}) => (
+  <Rider at={lerp(from, to, p)} z={kind === "other" ? 3 : 4}>
+    <Dot
+      color={kind === "coming" ? "#1A120B" : "#3A2A1B"}
+      dim={kind === "other"}
+      fill={kind === "coming" ? "#9DD07F" : "#E9D3A1"}
+      ring="#1A120B"
+    >
+      <Sack />
+    </Dot>
+  </Rider>
+);

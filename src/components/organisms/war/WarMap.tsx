@@ -16,6 +16,7 @@ import {
   CaravanToken,
   ROUTE_COLORS,
   Route,
+  Sack,
   progress,
 } from "./MapTravellers";
 import { AttackTarget } from "./SendArmyDrawer";
@@ -717,14 +718,16 @@ export const WarMap = ({
                 c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
               )}
             >
-              <Image
-                alt=""
-                className="w-7 h-7 object-contain shrink-0"
-                draggable={false}
-                height={56}
-                src={buildingImage(BUILDING_BY_ID["trading-post"])}
-                width={56}
-              />
+              <span
+                className={clsx(
+                  "shrink-0 w-6 h-6 rounded-full flex items-center justify-center border-2 border-[#1A120B]",
+                  c.kind === "coming"
+                    ? "bg-[#9DD07F] text-[#1A120B]"
+                    : "bg-[#E9D3A1] text-[#3A2A1B]",
+                )}
+              >
+                <Sack />
+              </span>
               <span className="flex-1 min-w-0 truncate">
                 {c.kind === "coming" ? (
                   <>
@@ -967,12 +970,9 @@ export const WarMap = ({
                   .map((c) => (
                     <CaravanToken
                       key={`t${c.id}`}
-                      amount={c.amount}
                       from={{ x: px(c.from.x), y: py(c.from.y) }}
                       kind={c.kind}
-                      left={c.arrivesAt - now}
                       p={progress(now, c.sentAt, c.arrivesAt)}
-                      resource={c.resource}
                       to={{ x: px(c.to.x), y: py(c.to.y) }}
                     />
                   ))}
@@ -981,10 +981,8 @@ export const WarMap = ({
                     key={`t${m.id}`}
                     from={{ x: px(m.from.x), y: py(m.from.y) }}
                     incoming={m.kind === "incoming"}
-                    left={Math.max(0, m.arrivesAt - now)}
                     p={progress(now, m.sentAt, m.arrivesAt)}
                     to={{ x: px(m.to.x), y: py(m.to.y) }}
-                    units={m.units}
                   />
                 ))}
               </div>
