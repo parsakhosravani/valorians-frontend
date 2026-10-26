@@ -1,12 +1,13 @@
 "use client";
 
-import React, { FunctionComponent, useMemo, useState } from "react";
+import React, { FunctionComponent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
 import builderImg from "~/images/resources/builder.webp";
 
 import { Building, Drawer, InfoDrawer } from "@/components";
+import { Village } from "@/components/organisms/tribe/Village";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { BUILDING_BY_ID, BuildingDef, RESOURCE_NAMES, ResourceId, buildingImage } from "@/lib/game/config";
 import {
@@ -124,6 +125,9 @@ const UpgradeRow = ({
 };
 
 type Filter = "all" | BuildingGroup;
+type View = "village" | "list";
+
+const VIEW_KEY = "tribe-view";
 
 export const Tribe: FunctionComponent = () => {
   const { telegram } = useTelegramContext();
@@ -131,6 +135,25 @@ export const Tribe: FunctionComponent = () => {
   const [open, setOpen] = useState<BuildingDef | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
+  const [view, setView] = useState<View>("village");
+
+  // Remember Village / List for this player.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(VIEW_KEY) === "list") setView("list");
+    } catch {
+      /* storage blocked: stay on the village */
+    }
+  }, []);
+
+  const pickView = (v: View) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const options = useMemo(() => upgradeOptions(state), [state]);
   const advice = useMemo(() => recommendUpgrade(state, options), [state, options]);
@@ -218,8 +241,26 @@ export const Tribe: FunctionComponent = () => {
         </section>
       )}
 
+      {/* Village / List switch */}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display font-bold text-lg">{view === "village" ? "Your village" : "All buildings"}</h2>
+        <div className="flex p-0.5 rounded-full bg-panel border border-line">
+          {(["village", "list"] as View[]).map((v) => (
+            <button
+              key={v}
+              className={clsx("h-7 px-3.5 rounded-full text-xs font-bold", view === v ? "bg-gold text-[#1A120B]" : "text-sub")}
+              onClick={() => pickView(v)}
+            >
+              {v === "village" ? "Village" : "List"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === "village" && <Village freeBuilder={freeBuilders > 0} now={now} options={options} onOpen={setOpen} />}
+
       {/* A few quick wins you can start right now */}
-      {ready.length > 0 && (
+      {view === "list" && ready.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="font-display font-bold text-lg">
             Quick upgrades <span className="text-muted text-base">· {ready.length} ready</span>
@@ -238,36 +279,35 @@ export const Tribe: FunctionComponent = () => {
       )}
 
       {/* Every building, filterable */}
-      <section className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display font-bold text-lg">All buildings</h2>
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto scrollable -mx-3 px-3">
-          {(["all", "economy", "military", "defense"] as Filter[]).map((f) => (
-            <button
-              key={f}
-              className={clsx(
-                "h-8 px-3.5 rounded-full text-sm font-bold border shrink-0",
-                filter === f ? "bg-gold text-[#1A120B] border-gold" : "bg-panel text-sub border-line"
-              )}
-              onClick={() => setFilter(f)}
-            >
-              {f === "all" ? "All" : GROUP_LABEL[f]}
-            </button>
+      {view === "list" && (
+        <section className="flex flex-col gap-2">
+          <div className="flex gap-1.5 overflow-x-auto scrollable -mx-3 px-3">
+            {(["all", "economy", "military", "defense"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                className={clsx(
+                  "h-8 px-3.5 rounded-full text-sm font-bold border shrink-0",
+                  filter === f ? "bg-gold text-[#1A120B] border-gold" : "bg-panel text-sub border-line"
+                )}
+                onClick={() => setFilter(f)}
+              >
+                {f === "all" ? "All" : GROUP_LABEL[f]}
+              </button>
+            ))}
+          </div>
+          {rest.map((o) => (
+            <UpgradeRow
+              key={o.building.id}
+              busy={busy === o.building.id}
+              freeBuilder={freeBuilders > 0}
+              o={o}
+              onOpen={() => setOpen(o.building)}
+              onUpgrade={() => upgrade(o.building.id)}
+            />
           ))}
-        </div>
-        {rest.map((o) => (
-          <UpgradeRow
-            key={o.building.id}
-            busy={busy === o.building.id}
-            freeBuilder={freeBuilders > 0}
-            o={o}
-            onOpen={() => setOpen(o.building)}
-            onUpgrade={() => upgrade(o.building.id)}
-          />
-        ))}
-        {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
-      </section>
+          {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
+        </section>
+      )}
 
       <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
         {open && (
