@@ -247,7 +247,7 @@ async function resolveAttack(a: AttackRow, now: number) {
   if (!report || !defender) {
     // Nobody to fight: the army turns round and walks home.
     await mutatePlayer(attacker.id, now, (s) =>
-      returnHome(s, a.units, defender ? displayName(defender) : "Abandoned land", at + travelMs, now, rand(), a.to)
+      returnHome(s, a.units, defender ? displayName(defender) : "Abandoned land", at + travelMs, now, rand(), a.to, at)
     );
     await notify.turnedBack(attacker.id, defender ? displayName(defender) : "The target");
 

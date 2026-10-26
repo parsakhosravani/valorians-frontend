@@ -37,7 +37,7 @@ import {
   UnitId,
   buildingImage,
 } from "@/lib/game/config";
-import { TERRAIN, Terrain, scoutCost, seaAt, seaRoute, terrainAt } from "@/lib/game/map";
+import { TERRAIN, Terrain, routeMs, scoutCost, seaAt, seaRoute, terrainAt } from "@/lib/game/map";
 import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
@@ -658,6 +658,20 @@ export const WarMap = ({
   };
 
   const returning = state.marches;
+  // Armies walking home that we can place on the map. Marches saved before
+  // `leftAt` existed fall back to an estimate of the trip from the route.
+  const homeward = data
+    ? returning
+        .filter((m) => m.from && m.returnsAt > now)
+        .map((m) => ({
+          id: m.id,
+          units: m.units,
+          from: m.from!,
+          returnsAt: m.returnsAt,
+          leftAt:
+            m.leftAt ?? m.returnsAt - routeMs(m.units, m.from!, data.home),
+        }))
+    : [];
   const incoming = data?.movements.filter((m) => m.kind === "incoming") ?? [];
   const mine = data?.movements.filter((m) => m.kind === "outgoing") ?? [];
   const merchants =
@@ -909,22 +923,15 @@ export const WarMap = ({
                       to={{ x: px(m.to.x), y: py(m.to.y) }}
                     />
                   ))}
-                  {returning
-                    .filter((m) => m.from && data)
-                    .map((m) => (
-                      <line
-                        key={m.id}
-                        opacity="0.6"
-                        stroke="#D8C9AE"
-                        strokeDasharray="2 6"
-                        strokeLinecap="round"
-                        strokeWidth="3"
-                        x1={px(m.from!.x)}
-                        x2={px(data.home.x)}
-                        y1={py(m.from!.y)}
-                        y2={py(data.home.y)}
-                      />
-                    ))}
+                  {homeward.map((m) => (
+                    <Route
+                      key={`b${m.id}`}
+                      color={ROUTE_COLORS.outgoing}
+                      from={{ x: px(m.from.x), y: py(m.from.y) }}
+                      p={progress(now, m.leftAt, m.returnsAt)}
+                      to={{ x: px(data.home.x), y: py(data.home.y) }}
+                    />
+                  ))}
                 </svg>
 
                 {/* Barbarian camps */}
@@ -1056,6 +1063,25 @@ export const WarMap = ({
                       to={{ x: px(c.to.x), y: py(c.to.y) }}
                     />
                   ))}
+                {homeward.map((m) => {
+                  const f = progress(now, m.leftAt, m.returnsAt);
+
+                  return (
+                    <ArmyToken
+                      key={`b${m.id}`}
+                      from={{ x: px(m.from.x), y: py(m.from.y) }}
+                      incoming={false}
+                      left={Math.max(0, m.returnsAt - now)}
+                      p={f}
+                      to={{ x: px(data.home.x), y: py(data.home.y) }}
+                      units={m.units}
+                      atSea={seaAt(
+                        Math.round(m.from.x + (data.home.x - m.from.x) * f),
+                        Math.round(m.from.y + (data.home.y - m.from.y) * f),
+                      )}
+                    />
+                  );
+                })}
                 {data.movements.map((m) => (
                   <ArmyToken
                     key={`t${m.id}`}

@@ -71,6 +71,8 @@ export type March = {
   loot: Record<ResourceId, number>;
   coins: number;
   returnsAt: number;
+  /** When the army set off home (so the map can place it along the road). */
+  leftAt?: number;
   /** Map tile the army is walking home from (for drawing it on the map). */
   from?: { x: number; y: number };
 };
