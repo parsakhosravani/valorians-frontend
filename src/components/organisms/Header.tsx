@@ -12,7 +12,8 @@ import { compact } from "@/lib/format";
 
 /** Top bar on every screen (with the Market button); Build, War and Market also show your stock. */
 export const Header: React.FC = () => {
-  const { state, rates } = useGame();
+  const { state, rates, me } = useGame();
+  const trades = me?.activeTrades ?? 0;
   const pathname = usePathname();
   const showResources =
     pathname === "/tribe" || pathname === "/battle" || pathname === "/market";
@@ -27,9 +28,9 @@ export const Header: React.FC = () => {
           <Coin amount={Math.floor(state.coins)} />
         </div>
         <Link
-          aria-label="Market"
+          aria-label={trades ? `Market, ${trades} active trade${trades === 1 ? "" : "s"}` : "Market"}
           className={clsx(
-            "h-8 pl-2 pr-2.5 rounded-full border flex items-center gap-1 text-xs font-extrabold [&_svg]:w-[18px] [&_svg]:h-[18px]",
+            "relative h-8 pl-2 pr-2.5 rounded-full border flex items-center gap-1 text-xs font-extrabold [&_svg]:w-[18px] [&_svg]:h-[18px]",
             onMarket
               ? "bg-gold border-gold text-[#1A120B]"
               : "bg-panel border-line text-goldtext",
@@ -38,6 +39,14 @@ export const Header: React.FC = () => {
         >
           {NAV_ICONS.trade}
           Trade
+          {trades > 0 && (
+            <span
+              aria-hidden
+              className="absolute -top-1.5 -right-1.5 flex items-center justify-center bg-ember text-[#FFF4EA] text-[10px] leading-none tabular-nums rounded-full min-w-4 h-4 px-1 ring-2 ring-ground"
+            >
+              {trades > 9 ? "9+" : trades}
+            </span>
+          )}
         </Link>
       </div>
 
