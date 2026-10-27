@@ -804,6 +804,9 @@ export const WarMap = ({
                 const shielded = t.shieldUntil > now;
                 const s = strength(t.power);
                 const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
+                // Full labels (name, level, big shield) zoomed in; zoomed out only for
+                // you, your clan, the village you picked and anyone you're dealing with now.
+                const loud = labelsAll || t.isMe || t.ally || picked || atWar.has(`${t.x},${t.y}`);
                 const ring = t.isMe
                   ? "border-gold bg-gold/30 shadow-[0_0_18px_rgba(227,169,72,0.85)]"
                   : t.ally
@@ -849,23 +852,30 @@ export const WarMap = ({
                       src={buildingImage(BUILDING_BY_ID["town-hall"])}
                       width={104}
                     />
-                    {/* Town Hall level */}
-                    <span className="absolute left-[8px] top-[28px] w-5 h-5 rounded-full border-2 border-[#F7D58A] bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] font-display text-[10px] font-black leading-none flex items-center justify-center shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
-                      {t.townHall}
-                    </span>
+                    {/* Town Hall level: with the name, see `loud` */}
+                    {loud && (
+                      <span className="absolute left-[8px] top-[28px] w-5 h-5 rounded-full border-2 border-[#F7D58A] bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] font-display text-[10px] font-black leading-none flex items-center justify-center shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
+                        {t.townHall}
+                      </span>
+                    )}
+                    {/* Shield: full size with the labels, a small faint mark otherwise */}
                     {shielded && !t.isMe && (
-                      <span className="absolute right-[6px] top-[-2px] text-base drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]">
+                      <span
+                        className={clsx(
+                          "absolute drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]",
+                          loud ? "right-[6px] top-[-2px] text-base" : "right-[16px] top-[6px] text-[10px] opacity-75",
+                        )}
+                      >
                         <GameIcon e="🛡️" />
                       </span>
                     )}
                     {t.clan && (
                       <span className="absolute left-[4px] top-[-8px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                        <ClanFlag flag={t.clan.flag} size={20} title={`[${t.clan.tag}]`} />
+                        <ClanFlag flag={t.clan.flag} size={loud ? 20 : 14} title={`[${t.clan.tag}]`} />
                       </span>
                     )}
-                    {/* Name plate: everyone's when zoomed in; zoomed out only yours, your
-                        clan's, the one you picked and anyone you're at war with right now */}
-                    {(labelsAll || t.isMe || t.ally || picked || atWar.has(`${t.x},${t.y}`)) && (
+                    {/* Name plate */}
+                    {loud && (
                       <span
                         className={clsx(
                           "absolute left-1/2 top-[52px] -translate-x-1/2 max-w-[120px] truncate px-1.5 h-[17px] leading-[15px] rounded-md border font-display text-[10px] font-bold tracking-[0.02em] shadow-[0_2px_4px_rgba(0,0,0,0.65)]",
