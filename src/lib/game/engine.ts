@@ -78,6 +78,8 @@ export type March = {
   leftAt?: number;
   /** Map tile the army is walking home from (for drawing it on the map). */
   from?: { x: number; y: number };
+  /** New orders this expedition already took on the road (see REDIRECT). */
+  hops?: number;
 };
 
 /** A regiment's battle experience; it sets the regiment's rank. */
@@ -160,6 +162,8 @@ export type GameState = {
    * last free weekly Plus shield was claimed at plusClaimedAt.
    */
   shield: { cooldownUntil: number; plusClaimedAt: number };
+  /** Cards the player owns, by level. War Orders: more new orders per expedition. */
+  cards: { orders: number };
 };
 
 export type Rates = {
@@ -227,6 +231,7 @@ export function createInitialState(now: number): GameState {
     clanPerks: { ...NO_PERKS },
     plus: { until: 0, trialUsed: false, paid: false },
     shield: { cooldownUntil: 0, plusClaimedAt: 0 },
+    cards: { orders: 0 },
   };
 }
 
@@ -256,6 +261,7 @@ export function normalizeState(saved: GameState): GameState {
     clanPerks: { ...fresh.clanPerks, ...s.clanPerks },
     plus: { ...fresh.plus, ...s.plus },
     shield: { ...fresh.shield, ...s.shield },
+    cards: { ...fresh.cards, ...s.cards },
     troops: Object.fromEntries(
       UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
@@ -545,10 +551,11 @@ function structuredCloneState(s: GameState): GameState {
     queue: s.queue.map((q) => ({ ...q })),
     plus: { ...s.plus },
     shield: { ...s.shield },
+    cards: { orders: s.cards?.orders ?? 0 },
     quests: Object.fromEntries(Object.entries(s.quests).map(([k, v]) => [k, { ...v }])),
     army: { ...s.army },
     training: s.training.map((t) => ({ ...t })),
-    marches: s.marches.map((m) => ({ ...m, units: { ...m.units }, loot: { ...m.loot } })),
+    marches: s.marches.map((m) => ({ ...m, units: { ...m.units }, loot: { ...m.loot }, ...(m.from ? { from: { ...m.from } } : {}) })),
     camps: { ...s.camps, lastRaid: { ...s.camps.lastRaid } },
     war: { ...s.war },
     frenzy: { ...s.frenzy },

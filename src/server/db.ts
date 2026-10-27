@@ -120,7 +120,7 @@ async function init(): Promise<Client> {
       to_y          INTEGER NOT NULL,
       sent_at       INTEGER NOT NULL,
       arrives_at    INTEGER NOT NULL,
-      status        TEXT NOT NULL DEFAULT 'marching' -- marching | resolving | fighting | done | recalled
+      status        TEXT NOT NULL DEFAULT 'marching' -- marching | resolving | fighting | done | recalled | redirected
     );
     CREATE INDEX IF NOT EXISTS attacks_due ON attacks(status, arrives_at);
     CREATE INDEX IF NOT EXISTS attacks_attacker ON attacks(attacker_id, status);
@@ -196,6 +196,12 @@ async function init(): Promise<Client> {
     await client.execute(`ALTER TABLE attacks ADD COLUMN ${col}`).catch(() => {});
   }
   await client.execute("CREATE INDEX IF NOT EXISTS attacks_fighting ON attacks(status, ends_at)");
+  // New orders on the road: spoils the army carries from an earlier battle,
+  // how many new orders this expedition took, the march home's length from
+  // the new target, and the march it continues (status 'redirected').
+  for (const col of ["loot TEXT", "coins INTEGER NOT NULL DEFAULT 0", "hops INTEGER NOT NULL DEFAULT 0", "home_ms INTEGER", "parent_id INTEGER"]) {
+    await client.execute(`ALTER TABLE attacks ADD COLUMN ${col}`).catch(() => {});
+  }
   await client.executeMultiple(`
     -- Update announcements an admin broadcasts from the bot chat. The post is
     -- copied from the admin's own message (text, photo, video...) to every

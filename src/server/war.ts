@@ -13,6 +13,14 @@ import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, marchRoute, pointAlong, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   BattleOutcome,
+  Loot,
+  checkCamp,
+  checkOrdersLeft,
+  payFromLoot,
+  paySupplyFromHome,
+  redirectSupply,
+  splitForRedirect,
+  splitSpoils,
   Promotion,
   RaidReport,
   armySize,
@@ -116,29 +124,7 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
 
   if (Number(out.rows[0].n) >= MAX_MARCHES) throw new GameError(`You can have ${MAX_MARCHES} armies on the move at once`, "too_many");
   const home = await homeOf(me.id);
-  let dest: Point;
-  let defenderId: number | null = null;
-  let campLevel: number | null = null;
-
-  if (to.camp) {
-    campLevel = Math.floor(Number(to.camp));
-    dest = (await campSpots(me.id, home, campLevel))[campLevel - 1];
-    const busy = await db.execute({
-      sql: `SELECT 1 FROM attacks WHERE attacker_id = ? AND camp_level = ? AND status IN ${ACTIVE_ATTACK} LIMIT 1`,
-      args: [me.id, campLevel],
-    });
-
-    if (busy.rows.length) throw new GameError("An army is already on its way to this camp", "busy");
-  } else {
-    defenderId = Math.floor(Number(to.target));
-    if (defenderId === me.id) throw new GameError("You can't attack yourself");
-    const target = await findById(defenderId);
-
-    if (!target) throw new GameError("That tribe doesn't exist");
-    if (me.clanId != null && target.clanId === me.clanId) throw new GameError("That tribe is in your clan. Clanmates don't raid each other.", "same_clan");
-    if (target.state.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
-    dest = await homeOf(defenderId);
-  }
+  const { dest, defenderId, campLevel } = await resolveTarget(me, to, now, home);
 
   // Across the sea the army sails, and takes the Longships it needs along.
   const naval = seaRoute(home, dest).naval;
@@ -176,6 +162,38 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
   }
 }
 
+type Target = { dest: Point; defenderId: number | null; campLevel: number | null; name: string };
+
+/** Where an attack on a tribe or one of your camps goes, after checking it's allowed. */
+async function resolveTarget(me: Player, to: { target?: number; camp?: number }, now: number, home: Point): Promise<Target> {
+  const db = await getDb();
+
+  if (to.camp) {
+    const campLevel = Math.floor(Number(to.camp));
+    const dest = (await campSpots(me.id, home, campLevel))[campLevel - 1];
+
+    if (!dest) throw new GameError("Unknown camp");
+    const busy = await db.execute({
+      sql: `SELECT 1 FROM attacks WHERE attacker_id = ? AND camp_level = ? AND status IN ${ACTIVE_ATTACK} LIMIT 1`,
+      args: [me.id, campLevel],
+    });
+
+    if (busy.rows.length) throw new GameError("An army is already on its way to this camp", "busy");
+
+    return { dest, defenderId: null, campLevel, name: `Barbarian camp ${campLevel}` };
+  }
+  const defenderId = Math.floor(Number(to.target));
+
+  if (defenderId === me.id) throw new GameError("You can't attack yourself");
+  const target = await findById(defenderId);
+
+  if (!target) throw new GameError("That tribe doesn't exist");
+  if (me.clanId != null && target.clanId === me.clanId) throw new GameError("That tribe is in your clan. Clanmates don't raid each other.", "same_clan");
+  if (target.state.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
+
+  return { dest: await homeOf(defenderId), defenderId, campLevel: null, name: displayName(target) };
+}
+
 type AttackRow = {
   id: number;
   attackerId: number;
@@ -188,6 +206,13 @@ type AttackRow = {
   arrivesAt: number;
   endsAt: number | null;
   battle: StoredBattle | null;
+  /** Spoils carried from an earlier battle of this expedition (after new orders). */
+  loot: Loot | null;
+  coins: number;
+  /** New orders this expedition already took. */
+  hops: number;
+  /** Set after new orders: the march home from the target takes this long (not the way it came). */
+  homeMs: number | null;
 };
 
 /** A battle under way: decided when the armies met, played out until plan.endsAt. */
@@ -210,7 +235,17 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   arrivesAt: Number(r.arrives_at),
   endsAt: r.ends_at == null ? null : Number(r.ends_at),
   battle: r.battle == null ? null : (JSON.parse(String(r.battle)) as StoredBattle),
+  loot: r.loot == null ? null : (JSON.parse(String(r.loot)) as Loot),
+  coins: Number(r.coins ?? 0),
+  hops: Number(r.hops ?? 0),
+  homeMs: r.home_ms == null ? null : Number(r.home_ms),
 });
+
+/** Spoils and order count an army keeps on its way home. */
+const carriedOf = (a: AttackRow) => ({ loot: a.loot ?? undefined, coins: a.coins, hops: a.hops });
+
+/** How long the march home from the target is. */
+const homeTripMs = (a: AttackRow) => a.homeMs ?? a.arrivesAt - a.sentAt;
 
 /** Troop types whose rank went up from one state to the next. */
 const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, after: typeof before): Promotion[] =>
@@ -224,7 +259,7 @@ async function turnBack(a: AttackRow, attackerId: number, name: string | null, n
   const at = a.arrivesAt;
 
   await mutatePlayer(attackerId, now, (s) =>
-    returnHome(s, a.units, name ?? "Abandoned land", at + (a.arrivesAt - a.sentAt), now, rand(), a.to, at)
+    returnHome(s, a.units, name ?? "Abandoned land", at + homeTripMs(a), now, rand(), a.to, at, carriedOf(a))
   );
   await notify.turnedBack(attackerId, name ?? "The target");
 }
@@ -303,7 +338,8 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 async function finishBattle(a: AttackRow, now: number) {
   const { plan, outcome, engaged } = a.battle!;
   const at = plan.endsAt;
-  const travelMs = a.arrivesAt - a.sentAt;
+  const travelMs = homeTripMs(a);
+  const carried = { carried: a.loot ?? undefined, carriedCoins: a.coins, hops: a.hops };
   const terrain = terrainAt(a.to.x, a.to.y);
   const landing = seaRoute(a.from, a.to).naval;
   const story = { battleMs: plan.endsAt - plan.startedAt, rounds: plan.rounds };
@@ -319,7 +355,7 @@ async function finishBattle(a: AttackRow, now: number) {
     let report!: RaidReport;
 
     await mutatePlayer(attacker.id, now, (s) => {
-      const r = campBattle(s, a.campLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to, outcome });
+      const r = campBattle(s, a.campLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to, outcome, ...carried });
 
       report = r.report;
 
@@ -350,6 +386,8 @@ async function finishBattle(a: AttackRow, now: number) {
       landing,
       outcome,
       engaged: engaged ?? undefined,
+      carried: carried.carried,
+      carriedCoins: carried.carriedCoins,
     });
 
     report = r.report;
@@ -360,7 +398,7 @@ async function finishBattle(a: AttackRow, now: number) {
   let promoted: Promotion[] = [];
 
   await mutatePlayer(attacker.id, now, (s) => {
-    const next = receiveRaidReport(s, report, full.defenderName, at, rand(), a.to);
+    const next = receiveRaidReport(s, report, full.defenderName, at, rand(), a.to, a.hops);
 
     promoted = promotionsBetween(s, next);
 
@@ -380,7 +418,9 @@ async function finishBattle(a: AttackRow, now: number) {
 async function abandon(a: AttackRow, now: number, e: unknown) {
   // eslint-disable-next-line no-console
   console.error("battle failed, sending the armies home", a.id, e);
-  await mutatePlayer(a.attackerId, now, (s) => returnHome(s, a.units, "a failed march", now + 60_000, now, rand())).catch(() => {});
+  await mutatePlayer(a.attackerId, now, (s) =>
+    returnHome(s, a.units, "a failed march", now + 60_000, now, rand(), undefined, now, carriedOf(a))
+  ).catch(() => {});
   if (a.defenderId && a.battle?.engaged) {
     await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, a.battle!.engaged!)).catch(() => {});
   }
@@ -455,13 +495,189 @@ export async function recallMarch(me: Player, id: number, now: number) {
 
   if (claim.rowsAffected !== 1) throw new GameError("That army can't be recalled anymore", "not_found");
   const walked = now - a.sentAt;
-  const progress = Math.min(1, walked / Math.max(1, a.arrivesAt - a.sentAt));
-  // Turn round where the army really is on its road, on a whole tile.
-  const road = marchRoute(a.from, a.to);
-  const spot = pointAlong(road, routeTimeline(road, a.units), progress);
-  const where = { x: Math.round(spot.x), y: Math.round(spot.y) };
+  const where = spotOnRoad(a.from, a.to, a.units, walked / Math.max(1, a.arrivesAt - a.sentAt)).tile;
+  // An army that took new orders started this leg out on the map: it goes
+  // home from where it is now, not back the way it came.
+  const back = a.homeMs == null ? walked : routeMs(a.units, where, await homeOf(me.id), getRates(me.state).marchMultiplier);
 
-  return mutatePlayer(me.id, now, (s) => returnHome(s, a.units, "recalled", now + walked, now, rand(), where));
+  return mutatePlayer(me.id, now, (s) => returnHome(s, a.units, "recalled", now + back, now, rand(), where, now, carriedOf(a)));
+}
+
+/** Where an army is along its road, `f` of the way through in time: on a whole tile, and whether it's at sea. */
+function spotOnRoad(from: Point, to: Point, units: Army, f: number) {
+  const road = marchRoute(from, to);
+  const spot = pointAlong(road, routeTimeline(road, units), Math.min(1, Math.max(0, f)));
+  const tile = { x: Math.round(spot.x), y: Math.round(spot.y) };
+
+  return { tile, atSea: spot.atSea || terrainAt(tile.x, tile.y) === "sea" };
+}
+
+/** Where an expedition given new orders is, and what it has with it. */
+type Expedition = {
+  units: Army;
+  where: Point;
+  loot: Loot | null;
+  coins: number;
+  hops: number;
+  /** The attack row it's marching under (null: an army on its way home). */
+  attack: AttackRow | null;
+  /** The march in the player's state (an army on its way home). */
+  marchId: string | null;
+};
+
+/**
+ * Gives an army out on the map new orders: from where it stands it marches on
+ * another tribe or camp. Works on an army marching to its target (before it
+ * arrives) and on one walking home with the spoils. It can leave troops
+ * behind, who walk home with their share of the spoils, but never take more.
+ * Supplies for the new road come out of the spoils first, then home storage.
+ * Each expedition takes a limited number of new orders (War Orders card).
+ */
+export async function redirectMarch(
+  me: Player,
+  from: { attack?: number; march?: string },
+  to: { target?: number; camp?: number },
+  keep: Army,
+  now: number
+) {
+  const db = await getDb();
+  const home = await homeOf(me.id);
+  const mult = getRates(me.state).marchMultiplier;
+  let ex: Expedition;
+
+  if (from.attack != null) {
+    const rs = await db.execute({
+      sql: "SELECT * FROM attacks WHERE id = ? AND attacker_id = ? AND status = 'marching' AND arrives_at > ?",
+      args: [Math.floor(Number(from.attack)), me.id, now],
+    });
+
+    if (!rs.rows[0]) throw new GameError("That army can't take new orders anymore", "not_found");
+    const a = toAttack(rs.rows[0] as Record<string, unknown>);
+    const pos = spotOnRoad(a.from, a.to, a.units, (now - a.sentAt) / Math.max(1, a.arrivesAt - a.sentAt));
+
+    if (pos.atSea) throw new GameError("The army is out at sea. Give new orders once it's back on land.", "at_sea");
+    ex = { units: a.units, where: pos.tile, loot: a.loot, coins: a.coins, hops: a.hops, attack: a, marchId: null };
+  } else {
+    const m = me.state.marches.find((x) => x.id === String(from.march) && x.returnsAt > now);
+
+    if (!m) throw new GameError("That army is already home", "not_found");
+    if (!m.from) throw new GameError("This army's road isn't known. It has to come home first.", "not_found");
+    const leftAt = m.leftAt ?? m.returnsAt - routeMs(m.units, m.from, home, mult);
+    const pos = spotOnRoad(m.from, home, m.units, (now - leftAt) / Math.max(1, m.returnsAt - leftAt));
+
+    if (pos.atSea) throw new GameError("The army is out at sea. Give new orders once it's back on land.", "at_sea");
+    const out = await db.execute({
+      sql: `SELECT COUNT(*) AS n FROM attacks WHERE attacker_id = ? AND status IN ${ACTIVE_ATTACK}`,
+      args: [me.id],
+    });
+
+    if (Number(out.rows[0].n) >= MAX_MARCHES) throw new GameError(`You can have ${MAX_MARCHES} armies on the move at once`, "too_many");
+    ex = { units: m.units, where: pos.tile, loot: m.loot, coins: m.coins, hops: m.hops ?? 0, attack: null, marchId: m.id };
+  }
+
+  checkOrdersLeft(me.state, ex.hops);
+  if (to.camp) checkCamp(me.state, Math.floor(Number(to.camp)), now);
+  const t = await resolveTarget(me, to, now, home);
+  const cur = ex.attack;
+
+  if (cur && cur.defenderId === t.defenderId && cur.campLevel === t.campLevel) {
+    throw new GameError("The army is already marching there", "same_target");
+  }
+
+  // Ships go with whoever's road crosses the sea.
+  const { go, back } = splitForRedirect(ex.units, keep, {
+    go: seaRoute(ex.where, t.dest).naval || seaRoute(t.dest, home).naval,
+    back: seaRoute(ex.where, home).naval,
+  });
+  const legMs = routeMs(go, ex.where, t.dest, mult);
+  const homeMs = routeMs(go, t.dest, home, mult);
+  const backMs = routeMs(back, ex.where, home, mult);
+  const share = splitSpoils(ex.loot ?? {}, ex.coins, go, back);
+  const supply = redirectSupply(go, legMs);
+  const paid = payFromLoot(share.go, supply);
+
+  // Take the army off its old road before anything else can use it.
+  if (cur) {
+    const claim = await db.execute({
+      sql: "UPDATE attacks SET status = 'redirected' WHERE id = ? AND status = 'marching'",
+      args: [cur.id],
+    });
+
+    if (claim.rowsAffected !== 1) throw new GameError("That army can't take new orders anymore", "not_found");
+  }
+  let after: Player;
+
+  try {
+    after = await mutatePlayer(me.id, now, (s0) => {
+      let s = s0;
+
+      if (ex.marchId) {
+        if (!s.marches.some((m) => m.id === ex.marchId && m.returnsAt > now)) throw new GameError("That army is already home", "not_found");
+        s = { ...s, marches: s.marches.filter((m) => m.id !== ex.marchId) };
+      }
+      s = paySupplyFromHome(s, paid.owed);
+
+      // Whoever stays behind walks home with their share of the spoils.
+      return returnHome(s, back, "the road", now + backMs, now, rand(), ex.where, now, {
+        loot: share.back,
+        coins: share.backCoins,
+        hops: ex.hops,
+      });
+    });
+  } catch (e) {
+    if (cur) await db.execute({ sql: "UPDATE attacks SET status = 'marching' WHERE id = ? AND status = 'redirected'", args: [cur.id] });
+    throw e;
+  }
+
+  let id: number;
+
+  try {
+    const ins = await db.execute({
+      sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
+                                 loot, coins, hops, home_ms, parent_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        me.id,
+        t.defenderId,
+        t.campLevel,
+        JSON.stringify(go),
+        ex.where.x,
+        ex.where.y,
+        t.dest.x,
+        t.dest.y,
+        now,
+        now + legMs,
+        JSON.stringify(paid.loot),
+        share.goCoins,
+        ex.hops + 1,
+        homeMs,
+        cur?.id ?? null,
+      ],
+    });
+
+    id = Number(ins.lastInsertRowid);
+  } catch (e) {
+    // Couldn't set off: they walk home with what they carry, so nothing is lost.
+    await mutatePlayer(me.id, now, (s) =>
+      returnHome(s, go, "a failed march", now + routeMs(go, ex.where, home, mult), now, rand(), ex.where, now, {
+        loot: paid.loot,
+        coins: share.goCoins,
+        hops: ex.hops,
+      })
+    ).catch(() => {});
+    throw e;
+  }
+
+  // The old target sees the army turn away; the new one sees it coming.
+  if (cur?.defenderId) await notify.calledOff(cur.defenderId, displayName(me)).catch(() => {});
+  if (t.defenderId) {
+    const def = await findById(t.defenderId);
+    const watch = (def?.state.buildings["watchtower"] ?? 0) >= 1;
+
+    await notify.incoming(t.defenderId, displayName(me), watch ? go : null, legMs).catch(() => {});
+  }
+
+  return { player: after, march: { id, arrivesAt: now + legMs, supply, fromHome: paid.owed } };
 }
 
 /** Pays scouts to look inside a tribe: exact defense, troops home and what could be looted. */

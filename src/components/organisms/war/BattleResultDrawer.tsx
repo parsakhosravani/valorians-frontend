@@ -93,6 +93,15 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
           </div>
         </div>
       ) : null}
+      {!asDefender && report.carried && (RESOURCES.some((r) => (report.carried?.[r.id] ?? 0) > 0) || !!report.carriedCoins) && (
+        <div className={report.attackerWon ? "text-xs text-sub" : "text-xs text-bad"}>
+          <GameIcon e="🎒" /> {report.attackerWon ? "Also bringing home" : "Lost on the field"} the spoils carried from the last battle:{" "}
+          {RESOURCES.filter((r) => (report.carried?.[r.id] ?? 0) > 0)
+            .map((r) => `${fmt(report.carried![r.id])} ${r.name.toLowerCase()}`)
+            .join(", ")}
+          {report.carriedCoins ? `, ${fmt(report.carriedCoins)} coins` : ""}.
+        </div>
+      )}
     </div>
   );
 };
