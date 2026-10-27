@@ -173,9 +173,6 @@ const SAND = "#C8B27A";
 /** From this zoom up, the land on screen is repainted at full detail. */
 const CLOSE_UP_ZOOM = 1.3;
 
-/** Tribes this close (tiles) get a road drawn to them from home. */
-const ROAD_REACH = 8;
-
 /**
  * Height that makes the map end just above the bottom bar, so on a phone the
  * whole map is on screen and the page around it never needs scrolling (the
@@ -479,29 +476,8 @@ export const WarMap = ({
         : "",
     [data],
   );
-  // What the ground paints round them: your land, fields by every village,
-  // and roads from home to the camps and the tribes close by.
-  const ground = useMemo(() => {
-    if (!data) return { home: "", villages: "", roads: "" };
-    const xy = (p: { x: number; y: number }) => `${Math.round(p.x)},${Math.round(p.y)}`;
-
-    return {
-      home: xy(data.home),
-      villages: data.tribes.map(xy).sort().join(";"),
-      // Armies and merchants travel on these same painted roads: no lines of their own.
-      roads: Array.from(
-        new Set([
-          ...data.camps.map((c) => `${xy(data.home)}>${xy(c)}`),
-          ...data.tribes.filter((t) => !t.isMe && t.distance <= ROAD_REACH).map((t) => `${xy(data.home)}>${xy(t)}`),
-          ...data.movements.map((m) => `${xy(m.from)}>${xy(m.to)}`),
-          ...state.marches.filter((m) => m.from).map((m) => `${xy(m.from!)}>${xy(data.home)}`),
-          ...(data.caravans ?? []).map((c) => `${xy(c.from)}>${xy(c.to)}`),
-        ]),
-      )
-        .sort()
-        .join(";"),
-    };
-  }, [data, state.marches]);
+  // Your tribe: the ground draws your territory round it.
+  const homeAt = data ? `${data.home.x},${data.home.y}` : "";
 
   const strength = (p: number) => {
     const ratio = p / Math.max(1, data?.myPower ?? 1);
@@ -696,13 +672,11 @@ export const WarMap = ({
               style={{ width: n * T, height: n * T }}
             >
               <MapGround
-                home={ground.home}
+                home={homeAt}
                 n={n}
                 occupied={occupied}
                 ox={ox}
                 oy={oy}
-                roads={ground.roads}
-                villages={ground.villages}
               />
               {closeUp && (
                 <div
@@ -716,13 +690,11 @@ export const WarMap = ({
                 >
                   <MapGround
                     detail
-                    home={ground.home}
+                    home={homeAt}
                     n={closeUp.n}
                     occupied={occupied}
                     ox={closeUp.x}
                     oy={closeUp.y}
-                    roads={ground.roads}
-                    villages={ground.villages}
                   />
                 </div>
               )}
