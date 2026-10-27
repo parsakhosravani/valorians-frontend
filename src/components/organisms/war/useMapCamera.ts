@@ -45,6 +45,8 @@ export function useMapCamera({
   const raf = useRef(0);
   const idle = useRef<ReturnType<typeof setTimeout>>();
   const dragged = useRef(false);
+  /** A finger (or the mouse button) is down on the map. */
+  const moving = useRef(false);
   const onResizeRef = useRef(onResize);
 
   sizeRef.current = size;
@@ -82,20 +84,34 @@ export function useMapCamera({
 
     if (!l) return;
     l.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${z})`;
-    l.style.setProperty("--pin", pinScale(z).toFixed(3));
   }, []);
 
-  /** Moving: let the browser keep the layer on the GPU, and give it back sharp when it stops. */
-  const busy = useCallback(() => {
+  /**
+   * The camera stopped: resize the markers for this zoom and let the browser
+   * redraw the layer sharp at the new scale. Both repaint the whole map, so
+   * they wait until nothing moves; while it moves, the GPU only slides and
+   * scales the picture it already has.
+   */
+  const settle = useCallback(() => {
     const l = layer.current;
 
     if (!l) return;
-    l.style.willChange = "transform";
+    const pin = pinScale(cam.current.z).toFixed(3);
+
+    if (l.style.getPropertyValue("--pin") !== pin) l.style.setProperty("--pin", pin);
+    l.style.willChange = "auto";
+    requestAnimationFrame(() => {
+      if (layer.current) layer.current.style.willChange = "";
+    });
+  }, []);
+
+  const busy = useCallback(() => {
     clearTimeout(idle.current);
     idle.current = setTimeout(() => {
-      if (layer.current && !anim.current && !fling.current) layer.current.style.willChange = "";
-    }, 250);
-  }, []);
+      if (anim.current || fling.current || moving.current) busy();
+      else settle();
+    }, 160);
+  }, [settle]);
 
   const tick = useCallback(
     (time: number) => {
@@ -274,6 +290,7 @@ export function useMapCamera({
       const p = local(e);
 
       pointers.set(e.pointerId, p);
+      moving.current = true;
       if (pointers.size === 1) {
         dragged.current = false;
         startPan(e.pointerId, p, false);
@@ -333,6 +350,7 @@ export function useMapCamera({
       const p = local(e);
 
       pointers.delete(e.pointerId);
+      moving.current = pointers.size > 0;
       try {
         el.releasePointerCapture(e.pointerId);
       } catch {
@@ -459,7 +477,6 @@ export function useMapCamera({
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
-    el.addEventListener("lostpointercapture", up);
     el.addEventListener("wheel", wheel, { passive: false });
     el.addEventListener("gesturestart", gStart);
     el.addEventListener("gesturechange", gChange);
@@ -471,7 +488,6 @@ export function useMapCamera({
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
-      el.removeEventListener("lostpointercapture", up);
       el.removeEventListener("wheel", wheel);
       el.removeEventListener("gesturestart", gStart);
       el.removeEventListener("gesturechange", gChange);
