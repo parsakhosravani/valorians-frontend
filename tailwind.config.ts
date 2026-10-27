@@ -48,6 +48,10 @@ const config: Config = {
           "0%, 100%": { transform: "scale(1)" },
           "50%": { transform: "scale(1.02)" },
         },
+        nudge: {
+          "0%, 100%": { translate: "0 0" },
+          "50%": { translate: "0 -2px" },
+        },
         clash: {
           "0%, 100%": { transform: "rotate(-8deg) scale(1)" },
           "45%": { transform: "rotate(10deg) scale(1.12)" },
@@ -57,6 +61,7 @@ const config: Config = {
       animation: {
         route: "route 1.2s linear infinite",
         trot: "trot 0.6s ease-in-out infinite",
+        nudge: "nudge 1.4s ease-in-out infinite",
         clash: "clash 0.9s ease-in-out infinite",
         sail: "sail 1.8s ease-in-out infinite",
         float: "float 2.2s ease-in-out infinite",
