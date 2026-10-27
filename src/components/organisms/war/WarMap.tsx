@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type RefObject,
 } from "react";
 import Image from "next/image";
 import clsx from "clsx";
@@ -168,6 +169,43 @@ const TERRAIN_ICON: Record<Terrain, string> = {
 
 const SAND = "#C8B27A";
 
+/**
+ * Height that makes the map end just above the bottom bar, so on a phone the
+ * whole map is on screen and the page around it never needs scrolling (the
+ * map takes every touch, so a page you can't see the end of is stuck).
+ */
+const useFillHeight = (box: RefObject<HTMLDivElement>) => {
+  const [h, setH] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    const page = el?.closest<HTMLElement>(".scrollable");
+
+    if (!el || !page) return;
+    const measure = () => {
+      const pad = parseFloat(getComputedStyle(page).paddingBottom) || 0;
+      const top = el.getBoundingClientRect().top - page.getBoundingClientRect().top + page.scrollTop;
+      // 16px: the page's own gap under the map.
+      const next = Math.max(300, Math.floor(page.clientHeight - pad - top - 16));
+
+      setH((old) => (old === next ? old : next));
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+
+    ro.observe(page);
+    window.addEventListener("resize", measure);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [box]);
+
+  return h;
+};
+
 // ─── The sea ─────────────────────────────────────────────────────────────────
 
 /**
@@ -237,7 +275,10 @@ export const WarMap = ({
   const [ordersFor, setOrdersFor] = useState<ArmyOnRoad | null>(null);
   const [picking, setPicking] = useState<ArmyOnRoad | null>(null);
   const [redirecting, setRedirecting] = useState<{ army: ArmyOnRoad; target: AttackTarget } | null>(null);
+  // The on-the-move list starts folded so it doesn't cover the map; its header shows what's coming.
+  const [movesOpen, setMovesOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const fill = useFillHeight(box);
   const radius = useRef(0);
   const outgoing = useRef<Set<number>>(new Set());
   const centred = useRef(false);
@@ -541,122 +582,15 @@ export const WarMap = ({
     </button>
   );
 
+  const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
+
   return (
     <div className="flex flex-col gap-2">
-      {/* Armies on the move */}
-      {(incoming.length > 0 ||
-        mine.length > 0 ||
-        battles.length > 0 ||
-        returning.length > 0 ||
-        merchants.length > 0) && (
-        <div className="flex flex-col gap-1.5">
-          {battles.map((m) => (
-            <BattleRow key={`f${m.id}`} m={m} now={now} onWatch={() => setWatching(m.id)} />
-          ))}
-          {incoming.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 bg-[#2A140E] border border-[#8A3B23] text-sm"
-            >
-              <span className="text-lg animate-pulse"><GameIcon e="🔥" /></span>
-              <span className="flex-1 min-w-0">
-                <b>{m.from.name}</b> is marching on you
-                <span className="block text-xs text-[#FFB27A]">
-                  {m.units ? (
-                    <ArmyLine army={m.units} />
-                  ) : (
-                    "Build a Watchtower to see their army"
-                  )}
-                </span>
-              </span>
-              <span className="font-display font-black text-[#FFB27A] shrink-0">
-                {formatDuration(m.arrivesAt - now)}
-              </span>
-            </div>
-          ))}
-          {mine.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-2 card px-3 py-2 !border-gold/60 text-sm"
-            >
-              <span className="text-lg"><GameIcon e="⚔️" /></span>
-              <span className="flex-1 min-w-0 truncate">
-                To <b>{m.to.name}</b>
-                <span className="block text-xs text-muted truncate">
-                  {m.units && <ArmyLine army={m.units} />}
-                </span>
-              </span>
-              <span className="font-display font-black text-goldtext shrink-0">
-                {formatDuration(m.arrivesAt - now)}
-              </span>
-              {ordersButton(outbound(m))}
-            </div>
-          ))}
-          {returning.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-2 card px-3 py-2 text-sm"
-            >
-              <span className="text-lg">↩️</span>
-              <span className="flex-1 min-w-0 truncate">
-                Back from <b>{m.target}</b>
-                <span className="block text-xs text-muted truncate">
-                  <ArmyLine army={m.units} />
-                </span>
-              </span>
-              <span className="font-display font-black text-sub shrink-0">
-                {formatDuration(m.returnsAt - now)}
-              </span>
-              {(() => {
-                const h = homeward.find((x) => x.id === m.id);
-
-                return h ? ordersButton(homebound(h)) : null;
-              })()}
-            </div>
-          ))}
-          {merchants.map((c) => (
-            <div
-              key={c.id}
-              className={clsx(
-                "flex items-center gap-2 card px-3 py-2 text-sm",
-                c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
-              )}
-            >
-              <span className="text-lg"><GameIcon e="🐪" /></span>
-              <span className="flex-1 min-w-0 truncate">
-                {c.kind === "coming" ? (
-                  <>
-                    <b>
-                      {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
-                    </b>{" "}
-                    coming from {c.from.name}
-                  </>
-                ) : (
-                  <>
-                    <b>
-                      {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
-                    </b>{" "}
-                    on its way to {c.to.name}
-                  </>
-                )}
-              </span>
-              <span
-                className={clsx(
-                  "font-display font-black shrink-0",
-                  c.kind === "coming" ? "text-good" : "text-sub",
-                )}
-              >
-                {formatDuration(c.arrivesAt - now)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* The map */}
       <div
         ref={box}
         className="relative rounded-2xl overflow-hidden border border-frame/80 h-[max(320px,calc(100svh-260px))] bg-[#1C3F54] shadow-card"
+        style={fill ? { height: fill } : undefined}
       >
         {!data && !error && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-muted font-display">
@@ -996,7 +930,134 @@ export const WarMap = ({
             </div>
           </div>
         )}
-        <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-xl border border-frame/80 bg-ink/80 pl-2.5 pr-1 py-1 shadow-card">
+        {/* Armies, battles and merchants on the move: on the map, so they never push it off the screen */}
+        {data && onTheMove > 0 && (
+          <div className="absolute inset-x-2 top-2 z-10 sm:right-auto sm:w-[26rem] flex flex-col gap-1.5 rounded-xl border border-frame/80 bg-ink/85 backdrop-blur-[2px] p-1.5 shadow-card">
+            <button
+              aria-expanded={movesOpen}
+              className="flex items-center gap-2 px-1.5 h-7 text-left font-display text-[12px] font-black tracking-[0.03em] text-goldtext"
+              onClick={() => setMovesOpen((o) => !o)}
+            >
+              {incoming.length > 0 && <span className="text-[#FFB27A] animate-pulse"><GameIcon e="🔥" /> {incoming.length} incoming</span>}
+              {battles.length > 0 && <span className="text-[#FFB27A]"><GameIcon e="⚔️" /> {battles.length} fighting</span>}
+              {mine.length + returning.length > 0 && (
+                <span className="text-parch"><GameIcon e="🚩" /> {mine.length + returning.length} on the road</span>
+              )}
+              {merchants.length > 0 && <span className="text-sub"><GameIcon e="🐪" /> {merchants.length}</span>}
+              <span className={clsx("ml-auto text-sub transition-transform", movesOpen && "rotate-180")}>▾</span>
+            </button>
+            {movesOpen && (
+              <div className="map-list flex flex-col gap-1.5 max-h-[30svh] overflow-y-auto overscroll-contain">
+      {battles.map((m) => (
+                <BattleRow key={`f${m.id}`} m={m} now={now} onWatch={() => setWatching(m.id)} />
+              ))}
+              {incoming.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 bg-[#2A140E] border border-[#8A3B23] text-sm"
+                >
+                  <span className="text-base animate-pulse"><GameIcon e="🔥" /></span>
+                  <span className="flex-1 min-w-0">
+                    <b>{m.from.name}</b> is marching on you
+                    <span className="block text-xs text-[#FFB27A]">
+                      {m.units ? (
+                        <ArmyLine army={m.units} />
+                      ) : (
+                        "Build a Watchtower to see their army"
+                      )}
+                    </span>
+                  </span>
+                  <span className="font-display font-black text-[#FFB27A] shrink-0">
+                    {formatDuration(m.arrivesAt - now)}
+                  </span>
+                </div>
+              ))}
+              {mine.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 card px-2.5 py-1.5 !border-gold/60 text-sm"
+                >
+                  <span className="text-base"><GameIcon e="⚔️" /></span>
+                  <span className="flex-1 min-w-0 truncate">
+                    To <b>{m.to.name}</b>
+                    <span className="block text-xs text-muted truncate">
+                      {m.units && <ArmyLine army={m.units} />}
+                    </span>
+                  </span>
+                  <span className="font-display font-black text-goldtext shrink-0">
+                    {formatDuration(m.arrivesAt - now)}
+                  </span>
+                  {ordersButton(outbound(m))}
+                </div>
+              ))}
+              {returning.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 card px-2.5 py-1.5 text-sm"
+                >
+                  <span className="text-base">↩️</span>
+                  <span className="flex-1 min-w-0 truncate">
+                    Back from <b>{m.target}</b>
+                    <span className="block text-xs text-muted truncate">
+                      <ArmyLine army={m.units} />
+                    </span>
+                  </span>
+                  <span className="font-display font-black text-sub shrink-0">
+                    {formatDuration(m.returnsAt - now)}
+                  </span>
+                  {(() => {
+                    const h = homeward.find((x) => x.id === m.id);
+        
+                    return h ? ordersButton(homebound(h)) : null;
+                  })()}
+                </div>
+              ))}
+              {merchants.map((c) => (
+                <div
+                  key={c.id}
+                  className={clsx(
+                    "flex items-center gap-2 card px-2.5 py-1.5 text-sm",
+                    c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
+                  )}
+                >
+                  <span className="text-base"><GameIcon e="🐪" /></span>
+                  <span className="flex-1 min-w-0 truncate">
+                    {c.kind === "coming" ? (
+                      <>
+                        <b>
+                          {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
+                        </b>{" "}
+                        coming from {c.from.name}
+                      </>
+                    ) : (
+                      <>
+                        <b>
+                          {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
+                        </b>{" "}
+                        on its way to {c.to.name}
+                      </>
+                    )}
+                  </span>
+                  <span
+                    className={clsx(
+                      "font-display font-black shrink-0",
+                      c.kind === "coming" ? "text-good" : "text-sub",
+                    )}
+                  >
+                    {formatDuration(c.arrivesAt - now)}
+                  </span>
+                </div>
+              ))}
+              </div>
+            )}
+          </div>
+        )}
+        <div
+          className={clsx(
+            "absolute left-2 bottom-2 z-10 flex items-center gap-2 rounded-xl border border-frame/80 bg-ink/80 pl-2.5 pr-1 py-1 shadow-card",
+            picking && "hidden",
+          )}
+        >
           <span className="flex items-center gap-2 text-[11px] font-bold text-sub">
             <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-good bg-good/30" />weaker</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-goldtext bg-goldtext/20" />even</span>

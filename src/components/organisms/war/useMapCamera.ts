@@ -256,7 +256,8 @@ export function useMapCamera({
 
     if (!el || !size) return;
     const pointers = new Map<number, Pt>();
-    let pan: { start: Pt; cam: Cam; moved: boolean; id: number } | null = null;
+    /** A drag, in screen coordinates (the map itself may scroll with the page). */
+    let pan: { start: Pt; cam: Cam; moved: boolean; id: number; over: number } | null = null;
     let pinch: { d: number; z: number; m: Pt } | null = null;
     let samples: { x: number; y: number; t: number }[] = [];
     let lastTap: { x: number; y: number; t: number } | null = null;
@@ -272,8 +273,9 @@ export function useMapCamera({
 
       return { d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
     };
+    const page = () => el.closest<HTMLElement>(".scrollable");
     const startPan = (id: number, p: Pt, moved: boolean) => {
-      pan = { start: p, cam: { ...cam.current }, moved, id };
+      pan = { start: p, cam: { ...cam.current }, moved, id, over: 0 };
       samples = [{ ...p, t: performance.now() }];
     };
     const startPinch = () => {
@@ -293,7 +295,7 @@ export function useMapCamera({
       moving.current = true;
       if (pointers.size === 1) {
         dragged.current = false;
-        startPan(e.pointerId, p, false);
+        startPan(e.pointerId, { x: e.clientX, y: e.clientY }, false);
       } else if (pointers.size === 2) {
         pan = null;
         startPinch();
@@ -319,15 +321,16 @@ export function useMapCamera({
         return;
       }
       if (!pan || pan.id !== e.pointerId) return;
-      const dx = p.x - pan.start.x;
-      const dy = p.y - pan.start.y;
+      const c = { x: e.clientX, y: e.clientY };
+      const dx = c.x - pan.start.x;
+      const dy = c.y - pan.start.y;
 
       if (!pan.moved) {
         if (Math.hypot(dx, dy) < (e.pointerType === "mouse" ? 4 : 8)) return;
         pan.moved = true;
         dragged.current = true;
         // Restart from here so the map doesn't jump by the dead zone.
-        pan.start = p;
+        pan.start = c;
         pan.cam = { ...cam.current };
         try {
           el.setPointerCapture(e.pointerId);
@@ -339,9 +342,22 @@ export function useMapCamera({
         return;
       }
       set({ ...pan.cam, x: pan.cam.x + dx, y: pan.cam.y + dy });
+      // Past the map's top or bottom edge, the rest of the drag scrolls the
+      // page, like the old scrolling map did, so nothing under it is ever stuck.
+      const over = pan.cam.y + dy - cam.current.y;
+      const sc = page();
+
+      if (sc && over !== pan.over) {
+        const before = sc.scrollTop;
+
+        sc.scrollTop -= over - pan.over;
+        // Scrolled the page: the map moved on screen, so carry on from here.
+        if (sc.scrollTop !== before) pan.start = { ...pan.start, y: pan.start.y + (before - sc.scrollTop) };
+        pan.over = pan.cam.y + (c.y - pan.start.y) - cam.current.y;
+      }
       const t = performance.now();
 
-      samples.push({ ...p, t });
+      samples.push({ ...c, t });
       while (samples.length > 2 && t - samples[0].t > 90) samples.shift();
     };
 
@@ -361,8 +377,9 @@ export function useMapCamera({
         // One finger left: carry on dragging with it, without a jump.
         if (pointers.size === 1) {
           const [[id, q]] = Array.from(pointers.entries());
+          const r = el.getBoundingClientRect();
 
-          startPan(id, q, true);
+          startPan(id, { x: q.x + r.left, y: q.y + r.top }, true);
         }
 
         return;
@@ -379,8 +396,8 @@ export function useMapCamera({
 
         if (e.type === "pointerup" && first && t - first.t > 0 && t - samples[samples.length - 1].t < 60) {
           const dt = t - first.t;
-          const vx = (p.x - first.x) / dt;
-          const vy = (p.y - first.y) / dt;
+          const vx = (e.clientX - first.x) / dt;
+          const vy = (e.clientY - first.y) / dt;
 
           if (Math.hypot(vx, vy) > 0.15) {
             const cap = 3;
@@ -440,6 +457,10 @@ export function useMapCamera({
         zoomTo(zoomGoal() * Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.0022), local(e));
       } else {
         set({ ...c, x: c.x - dx, y: c.y - dy });
+        const left = c.y - dy - cam.current.y;
+        const sc = page();
+
+        if (sc && left) sc.scrollTop -= left;
       }
     };
 
