@@ -71,7 +71,7 @@ export const BattleToken = ({
   return (
     <button
       aria-label={`Battle at ${m.to.name}`}
-      className="absolute flex flex-col items-center"
+      className="map-pin absolute flex flex-col items-center"
       style={{ left: at.x, top: at.y, transform: "translate(-50%, -62%)", zIndex: 6 }}
       onClick={onClick}
     >

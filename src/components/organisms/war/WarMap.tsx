@@ -1,6 +1,5 @@
 "use client";
 import {
-  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -29,6 +28,8 @@ import {
   LiveBattleDrawer,
 } from "./LiveBattle";
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
+import { MapGround, TILE } from "./MapGround";
+import { useMapCamera } from "./useMapCamera";
 
 import { Button, Drawer, InfoDrawer } from "@/components";
 import {
@@ -145,24 +146,15 @@ type ReportItem = { attackId: number | null; report: BattleReport };
 
 // ─── Drawing ─────────────────────────────────────────────────────────────────
 
-const T = 46; // tile size in px at zoom 1
-const MIN_ZOOM = 0.45;
-const MAX_ZOOM = 1.8;
+const T = TILE;
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 2.2;
 
 /** Map radius (tiles) that fills this box even fully zoomed out. */
 const wantedRadius = (el: HTMLElement | null) => {
   const side = el ? Math.max(el.clientWidth, el.clientHeight) : 0;
 
   return Math.min(30, Math.max(14, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1));
-};
-
-const TERRAIN_FILL: Record<Terrain, string[]> = {
-  plains: ["#5E6B37", "#627039", "#5A6734"],
-  forest: ["#34492A", "#36502B", "#314527"],
-  hills: ["#7B6848", "#81704E", "#76633F"],
-  mountains: ["#4E4130", "#534633", "#4A3D2C"],
-  lake: ["#2F5664", "#315A69", "#2D5260"],
-  sea: ["#1E4258", "#20465D", "#1C3F54"],
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
@@ -175,85 +167,6 @@ const TERRAIN_ICON: Record<Terrain, string> = {
 };
 
 const SAND = "#C8B27A";
-
-const Ground = memo(function Ground({
-  ox,
-  oy,
-  n,
-}: {
-  ox: number;
-  oy: number;
-  n: number;
-}) {
-  const tiles = [];
-
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const x = ox + i;
-      const y = oy + j;
-      const t = terrainAt(x, y);
-      const v = (((x * 7 + y * 13) % 3) + 3) % 3;
-      const px = i * T;
-      const py = j * T;
-
-      tiles.push(
-        <g key={`${x},${y}`}>
-          <rect fill={TERRAIN_FILL[t][v]} height={T} width={T} x={px} y={py} />
-          {t === "forest" && (
-            <g fill="#22361C" opacity="0.9">
-              <polygon
-                points={`${px + 12},${py + 30} ${px + 18},${py + 14} ${px + 24},${py + 30}`}
-              />
-              <polygon
-                points={`${px + 24},${py + 38} ${px + 31},${py + 20} ${px + 38},${py + 38}`}
-              />
-            </g>
-          )}
-          {t === "hills" && (
-            <path
-              d={`M${px + 8} ${py + 32} l8 -10 l6 6 l8 -12 l10 16`}
-              fill="none"
-              opacity="0.7"
-              stroke="#5A4A30"
-              strokeLinejoin="round"
-              strokeWidth="2.5"
-            />
-          )}
-          {t === "mountains" && (
-            <path
-              d={`M${px + 8} ${py + 32} l8 -10 l6 6 l8 -12 l10 16`}
-              fill="none"
-              opacity="0.85"
-              stroke="#2E261B"
-              strokeLinejoin="round"
-              strokeWidth="2.5"
-            />
-          )}
-          {t === "lake" && (
-            <path
-              d={`M${px + 8} ${py + 20} q5 -4 10 0 t10 0 M${px + 16} ${py + 30} q5 -4 10 0 t10 0`}
-              fill="none"
-              opacity="0.45"
-              stroke="#BFE0E8"
-              strokeWidth="1.5"
-            />
-          )}
-          {t === "sea" && v === 0 && (
-            <path
-              d={`M${px + 6} ${py + 16} q6 -5 12 0 t12 0 M${px + 18} ${py + 32} q6 -5 12 0 t12 0`}
-              fill="none"
-              opacity="0.35"
-              stroke="#9FD0E6"
-              strokeWidth="1.5"
-            />
-          )}
-        </g>,
-      );
-    }
-  }
-
-  return <>{tiles}</>;
-});
 
 // ─── The sea ─────────────────────────────────────────────────────────────────
 
@@ -324,7 +237,6 @@ export const WarMap = ({
   const [ordersFor, setOrdersFor] = useState<ArmyOnRoad | null>(null);
   const [picking, setPicking] = useState<ArmyOnRoad | null>(null);
   const [redirecting, setRedirecting] = useState<{ army: ArmyOnRoad; target: AttackTarget } | null>(null);
-  const scroller = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const radius = useRef(0);
   const outgoing = useRef<Set<number>>(new Set());
@@ -441,291 +353,60 @@ export const WarMap = ({
     return { road: { points, stops: kept }, atSea: pointAlong(r, stops, f).atSea };
   };
 
+  // ─── Camera: drag, pinch, wheel and the +/− buttons (see useMapCamera) ────
+  const grown = useRef(0);
+  const camera = useMapCamera({
+    size: n * T,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    // A bigger window: load more of the world if it no longer fills it.
+    onResize: () => {
+      if (wantedRadius(box.current) > radius.current && Date.now() - grown.current > 1000) {
+        grown.current = Date.now();
+        load();
+      }
+    },
+  });
+
   // A bigger window loads a bigger area: keep the same spot in view.
   const origin = useRef<{ ox: number; oy: number } | null>(null);
 
   useLayoutEffect(() => {
-    const el = scroller.current;
     const o = origin.current;
 
-    if (data && el && o && (o.ox !== ox || o.oy !== oy)) {
-      el.scrollLeft += (o.ox - ox) * T * zoomRef.current;
-      el.scrollTop += (o.oy - oy) * T * zoomRef.current;
-    }
-    if (data) origin.current = { ox, oy };
-  }, [data, ox, oy]);
+    if (!data) return;
+    if (o && (o.ox !== ox || o.oy !== oy)) camera.shift((o.ox - ox) * T, (o.oy - oy) * T);
+    else camera.refit();
+    origin.current = { ox, oy };
+  }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start centred on your tribe (or the one you came to take revenge on).
   useLayoutEffect(() => {
-    const el = scroller.current;
-
-    if (!data || !el || centred.current) return;
+    if (!data || centred.current || !camera.viewport.current) return;
     const focus =
       (focusId && data.tribes.find((t) => t.id === focusId)) || data.home;
 
-    paint(Math.max(1, minZoom()), 0, 0, 0, 0);
-
-    el.scrollLeft = px(focus.x) * zoomRef.current - el.clientWidth / 2;
-    el.scrollTop = py(focus.y) * zoomRef.current - el.clientHeight / 2;
+    camera.centerOn(px(focus.x), py(focus.y), { z: 1, instant: true });
     centred.current = true;
     if (focusId) {
       const t = data.tribes.find((x) => x.id === focusId);
 
       if (t) setSelected({ kind: "tribe", tribe: t });
     }
-  }, [data]);
-
-  // Mouse (Telegram Desktop): drag to pan; the wheel scrolls both ways.
-  const drag = useRef<{
-    x: number;
-    y: number;
-    left: number;
-    top: number;
-    moved: boolean;
-  } | null>(null);
-  const onPointerDown = (e: React.PointerEvent) => {
-    const el = scroller.current;
-
-    if (e.pointerType !== "mouse" || e.button !== 0 || !el) return;
-    drag.current = {
-      x: e.clientX,
-      y: e.clientY,
-      left: el.scrollLeft,
-      top: el.scrollTop,
-      moved: false,
-    };
-  };
-  const onPointerMove = (e: React.PointerEvent) => {
-    const d = drag.current;
-    const el = scroller.current;
-
-    if (!d || !el) return;
-    const dx = e.clientX - d.x;
-    const dy = e.clientY - d.y;
-
-    if (!d.moved && Math.abs(dx) + Math.abs(dy) > 5) {
-      d.moved = true;
-      el.setPointerCapture?.(e.pointerId);
-    }
-    if (d.moved) {
-      el.scrollLeft = d.left - dx;
-      el.scrollTop = d.top - dy;
-    }
-  };
-  const endDrag = (e: React.PointerEvent) => {
-    scroller.current?.releasePointerCapture?.(e.pointerId);
-    // Let the click that ends a drag be swallowed, then reset.
-    setTimeout(() => (drag.current = null), 0);
-  };
-  const onClickCapture = (e: React.MouseEvent) => {
-    if (drag.current?.moved) {
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  };
-  // ─── Zoom: mouse wheel, trackpad pinch, two-finger pinch, +/− buttons ──────
-  // Zoom is drawn straight to the DOM every frame (no React render of the
-  // whole map), and eases toward its target so it never jumps.
-  const zoomRef = useRef(1);
-  const sizer = useRef<HTMLDivElement>(null);
-  const inner = useRef<HTMLDivElement>(null);
-  const goal = useRef<{
-    z: number;
-    fx: number;
-    fy: number;
-    bx: number;
-    by: number;
-  } | null>(null);
-  const frame = useRef(0);
-  const nRef = useRef(0);
-
-  nRef.current = n;
-
-  /** Smallest zoom that still fills the box, so no empty space shows. */
-  const minZoom = useCallback(() => {
-    const el = scroller.current;
-    const size = nRef.current * T;
-
-    if (!el || !size) return MIN_ZOOM;
-
-    return Math.min(
-      MAX_ZOOM,
-      Math.max(MIN_ZOOM, el.clientWidth / size, el.clientHeight / size),
-    );
-  }, []);
-
-  /** Draws zoom z, keeping map point (bx, by) under viewport point (fx, fy). */
-  const paint = useCallback(
-    (z: number, fx: number, fy: number, bx: number, by: number) => {
-      const el = scroller.current;
-      const size = nRef.current * T;
-
-      zoomRef.current = z;
-      if (sizer.current) {
-        sizer.current.style.width = `${size * z}px`;
-        sizer.current.style.height = `${size * z}px`;
-      }
-      if (inner.current) inner.current.style.transform = `scale(${z})`;
-      if (el) {
-        el.scrollLeft = bx * z - fx;
-        el.scrollTop = by * z - fy;
-      }
-    },
-    [],
-  );
-
-  /** Zooms toward `next`, keeping the map point under `focus` (px in the viewport) still. */
-  const zoomTo = useCallback(
-    (next: number, focus?: { x: number; y: number }, instant = false) => {
-      const el = scroller.current;
-
-      if (!el) return;
-      const z0 = zoomRef.current;
-      const z = Math.max(minZoom(), Math.min(MAX_ZOOM, next));
-      const fx = focus?.x ?? el.clientWidth / 2;
-      const fy = focus?.y ?? el.clientHeight / 2;
-      const g = {
-        z,
-        fx,
-        fy,
-        bx: (el.scrollLeft + fx) / z0,
-        by: (el.scrollTop + fy) / z0,
-      };
-
-      goal.current = g;
-      if (instant) {
-        cancelAnimationFrame(frame.current);
-        frame.current = 0;
-        paint(z, fx, fy, g.bx, g.by);
-
-        return;
-      }
-      if (frame.current) return; // the running animation picks up the new goal
-      const step = () => {
-        const t = goal.current;
-
-        if (!t) return (frame.current = 0);
-        const cur = zoomRef.current;
-        const done = Math.abs(t.z - cur) < 0.002;
-        const z1 = done ? t.z : cur + (t.z - cur) * 0.25;
-
-        paint(z1, t.fx, t.fy, t.bx, t.by);
-        frame.current = done ? 0 : requestAnimationFrame(step);
-      };
-
-      frame.current = requestAnimationFrame(step);
-    },
-    [minZoom, paint],
-  );
-  /** Where the next zoom step starts from (the goal while one is easing). */
-  const zoomNow = () =>
-    frame.current && goal.current ? goal.current.z : zoomRef.current;
-
-  const hasMap = !!data;
-
-  useEffect(() => {
-    const el = scroller.current;
-
-    if (!el) return;
-    const local = (cx: number, cy: number) => {
-      const r = el.getBoundingClientRect();
-
-      return { x: cx - r.left, y: cy - r.top };
-    };
-    // Wheel zooms. Shift+wheel and sideways trackpad swipes still pan.
-    const onWheel = (e: WheelEvent) => {
-      if (e.shiftKey) {
-        el.scrollLeft += e.deltaY || e.deltaX;
-        e.preventDefault();
-
-        return;
-      }
-      if (!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return; // trackpad pan
-      e.preventDefault();
-      const unit = e.deltaMode === 1 ? 33 : 1; // lines → px
-      const speed = e.ctrlKey ? 0.01 : 0.0018; // pinch gestures send small deltas
-
-      zoomTo(
-        (e.ctrlKey ? zoomRef.current : zoomNow()) *
-          Math.exp(-e.deltaY * unit * speed),
-        local(e.clientX, e.clientY),
-        e.ctrlKey,
-      );
-    };
-    // Two-finger pinch on phones and tablets.
-    let pinch: { d: number; z: number } | null = null;
-    const dist = (t: TouchList) =>
-      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const onStart = (e: TouchEvent) => {
-      if (e.touches.length === 2)
-        pinch = { d: dist(e.touches), z: zoomRef.current };
-    };
-    const onMove = (e: TouchEvent) => {
-      if (!pinch || e.touches.length !== 2) return;
-      e.preventDefault();
-      const mid = local(
-        (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      );
-
-      zoomTo(pinch.z * (dist(e.touches) / pinch.d), mid, true);
-    };
-    const onEnd = () => (pinch = null);
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("touchstart", onStart, { passive: true });
-    el.addEventListener("touchmove", onMove, { passive: false });
-    el.addEventListener("touchend", onEnd);
-
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("touchstart", onStart);
-      el.removeEventListener("touchmove", onMove);
-      el.removeEventListener("touchend", onEnd);
-    };
-  }, [hasMap, zoomTo]);
-
-  // Window resized (Telegram Desktop, rotating a tablet): ease the zoom so
-  // the map still fills the box, and load more of the world if needed.
-  useEffect(() => {
-    const el = box.current;
-
-    if (!el || typeof ResizeObserver === "undefined") return;
-    let last = 0;
-    let size = { w: el.clientWidth, h: el.clientHeight };
-    const ro = new ResizeObserver(() => {
-      const sc = scroller.current;
-
-      // Keep the middle of the view in the middle.
-      if (sc) {
-        sc.scrollLeft -= (el.clientWidth - size.w) / 2;
-        sc.scrollTop -= (el.clientHeight - size.h) / 2;
-      }
-      size = { w: el.clientWidth, h: el.clientHeight };
-      if (zoomRef.current < minZoom() - 0.001) zoomTo(minZoom());
-      if (wantedRadius(el) > radius.current && Date.now() - last > 1000) {
-        last = Date.now();
-        load();
-      }
-    });
-
-    ro.observe(el);
-
-    return () => ro.disconnect();
-  }, [hasMap, load, minZoom, zoomTo]);
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recentre = () => {
-    const el = scroller.current;
-
-    if (!data || !el) return;
-    const z = zoomRef.current;
-
-    el.scrollTo({
-      left: px(data.home.x) * z - el.clientWidth / 2,
-      top: py(data.home.y) * z - el.clientHeight / 2,
-      behavior: "smooth",
-    });
+    if (data) camera.centerOn(px(data.home.x), py(data.home.y));
   };
+
+  // Tiles with something standing on them: the ground leaves them clear.
+  const occupied = useMemo(
+    () =>
+      data
+        ? [...data.tribes.map((t) => `${t.x},${t.y}`), ...data.camps.map((c) => `${c.x},${c.y}`)].sort().join(";")
+        : "",
+    [data],
+  );
 
   const strength = (p: number) => {
     const ratio = p / Math.max(1, data?.myPower ?? 1);
@@ -975,10 +656,10 @@ export const WarMap = ({
       {/* The map */}
       <div
         ref={box}
-        className="relative rounded-2xl overflow-hidden border border-line h-[max(320px,calc(100svh-260px))] bg-[#1B2416]"
+        className="relative rounded-2xl overflow-hidden border border-frame/80 h-[max(320px,calc(100svh-260px))] bg-[#1C3F54] shadow-card"
       >
         {!data && !error && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted">
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted font-display">
             Unrolling the map…
           </p>
         )}
@@ -992,275 +673,279 @@ export const WarMap = ({
         )}
         {data && (
           <div
-            ref={scroller}
-            className={clsx(
-              "absolute inset-0 overflow-auto overscroll-contain select-none no-scrollbar",
-              drag.current?.moved ? "cursor-grabbing" : "cursor-grab",
-            )}
-            onClickCapture={onClickCapture}
-            onPointerCancel={endDrag}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
+            ref={camera.viewport}
+            className="map-viewport absolute inset-0 overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing"
           >
             <div
-              ref={sizer}
-              className="relative"
-              style={{
-                width: n * T * zoomRef.current,
-                height: n * T * zoomRef.current,
-              }}
+              ref={camera.layer}
+              className="absolute left-0 top-0 origin-top-left"
+              style={{ width: n * T, height: n * T }}
             >
-              <div
-                ref={inner}
-                className="absolute left-0 top-0 origin-top-left"
-                style={{
-                  width: n * T,
-                  height: n * T,
-                  transform: `scale(${zoomRef.current})`,
-                }}
+              <MapGround n={n} occupied={occupied} ox={ox} oy={oy} />
+              <svg
+                aria-hidden="true"
+                className="absolute inset-0"
+                height={n * T}
+                width={n * T}
               >
-                <svg
-                  aria-hidden="true"
-                  className="absolute inset-0"
-                  height={n * T}
-                  width={n * T}
-                >
-                  <Ground n={n} ox={ox} oy={oy} />
-                  {/* Faint grid so distances read */}
-                  <g opacity="0.12" stroke="#000">
-                    {Array.from({ length: n + 1 }, (_, i) => (
-                      <g key={i}>
-                        <line x1={i * T} x2={i * T} y1={0} y2={n * T} />
-                        <line x1={0} x2={n * T} y1={i * T} y2={i * T} />
-                      </g>
-                    ))}
-                  </g>
-                  {/* Merchant roads, under the armies' */}
-                  {(data.caravans ?? [])
-                    .filter((c) => c.arrivesAt > now)
-                    .map((c) => (
-                      <Route
-                        key={`r${c.id}`}
-                        merchant
-                        color={ROUTE_COLORS[c.kind]}
-                        faint={c.kind === "other"}
-                        from={{ x: px(c.from.x), y: py(c.from.y) }}
-                        p={progress(now, c.sentAt, c.arrivesAt)}
-                        to={{ x: px(c.to.x), y: py(c.to.y) }}
-                      />
-                    ))}
-                  {/* Marches */}
-                  {marching.map((m) => {
-                    const f = progress(now, m.sentAt, m.arrivesAt);
+                {/* Merchant roads, under the armies' */}
+                {(data.caravans ?? [])
+                  .filter((c) => c.arrivesAt > now)
+                  .map((c) => (
+                    <Route
+                      key={`r${c.id}`}
+                      merchant
+                      color={ROUTE_COLORS[c.kind]}
+                      faint={c.kind === "other"}
+                      from={{ x: px(c.from.x), y: py(c.from.y) }}
+                      p={progress(now, c.sentAt, c.arrivesAt)}
+                      to={{ x: px(c.to.x), y: py(c.to.y) }}
+                    />
+                  ))}
+                {/* Marches */}
+                {marching.map((m) => {
+                  const f = progress(now, m.sentAt, m.arrivesAt);
 
-                    return (
-                      <Route
-                        key={`r${m.id}`}
-                        color={ROUTE_COLORS[m.kind]}
-                        from={{ x: px(m.from.x), y: py(m.from.y) }}
-                        p={f}
-                        road={roadOf(m.from, m.to, m.units, f).road}
-                        to={{ x: px(m.to.x), y: py(m.to.y) }}
-                      />
-                    );
-                  })}
-                  {homeward.map((m) => {
-                    const f = progress(now, m.leftAt, m.returnsAt);
+                  return (
+                    <Route
+                      key={`r${m.id}`}
+                      color={ROUTE_COLORS[m.kind]}
+                      from={{ x: px(m.from.x), y: py(m.from.y) }}
+                      p={f}
+                      road={roadOf(m.from, m.to, m.units, f).road}
+                      to={{ x: px(m.to.x), y: py(m.to.y) }}
+                    />
+                  );
+                })}
+                {homeward.map((m) => {
+                  const f = progress(now, m.leftAt, m.returnsAt);
 
-                    return (
-                      <Route
-                        key={`b${m.id}`}
-                        color={ROUTE_COLORS.outgoing}
-                        from={{ x: px(m.from.x), y: py(m.from.y) }}
-                        p={f}
-                        road={roadOf(m.from, data.home, m.units, f).road}
-                        to={{ x: px(data.home.x), y: py(data.home.y) }}
-                      />
-                    );
-                  })}
-                </svg>
+                  return (
+                    <Route
+                      key={`b${m.id}`}
+                      color={ROUTE_COLORS.outgoing}
+                      from={{ x: px(m.from.x), y: py(m.from.y) }}
+                      p={f}
+                      road={roadOf(m.from, data.home, m.units, f).road}
+                      to={{ x: px(data.home.x), y: py(data.home.y) }}
+                    />
+                  );
+                })}
+              </svg>
 
-                {/* Barbarian camps */}
-                {data.camps.map((c) => (
+              {/* Barbarian camps */}
+              {data.camps.map((c) => {
+                const picked = selected?.kind === "camp" && selected.camp.level === c.level;
+
+                return (
                   <button
                     key={`c${c.level}`}
                     aria-label={`Barbarian camp ${c.level}`}
                     className={clsx(
-                      "absolute flex flex-col items-center",
-                      c.state === "locked" && "opacity-45 grayscale",
+                      "map-pin absolute",
+                      c.state === "locked" && "opacity-55 grayscale",
                     )}
-                    style={{ left: px(c.x) - 24, top: py(c.y) - 26, width: 48 }}
+                    style={{
+                      left: px(c.x) - 32,
+                      top: py(c.y) - 40,
+                      width: 64,
+                      height: 62,
+                      transformOrigin: "32px 40px",
+                      zIndex: picked ? 4 : 1,
+                    }}
                     onClick={() => setSelected({ kind: "camp", camp: c })}
                   >
+                    {/* Ground marker */}
+                    <span
+                      className={clsx(
+                        "absolute left-[10px] top-[30px] w-11 h-[18px] rounded-[50%] border-2",
+                        c.state === "locked"
+                          ? "border-line bg-ink/30"
+                          : "border-[#C2552E] bg-[#8A3B23]/35",
+                        picked && "shadow-[0_0_14px_rgba(240,106,68,0.9)]",
+                      )}
+                    />
                     <Image
                       draggable={false}
                       alt=""
-                      className="w-11 h-11 object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.6)]"
+                      className="absolute left-[10px] top-0 w-11 h-11 object-contain drop-shadow-[0_4px_3px_rgba(0,0,0,0.65)]"
                       height={88}
                       src={buildingImage(BUILDING_BY_ID["barracks"])}
                       width={88}
                     />
                     <span
                       className={clsx(
-                        "-mt-1.5 px-1.5 rounded-full text-[10px] font-black border",
+                        "absolute left-1/2 top-[44px] -translate-x-1/2 whitespace-nowrap px-1.5 h-4 inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
                         c.state === "new"
                           ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
                           : c.state === "ready"
                             ? "bg-good text-[#1A120B] border-[#E6F5D9]"
-                            : "bg-panel text-sub border-line",
+                            : "bg-ink/90 text-sub border-line",
                       )}
                     >
-                      {c.state === "locked"
-                        ? <GameIcon e="🔒" />
-                        : c.state === "cooldown"
-                          ? formatDuration(c.readyAt - now)
-                          : `Camp ${c.level}`}
+                      {c.state === "locked" ? (
+                        <>
+                          <GameIcon e="🔒" /> {c.level}
+                        </>
+                      ) : c.state === "cooldown" ? (
+                        formatDuration(c.readyAt - now)
+                      ) : (
+                        `Camp ${c.level}`
+                      )}
                     </span>
                   </button>
-                ))}
+                );
+              })}
 
-                {/* Tribes */}
-                {data.tribes.map((t) => {
-                  const shielded = t.shieldUntil > now;
-                  const s = strength(t.power);
+              {/* Tribes */}
+              {data.tribes.map((t) => {
+                const shielded = t.shieldUntil > now;
+                const s = strength(t.power);
+                const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
+                const ring = t.isMe
+                  ? "border-gold bg-gold/30 shadow-[0_0_18px_rgba(227,169,72,0.85)]"
+                  : t.ally
+                    ? "border-sea bg-sea/25 shadow-[0_0_10px_rgba(127,179,208,0.6)]"
+                    : s === "weaker"
+                      ? "border-good bg-good/20"
+                      : s === "stronger"
+                        ? "border-bad bg-bad/20"
+                        : "border-goldtext/80 bg-goldtext/15";
 
-                  return (
-                    <button
-                      key={t.id}
-                      aria-label={t.isMe ? "Your tribe" : t.name}
-                      className="absolute flex flex-col items-center"
-                      style={{
-                        left: px(t.x) - 32,
-                        top: py(t.y) - 34,
-                        width: 64,
-                        zIndex: t.isMe ? 3 : 2,
-                      }}
-                      onClick={() => setSelected({ kind: "tribe", tribe: t })}
-                    >
-                      {t.terrain === "sea" && (
-                        // Settled before the seas were charted: a little island of their own.
-                        <span
-                          className="absolute rounded-[50%] border-2 border-[#E6D3A0]/70"
-                          style={{ left: 4, top: 6, width: 56, height: 44, background: SAND }}
-                        />
+                return (
+                  <button
+                    key={t.id}
+                    aria-label={t.isMe ? "Your tribe" : t.name}
+                    className="map-pin absolute"
+                    style={{
+                      left: px(t.x) - 40,
+                      top: py(t.y) - 44,
+                      width: 80,
+                      height: 72,
+                      transformOrigin: "40px 44px",
+                      zIndex: picked ? 4 : t.isMe ? 3 : 2,
+                    }}
+                    onClick={() => setSelected({ kind: "tribe", tribe: t })}
+                  >
+                    {t.terrain === "sea" && (
+                      // Settled before the seas were charted: a little island of their own.
+                      <span
+                        className="absolute rounded-[50%] border-2 border-[#E6D3A0]/70"
+                        style={{ left: 8, top: 18, width: 64, height: 40, background: SAND }}
+                      />
+                    )}
+                    {/* Ground marker: its color says how strong they are next to you */}
+                    {picked && (
+                      <span className={clsx("absolute left-[12px] top-[32px] w-14 h-[22px] rounded-[50%] border-2 animate-ping", ring)} />
+                    )}
+                    <span className={clsx("absolute left-[12px] top-[32px] w-14 h-[22px] rounded-[50%] border-2", ring)} />
+                    <Image
+                      draggable={false}
+                      alt=""
+                      className="absolute left-[14px] top-[-6px] w-[52px] h-[52px] object-contain drop-shadow-[0_5px_4px_rgba(0,0,0,0.65)]"
+                      height={104}
+                      src={buildingImage(BUILDING_BY_ID["town-hall"])}
+                      width={104}
+                    />
+                    {/* Town Hall level */}
+                    <span className="absolute left-[8px] top-[28px] w-5 h-5 rounded-full border-2 border-[#F7D58A] bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] font-display text-[10px] font-black leading-none flex items-center justify-center shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
+                      {t.townHall}
+                    </span>
+                    {shielded && !t.isMe && (
+                      <span className="absolute right-[6px] top-[-2px] text-base drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]">
+                        <GameIcon e="🛡️" />
+                      </span>
+                    )}
+                    {t.clan && (
+                      <span className="absolute left-[4px] top-[-8px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                        <ClanFlag flag={t.clan.flag} size={20} title={`[${t.clan.tag}]`} />
+                      </span>
+                    )}
+                    {/* Name plate */}
+                    <span
+                      className={clsx(
+                        "absolute left-1/2 top-[52px] -translate-x-1/2 max-w-[120px] truncate px-1.5 h-[17px] leading-[15px] rounded-md border font-display text-[10px] font-bold tracking-[0.02em] shadow-[0_2px_4px_rgba(0,0,0,0.65)]",
+                        t.isMe
+                          ? "bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] border-[#F7D58A]"
+                          : t.ally
+                            ? "bg-ink/90 text-sea border-sea/60"
+                            : "bg-ink/90 text-parch border-frame",
                       )}
-                      <span
-                        className={clsx(
-                          "relative w-12 h-12 rounded-full flex items-center justify-center border-[3px] bg-panel/70",
-                          t.isMe
-                            ? "border-gold shadow-[0_0_16px_rgba(227,169,72,0.8)]"
-                            : t.ally
-                              ? "border-[#7FB3D0] shadow-[0_0_10px_rgba(127,179,208,0.6)]"
-                              : s === "weaker"
-                              ? "border-good"
-                              : s === "stronger"
-                                ? "border-[#F08A6C]"
-                                : "border-gold/70",
-                        )}
-                      >
-                        <Image
-                          draggable={false}
-                          alt=""
-                          className="w-10 h-10 object-contain"
-                          height={80}
-                          src={buildingImage(BUILDING_BY_ID["town-hall"])}
-                          width={80}
-                        />
-                        {shielded && !t.isMe && (
-                          <span className="absolute -top-1 -right-1 text-sm">
-                            <GameIcon e="🛡️" />
-                          </span>
-                        )}
-                        <span className="absolute -bottom-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gold text-[#1A120B] text-[10px] font-black flex items-center justify-center">
-                          {t.townHall}
-                        </span>
-                        {t.clan && (
-                          <span className="absolute -top-3 -left-2.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                            <ClanFlag flag={t.clan.flag} size={22} title={`[${t.clan.tag}]`} />
-                          </span>
-                        )}
-                      </span>
-                      <span
-                        className={clsx(
-                          "mt-0.5 max-w-[84px] truncate px-1.5 rounded-full text-[10px] font-extrabold",
-                          t.isMe
-                            ? "bg-gold text-[#1A120B]"
-                            : "bg-panel/90 text-parch border border-line",
-                        )}
-                      >
-                        {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
-                      </span>
-                    </button>
-                  );
-                })}
+                    >
+                      {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
+                    </span>
+                  </button>
+                );
+              })}
 
-                {/* Caravans and armies on the road */}
-                {(data.caravans ?? [])
-                  .filter((c) => c.arrivesAt > now)
-                  .map((c) => (
-                    <CaravanToken
-                      key={`t${c.id}`}
-                      amount={c.amount}
-                      from={{ x: px(c.from.x), y: py(c.from.y) }}
-                      kind={c.kind}
-                      left={c.arrivesAt - now}
-                      p={progress(now, c.sentAt, c.arrivesAt)}
-                      resource={c.resource}
-                      to={{ x: px(c.to.x), y: py(c.to.y) }}
-                    />
-                  ))}
-                {homeward.map((m) => {
-                  const f = progress(now, m.leftAt, m.returnsAt);
-                  const { road, atSea } = roadOf(m.from, data.home, m.units, f);
-
-                  return (
-                    <ArmyToken
-                      key={`b${m.id}`}
-                      atSea={atSea}
-                      from={{ x: px(m.from.x), y: py(m.from.y) }}
-                      incoming={false}
-                      left={Math.max(0, m.returnsAt - now)}
-                      p={f}
-                      road={road}
-                      to={{ x: px(data.home.x), y: py(data.home.y) }}
-                      units={m.units}
-                      onClick={() => setOrdersFor(homebound(m))}
-                    />
-                  );
-                })}
-                {battles.map((m) => (
-                  <BattleToken
-                    key={`f${m.id}`}
-                    at={{ x: px(m.to.x), y: py(m.to.y) }}
-                    m={m}
-                    now={now}
-                    onClick={() => setWatching(m.id)}
+              {/* Caravans and armies on the road */}
+              {(data.caravans ?? [])
+                .filter((c) => c.arrivesAt > now)
+                .map((c) => (
+                  <CaravanToken
+                    key={`t${c.id}`}
+                    amount={c.amount}
+                    from={{ x: px(c.from.x), y: py(c.from.y) }}
+                    kind={c.kind}
+                    left={c.arrivesAt - now}
+                    p={progress(now, c.sentAt, c.arrivesAt)}
+                    resource={c.resource}
+                    to={{ x: px(c.to.x), y: py(c.to.y) }}
                   />
                 ))}
-                {marching.map((m) => {
-                  const f = progress(now, m.sentAt, m.arrivesAt);
-                  const { road, atSea } = roadOf(m.from, m.to, m.units, f);
+              {homeward.map((m) => {
+                const f = progress(now, m.leftAt, m.returnsAt);
+                const { road, atSea } = roadOf(m.from, data.home, m.units, f);
 
-                  return (
-                    <ArmyToken
-                      key={`t${m.id}`}
-                      atSea={atSea}
-                      from={{ x: px(m.from.x), y: py(m.from.y) }}
-                      incoming={m.kind === "incoming"}
-                      left={Math.max(0, m.arrivesAt - now)}
-                      p={f}
-                      road={road}
-                      to={{ x: px(m.to.x), y: py(m.to.y) }}
-                      units={m.units}
-                      onClick={m.kind === "outgoing" ? () => setOrdersFor(outbound(m)) : undefined}
-                    />
-                  );
-                })}
-              </div>
+                return (
+                  <ArmyToken
+                    key={`b${m.id}`}
+                    atSea={atSea}
+                    from={{ x: px(m.from.x), y: py(m.from.y) }}
+                    incoming={false}
+                    left={Math.max(0, m.returnsAt - now)}
+                    p={f}
+                    road={road}
+                    to={{ x: px(data.home.x), y: py(data.home.y) }}
+                    units={m.units}
+                    onClick={() => setOrdersFor(homebound(m))}
+                  />
+                );
+              })}
+              {battles.map((m) => (
+                <BattleToken
+                  key={`f${m.id}`}
+                  at={{ x: px(m.to.x), y: py(m.to.y) }}
+                  m={m}
+                  now={now}
+                  onClick={() => setWatching(m.id)}
+                />
+              ))}
+              {marching.map((m) => {
+                const f = progress(now, m.sentAt, m.arrivesAt);
+                const { road, atSea } = roadOf(m.from, m.to, m.units, f);
+
+                return (
+                  <ArmyToken
+                    key={`t${m.id}`}
+                    atSea={atSea}
+                    from={{ x: px(m.from.x), y: py(m.from.y) }}
+                    incoming={m.kind === "incoming"}
+                    left={Math.max(0, m.arrivesAt - now)}
+                    p={f}
+                    road={road}
+                    to={{ x: px(m.to.x), y: py(m.to.y) }}
+                    units={m.units}
+                    onClick={m.kind === "outgoing" ? () => setOrdersFor(outbound(m)) : undefined}
+                  />
+                );
+              })}
             </div>
           </div>
         )}
+
+        {/* Frame: a soft vignette and a gold hairline, like a map under glass */}
+        <div className="pointer-events-none absolute inset-0 z-[5] rounded-2xl shadow-[inset_0_0_42px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-gold/20" />
 
         {picking && (
           <div className="absolute inset-x-2 bottom-2 z-20 flex items-center gap-2 rounded-xl px-3 py-2 bg-ink/90 border border-gold text-sm shadow-lg mr-14">
@@ -1277,45 +962,47 @@ export const WarMap = ({
           </div>
         )}
         {data && (
-          <div className="absolute right-2 bottom-2 flex flex-col gap-1.5 z-10">
-            <button
-              aria-label="Zoom in"
-              className="btn btn-wood w-11 h-11 px-0 text-xl text-goldtext"
-              onClick={() => zoomTo(zoomNow() * 1.4)}
-            >
-              +
-            </button>
-            <button
-              aria-label="Zoom out"
-              className="btn btn-wood w-11 h-11 px-0 text-xl text-goldtext"
-              onClick={() => zoomTo(zoomNow() / 1.4)}
-            >
-              −
-            </button>
+          <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-2">
             <button
               aria-label="Back to my tribe"
-              className="btn btn-wood w-11 h-11 px-0"
+              className="w-11 h-11 rounded-full border-2 border-gold bg-ink/85 shadow-[0_0_12px_rgba(227,169,72,0.55),0_4px_10px_rgba(0,0,0,0.6)] flex items-center justify-center active:scale-95 transition-transform"
               onClick={recentre}
             >
-              <span className="w-9 h-9 rounded-full border-2 border-gold bg-panel/70 shadow-[0_0_10px_rgba(227,169,72,0.7)] flex items-center justify-center">
-                <Image
-                  draggable={false}
-                  alt=""
-                  className="w-7 h-7 object-contain"
-                  height={56}
-                  src={buildingImage(BUILDING_BY_ID["town-hall"])}
-                  width={56}
-                />
-              </span>
+              <Image
+                draggable={false}
+                alt=""
+                className="w-8 h-8 object-contain"
+                height={64}
+                src={buildingImage(BUILDING_BY_ID["town-hall"])}
+                width={64}
+              />
             </button>
+            <div className="flex flex-col items-center rounded-xl border border-frame bg-gradient-to-b from-[#3A2B1E]/95 to-[#1E1610]/95 shadow-raised overflow-hidden">
+              <button
+                aria-label="Zoom in"
+                className="w-11 h-11 flex items-center justify-center font-display text-2xl leading-none text-goldtext active:bg-gold/15"
+                onClick={() => camera.zoomBy(1.5)}
+              >
+                +
+              </button>
+              <span className="h-px w-7 bg-line" />
+              <button
+                aria-label="Zoom out"
+                className="w-11 h-11 flex items-center justify-center font-display text-2xl leading-none text-goldtext active:bg-gold/15"
+                onClick={() => camera.zoomBy(1 / 1.5)}
+              >
+                −
+              </button>
+            </div>
           </div>
         )}
-        <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5 card-flat !bg-ink/80 px-2 py-1">
-          <span className="text-[11px] font-bold text-sub">
-            <span className="text-good">●</span> weaker{" "}
-            <span className="text-gold">●</span> even{" "}
-            <span className="text-bad">●</span> stronger
+        <div className="absolute left-2 top-2 z-10 flex items-center gap-2 rounded-xl border border-frame/80 bg-ink/80 pl-2.5 pr-1 py-1 shadow-card">
+          <span className="flex items-center gap-2 text-[11px] font-bold text-sub">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-good bg-good/30" />weaker</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-goldtext bg-goldtext/20" />even</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-bad bg-bad/30" />stronger</span>
           </span>
+
           <InfoDrawer
             content={
               <span className="flex flex-col gap-1.5 text-left text-sm">
@@ -1361,7 +1048,7 @@ export const WarMap = ({
                   longer the more troops fight. Tap the crossed swords to watch it
                   round by round; the defenders are on the field until it ends.
                 </span>
-                <span>🖱️ Scroll or pinch to zoom, drag to move around.</span>
+                <span>Drag to move around. Pinch, scroll or double-tap to zoom.</span>
               </span>
             }
             title="War on the map"
