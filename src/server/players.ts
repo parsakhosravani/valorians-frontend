@@ -222,14 +222,12 @@ async function clanBadge(clanId: number | null) {
     : null;
 }
 
-/** Trades still in play for the player: their open offers plus deals whose merchants are on the road. */
-async function activeTrades(id: number) {
+/** Offers other players have open on the market right now (what the player could buy). */
+async function marketOffers(id: number) {
   const db = await getDb();
   const rs = await db.execute({
-    sql: `SELECT
-            (SELECT COUNT(*) FROM trades WHERE seller_id = ? AND status IN ('open', 'accepted', 'delivering')) +
-            (SELECT COUNT(*) FROM trades WHERE buyer_id = ? AND status IN ('accepted', 'delivering')) AS n`,
-    args: [id, id],
+    sql: "SELECT COUNT(*) AS n FROM trades WHERE status = 'open' AND seller_id != ?",
+    args: [id],
   });
 
   return Number(rs.rows[0]?.n ?? 0);
@@ -237,7 +235,7 @@ async function activeTrades(id: number) {
 
 export async function playerView(p: Player, now: number) {
   // Independent lookups: run them together instead of one after another.
-  const [clan, rank, trades] = await Promise.all([clanBadge(p.clanId), rankOf(p.state.population), activeTrades(p.id)]);
+  const [clan, rank, trades] = await Promise.all([clanBadge(p.clanId), rankOf(p.state.population), marketOffers(p.id)]);
 
   return {
     serverTime: now,
@@ -249,8 +247,8 @@ export async function playerView(p: Player, now: number) {
       photoUrl: avatarUrl(p.id),
       clan,
       rank,
-      /** Shown as a badge on the header's Trade button. */
-      activeTrades: trades,
+      /** Other players' open offers, shown as a badge on the header's Trade button. */
+      marketOffers: trades,
       /** Monthly Valorians Plus price in Telegram Stars. */
       plusPrice: plusPrice(),
     },

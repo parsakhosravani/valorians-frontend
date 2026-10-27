@@ -19,7 +19,7 @@ const HEADER_TOP_PADDING =
 /** Top bar on every screen (with the Market button); Build, War and Market also show your stock. */
 export const Header: React.FC = () => {
   const { state, rates, me } = useGame();
-  const trades = me?.activeTrades ?? 0;
+  const trades = me?.marketOffers ?? 0;
   const pathname = usePathname();
   const showResources =
     pathname === "/tribe" || pathname === "/battle" || pathname === "/market";
@@ -40,7 +40,7 @@ export const Header: React.FC = () => {
           <Coin amount={Math.floor(state.coins)} />
         </div>
         <Link
-          aria-label={trades ? `Market, ${trades} active trade${trades === 1 ? "" : "s"}` : "Market"}
+          aria-label={trades ? `Market, ${trades} offer${trades === 1 ? "" : "s"} from other players` : "Market"}
           className={clsx(
             "relative h-8 pl-2 pr-2.5 rounded-full border flex items-center gap-1 text-xs font-extrabold [&_img]:w-[20px] [&_img]:h-[20px]",
             onMarket
