@@ -382,8 +382,42 @@ const Art = ({ v, o, now, onOpen }: PlotProps) => {
 };
 
 /**
- * A name plate at each building's foot: the level (green ↑ when it can be
- * upgraded now) and the building's name, so every plot can be told apart.
+ * The "upgrade now" mark: a green gem with a gold rim and a raised double
+ * chevron, gently bobbing so ready buildings catch the eye.
+ */
+const UpgradeMark = ({ size }: { size: number }) => {
+  const id = useId().replace(/:/g, "");
+
+  return (
+    <svg aria-hidden="true" className="shrink-0 animate-nudge drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" height={size} viewBox="0 0 24 24" width={size}>
+      <defs>
+        <radialGradient cx="38%" cy="30%" id={`${id}-gem`} r="75%">
+          <stop offset="0" stopColor="#D8F5B8" />
+          <stop offset="0.45" stopColor="#6FB548" />
+          <stop offset="1" stopColor="#2E5A1C" />
+        </radialGradient>
+        <linearGradient id={`${id}-rim`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor="#FBE3A6" />
+          <stop offset="1" stopColor="#9A6A26" />
+        </linearGradient>
+      </defs>
+      <circle cx="12" cy="12" fill={`url(#${id}-rim)`} r="11.5" />
+      <circle cx="12" cy="12" fill={`url(#${id}-gem)`} r="9.6" />
+      {/* Double chevron: dark outline, then light face */}
+      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7.5 12.2 12 7.7l4.5 4.5M7.5 16.6 12 12.1l4.5 4.5" stroke="#1C3410" strokeWidth="4" />
+        <path d="M7.5 12.2 12 7.7l4.5 4.5M7.5 16.6 12 12.1l4.5 4.5" stroke="#FFFBEA" strokeWidth="2.2" />
+      </g>
+      {/* Highlight */}
+      <ellipse cx="9" cy="6.6" fill="#fff" opacity="0.35" rx="3.2" ry="1.4" transform="rotate(-25 9 6.6)" />
+    </svg>
+  );
+};
+
+/**
+ * A name plate at each building's foot: the level, the building's name, and
+ * an upgrade mark beside them when it can be upgraded now, so the level is
+ * never hidden.
  */
 const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
   const { x, y } = v.plots[o.building.id];
@@ -395,7 +429,8 @@ const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
     <button
       aria-hidden="true"
       className={clsx(
-        "absolute -translate-x-1/2 z-[10000] flex items-center gap-1 py-[2px] pl-[2px] pr-1.5 rounded-[10px] border",
+        "absolute -translate-x-1/2 z-[10000] flex items-center gap-1 py-[2px] pl-[2px] rounded-[10px] border",
+        ready ? "pr-[2px]" : "pr-1.5",
         "bg-[#1A120B]/85 backdrop-blur-[2px] shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
         ready ? "border-good/70" : built ? "border-frame" : "border-line/60",
       )}
@@ -406,15 +441,16 @@ const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
       <span
         className={clsx(
           "shrink-0 rounded-full border flex items-center justify-center font-display font-black leading-none",
-          ready ? "bg-good text-[#14210E] border-[#E6F5D9]" : built ? "bg-gold text-[#1A120B] border-[#FBE3A6]" : "bg-panel2 text-muted border-line",
+          built ? "bg-gold text-[#1A120B] border-[#FBE3A6]" : "bg-panel2 text-muted border-line",
         )}
         style={{ minWidth: v.label + 6, height: v.label + 6, fontSize: v.label - 1 }}
       >
-        {ready ? (built ? "↑" : "+") : o.maxed ? "★" : built ? o.level : "+"}
+        {o.maxed ? "★" : built ? o.level : "+"}
       </span>
       <span className={clsx("font-bold leading-[1.1] text-left", built || o.job ? "text-parch" : "text-muted")} style={{ fontSize: v.label }}>
         {o.building.name}
       </span>
+      {ready && <UpgradeMark size={v.label + 7} />}
     </button>
   );
 };
