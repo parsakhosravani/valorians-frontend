@@ -87,3 +87,10 @@ test("tribes never settle on mountains or in walled-off valleys; camps always ha
     }
   }
 });
+
+test("a road from between two tiles (a recalled army's turn-back spot) still resolves", () => {
+  const r = marchRoute({ x: 10.37, y: 12.81 }, { x: 20, y: 25 });
+
+  expect(r.path.length).toBeGreaterThan(1);
+  expect(r.path[0]).toEqual({ x: 10, y: 13 });
+});

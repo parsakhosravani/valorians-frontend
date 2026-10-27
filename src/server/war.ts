@@ -10,7 +10,7 @@ import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, campDefense } from "@/lib/game/config";
 import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
-import { Point, distance, routeMs, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
+import { Point, distance, marchRoute, pointAlong, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   BattleOutcome,
   Promotion,
@@ -456,7 +456,10 @@ export async function recallMarch(me: Player, id: number, now: number) {
   if (claim.rowsAffected !== 1) throw new GameError("That army can't be recalled anymore", "not_found");
   const walked = now - a.sentAt;
   const progress = Math.min(1, walked / Math.max(1, a.arrivesAt - a.sentAt));
-  const where = { x: a.from.x + (a.to.x - a.from.x) * progress, y: a.from.y + (a.to.y - a.from.y) * progress };
+  // Turn round where the army really is on its road, on a whole tile.
+  const road = marchRoute(a.from, a.to);
+  const spot = pointAlong(road, routeTimeline(road, a.units), progress);
+  const where = { x: Math.round(spot.x), y: Math.round(spot.y) };
 
   return mutatePlayer(me.id, now, (s) => returnHome(s, a.units, "recalled", now + walked, now, rand(), where));
 }
