@@ -78,6 +78,10 @@ type Movement = {
   campLevel: number | null;
   /** The army reached its target and the battle is being fought. */
   battle: LiveBattle | null;
+  /** Your own armies: spoils carried from an earlier battle, and new orders taken on this expedition. */
+  loot?: Record<string, number> | null;
+  coins?: number;
+  hops?: number;
 };
 
 /** A battle under way, as far as it has gone: later rounds stay secret until they're fought. */
@@ -210,6 +214,14 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       units: outgoing || watch || battle ? JSON.parse(String(a.units)) : null,
       campLevel,
       battle,
+      // Your own army after new orders: the spoils it carries and how many orders it took.
+      ...(outgoing
+        ? {
+            loot: a.loot == null ? null : JSON.parse(String(a.loot)),
+            coins: Number(a.coins ?? 0),
+            hops: Number(a.hops ?? 0),
+          }
+        : {}),
     };
   });
 

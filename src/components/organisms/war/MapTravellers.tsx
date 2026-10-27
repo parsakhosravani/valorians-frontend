@@ -157,6 +157,7 @@ export const ArmyToken = ({
   incoming,
   left,
   atSea = false,
+  onClick,
 }: {
   from: Pt;
   to: Pt;
@@ -168,13 +169,19 @@ export const ArmyToken = ({
   left: number;
   /** Out on the water right now: the army shows as a Longship. */
   atSea?: boolean;
+  /** Your own armies can be tapped to give them orders. */
+  onClick?: () => void;
 }) => {
   const lead = leadUnit(units);
   const n = total(units);
+  const Tag = onClick ? "button" : "span";
 
   return (
-    <Rider at={along(road ?? straight(from, to), p).at} z={5}>
-      <span className="relative flex items-center justify-center">
+    <Rider at={along(road ?? straight(from, to), p).at} z={onClick ? 6 : 5}>
+      <Tag
+        {...(onClick ? { "aria-label": "Army orders", type: "button" as const, onClick } : {})}
+        className={clsx("relative flex items-center justify-center", onClick && "pointer-events-auto cursor-pointer active:scale-95 transition-transform")}
+      >
         {incoming && (
           <span className="absolute inset-0 rounded-full bg-[#F06A44]/50 animate-ping" />
         )}
@@ -200,7 +207,7 @@ export const ArmyToken = ({
             </span>
           )}
         </span>
-      </span>
+      </Tag>
       <span
         className={clsx(
           "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",

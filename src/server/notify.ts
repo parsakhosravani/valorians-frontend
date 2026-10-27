@@ -170,6 +170,15 @@ export const notify = {
     );
   },
 
+  calledOff(defenderId: number, attacker: string) {
+    return sendToPlayer(
+      defenderId,
+      `🏳️ <b>${esc(attacker)}</b>'s army turned away from your tribe and marched on another target.`,
+      "🗺️ See the map",
+      "/battle?tab=map"
+    );
+  },
+
   turnedBack(attackerId: number, target: string) {
     return sendToPlayer(
       attackerId,

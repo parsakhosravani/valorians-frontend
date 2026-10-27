@@ -31,6 +31,7 @@ import {
   XP_LOSS_SHARE,
   XP_PER_STRENGTH,
   LANDING_DEFENSE,
+  REDIRECT,
 } from "./config";
 import {
   Army,
@@ -53,7 +54,11 @@ import type { BattleRound } from "./battle";
 /** Troops that fight (everything but ships). */
 const FIGHTERS = UNIT_IDS.filter((u) => !UNIT_BY_ID[u].transport);
 
-const emptyLoot = (): Record<ResourceId, number> => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
+export type Loot = Record<ResourceId, number>;
+
+const emptyLoot = (): Loot => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
+
+const lootTotal = (l: Partial<Loot> | undefined) => RESOURCE_IDS.reduce((a, r) => a + (l?.[r] ?? 0), 0);
 
 export const armySize = (a: Army) => UNIT_IDS.reduce((n, u) => n + (a[u] ?? 0), 0);
 
@@ -388,7 +393,20 @@ export function embark(s: GameState, units: Army, naval: boolean): Army {
   return out;
 }
 
-const carryOf = (units: Army) => UNITS.reduce((sum, u) => sum + u.carry * units[u.id], 0);
+export const carryOf = (units: Army) => UNITS.reduce((sum, u) => sum + u.carry * (units[u.id] ?? 0), 0);
+
+/**
+ * What an army that won keeps of the spoils it already carried into the
+ * battle: all of it while the survivors can carry it, less when too many fell.
+ */
+function keptSpoils(carried: Loot | undefined, carry: number): Loot {
+  const kept = emptyLoot();
+  const total = lootTotal(carried);
+  if (!carried || total <= 0) return kept;
+  const f = Math.min(1, carry / total);
+  for (const r of RESOURCE_IDS) kept[r] = Math.floor((carried[r] ?? 0) * f);
+  return kept;
+}
 
 const survivorsOf = (sent: Army, losses: Army) => {
   const out = emptyArmy();
@@ -425,6 +443,12 @@ export type RaidReport = BattleOutcome & {
   /** How long the fight lasted and how it went, round by round (timed battles only). */
   battleMs?: number;
   rounds?: BattleRound[];
+  /**
+   * Spoils from an earlier battle the army brought to this one (after new
+   * orders on the road). A winner keeps them on top of `loot`; a loser drops them.
+   */
+  carried?: Loot;
+  carriedCoins?: number;
 };
 
 /**
@@ -446,6 +470,11 @@ export type MapOpts = {
   outcome?: BattleOutcome;
   /** Defenders who left home to fight this battle; survivors go back home. */
   engaged?: Army;
+  /** Spoils the army already carries from an earlier battle of the same expedition. */
+  carried?: Loot;
+  carriedCoins?: number;
+  /** New orders the expedition already took (kept on the march home). */
+  hops?: number;
 };
 
 /** Only the troops that fight (ships stay out of it). */
@@ -537,7 +566,8 @@ export function defendRaid(
   const loot = emptyLoot();
   if (outcome.attackerWon) {
     const survivors = survivorsOf(sent, outcome.attackerLosses);
-    let carry = carryOf(survivors);
+    // Spoils already on their backs take up room: only the rest fills with new loot.
+    const carry = Math.max(0, carryOf(survivors) - lootTotal(keptSpoils(opts.carried, carryOf(survivors))));
     const available = RESOURCE_IDS.map((r) => Math.max(0, d.resources[r] - dr.hidden) * MAX_LOOT_SHARE);
     const total = available.reduce((a, b) => a + b, 0);
     if (total > 0 && carry > 0) {
@@ -565,6 +595,9 @@ export function defendRaid(
       loot,
       coins: 0,
       returnsAt: now + (opts.travelMs ?? Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier)),
+      ...(lootTotal(opts.carried) > 0 || (opts.carriedCoins ?? 0) > 0
+        ? { carried: { ...emptyLoot(), ...opts.carried }, carriedCoins: opts.carriedCoins ?? 0 }
+        : {}),
     },
   };
 }
@@ -576,22 +609,29 @@ export function receiveRaidReport(
   targetName: string,
   now: number,
   rand: number,
-  from?: Point
+  from?: Point,
+  hops = 0
 ) {
   const s = cloneState(s0);
   if (report.attackerXp) applyBattleXp(s, regimentWith(s, report.sent), report.attackerLosses, report.attackerXp);
   const units = survivorsOf(report.sent, report.attackerLosses);
   for (const u of UNIT_IDS) units[u] += report.attackerHealed[u];
+  // A winner keeps the spoils it brought; a beaten army drops them on the field.
+  const kept = report.attackerWon ? keptSpoils(report.carried, carryOf(survivorsOf(report.sent, report.attackerLosses))) : emptyLoot();
+  const loot = emptyLoot();
+  for (const r of RESOURCE_IDS) loot[r] = (report.loot[r] ?? 0) + kept[r];
+  const coins = report.coins + (report.attackerWon ? (report.carriedCoins ?? 0) : 0);
   if (armySize(units) > 0) {
     s.marches.push({
       id: marchId(now, rand),
       target: targetName,
       units,
-      loot: report.loot,
-      coins: report.coins,
+      loot,
+      coins,
       returnsAt: report.returnsAt,
       leftAt: now,
       ...(from ? { from } : {}),
+      ...(hops ? { hops } : {}),
     });
   }
   if (report.attackerWon) s.war.attacksWon += 1;
@@ -642,6 +682,8 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
 
   const loot = emptyLoot();
   let coins = 0;
+  // Spoils brought from an earlier battle come home only if this one is won.
+  const kept = outcome.attackerWon ? keptSpoils(opts.carried, carryOf(survivorsOf(sent, outcome.attackerLosses))) : emptyLoot();
   if (outcome.attackerWon) {
     const reward = campReward(s, level);
     for (const res of RESOURCE_IDS) loot[res] = reward.resources;
@@ -660,11 +702,12 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
       id: marchId(now, rand),
       target: `Barbarian camp ${level}`,
       units: home,
-      loot,
-      coins,
+      loot: Object.fromEntries(RESOURCE_IDS.map((r) => [r, loot[r] + kept[r]])) as Loot,
+      coins: coins + (outcome.attackerWon ? (opts.carriedCoins ?? 0) : 0),
       returnsAt,
       leftAt: now,
       ...(opts.from ? { from: opts.from } : {}),
+      ...(opts.hops ? { hops: opts.hops } : {}),
     });
   }
   const report: RaidReport = {
@@ -676,6 +719,9 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
     loot,
     coins,
     returnsAt,
+    ...(lootTotal(opts.carried) > 0 || (opts.carriedCoins ?? 0) > 0
+      ? { carried: { ...emptyLoot(), ...opts.carried }, carriedCoins: opts.carriedCoins ?? 0 }
+      : {}),
   };
   return { state: s, report };
 }
@@ -686,7 +732,10 @@ export function raidCamp(s0: GameState, level: number, units: Army, now: number,
   return campBattle(d.state, d.level, d.sent, now, rand);
 }
 
-/** Troops that turned back before a battle walk home with nothing. */
+/**
+ * Troops that turned back before a battle walk home, with nothing or with the
+ * spoils they already carried (`extra`, after new orders on the road).
+ */
 export function returnHome(
   s0: GameState,
   units: Army,
@@ -695,13 +744,177 @@ export function returnHome(
   now: number,
   rand: number,
   from?: Point,
-  leftAt = now
+  leftAt = now,
+  extra: { loot?: Partial<Loot>; coins?: number; hops?: number } = {}
 ) {
   const s = cloneState(s0);
   if (armySize(units) > 0) {
-    s.marches.push({ id: marchId(now, rand), target, units: { ...units }, loot: emptyLoot(), coins: 0, returnsAt, leftAt, ...(from ? { from } : {}) });
+    s.marches.push({
+      id: marchId(now, rand),
+      target,
+      units: { ...units },
+      loot: { ...emptyLoot(), ...extra.loot },
+      coins: extra.coins ?? 0,
+      returnsAt,
+      leftAt,
+      ...(from ? { from } : {}),
+      ...(extra.hops ? { hops: extra.hops } : {}),
+    });
   }
   return s;
+}
+
+// ─── New orders on the road ──────────────────────────────────────────────────
+
+/** New orders one expedition can take: one, plus one per War Orders card level. */
+export const maxOrders = (s: GameState) => REDIRECT.baseOrders + Math.min(REDIRECT.maxCardLevel, s.cards?.orders ?? 0);
+
+/** Coins for the next War Orders card level, or null at the top. */
+export const ordersCardCost = (s: GameState) => {
+  const lvl = s.cards?.orders ?? 0;
+  return lvl >= REDIRECT.maxCardLevel ? null : REDIRECT.cardCost[lvl];
+};
+
+/** Raises the War Orders card one level, for coins. */
+export function buyOrdersCard(s0: GameState): GameState {
+  const cost = ordersCardCost(s0);
+  if (cost == null) throw new GameError("Your War Orders card is at its highest level", "max_level");
+  if (s0.coins < cost) throw new GameError(`The War Orders card costs ${cost} coins`, "not_enough_coins");
+  const s = cloneState(s0);
+  s.coins -= cost;
+  s.cards = { ...s.cards, orders: (s.cards?.orders ?? 0) + 1 };
+  return s;
+}
+
+/**
+ * Splits an army given new orders: `keep` (at most what it has) go on to the
+ * new target and the rest walk home. An army can shrink but never grow.
+ * Longships go where they're needed: with the troops going on when their road
+ * (there, or home after the battle) crosses the sea, with the ones heading
+ * home when theirs does; spare ships sail home.
+ */
+export function splitForRedirect(
+  current: Army,
+  keep: Army,
+  ships: { go: boolean; back: boolean }
+): { go: Army; back: Army } {
+  const go = emptyArmy();
+  const back = emptyArmy();
+  for (const u of FIGHTERS) {
+    const have = current[u] ?? 0;
+    const n = Math.floor(Number(keep?.[u] ?? 0));
+    if (!Number.isFinite(n) || n < 0) throw new GameError("Bad troop count");
+    if (n > have) {
+      throw new GameError(
+        have === 0
+          ? `This army has no ${UNIT_BY_ID[u].name}`
+          : `This army only has ${have} ${UNIT_BY_ID[u].name}. New orders can't add troops.`,
+        "not_enough_troops"
+      );
+    }
+    go[u] = n;
+    back[u] = have - n;
+  }
+  if (fighterCount(go) === 0) throw new GameError("Choose some troops to go on", "no_troops");
+  const fleet = current[SHIP_ID] ?? 0;
+  const forGo = ships.go ? shipsNeeded(go) : 0;
+  const forBack = ships.back && fighterCount(back) > 0 ? shipsNeeded(back) : 0;
+  if (forGo + forBack > fleet) {
+    throw new GameError(
+      forBack > 0
+        ? `These roads cross the sea: ${forGo + forBack} Longships needed, this army has ${fleet}. Keep more troops together.`
+        : `That road crosses the sea: ${forGo} Longships needed, this army has ${fleet}.`,
+      "need_ships"
+    );
+  }
+  go[SHIP_ID] = forGo;
+  back[SHIP_ID] = fleet - forGo;
+  return { go, back };
+}
+
+/**
+ * Field supplies for new orders: a share of what the troops cost to train,
+ * plus the crop they eat on the new road.
+ */
+export function redirectSupply(units: Army, legMs: number): Loot {
+  const cost = emptyLoot();
+  const hours = Math.max(0, legMs) / 3_600_000;
+  for (const u of FIGHTERS) {
+    const n = units[u] ?? 0;
+    if (!n) continue;
+    const def = UNIT_BY_ID[u];
+    for (const r of RESOURCE_IDS) cost[r] += def.cost[r] * n * REDIRECT.supplyShare;
+    cost.crop += def.upkeep * n * hours;
+  }
+  for (const r of RESOURCE_IDS) cost[r] = Math.ceil(cost[r]);
+  return cost;
+}
+
+/** Pays `cost` out of `loot` as far as it goes; returns what's left and what's still owed. */
+export function payFromLoot(loot: Partial<Loot>, cost: Loot): { loot: Loot; owed: Loot } {
+  const left = { ...emptyLoot(), ...loot };
+  const owed = emptyLoot();
+  for (const r of RESOURCE_IDS) {
+    const paid = Math.min(left[r], cost[r]);
+    left[r] -= paid;
+    owed[r] = cost[r] - paid;
+  }
+  return { loot: left, owed };
+}
+
+/**
+ * Shares the spoils of a split army by how much each side can carry: the
+ * troops heading home take their share (up to what they can carry).
+ */
+export function splitSpoils(loot: Partial<Loot>, coins: number, go: Army, back: Army) {
+  const goLoot = { ...emptyLoot(), ...loot };
+  const backLoot = emptyLoot();
+  const cGo = carryOf(go);
+  const cBack = carryOf(back);
+  if (cBack <= 0) return { go: goLoot, back: backLoot, goCoins: coins, backCoins: 0 };
+  const share = cBack / Math.max(1, cGo + cBack);
+  let room = cBack;
+  for (const r of RESOURCE_IDS) {
+    const n = Math.min(room, Math.floor(goLoot[r] * share));
+    backLoot[r] = n;
+    goLoot[r] -= n;
+    room -= n;
+  }
+  const backCoins = Math.floor(coins * share);
+  return { go: goLoot, back: backLoot, goCoins: coins - backCoins, backCoins };
+}
+
+/** Takes what supplies the loot didn't cover from home storage. */
+export function paySupplyFromHome(s0: GameState, owed: Loot): GameState {
+  for (const r of RESOURCE_IDS) {
+    if (s0.resources[r] < owed[r]) {
+      throw new GameError(`Supplies for new orders need ${Math.ceil(owed[r])} more ${r} than the army carries or you have`, "not_enough_resources");
+    }
+  }
+  const s = cloneState(s0);
+  for (const r of RESOURCE_IDS) s.resources[r] -= owed[r];
+  return s;
+}
+
+/** Can this expedition (having taken `hops` new orders) take another one? */
+export function checkOrdersLeft(s: GameState, hops: number) {
+  const max = maxOrders(s);
+  if (hops >= max) {
+    throw new GameError(
+      (s.cards?.orders ?? 0) >= REDIRECT.maxCardLevel
+        ? `This army already took ${max} new orders on this expedition`
+        : `This army already took ${max === 1 ? "its new order" : `${max} new orders`}. Upgrade the War Orders card for more.`,
+      "no_orders"
+    );
+  }
+}
+
+/** Throws if a camp can't be attacked right now (without changing anything). */
+export function checkCamp(s: GameState, level: number, now: number) {
+  if (!(level >= 1 && level <= MAX_CAMP_LEVEL)) throw new GameError("Unknown camp");
+  const st = campStatus(s, level, now);
+  if (st.state === "locked") throw new GameError("Clear the previous camp first", "locked");
+  if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");
 }
 
 /** What the attacker sees about a target before attacking. */

@@ -98,6 +98,17 @@ interface GameContextType {
   /** Sends an army across the map; resolves to its arrival time, or null if it couldn't leave. */
   attack: (to: { target?: number; camp?: number }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
   recall: (marchId: number) => Promise<boolean>;
+  /**
+   * New orders for an army on the road (marching out: `attack`; walking home:
+   * `march`): it goes on to another target with `units` (at most what it has).
+   */
+  redirect: (
+    from: { attack?: number; march?: string },
+    to: { target?: number; camp?: number },
+    units: Army
+  ) => Promise<{ id: number; arrivesAt: number } | null>;
+  /** Raises the War Orders card a level (one more new order per expedition). */
+  buyOrdersCard: () => Promise<boolean>;
   /** Quietly reloads the player's state (e.g. after a battle was fought on the server). */
   refresh: () => Promise<void>;
   scout: (target: number) => Promise<ScoutReport | null>;
@@ -447,6 +458,16 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       return res?.march ?? null;
     },
     recall: (id) => act("war/recall", { id }, "Army turned back"),
+    redirect: async (from, to, units) => {
+      const res = await send<PlayerView & { march: { id: number; arrivesAt: number } }>(
+        "war/redirect",
+        { ...from, ...to, units },
+        "New orders sent"
+      );
+
+      return res?.march ?? null;
+    },
+    buyOrdersCard: () => act("war/orders", {}, "War Orders card upgraded"),
     refresh: async () => {
       if (!authHeader) return;
       try {

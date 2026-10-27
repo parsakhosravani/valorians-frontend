@@ -20,6 +20,7 @@ import {
   progress,
 } from "./MapTravellers";
 import { AttackTarget } from "./SendArmyDrawer";
+import { ArmyOnRoad, ArmyOrdersDrawer, RedirectDrawer, armySpot } from "./RedirectDrawer";
 import {
   BattleMovement,
   BattleRow,
@@ -109,6 +110,10 @@ type Movement = {
   campLevel: number | null;
   /** Arrived: the battle is being fought (older servers don't send it). */
   battle?: LiveBattleData | null;
+  /** Your armies: spoils carried from an earlier battle and new orders taken (older servers don't send them). */
+  loot?: Partial<Record<ResourceId, number>> | null;
+  coins?: number;
+  hops?: number;
 };
 
 type Caravan = {
@@ -315,6 +320,10 @@ export const WarMap = ({
   const [scouts, setScouts] = useState<Record<number, ScoutReport>>({});
   const [busy, setBusy] = useState(false);
   const [watching, setWatching] = useState<number | null>(null);
+  // New orders: the army tapped, the army waiting for a new target, and the target picked.
+  const [ordersFor, setOrdersFor] = useState<ArmyOnRoad | null>(null);
+  const [picking, setPicking] = useState<ArmyOnRoad | null>(null);
+  const [redirecting, setRedirecting] = useState<{ army: ArmyOnRoad; target: AttackTarget } | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const radius = useRef(0);
@@ -749,11 +758,43 @@ export const WarMap = ({
     data?.caravans?.filter((c) => c.kind !== "other" && c.arrivesAt > now) ??
     [];
 
-  const attackTribe = (t: Tribe) => {
+  /** One of your armies marching out, as something you can give orders. */
+  const outbound = (m: Movement): ArmyOnRoad => ({
+    kind: "attack",
+    id: m.id,
+    units: m.units ?? ({} as Army),
+    from: m.from,
+    to: m.to,
+    toName: m.to.name,
+    startedAt: m.sentAt,
+    endsAt: m.arrivesAt,
+    loot: m.loot ?? null,
+    coins: m.coins ?? 0,
+    hops: m.hops ?? 0,
+  });
+  const homebound = (m: (typeof homeward)[number]): ArmyOnRoad => {
+    const full = returning.find((x) => x.id === m.id)!;
+
+    return {
+      kind: "march",
+      id: m.id,
+      units: m.units,
+      from: m.from,
+      to: data!.home,
+      toName: "Your tribe",
+      startedAt: m.leftAt,
+      endsAt: m.returnsAt,
+      loot: full.loot,
+      coins: full.coins,
+      hops: full.hops ?? 0,
+    };
+  };
+
+  /** A target's details for the march drawers, from `from` (home, or where a redirected army stands). */
+  const tribeTarget = (t: Tribe, from: { x: number; y: number }): AttackTarget => {
     const s = scouts[t.id];
 
-    setSelected(null);
-    onAttack({
+    return {
       title: `Raid ${t.name}`,
       to: { target: t.id },
       defense: s
@@ -763,27 +804,40 @@ export const WarMap = ({
             exact: true,
           }
         : t.defense!,
-      distance: t.distance,
+      distance: Math.round(Math.hypot(t.x - from.x, t.y - from.y) * 10) / 10,
       terrain: t.terrain,
-      from: data!.home,
+      from,
       at: { x: t.x, y: t.y },
       harbor: t.harbor ?? 0,
       note:
         state.shieldUntil > now ? "Attacking ends your own shield." : undefined,
-    });
+    };
   };
+  const campTarget = (c: Camp, from: { x: number; y: number }): AttackTarget => ({
+    title: `Barbarian camp ${c.level}`,
+    to: { camp: c.level },
+    defense: { min: c.defense, max: c.defense, exact: true },
+    distance: Math.round(Math.hypot(c.x - from.x, c.y - from.y) * 10) / 10,
+    terrain: c.terrain,
+    from,
+    at: { x: c.x, y: c.y },
+  });
 
+  const attackTribe = (t: Tribe) => {
+    setSelected(null);
+    onAttack(tribeTarget(t, data!.home));
+  };
   const attackCamp = (c: Camp) => {
     setSelected(null);
-    onAttack({
-      title: `Barbarian camp ${c.level}`,
-      to: { camp: c.level },
-      defense: { min: c.defense, max: c.defense, exact: true },
-      distance: c.distance,
-      terrain: c.terrain,
-      from: data!.home,
-      at: { x: c.x, y: c.y },
-    });
+    onAttack(campTarget(c, data!.home));
+  };
+
+  /** The army waiting for new orders goes for this target instead. */
+  const redirectTo = (target: (from: { x: number; y: number }) => AttackTarget) => {
+    if (!picking) return;
+    setSelected(null);
+    setRedirecting({ army: picking, target: target(armySpot(picking, now).tile) });
+    setPicking(null);
   };
 
   const doScout = async (t: Tribe) => {
@@ -797,6 +851,14 @@ export const WarMap = ({
   const doRecall = async (id: number) => {
     if (await recall(id)) load();
   };
+  const ordersButton = (a: ArmyOnRoad) => (
+    <button
+      className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs"
+      onClick={() => setOrdersFor(a)}
+    >
+      <GameIcon e="🧭" /> Orders
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -846,12 +908,7 @@ export const WarMap = ({
               <span className="font-display font-black text-goldtext shrink-0">
                 {formatDuration(m.arrivesAt - now)}
               </span>
-              <button
-                className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs"
-                onClick={() => doRecall(m.id)}
-              >
-                Recall
-              </button>
+              {ordersButton(outbound(m))}
             </div>
           ))}
           {returning.map((m) => (
@@ -869,6 +926,11 @@ export const WarMap = ({
               <span className="font-display font-black text-sub shrink-0">
                 {formatDuration(m.returnsAt - now)}
               </span>
+              {(() => {
+                const h = homeward.find((x) => x.id === m.id);
+
+                return h ? ordersButton(homebound(h)) : null;
+              })()}
             </div>
           ))}
           {merchants.map((c) => (
@@ -1163,6 +1225,7 @@ export const WarMap = ({
                       road={road}
                       to={{ x: px(data.home.x), y: py(data.home.y) }}
                       units={m.units}
+                      onClick={() => setOrdersFor(homebound(m))}
                     />
                   );
                 })}
@@ -1190,6 +1253,7 @@ export const WarMap = ({
                       road={road}
                       to={{ x: px(m.to.x), y: py(m.to.y) }}
                       units={m.units}
+                      onClick={m.kind === "outgoing" ? () => setOrdersFor(outbound(m)) : undefined}
                     />
                   );
                 })}
@@ -1198,6 +1262,20 @@ export const WarMap = ({
           </div>
         )}
 
+        {picking && (
+          <div className="absolute inset-x-2 bottom-2 z-20 flex items-center gap-2 rounded-xl px-3 py-2 bg-ink/90 border border-gold text-sm shadow-lg mr-14">
+            <span className="text-lg animate-pulse">
+              <GameIcon e="🧭" />
+            </span>
+            <span className="flex-1 min-w-0 leading-tight">
+              <b className="text-goldtext">Pick a new target</b>
+              <span className="block text-[11px] text-sub">Tap a tribe or a camp on the map.</span>
+            </span>
+            <button className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs" onClick={() => setPicking(null)}>
+              Cancel
+            </button>
+          </div>
+        )}
         {data && (
           <div className="absolute right-2 bottom-2 flex flex-col gap-1.5 z-10">
             <button
@@ -1271,6 +1349,12 @@ export const WarMap = ({
                 <span>
                   You can recall an army before it arrives. Raided tribes get a
                   2h shield.
+                </span>
+                <span>
+                  <GameIcon e="🧭" /> Tap one of your armies on the road to give it new orders: on its way out or
+                  on its way home with the spoils, it can march on another tribe or camp from where it stands.
+                  It can leave troops behind but never take on more. Supplies for the new road come out of the
+                  spoils first. One new order per expedition; the War Orders card adds more.
                 </span>
                 <span>
                   <GameIcon e="⚔️" /> When armies meet, the battle lasts from 1 minute up to 30,
@@ -1444,6 +1528,14 @@ export const WarMap = ({
                         <p className="flex-1 text-xs font-bold text-[#A9D3EA] self-center">
                           <GameIcon e="🤝" /> Clanmate. You fight side by side, not against each other.
                         </p>
+                      ) : picking ? (
+                        <Button
+                          className="flex-1"
+                          disabled={shielded}
+                          onClick={() => redirectTo((from) => tribeTarget(t, from))}
+                        >
+                          <GameIcon e="🧭" /> Send army here
+                        </Button>
                       ) : (
                         <Button
                           className="flex-1"
@@ -1505,6 +1597,10 @@ export const WarMap = ({
                   <p className="text-sm font-bold text-goldtext">
                     {fightingCamp ? "Your army is fighting here right now." : "Your army is already on its way."}
                   </p>
+                ) : picking ? (
+                  <Button isFull onClick={() => redirectTo((from) => campTarget(c, from))}>
+                    <GameIcon e="🧭" /> Send army to camp {c.level}
+                  </Button>
                 ) : (
                   <Button isFull onClick={() => attackCamp(c)}>
                     <GameIcon e="⚔️" /> Attack camp {c.level}
@@ -1515,6 +1611,30 @@ export const WarMap = ({
           })()}
       </Drawer>
       <LiveBattleDrawer m={watched} now={now} onClose={() => setWatching(null)} />
+      <ArmyOrdersDrawer
+        army={ordersFor}
+        onClose={() => setOrdersFor(null)}
+        onNewTarget={(a) => {
+          setOrdersFor(null);
+          setPicking(a);
+        }}
+        onRecall={(id) => {
+          setOrdersFor(null);
+          doRecall(id);
+        }}
+      />
+      {data && (
+        <RedirectDrawer
+          army={redirecting?.army ?? null}
+          home={data.home}
+          target={redirecting?.target ?? null}
+          onClose={() => setRedirecting(null)}
+          onSent={() => {
+            setRedirecting(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 };

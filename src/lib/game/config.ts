@@ -475,6 +475,26 @@ export const campFirstReward = (level: number) => ({
 export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
 
+// ─── New orders on the road ─────────────────────────────────────────────────────
+//
+// An army out on an expedition (marching to a target, or on its way home with
+// the spoils) can be given a new target from where it stands. It can leave
+// troops behind, who walk home, but it can never grow. Each new order costs
+// field supplies, paid from the loot it carries first and from home storage
+// after that. How many new orders one expedition can take is set by the War
+// Orders card.
+
+export const REDIRECT = {
+  /** New orders one expedition can take without the card. */
+  baseOrders: 1,
+  /** Share of the troops' training cost spent on supplies for each new order. */
+  supplyShare: 0.05,
+  /** War Orders card: each level lets an expedition take one more new order. */
+  maxCardLevel: 4,
+  /** Coins to raise the card from level `i` to `i + 1`. */
+  cardCost: [2000, 5000, 12000, 30000],
+};
+
 // ─── Sea and ships ─────────────────────────────────────────────────────────────
 //
 // Armies can't walk on the sea. A march whose path crosses open water needs
