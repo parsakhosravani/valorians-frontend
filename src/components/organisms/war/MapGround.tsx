@@ -8,15 +8,16 @@ import { Terrain, marchRoute, terrainAt } from "@/lib/game/map";
  * The land under the war map, painted once onto a canvas and handed to the
  * camera as one picture.
  *
- * 1. Ground: biome colours blended tile to tile, brushed with noise, lit from
- *    the top-left so hills and mountains have relief. Water gets a ragged,
- *    crisp coastline with a beach and a foam line, light in the shallows and
- *    dark far out.
+ * 1. Ground, all painted the same way, lit from the top-left:
+ *    - water with a ragged, crisp coastline, beach and foam, light in the
+ *      shallows and dark far out;
+ *    - woods as a canopy of rounded tree crowns, with an edge that fades into
+ *      the meadow and the odd autumn grove;
+ *    - mountains as ridged rock rising out of foothills, snow on the crests;
+ *    - rolling, lumpy hills.
  * 2. Flat things on the ground: cleared earth under settlements, roads along
  *    the routes armies really march, your territory, fields round villages,
  *    grass on the plains.
- * 3. The painted terrain icons, back to front: woods of overlapping trees,
- *    low warm hills, and snowy peaks big enough to join into ranges.
  */
 
 export const TILE = 46; // tile size in px at zoom 1
@@ -38,6 +39,17 @@ const DEEP: V3 = [0x14, 0x34, 0x4c];
 const LAKE_SHALLOW: V3 = [0x4f, 0x98, 0x96];
 const LAKE_DEEP: V3 = [0x26, 0x5c, 0x6a];
 const FOAM: V3 = [0xe8, 0xf1, 0xe6];
+const CANOPY_FLOOR: V3 = [0x1c, 0x2e, 0x18];
+const PINE_DARK: V3 = [0x2c, 0x4c, 0x26];
+const PINE: V3 = [0x3c, 0x63, 0x2d];
+const PINE_LIGHT: V3 = [0x58, 0x7a, 0x34];
+const GOLD: V3 = [0xb8, 0x8c, 0x2e];
+const RUST: V3 = [0x9c, 0x4e, 0x22];
+const ROCK_LOW: V3 = [0x5e, 0x52, 0x43];
+const ROCK_HIGH: V3 = [0x80, 0x78, 0x6e];
+const SNOW: V3 = [0xee, 0xf1, 0xf3];
+
+const mixV = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 const wet = (t: Terrain) => t === "sea" || t === "lake";
 
@@ -76,102 +88,38 @@ const vnoise = (x: number, y: number, seed: number) => {
 const fbm = (x: number, y: number, seed: number) =>
   vnoise(x, y, seed) * 0.5 + vnoise(x * 2.1, y * 2.1, seed + 1) * 0.3 + vnoise(x * 4.3, y * 4.3, seed + 2) * 0.2;
 
+/**
+ * Tree crowns: the nearest of one jittered point per cell. Returns the
+ * distance to it and which cell it is, so each crown keeps its own colour.
+ */
+const crowns = (x: number, y: number): [number, number] => {
+  const gx = Math.floor(x);
+  const gy = Math.floor(y);
+  let best = 9;
+  let cell = 0;
+
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const cx = gx + dx;
+      const cy = gy + dy;
+      const px = cx + 0.15 + hash(cx, cy, 51) * 0.7;
+      const py = cy + 0.15 + hash(cx, cy, 52) * 0.7;
+      const d = (x - px) * (x - px) + (y - py) * (y - py);
+
+      if (d < best) {
+        best = d;
+        cell = cx * 7919 + cy;
+      }
+    }
+
+  return [Math.sqrt(best), cell];
+};
+
 const sstep = (a: number, b: number, x: number) => {
   const t = x <= a ? 0 : x >= b ? 1 : (x - a) / (b - a);
 
   return t * t * (3 - 2 * t);
 };
-
-// ─── Icons ───────────────────────────────────────────────────────────────────
-
-type Icons = {
-  /** Evergreen tints, each also mirrored: plain, deep shade, sunlit. */
-  pines: CanvasImageSource[];
-  /** Autumn groves: gold and rust. */
-  autumn: CanvasImageSource[];
-  /** Peaks: plain, cold, warm; each also mirrored. */
-  peaks: CanvasImageSource[];
-  hills: CanvasImageSource[];
-};
-
-const load = (src: string) =>
-  new Promise<HTMLImageElement>((ok, fail) => {
-    const img = new window.Image();
-
-    img.decoding = "async";
-    img.onload = () => ok(img);
-    img.onerror = fail;
-    img.src = src;
-  });
-
-/**
- * The painted icon recoloured pixel by pixel (canvas filters aren't on every
- * phone), optionally mirrored: one painting becomes a family, so repeated
- * stamps stop looking like a pattern.
- */
-const variant = (img: HTMLImageElement, recolor: ((r: number, g: number, b: number) => number[]) | null, flip: boolean) => {
-  const c = document.createElement("canvas");
-
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const g = c.getContext("2d")!;
-
-  if (flip) {
-    g.translate(c.width, 0);
-    g.scale(-1, 1);
-  }
-  g.drawImage(img, 0, 0);
-  if (recolor) {
-    const d = g.getImageData(0, 0, c.width, c.height);
-
-    for (let k = 0; k < d.data.length; k += 4) {
-      if (!d.data[k + 3]) continue;
-      const [r, gg, b] = recolor(d.data[k], d.data[k + 1], d.data[k + 2]);
-
-      d.data[k] = r;
-      d.data[k + 1] = gg;
-      d.data[k + 2] = b;
-    }
-    g.putImageData(d, 0, 0);
-  }
-
-  return c;
-};
-
-const both = (img: HTMLImageElement, recolor: ((r: number, g: number, b: number) => number[]) | null) => [
-  variant(img, recolor, false),
-  variant(img, recolor, true),
-];
-
-// Leaves turn, trunks and shadows stay: only pixels where green leads change.
-const turn = (warmth: number, red: number) => (r: number, g: number, b: number) =>
-  g > r + 6 ? [g * red, g * warmth, b * 0.45] : [r, g, b];
-
-let icons: Promise<Icons> | null = null;
-const loadIcons = () =>
-  (icons ??= Promise.all([
-    load("/images/icons/forest.webp"),
-    load("/images/icons/mountain.webp"),
-  ])
-    .then(([forest, mountain]) => ({
-      pines: [
-        ...both(forest, null),
-        ...both(forest, (r, g, b) => [r * 0.62, g * 0.74, b * 0.7]),
-        ...both(forest, (r, g, b) => [r * 1.12 + 10, g * 1.08 + 8, b * 0.88]),
-      ],
-      autumn: [...both(forest, turn(0.86, 1.2)), ...both(forest, turn(0.66, 1.18))],
-      peaks: [
-        ...both(mountain, null),
-        ...both(mountain, (r, g, b) => [r * 0.84, g * 0.86, b * 0.9 + 4]),
-        ...both(mountain, (r, g, b) => [r * 1.04 + 6, g * 0.97, b * 0.86]),
-      ],
-      // Hills are the mountain's rock, low and warm; the peaks keep their snow.
-      hills: both(mountain, (r, g, b) => [r * 0.5 + 66, g * 0.48 + 50, b * 0.45 + 26]),
-    }))
-    .catch((e) => {
-      icons = null;
-      throw e;
-    }));
 
 // ─── What stands on the land ─────────────────────────────────────────────────
 
@@ -218,6 +166,7 @@ const survey = ({ ox, oy, n }: Scene) => {
   const ELEV = new Float32Array(W * W);
   const MTN = new Float32Array(W * W);
   const FOR = new Float32Array(W * W);
+  const HIL = new Float32Array(W * W);
   const DIST = new Float32Array(W * W);
   const COL = new Float32Array(W * W * 3);
 
@@ -229,6 +178,7 @@ const survey = ({ ox, oy, n }: Scene) => {
     LAKE[k] = t === "lake" ? 1 : 0;
     MTN[k] = t === "mountains" ? 1 : 0;
     FOR[k] = t === "forest" ? 1 : 0;
+    HIL[k] = t === "hills" ? 1 : 0;
     ELEV[k] = t === "mountains" ? 1 : t === "hills" ? 0.45 : t === "forest" ? 0.12 : w ? -0.2 : 0;
     const c = LAND[w ? "plains" : (t as keyof typeof LAND)];
 
@@ -251,7 +201,7 @@ const survey = ({ ox, oy, n }: Scene) => {
     DIST[k] = best;
   }
 
-  return { W, at, id, WET, LAKE, ELEV, DIST, COL, MTN, FOR };
+  return { W, at, id, WET, LAKE, ELEV, DIST, COL, MTN, FOR, HIL };
 };
 
 type Survey = ReturnType<typeof survey>;
@@ -259,14 +209,31 @@ type Survey = ReturnType<typeof survey>;
 // ─── 1. Ground ───────────────────────────────────────────────────────────────
 
 /** Samples per tile: as many as a phone can afford for this much map. */
-const samplesPerTile = (n: number) => Math.max(8, Math.min(20, Math.floor(Math.sqrt(650_000) / n)));
+const samplesPerTile = (n: number) => Math.max(8, Math.min(26, Math.floor(Math.sqrt(1_000_000) / n)));
 
 const paintSoil = (s: Scene, v: Survey) => {
   const { ox, oy, n } = s;
-  const { W, WET, LAKE, ELEV, DIST, COL, MTN, FOR } = v;
+  const { W, WET, LAKE, ELEV, DIST, COL, MTN, FOR, HIL } = v;
   const S = samplesPerTile(n);
   const w = n * S;
   const rgb = new Float32Array(w * w * 3);
+  /** A field read at a bent spot: forests and ranges lose the tile grid's corners. */
+  const bent = (f: Float32Array, fx: number, fy: number) => {
+    const x = fx - 0.5;
+    const y = fy - 0.5;
+    const i0 = Math.floor(x);
+    const j0 = Math.floor(y);
+    const tx = sstep(0, 1, x - i0);
+    const ty = sstep(0, 1, y - j0);
+    const a = (j0 + MARGIN) * W + i0 + MARGIN;
+
+    return (
+      (f[a] ?? 0) * (1 - tx) * (1 - ty) +
+      (f[a + 1] ?? 0) * tx * (1 - ty) +
+      (f[a + W] ?? 0) * (1 - tx) * ty +
+      (f[a + W + 1] ?? 0) * tx * ty
+    );
+  };
   const elev = new Float32Array(w * w);
 
   for (let sy = 0; sy < w; sy++) {
@@ -336,29 +303,59 @@ const paintSoil = (s: Scene, v: Survey) => {
         R = (R + (tone[0] - R) * k) * fine;
         G = (G + (tone[1] - G) * k) * fine;
         B = (B + (tone[2] - B) * k) * fine;
-        // Woods: a dark, blotchy canopy floor, so a forest reads as one mass.
-        const f = bil(FOR);
+        // Hills: rolling ground, lumpy under the light.
+        const hl = bil(HIL);
 
-        if (f > 0.05) {
-          const blot = 0.82 + fbm(wx * 2.4, wy * 2.4, 31) * 0.4;
-          const kf = sstep(0.2, 0.85, f) * 0.8;
+        if (hl > 0.05) elev[o] += hl * (fbm(wx * 2.3, wy * 2.3, 25) - 0.3) * 0.5;
 
-          R += (0x22 * blot - R) * kf;
-          G += (0x37 * blot - G) * kf;
-          B += (0x1c * blot - B) * kf;
+        // Woods, painted like the sea: a canopy with a ragged edge that fades
+        // into the meadow, made of rounded tree crowns lit from the top-left.
+        const bx = fx + (fbm(wx * 0.9, wy * 0.9, 61) - 0.5) * 0.9;
+        const by = fy + (fbm(wx * 0.9, wy * 0.9, 62) - 0.5) * 0.9;
+        const fv = bent(FOR, bx, by) + (fbm(wx * 1.4, wy * 1.4, 41) - 0.5) * 0.45;
+        const kf = sstep(0.4, 0.62, fv);
+
+        if (kf > 0) {
+          const [dist, cell] = crowns(wx * 3.6, wy * 3.6);
+          // Crowns overlap: only the narrow gaps between them show the dark floor.
+          const dome = Math.max(0, 1 - dist / 0.78);
+          const hue = hash(cell, 7, 53);
+          const grove = fbm(wx * 0.2, wy * 0.2, 77) > 0.66 && hue < 0.6;
+          const leaf = grove ? (hue < 0.3 ? GOLD : RUST) : hue < 0.33 ? PINE_DARK : hue < 0.75 ? PINE : PINE_LIGHT;
+          const body = 0.78 + dome * 0.22;
+          const gap = 1 - sstep(0, 0.22, dome);
+          const tr = leaf[0] * body + (CANOPY_FLOOR[0] - leaf[0] * body) * gap;
+          const tg = leaf[1] * body + (CANOPY_FLOOR[1] - leaf[1] * body) * gap;
+          const tb = leaf[2] * body + (CANOPY_FLOOR[2] - leaf[2] * body) * gap;
+
+          R += (tr - R) * kf;
+          G += (tg - G) * kf;
+          B += (tb - B) * kf;
+          // The canopy stands above the ground, each crown a dome the light catches.
+          elev[o] += kf * (0.3 + Math.sqrt(dome) * 0.35);
         }
-        // Mountains: bare, ridged rock between the peaks.
-        const m = bil(MTN);
 
-        if (m > 0.05) {
-          const ridge = 1 - Math.abs(2 * fbm(wx * 1.7, wy * 1.7, 21) - 1);
-          const rock = 0.72 + ridge * 0.5;
-          const km = sstep(0.2, 0.8, m) * 0.85;
+        // Mountains, painted the same way: ridged rock that rises out of the
+        // land, bare and brown low down, grey higher, snow on the tops.
+        const mtn = bent(MTN, bx, by);
+        const mv = mtn + (fbm(wx * 1.2, wy * 1.2, 43) - 0.5) * 0.5 + (vnoise(wx * 3.5, wy * 3.5, 44) - 0.5) * 0.22;
+        const foot = sstep(0.15, 0.45, mv);
+        const km = sstep(0.35, 0.62, mv);
 
-          R += (0x7c * rock - R) * km;
-          G += (0x70 * rock - G) * km;
-          B += (0x60 * rock - B) * km;
-          elev[o] += m * ridge * 0.5;
+        elev[o] += foot * 0.3;
+        if (km > 0) {
+          const ridge = 1 - Math.abs(2 * fbm(wx * 2, wy * 2, 21) - 1);
+          const crag = 1 - Math.abs(2 * vnoise(wx * 4.5, wy * 4.5, 23) - 1);
+          const core = sstep(0.6, 1, mtn);
+          const h = km * (0.15 + ridge * 0.35 + crag * 0.15 + core * 0.35);
+          const rock = mixV(ROCK_LOW, ROCK_HIGH, sstep(0.25, 0.75, h));
+          // Snow only on the high crests, thinning out down the slopes.
+          const snow = sstep(0.9, 0.98, h + (vnoise(wx * 5, wy * 5, 27) - 0.5) * 0.1) * 0.75;
+
+          R += (rock[0] + (SNOW[0] - rock[0]) * snow - R) * km;
+          G += (rock[1] + (SNOW[1] - rock[1]) * snow - G) * km;
+          B += (rock[2] + (SNOW[2] - rock[2]) * snow - B) * km;
+          elev[o] += h * 1.2;
         }
         // A beach, then wet sand right at the water.
         const beach = sstep(0.18, 0.42, wv) * 0.9;
@@ -391,7 +388,7 @@ const paintSoil = (s: Scene, v: Survey) => {
       const o = sy * w + sx;
       const dx = elev[sy * w + Math.min(w - 1, sx + 1)] - elev[sy * w + Math.max(0, sx - 1)];
       const dy = elev[Math.min(w - 1, sy + 1) * w + sx] - elev[Math.max(0, sy - 1) * w + sx];
-      const shade = 1 + (-dx - dy) * k;
+      const shade = Math.max(0.5, Math.min(1.32, 1 + (-dx - dy) * k));
       const p = o * 4;
 
       img.data[p] = rgb[o * 3] * shade;
@@ -615,122 +612,6 @@ const paintFlat = (
   }
 };
 
-// ─── 3. Painted terrain ──────────────────────────────────────────────────────
-
-const paintTerrain = (g: CanvasRenderingContext2D, s: Scene, v: Survey, icons: Icons, road: Set<string>) => {
-  const T = TILE;
-  const { ox, oy, n, occupied } = s;
-  const sprites: { y: number; img: CanvasImageSource; x: number; size: number; shadow: number; a: number }[] = [];
-
-  for (let j = -1; j <= n; j++)
-    for (let i = -1; i <= n; i++) {
-      const t = v.at(i, j);
-      const x = ox + i;
-      const y = oy + j;
-      const key = `${x},${y}`;
-
-      if (occupied.has(key)) continue;
-      const onRoad = road.has(key);
-      const bx = i * T;
-      const by = j * T;
-
-      if (t === "forest") {
-        // Woods: five or six trees per tile, smaller at the edge and taller
-        // inside, in shades that drift across the forest. Here and there a
-        // grove has turned for autumn.
-        let inside = 0;
-
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (v.at(i + dx, j + dy) === "forest") inside++;
-        const grove = fbm(x * 0.22, y * 0.22, 77) > 0.66;
-        const many = inside >= 3 ? 6 : 5;
-
-        for (let k = 0; k < many; k++) {
-          // A jittered 3×2 grid, so trees spread over the tile without clumping.
-          const ax = bx + ((k % 3) + 0.5) * (T / 3) + (rnd(x, y, 70 + k) - 0.5) * 12;
-          const ay = by + (Math.floor(k / 3) + 0.75) * (T / 2) + (rnd(x, y, 80 + k) - 0.5) * 10;
-
-          if (onRoad && Math.abs(ax - bx - T / 2) < 13 && Math.abs(ay - by - T / 2) < 13) continue;
-          const pick = rnd(x, y, 95 + k);
-          const set = grove && pick < 0.7 ? icons.autumn : icons.pines;
-          // Deeper shade inside the woods, sunlit at the edges.
-          const tone = inside >= 3 ? (pick < 0.5 ? 2 : 0) : pick < 0.4 ? 4 : 0;
-          const img = set === icons.pines ? set[tone + (rnd(x, y, 97 + k) < 0.5 ? 1 : 0)] : set[Math.floor(pick * 5.7) % set.length];
-
-          sprites.push({ y: ay, x: ax, img, size: 22 + inside * 2 + rnd(x, y, 90 + k) * 10, shadow: 0.6, a: 0.3 });
-        }
-      } else if (t === "mountains") {
-        // Ranges: deep in a massif one tall peak, at its edge two smaller
-        // ones; cold rock high up, warmer below.
-        let around = 0;
-
-        for (let dy = -1; dy <= 1; dy++)
-          for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && v.at(i + dx, j + dy) === "mountains") around++;
-        const flip = rnd(x, y, 46) < 0.5 ? 1 : 0;
-
-        if (around >= 5) {
-          sprites.push({
-            x: bx + T / 2 + (rnd(x, y, 40) - 0.5) * 10,
-            y: by + T * 0.9 + (rnd(x, y, 42) - 0.5) * 6,
-            img: icons.peaks[(rnd(x, y, 47) < 0.6 ? 2 : 0) + flip],
-            size: 72 + around * 2.5 + rnd(x, y, 44) * 14,
-            shadow: 0.85,
-            a: 0.38,
-          });
-          if (rnd(x, y, 48) < 0.5)
-            sprites.push({
-              x: bx + T / 2 + (rnd(x, y, 49) < 0.5 ? -16 : 16),
-              y: by + T * 1.05,
-              img: icons.peaks[4 + (1 - flip)],
-              size: 44 + rnd(x, y, 45) * 10,
-              shadow: 0.8,
-              a: 0.3,
-            });
-        } else
-          for (let k = 0; k < 2; k++)
-            sprites.push({
-              x: bx + T / 2 + (k ? 10 : -9) + (rnd(x, y, 40 + k) - 0.5) * 8,
-              y: by + T * (k ? 0.98 : 0.7) + (rnd(x, y, 42 + k) - 0.5) * 6,
-              img: icons.peaks[(k ? 4 : rnd(x, y, 47) < 0.5 ? 0 : 2) + ((flip + k) % 2)],
-              size: (k ? 48 : 58) + rnd(x, y, 44 + k) * 12,
-              shadow: 0.8,
-              a: 0.35,
-            });
-      } else if (t === "hills" && !onRoad) {
-        sprites.push({
-          x: bx + T / 2 + (rnd(x, y, 50) - 0.5) * 14,
-          y: by + T * 0.85 + (rnd(x, y, 51) - 0.5) * 8,
-          img: icons.hills[rnd(x, y, 53) < 0.5 ? 0 : 1],
-          size: 26 + rnd(x, y, 52) * 8,
-          shadow: 0.85,
-          a: 0.22,
-        });
-      }
-      // Foothills: rocky mounds where the land rises to a range.
-      if (t !== "mountains" && !wet(t) && !onRoad && t !== "forest") {
-        const side = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([dx, dy]) => v.at(i + dx, j + dy) === "mountains");
-
-        if (side && rnd(x, y, 54) < 0.7)
-          sprites.push({
-            x: bx + T / 2 + side[0] * 12 + (rnd(x, y, 55) - 0.5) * 8,
-            y: by + T * 0.8 + side[1] * 10,
-            img: icons.hills[rnd(x, y, 56) < 0.5 ? 0 : 1],
-            size: 24 + rnd(x, y, 57) * 8,
-            shadow: 0.85,
-            a: 0.22,
-          });
-      }
-    }
-
-  sprites.sort((p, q) => p.y - q.y);
-  for (const sp of sprites) {
-    g.fillStyle = `rgba(14,10,4,${sp.a})`;
-    g.beginPath();
-    g.ellipse(sp.x + 3, sp.y - 1, (sp.size * sp.shadow) / 2, (sp.size * sp.shadow) / 5.5, 0, 0, Math.PI * 2);
-    g.fill();
-    g.drawImage(sp.img, sp.x - sp.size / 2, sp.y + 3 - sp.size, sp.size, sp.size);
-  }
-};
-
 /** Pixels the ground canvas may use: big enough to stay crisp, small enough for phones. */
 const MAX_PIXELS = 11_000_000;
 
@@ -786,28 +667,21 @@ export const MapGround = memo(function MapGround({
     const v = survey(scene);
     const { tiles, routes } = roadTiles(scene);
 
-    // Ground first so it's never blank, then the terrain once the icons load.
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = "high";
     g.drawImage(paintSoil(scene, v), 0, 0, size, size);
     paintFlat(g, scene, v, routes, tiles);
-    loadIcons()
-      .then((i) => {
-        if (!live) return;
-        paintTerrain(g, scene, v, i, tiles);
-        // Hand the finished picture over as an image: the browser tiles an
-        // image and only moves the tiles when the map pans or zooms, while a
-        // big canvas gets re-sent to the GPU on every frame.
-        c.toBlob(
-          (blob) => {
-            if (!live || !blob) return;
-            setSrc(URL.createObjectURL(blob));
-          },
-          "image/webp",
-          0.9,
-        );
-      })
-      .catch(() => undefined);
+    // Hand the finished picture over as an image: the browser tiles an
+    // image and only moves the tiles when the map pans or zooms, while a
+    // big canvas gets re-sent to the GPU on every frame.
+    c.toBlob(
+      (blob) => {
+        if (!live || !blob) return;
+        setSrc(URL.createObjectURL(blob));
+      },
+      "image/webp",
+      0.9,
+    );
 
     return () => {
       live = false;
