@@ -174,6 +174,12 @@ const SAND = "#C8B27A";
 const CLOSE_UP_ZOOM = 1.3;
 
 /**
+ * From this zoom up every village shows its name and every camp its full tag.
+ * Below it the map stays quiet: only names that matter to you right now.
+ */
+const LABELS_ZOOM = 1.3;
+
+/**
  * Height that makes the map end just above the bottom bar, so on a phone the
  * whole map is on screen and the page around it never needs scrolling (the
  * map takes every touch, so a page you can't see the end of is stuck).
@@ -638,6 +644,20 @@ export const WarMap = ({
       if (c.arrivesAt > now) place(`c${c.id}`, spot(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)));
   }
 
+  // Zoomed out, labels stay quiet: everyone's names only from LABELS_ZOOM up.
+  const labelsAll = restZoom >= LABELS_ZOOM;
+  // Villages you're dealing with right now (armies or your merchants on the way) keep their names.
+  const atWar = new Set<string>(
+    data
+      ? [
+          ...data.movements.flatMap((m) => [`${Math.round(m.from.x)},${Math.round(m.from.y)}`, `${m.to.x},${m.to.y}`]),
+          ...(data.caravans ?? [])
+            .filter((c) => c.kind !== "other")
+            .flatMap((c) => [`${c.from.x},${c.from.y}`, `${c.to.x},${c.to.y}`]),
+        ]
+      : [],
+  );
+
   const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
 
   return (
@@ -739,26 +759,42 @@ export const WarMap = ({
                       src={buildingImage(BUILDING_BY_ID["barracks"])}
                       width={88}
                     />
-                    <span
-                      className={clsx(
-                        "absolute left-1/2 top-[44px] -translate-x-1/2 whitespace-nowrap px-1.5 h-4 inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
-                        c.state === "new"
-                          ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
-                          : c.state === "ready"
-                            ? "bg-good text-[#1A120B] border-[#E6F5D9]"
-                            : "bg-ink/90 text-sub border-line",
-                      )}
-                    >
-                      {c.state === "locked" ? (
-                        <>
-                          <GameIcon e="🔒" /> {c.level}
-                        </>
-                      ) : c.state === "cooldown" ? (
-                        formatDuration(c.readyAt - now)
-                      ) : (
-                        `Camp ${c.level}`
-                      )}
-                    </span>
+                    {labelsAll || picked ? (
+                      <span
+                        className={clsx(
+                          "absolute left-1/2 top-[44px] -translate-x-1/2 whitespace-nowrap px-1.5 h-4 inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
+                          c.state === "new"
+                            ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
+                            : c.state === "ready"
+                              ? "bg-good text-[#1A120B] border-[#E6F5D9]"
+                              : "bg-ink/90 text-sub border-line",
+                        )}
+                      >
+                        {c.state === "locked" ? (
+                          <>
+                            <GameIcon e="🔒" /> {c.level}
+                          </>
+                        ) : c.state === "cooldown" ? (
+                          formatDuration(c.readyAt - now)
+                        ) : (
+                          `Camp ${c.level}`
+                        )}
+                      </span>
+                    ) : c.state !== "locked" ? (
+                      // Zoomed out: just the camp's number in a small badge, coloured by its state.
+                      <span
+                        className={clsx(
+                          "absolute left-1/2 top-[40px] -translate-x-1/2 min-w-[18px] h-[18px] px-1 rounded-full border-2 inline-flex items-center justify-center font-display text-[10px] font-black leading-none shadow-[0_2px_3px_rgba(0,0,0,0.6)]",
+                          c.state === "new"
+                            ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
+                            : c.state === "ready"
+                              ? "bg-good text-[#1A120B] border-[#E6F5D9]"
+                              : "bg-ink/90 text-sub border-line",
+                        )}
+                      >
+                        {c.level}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -827,19 +863,22 @@ export const WarMap = ({
                         <ClanFlag flag={t.clan.flag} size={20} title={`[${t.clan.tag}]`} />
                       </span>
                     )}
-                    {/* Name plate */}
-                    <span
-                      className={clsx(
-                        "absolute left-1/2 top-[52px] -translate-x-1/2 max-w-[120px] truncate px-1.5 h-[17px] leading-[15px] rounded-md border font-display text-[10px] font-bold tracking-[0.02em] shadow-[0_2px_4px_rgba(0,0,0,0.65)]",
-                        t.isMe
-                          ? "bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] border-[#F7D58A]"
-                          : t.ally
-                            ? "bg-ink/90 text-sea border-sea/60"
-                            : "bg-ink/90 text-parch border-frame",
-                      )}
-                    >
-                      {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
-                    </span>
+                    {/* Name plate: everyone's when zoomed in; zoomed out only yours, your
+                        clan's, the one you picked and anyone you're at war with right now */}
+                    {(labelsAll || t.isMe || t.ally || picked || atWar.has(`${t.x},${t.y}`)) && (
+                      <span
+                        className={clsx(
+                          "absolute left-1/2 top-[52px] -translate-x-1/2 max-w-[120px] truncate px-1.5 h-[17px] leading-[15px] rounded-md border font-display text-[10px] font-bold tracking-[0.02em] shadow-[0_2px_4px_rgba(0,0,0,0.65)]",
+                          t.isMe
+                            ? "bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] border-[#F7D58A]"
+                            : t.ally
+                              ? "bg-ink/90 text-sea border-sea/60"
+                              : "bg-ink/90 text-parch border-frame",
+                        )}
+                      >
+                        {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
+                      </span>
+                    )}
                   </button>
                 );
               })}
