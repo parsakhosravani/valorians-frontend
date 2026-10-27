@@ -2,7 +2,7 @@
 import React, { FunctionComponent, useState } from "react";
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
-import viking from "~/images/quest/viking.png";
+import viking from "~/images/quest/viking.webp";
 import Image from "next/image";
 import clsx from "clsx";
 import { ACTIVE_QUESTS, QUEST_ICONS, QuestDrawer } from "@/components/organisms/quest/QuestDrawer";

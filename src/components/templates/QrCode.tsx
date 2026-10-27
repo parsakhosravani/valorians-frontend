@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import rqcode from "~/images/qr/qr-code.png";
+import rqcode from "~/images/qr/qr-code.webp";
 import bg from "~/images/background/battle.webp";
 
 /** Shown when the page is opened outside Telegram: the game runs inside Telegram. */

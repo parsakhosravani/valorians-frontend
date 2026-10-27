@@ -5,7 +5,7 @@ import clsx from "clsx";
 
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
-import viking from "~/images/friends/viking.png";
+import viking from "~/images/friends/viking.webp";
 import coinImg from "~/images/resources/coin.webp";
 
 import { Card, Tabs, fmt } from "@/components/organisms/war/shared";
