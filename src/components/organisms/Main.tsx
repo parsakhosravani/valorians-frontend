@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
-import { useResourceContext, useTelegramContext } from "@/context";
+import { useGameStatus, useTelegramContext } from "@/context";
 import { Header, LoadingScreen, Navbar, QrCode } from "@/components";
 
 const Shell = ({
@@ -31,7 +31,7 @@ export const Main = ({
   children: React.ReactNode;
 }>) => {
   const { isMobile } = useTelegramContext();
-  const { status, error, retry } = useResourceContext();
+  const { status, error, retry } = useGameStatus();
   const pathname = usePathname();
 
   if (!isMobile || status === "no-auth") {
