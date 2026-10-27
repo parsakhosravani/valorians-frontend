@@ -4,6 +4,9 @@
  * server, so both agree on terrain and travel times.
  */
 import {
+  MAP_CENTER,
+  MAP_MAX,
+  MAP_MIN,
   MAP_SIZE,
   MIN_MARCH_SECONDS,
   TRIBE_SPACING,
@@ -43,8 +46,10 @@ const hash = (a: number, b: number, seed = 0) => {
 const noise = (x: number, y: number, seed: number, cell = 6) => {
   const gx = Math.floor(x / cell);
   const gy = Math.floor(y / cell);
-  const fx = (x % cell) / cell;
-  const fy = (y % cell) / cell;
+  // x - gx * cell is x % cell for the old, non-negative tiles (same land as
+  // always) and stays 0..cell for negative ones, where % would go negative.
+  const fx = (x - gx * cell) / cell;
+  const fy = (y - gy * cell) / cell;
   const lerp = (a: number, b: number, t: number) => a + (b - a) * (t * t * (3 - 2 * t));
   const top = lerp(hash(gx, gy, seed), hash(gx + 1, gy, seed), fx);
   const bottom = lerp(hash(gx, gy + 1, seed), hash(gx + 1, gy + 1, seed), fx);
@@ -75,7 +80,7 @@ export function terrainAt(x: number, y: number): Terrain {
   return "plains";
 }
 
-export const inMap = (p: Point) => p.x >= 0 && p.y >= 0 && p.x < MAP_SIZE && p.y < MAP_SIZE;
+export const inMap = (p: Point) => p.x >= MAP_MIN && p.y >= MAP_MIN && p.x < MAP_MAX && p.y < MAP_MAX;
 
 /** Ground nobody can settle or camp on. */
 const isWater = (t: Terrain) => t === "lake" || t === "sea";
@@ -125,7 +130,7 @@ function spiral(i: number): Point {
  * or a mountain, and never in a valley the mountains wall off.
  */
 export function homeSlot(n: number): Point {
-  const mid = Math.floor(MAP_SIZE / 2);
+  const mid = MAP_CENTER;
 
   for (let i = n; i < n + 50; i++) {
     const s = spiral(i);
@@ -139,6 +144,19 @@ export function homeSlot(n: number): Point {
 
   return { x: mid, y: mid };
 }
+
+/** The outermost ring of the settling spiral that still fits in the world. */
+export const MAX_RING = Math.floor((MAP_SIZE / 2 - 2) / TRIBE_SPACING);
+
+/**
+ * How full the world is once a tribe settles at `p`: the share of the
+ * spiral's area out to p's ring (0 at the middle, 1 at the last ring).
+ */
+export const settledShare = (p: Point) => {
+  const ring = Math.round(Math.max(Math.abs(p.x - MAP_CENTER), Math.abs(p.y - MAP_CENTER)) / TRIBE_SPACING);
+
+  return Math.min(1, ((2 * ring + 1) / (2 * MAX_RING + 1)) ** 2);
+};
 
 const key = (p: Point) => `${p.x},${p.y}`;
 
@@ -180,7 +198,7 @@ export function campPosition(playerId: number, level: number, home: Point, taken
   }
 
   // Last resort: the nearest free tile around home.
-  for (let r = 1; r < MAP_SIZE; r++)
+  for (let r = 1; r < 60; r++)
     for (let dy = -r; dy <= r; dy++)
       for (let dx = -r; dx <= r; dx++) {
         const p = { x: home.x + dx, y: home.y + dy };
@@ -188,7 +206,7 @@ export function campPosition(playerId: number, level: number, home: Point, taken
         if (Math.max(Math.abs(dx), Math.abs(dy)) === r && free(p)) return p;
       }
 
-  return { x: Math.min(MAP_SIZE - 1, home.x + 1), y: home.y };
+  return { x: Math.min(MAP_MAX - 1, home.x + 1), y: home.y };
 }
 
 /**
@@ -268,18 +286,28 @@ export const SHIP_ID = SHIP.id;
 // agree on the road and its time.
 
 const N = MAP_SIZE;
+/** A tile's place in the world grid (row by row from the top-left corner). */
+const at = (x: number, y: number) => (y - MAP_MIN) * N + (x - MAP_MIN);
 const CODES: Terrain[] = ["plains", "forest", "hills", "mountains", "lake", "sea"];
 const SEA = CODES.indexOf("sea");
 let GRID: Uint8Array | null = null;
+let SURVEYED: Uint8Array | null = null;
 
-/** The whole map's terrain, worked out once. */
-function grid() {
+/**
+ * The world's terrain, worked out tile by tile as roads first need it (the
+ * world is too big to survey all at once on a phone).
+ */
+function terrainCode(i: number) {
   if (!GRID) {
     GRID = new Uint8Array(N * N);
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) GRID[y * N + x] = CODES.indexOf(terrainAt(x, y));
+    SURVEYED = new Uint8Array(N * N);
+  }
+  if (!SURVEYED![i]) {
+    GRID[i] = CODES.indexOf(terrainAt((i % N) + MAP_MIN, Math.floor(i / N) + MAP_MIN));
+    SURVEYED![i] = 1;
   }
 
-  return GRID;
+  return GRID[i];
 }
 
 /** A walk is fine unless it's this much longer than the straight line; then ships are better. */
@@ -291,7 +319,7 @@ type Mode = { sea: boolean; climb: boolean };
 
 /** Cost to cross one tile, or null if it can't be entered. Start and end tiles are always open. */
 function tileCost(i: number, mode: Mode, end: boolean): number | null {
-  const t = CODES[grid()[i]];
+  const t = CODES[terrainCode(i)];
 
   if (t === "sea") return mode.sea || mode.climb ? 1 : end ? 1 : null;
   const march = TERRAIN[t].march;
@@ -301,17 +329,37 @@ function tileCost(i: number, mode: Mode, end: boolean): number | null {
   return end ? 1 : mode.climb ? CLIMB_COST : null;
 }
 
-/** A* over the tile grid, 8 directions, no cutting corners past blocked tiles. */
-function search(a: Point, b: Point, mode: Mode, limit = Infinity): { path: number[]; cost: number } | null {
-  const start = a.y * N + a.x;
-  const goal = b.y * N + b.x;
-  const g = new Float64Array(N * N).fill(Infinity);
-  const came = new Int32Array(N * N).fill(-1);
-  const done = new Uint8Array(N * N);
-  const cost = (i: number) => tileCost(i, mode, i === start || i === goal);
+/**
+ * A* over the tile grid, 8 directions, no cutting corners past blocked tiles.
+ * It searches the box round `a` and `b` grown by `margin` tiles (clipped to
+ * the world), so a short march doesn't look at the whole world. Returns the
+ * road as world-grid indexes.
+ */
+function search(
+  a: Point,
+  b: Point,
+  mode: Mode,
+  limit = Infinity,
+  margin = Infinity,
+): { path: number[]; cost: number } | null {
+  const x0 = Math.max(MAP_MIN, Math.min(a.x, b.x) - margin);
+  const y0 = Math.max(MAP_MIN, Math.min(a.y, b.y) - margin);
+  const x1 = Math.min(MAP_MAX - 1, Math.max(a.x, b.x) + margin);
+  const y1 = Math.min(MAP_MAX - 1, Math.max(a.y, b.y) + margin);
+  const W = x1 - x0 + 1;
+  const H = y1 - y0 + 1;
+  // Local index inside the box, and back to the world grid.
+  const loc = (x: number, y: number) => (y - y0) * W + (x - x0);
+  const world = (i: number) => at((i % W) + x0, Math.floor(i / W) + y0);
+  const start = loc(a.x, a.y);
+  const goal = loc(b.x, b.y);
+  const g = new Float64Array(W * H).fill(Infinity);
+  const came = new Int32Array(W * H).fill(-1);
+  const done = new Uint8Array(W * H);
+  const cost = (i: number) => tileCost(world(i), mode, i === start || i === goal);
   const h = (i: number) => {
-    const dx = Math.abs((i % N) - b.x);
-    const dy = Math.abs(Math.floor(i / N) - b.y);
+    const dx = Math.abs((i % W) + x0 - b.x);
+    const dy = Math.abs(Math.floor(i / W) + y0 - b.y);
 
     return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
   };
@@ -370,8 +418,8 @@ function search(a: Point, b: Point, mode: Mode, limit = Infinity): { path: numbe
     if (topF > limit) break;
     done[i] = 1;
     if (i === goal) break;
-    const x = i % N;
-    const y = Math.floor(i / N);
+    const x = i % W;
+    const y = Math.floor(i / W);
     const here = cost(i)!;
 
     for (let dy = -1; dy <= 1; dy++) {
@@ -380,15 +428,15 @@ function search(a: Point, b: Point, mode: Mode, limit = Infinity): { path: numbe
         const nx = x + dx;
         const ny = y + dy;
 
-        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-        const j = ny * N + nx;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
 
         if (done[j]) continue;
         const there = cost(j);
 
         if (there == null) continue;
         // Diagonals only when both tiles beside the step are open too.
-        if (dx && dy && (cost(y * N + nx) == null || cost(ny * N + x) == null)) continue;
+        if (dx && dy && (cost(y * W + nx) == null || cost(ny * W + x) == null)) continue;
         const step = (dx && dy ? Math.SQRT2 : 1) * (here + there) / 2;
         const ng = g[i] + step;
 
@@ -403,7 +451,7 @@ function search(a: Point, b: Point, mode: Mode, limit = Infinity): { path: numbe
   if (!done[goal]) return null;
   const path: number[] = [];
 
-  for (let i = goal; i !== -1; i = came[i]) path.push(i);
+  for (let i = goal; i !== -1; i = came[i]) path.push(world(i));
 
   return { path: path.reverse(), cost: g[goal] };
 }
@@ -430,14 +478,13 @@ export type MarchRoute = {
 };
 
 function build(a: Point, b: Point, idx: number[], climbed: boolean): MarchRoute {
-  const G = grid();
-  const path = idx.map((i) => ({ x: i % N, y: Math.floor(i / N) }));
+  const path = idx.map((i) => ({ x: (i % N) + MAP_MIN, y: Math.floor(i / N) + MAP_MIN }));
   const last = path.length - 1;
   // Start and end are beaches/homes: always land.
-  const wet = idx.map((i, k) => k !== 0 && k !== last && G[i] === SEA);
+  const wet = idx.map((i, k) => k !== 0 && k !== last && terrainCode(i) === SEA);
   const pace = (k: number) => {
     if (k === 0 || k === last) return 1;
-    const m = TERRAIN[CODES[G[idx[k]]]].march;
+    const m = TERRAIN[CODES[terrainCode(idx[k])]].march;
 
     return m ?? CLIMB_COST;
   };
@@ -478,7 +525,7 @@ function build(a: Point, b: Point, idx: number[], climbed: boolean): MarchRoute 
 }
 
 function findRoute(a: Point, b: Point): MarchRoute {
-  if (a.x === b.x && a.y === b.y) return build(a, b, [a.y * N + a.x], false);
+  if (a.x === b.x && a.y === b.y) return build(a, b, [at(a.x, a.y)], false);
   if (!inMap(a) || !inMap(b)) {
     // Off the map (shouldn't happen): the old straight line.
     const d = distance(a, b);
@@ -487,13 +534,21 @@ function findRoute(a: Point, b: Point): MarchRoute {
   }
   // On foot if there's a sensible way round; the sea search can use every
   // land road too, so if walking is too far it finds the shorter way by ship.
-  const walk = search(a, b, { sea: false, climb: false }, MAX_DETOUR(distance(a, b)));
+  const straight = distance(a, b);
+  const limit = MAX_DETOUR(straight);
+  // A walk no longer than `limit` stays inside the ellipse round a and b, so
+  // it never strays further than the ellipse's half-width outside their box:
+  // searching that box (plus a tile) finds exactly what the whole world would.
+  const reach = Math.ceil(Math.sqrt(limit * limit - straight * straight) / 2) + 1;
+  const walk = search(a, b, { sea: false, climb: false }, limit, reach);
 
   if (walk) return build(a, b, walk.path, false);
-  const sail = search(a, b, { sea: true, climb: false });
+  // Sea lanes and scrambles have no length limit: look near first, then the whole world.
+  const near = Math.max(24, Math.ceil(straight));
+  const sail = search(a, b, { sea: true, climb: false }, Infinity, near) ?? search(a, b, { sea: true, climb: false });
 
   if (sail) return build(a, b, sail.path, false);
-  const climb = search(a, b, { sea: true, climb: true })!;
+  const climb = (search(a, b, { sea: true, climb: true }, Infinity, near) ?? search(a, b, { sea: true, climb: true }))!;
 
   return build(a, b, climb.path, true);
 }
@@ -516,7 +571,7 @@ export function marchRoute(a0: Point, b0: Point): MarchRoute {
   // round) snaps to the nearest one, or the search never reaches it.
   const a = { x: Math.round(a0.x), y: Math.round(a0.y) };
   const b = { x: Math.round(b0.x), y: Math.round(b0.y) };
-  const flip = a.y * N + a.x > b.y * N + b.x;
+  const flip = at(a.x, a.y) > at(b.x, b.y);
   const [p, q] = flip ? [b, a] : [a, b];
   const k = `${p.x},${p.y}>${q.x},${q.y}`;
   let r = ROUTES.get(k);

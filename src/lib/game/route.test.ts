@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import * as E from "./engine";
-import { MAP_SIZE } from "./config";
+import { MAP_CENTER, MAP_MAX, MAP_MIN, MAP_SIZE } from "./config";
 import { Point, TERRAIN, campPositions, homeSlot, marchRoute, pointAlong, routeMs, routeTimeline, terrainAt } from "./map";
 
 const army = (a: Partial<E.Army>) => ({ ...E.emptyArmy(), ...a });
@@ -23,7 +23,7 @@ function acrossMountains(): { a: Point; b: Point } {
 
 test("there are mountains on the map, but not too many", () => {
   let m = 0;
-  for (let y = 0; y < MAP_SIZE; y++) for (let x = 0; x < MAP_SIZE; x++) if (terrainAt(x, y) === "mountains") m++;
+  for (let y = MAP_MIN; y < MAP_MAX; y++) for (let x = MAP_MIN; x < MAP_MAX; x++) if (terrainAt(x, y) === "mountains") m++;
   const share = m / (MAP_SIZE * MAP_SIZE);
   expect(share).toBeGreaterThan(0.03);
   expect(share).toBeLessThan(0.15);
@@ -77,7 +77,7 @@ test("tribes never settle on mountains or in walled-off valleys; camps always ha
   for (let n = 0; n < 300; n++) {
     const p = homeSlot(n);
     expect(terrainAt(p.x, p.y)).not.toBe("mountains");
-    expect(marchRoute({ x: MAP_SIZE / 2, y: MAP_SIZE / 2 }, p).climbed).toBe(false);
+    expect(marchRoute({ x: MAP_CENTER, y: MAP_CENTER }, p).climbed).toBe(false);
   }
   for (let id = 1; id <= 30; id++) {
     const home = homeSlot(id);

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import * as E from "./engine";
 import * as W from "./war";
-import { LANDING_DEFENSE, MAP_SIZE, UNIT_BY_ID } from "./config";
+import { LANDING_DEFENSE, MAP_MAX, MAP_MIN, MAP_SIZE, UNIT_BY_ID } from "./config";
 import {
   Point,
   campPosition,
@@ -48,7 +48,7 @@ function overLand(): { a: Point; b: Point } {
 
 test("the world has seas, but not too much of it, and the heart of the map is land", () => {
   let wet = 0;
-  for (let y = 0; y < MAP_SIZE; y++) for (let x = 0; x < MAP_SIZE; x++) if (seaAt(x, y)) wet++;
+  for (let y = MAP_MIN; y < MAP_MAX; y++) for (let x = MAP_MIN; x < MAP_MAX; x++) if (seaAt(x, y)) wet++;
   const share = wet / (MAP_SIZE * MAP_SIZE);
   expect(share).toBeGreaterThan(0.12);
   expect(share).toBeLessThan(0.45);

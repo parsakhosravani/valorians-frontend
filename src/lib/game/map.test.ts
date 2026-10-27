@@ -2,8 +2,8 @@ import { test, expect } from "bun:test";
 
 import * as E from "./engine";
 import * as W from "./war";
-import { MIN_MARCH_SECONDS } from "./config";
-import { campPosition, campPositions, distance, homeSlot, marchMs, terrainAt } from "./map";
+import { MAP_MIN, MIN_MARCH_SECONDS } from "./config";
+import { TERRAIN, campPosition, campPositions, distance, homeSlot, inMap, marchMs, marchRoute, terrainAt } from "./map";
 
 const T0 = Date.UTC(2026, 9, 25, 10);
 const army = (a: Partial<E.Army>) => ({ ...E.emptyArmy(), ...a });
@@ -89,4 +89,19 @@ test("camps never share a tile with a tribe or with each other", () => {
     expect(new Set(keys).size).toBe(camps.length);
     for (const k of keys) expect(homeKeys.has(k)).toBe(false);
   }
+});
+
+test("the world grew round the same middle: old land, homes and nearby roads are unchanged", () => {
+  // A few fixed facts from the 120×120 world, checked against the bigger one.
+  expect(inMap({ x: -100, y: 200 })).toBe(true);
+  expect(inMap({ x: MAP_MIN - 1, y: 0 })).toBe(false);
+  // The first tribe still settles at the old middle.
+  expect(Math.abs(homeSlot(0).x - 60)).toBeLessThanOrEqual(1);
+  expect(Math.abs(homeSlot(0).y - 60)).toBeLessThanOrEqual(1);
+  // Terrain works on negative coordinates (no gaps or NaN from the noise).
+  for (let y = -40; y < 0; y++) for (let x = -40; x < 0; x++) expect(TERRAIN[terrainAt(x, y)]).toBeDefined();
+  // Roads reach across the old edge into the new land.
+  const r = marchRoute({ x: 2, y: 60 }, { x: -6, y: 60 });
+  expect(r.path.length).toBeGreaterThan(1);
+  expect(r.path[r.path.length - 1]).toEqual({ x: -6, y: 60 });
 });

@@ -431,8 +431,17 @@ export const CAMP_TRAVEL_SECONDS = 45;
 
 // ─── World map ───────────────────────────────────────────────────────────────
 
-/** The world is MAP_SIZE × MAP_SIZE tiles; (0,0) is the top-left corner. */
-export const MAP_SIZE = 120;
+/**
+ * The world: tiles from MAP_MIN up to (not including) MAP_MAX on both axes,
+ * MAP_SIZE across. It began as 0–120; it grew evenly round the same middle
+ * (MAP_CENTER), so every tile that existed keeps its land and every tribe
+ * its home, and new tribes keep spiralling out from where the first settled.
+ * Coordinates can be negative.
+ */
+export const MAP_CENTER = 60;
+export const MAP_SIZE = 400;
+export const MAP_MIN = MAP_CENTER - MAP_SIZE / 2;
+export const MAP_MAX = MAP_CENTER + MAP_SIZE / 2;
 /** Tiles between neighbouring tribes when new players are placed. */
 export const TRIBE_SPACING = 4;
 /** Shortest possible one-way march. */
