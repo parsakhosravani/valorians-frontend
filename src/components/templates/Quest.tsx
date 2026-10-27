@@ -11,7 +11,7 @@ import { useGame } from "@/context";
 import { QuestId } from "@/lib/game/config";
 import { questStatus } from "@/lib/game/engine";
 
-interface QuestPropsType {}
+type QuestPropsType = Record<string, never>;
 
 export const Quest: FunctionComponent<QuestPropsType> = () => {
   const { state, now } = useGame();

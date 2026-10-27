@@ -37,7 +37,6 @@ function makeClient(): Client {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __valoriansDb: Promise<Client> | undefined;
 }
 

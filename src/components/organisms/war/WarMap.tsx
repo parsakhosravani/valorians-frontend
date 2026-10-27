@@ -174,7 +174,7 @@ const SAND = "#C8B27A";
  * whole map is on screen and the page around it never needs scrolling (the
  * map takes every touch, so a page you can't see the end of is stuck).
  */
-const useFillHeight = (box: RefObject<HTMLDivElement>) => {
+const useFillHeight = (box: RefObject<HTMLDivElement | null>) => {
   const [h, setH] = useState<number | null>(null);
 
   useLayoutEffect(() => {

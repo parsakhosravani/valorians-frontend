@@ -43,7 +43,7 @@ export function useMapCamera({
   const anim = useRef<Anim | null>(null);
   const fling = useRef<{ vx: number; vy: number; t: number } | null>(null);
   const raf = useRef(0);
-  const idle = useRef<ReturnType<typeof setTimeout>>();
+  const idle = useRef<ReturnType<typeof setTimeout>>(undefined);
   const dragged = useRef(false);
   /** A finger (or the mouse button) is down on the map. */
   const moving = useRef(false);

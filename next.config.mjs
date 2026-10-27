@@ -11,11 +11,11 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_ID: sha ? sha.slice(0, 7) : "dev",
     NEXT_PUBLIC_BUILD_DATE: new Date().toISOString().slice(0, 10),
   },
-  experimental: {
-    typedRoutes: true,
-    // Database client uses native bindings for local files; keep it out of the bundle.
-    serverComponentsExternalPackages: ["@libsql/client", "libsql"],
-  },
+  typedRoutes: true,
+  // Memoizes components automatically, so state updates only re-render what changed.
+  reactCompiler: true,
+  // Database client uses native bindings for local files; keep it out of the bundle.
+  serverExternalPackages: ["@libsql/client", "libsql"],
 };
 
 export default nextConfig;

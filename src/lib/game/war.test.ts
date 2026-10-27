@@ -37,7 +37,7 @@ test("second batch waits for the first", () => {
 });
 
 test("camp: strong army wins, gets reward on return, unlocks next camp", () => {
-  let s = withBarracks();
+  const s = withBarracks();
   s.army.spearman = 50; // 600 attack vs camp 1 defense 80
   const { state, report } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 50 }, T0, 0.5);
   expect(report.attackerWon).toBe(true);
