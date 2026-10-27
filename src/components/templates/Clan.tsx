@@ -5,12 +5,16 @@ import clsx from "clsx";
 
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
-import viking from "~/images/friends/viking.png";
+import viking from "~/images/friends/viking.webp";
 import coinImg from "~/images/resources/coin.webp";
 
 import { Card, Tabs, fmt } from "@/components/organisms/war/shared";
 import { FlagDesigner } from "@/components/organisms/clan/FlagDesigner";
-import { Avatar, Button, ClanFlag, Coin, TextImage } from "@/components";
+import { Avatar } from "@/components/molecules/Avatar";
+import { Button } from "@/components/atoms/Button";
+import { ClanFlag } from "@/components/molecules/ClanFlag";
+import { Coin } from "@/components/molecules/Coin";
+import { TextImage } from "@/components/molecules/TextImage";
 import useBackButton from "@/hooks/useBackButton";
 import { RESOURCES, useGame } from "@/context";
 import { apiRequest } from "@/lib/api";

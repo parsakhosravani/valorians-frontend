@@ -1,6 +1,8 @@
 import builder from "~/images/resources/builder.webp";
 
-import { InfoDrawer, Row, TextImage } from "@/components";
+import { InfoDrawer } from "@/components/organisms/InfoDrawer";
+import { Row } from "@/components/atoms/Row";
+import { TextImage } from "@/components/molecules/TextImage";
 import { useGame } from "@/context";
 
 export const Builder: React.FC = () => {

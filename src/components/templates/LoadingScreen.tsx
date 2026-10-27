@@ -14,7 +14,7 @@ import telegramIcon from "~/images/social/telegram.webp";
 import youtubeIcon from "~/images/social/youtube.webp";
 import xIcon from "~/images/social/x.webp";
 
-import { useResourceContext } from "@/context";
+import { useGameStatus } from "@/context";
 import { questLink } from "@/components/organisms/quest/QuestDrawer";
 
 /** Art every first screen needs; warming the cache avoids pop-in after loading. */
@@ -45,7 +45,7 @@ const EMBERS = Array.from({ length: 14 }, (_, i) => ({
  * then signing in and loading the tribe. Calls onDone once ready.
  */
 export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
-  const { status, error, retry } = useResourceContext();
+  const { status, error, retry } = useGameStatus();
   const [assetsLoaded, setAssetsLoaded] = useState(0);
   const [minElapsed, setMinElapsed] = useState(false);
   const [slow, setSlow] = useState(false);

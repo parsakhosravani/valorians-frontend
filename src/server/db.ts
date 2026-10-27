@@ -37,12 +37,41 @@ function makeClient(): Client {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __valoriansDb: Promise<Client> | undefined;
+}
+
+/**
+ * Bump this whenever the schema below changes (a new table, column or index).
+ * A database already at this version skips the whole setup, so a cold start
+ * costs one query instead of ~40 round trips to Turso.
+ */
+const SCHEMA_VERSION = 1;
+
+async function schemaVersion(client: Client): Promise<number> {
+  try {
+    const rs = await client.execute("SELECT value FROM meta WHERE key = 'schema_version'");
+
+    return rs.rows[0] ? Number(rs.rows[0].value) : 0;
+  } catch {
+    return 0; // fresh database: no meta table yet
+  }
 }
 
 async function init(): Promise<Client> {
   const client = makeClient();
+
+  if ((await schemaVersion(client)) >= SCHEMA_VERSION) return client;
+  await migrate(client);
+  await client.execute({
+    sql: "INSERT INTO meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    args: [String(SCHEMA_VERSION)],
+  });
+
+  return client;
+}
+
+/** Creates or upgrades every table. Safe to run again on an up-to-date database. */
+async function migrate(client: Client) {
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id            INTEGER PRIMARY KEY,           -- Telegram user id
@@ -251,7 +280,6 @@ async function init(): Promise<Client> {
     );
     CREATE INDEX IF NOT EXISTS payments_user ON payments(user_id, created_at DESC);
   `);
-  return client;
 }
 
 /** Shared, lazily-initialised database client. */

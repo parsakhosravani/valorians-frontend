@@ -1,4 +1,4 @@
-import { Clan } from "@/components";
+import { Clan } from "@/components/templates/Clan";
 
 export default function Page() {
   return <Clan />;

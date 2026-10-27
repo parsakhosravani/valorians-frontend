@@ -429,13 +429,16 @@ async function abandon(a: AttackRow, now: number, e: unknown) {
 /**
  * Starts the battles whose armies have arrived and finishes the ones whose
  * last round is over. Called at the start of war requests, at sign-in and by
- * the cron, so results appear the next time anyone looks.
+ * the cron, so results appear the next time anyone looks. With `playerId`,
+ * only battles that player is attacking or defending in.
  */
-export async function resolveDueAttacks(now: number) {
+export async function resolveDueAttacks(now: number, playerId?: number) {
   const db = await getDb();
+  const mine = playerId == null ? "" : " AND (attacker_id = ? OR defender_id = ?)";
+  const who = playerId == null ? [] : [playerId, playerId];
   const arrived = await db.execute({
-    sql: "SELECT * FROM attacks WHERE status = 'marching' AND arrives_at <= ? ORDER BY arrives_at ASC LIMIT 20",
-    args: [now],
+    sql: `SELECT * FROM attacks WHERE status = 'marching' AND arrives_at <= ?${mine} ORDER BY arrives_at ASC LIMIT 20`,
+    args: [now, ...who],
   });
 
   for (const row of arrived.rows) {
@@ -457,8 +460,8 @@ export async function resolveDueAttacks(now: number) {
   }
 
   const ended = await db.execute({
-    sql: "SELECT * FROM attacks WHERE status = 'fighting' AND ends_at <= ? ORDER BY ends_at ASC LIMIT 20",
-    args: [now],
+    sql: `SELECT * FROM attacks WHERE status = 'fighting' AND ends_at <= ?${mine} ORDER BY ends_at ASC LIMIT 20`,
+    args: [now, ...who],
   });
 
   for (const row of ended.rows) {

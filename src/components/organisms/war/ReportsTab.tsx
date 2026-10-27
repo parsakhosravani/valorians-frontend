@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, fmt } from "./shared";
 import { BattleSummary } from "./BattleResultDrawer";
 
-import { Drawer } from "@/components";
+import { Drawer } from "@/components/molecules/Drawer";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";

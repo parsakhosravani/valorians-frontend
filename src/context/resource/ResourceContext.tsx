@@ -167,7 +167,39 @@ export type ScoutReport = {
   power: number;
 };
 
-const GameContext = createContext<GameContextType | undefined>(undefined);
+/**
+ * The game context is split three ways so a component only re-renders when
+ * what it reads changes:
+ * - status: sign-in, load errors and the player's profile (rarely changes)
+ * - actions: every call to the server; the object never changes identity
+ * - live: state, rates and the clock, which move every second
+ * `useGame()` still returns all three merged for components that need it.
+ */
+type StatusKeys = "status" | "error" | "retry" | "me" | "authHeader";
+type LiveKeys = "state" | "rates" | "now" | "activeResource" | "combo";
+export type GameStatusValue = Pick<GameContextType, StatusKeys>;
+export type GameLiveValue = Pick<GameContextType, LiveKeys>;
+export type GameActions = Omit<GameContextType, StatusKeys | LiveKeys>;
+
+const StatusContext = createContext<GameStatusValue | undefined>(undefined);
+const ActionsContext = createContext<GameActions | undefined>(undefined);
+const LiveContext = createContext<GameLiveValue | undefined>(undefined);
+
+/**
+ * Wraps every function in `get()` (recursing into nested groups like `clan`)
+ * so the wrapper always calls the newest version. Keys are read once, so the
+ * returned object keeps the same identity for the provider's lifetime.
+ */
+function bindLatest<T extends object>(get: () => T): T {
+  const out: Record<string, unknown> = {};
+
+  for (const [key, val] of Object.entries(get())) {
+    if (typeof val === "function") out[key] = (...args: unknown[]) => (get() as any)[key](...args);
+    else if (val && typeof val === "object") out[key] = bindLatest(() => (get() as any)[key]);
+  }
+
+  return out as T;
+}
 
 const FLUSH_DELAY_MS = 700;
 const RESYNC_MS = 60_000;
@@ -290,7 +322,10 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Redraw counters every second, resync periodically, flush when hidden.
   useEffect(() => {
     if (status !== "ready") return;
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    // No point redrawing counters nobody can see (Telegram minimized, app in background).
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") setTick((x) => x + 1);
+    }, 1000);
     const r = setInterval(() => {
       flush().then(load);
     }, RESYNC_MS);
@@ -433,20 +468,11 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     return true;
   };
 
-  const value: GameContextType = {
-    status,
-    error,
-    retry: load,
-    me,
-    state,
-    rates,
-    now,
-    activeResource,
+  const actionsImpl: GameActions = {
     setActiveResource,
     tap,
     upgradeSkill: (skill) => act("skills/upgrade", { skill }, "Upgraded!"),
     claimStreak: () => act("streak", {}, "Reward claimed!"),
-    combo,
     upgradeBuilding: (building) => act("buildings/upgrade", { building }, "Construction started"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
@@ -524,18 +550,49 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       },
       claimPlus: () => act("shield/plus", {}, "🛡️ Weekly shield raised!"),
     },
-    authHeader,
   };
+  const actionsRef = useRef(actionsImpl);
 
-  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
+  actionsRef.current = actionsImpl;
+  const [actions] = useState(() => bindLatest(() => actionsRef.current));
+
+  const statusValue = useMemo<GameStatusValue>(
+    () => ({ status, error, retry: load, me, authHeader }),
+    [status, error, load, me, authHeader]
+  );
+  const liveValue = useMemo<GameLiveValue>(
+    () => ({ state, rates, now, activeResource, combo }),
+    [state, rates, now, activeResource, combo]
+  );
+
+  return (
+    <StatusContext.Provider value={statusValue}>
+      <ActionsContext.Provider value={actions}>
+        <LiveContext.Provider value={liveValue}>{children}</LiveContext.Provider>
+      </ActionsContext.Provider>
+    </StatusContext.Provider>
+  );
 };
 
-export const useResourceContext = () => {
-  const context = useContext(GameContext);
-  if (context === undefined) {
-    throw new Error("useResourceContext must be used within a ResourceProvider");
-  }
-  return context;
+const need = <T,>(v: T | undefined): T => {
+  if (v === undefined) throw new Error("Game hooks must be used within a ResourceProvider");
+
+  return v;
+};
+
+/** Sign-in status, load errors and the player's profile. Doesn't tick. */
+export const useGameStatus = () => need(useContext(StatusContext));
+
+/** Server actions. The object is stable, so reading it never causes re-renders. */
+export const useGameActions = () => need(useContext(ActionsContext));
+
+/** Everything at once: status, actions and live state (re-renders every second). */
+export const useResourceContext = (): GameContextType => {
+  const status = useGameStatus();
+  const actions = useGameActions();
+  const live = need(useContext(LiveContext));
+
+  return { ...status, ...actions, ...live };
 };
 
 /** Same as useResourceContext, for components that only render once ready. */

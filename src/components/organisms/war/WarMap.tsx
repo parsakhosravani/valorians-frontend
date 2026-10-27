@@ -32,7 +32,9 @@ import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { MapGround, TILE } from "./MapGround";
 import { useMapCamera } from "./useMapCamera";
 
-import { Button, Drawer, InfoDrawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
+import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import {
   BattleReport,
   ScoutReport,
@@ -174,7 +176,7 @@ const SAND = "#C8B27A";
  * whole map is on screen and the page around it never needs scrolling (the
  * map takes every touch, so a page you can't see the end of is stuck).
  */
-const useFillHeight = (box: RefObject<HTMLDivElement>) => {
+const useFillHeight = (box: RefObject<HTMLDivElement | null>) => {
   const [h, setH] = useState<number | null>(null);
 
   useLayoutEffect(() => {

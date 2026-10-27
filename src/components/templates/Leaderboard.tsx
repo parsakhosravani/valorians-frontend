@@ -6,8 +6,8 @@ import clsx from "clsx";
 import bg from "~/images/background/tribe.webp";
 
 import { Tabs } from "@/components/organisms/war/shared";
-import { Avatar } from "@/components";
-import { useGame } from "@/context";
+import { Avatar } from "@/components/molecules/Avatar";
+import { useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import useBackButton from "@/hooks/useBackButton";
 import { ScreenHeader } from "@/components/atoms/Ui";
@@ -22,7 +22,7 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 
 export const Leaderboard = () => {
   useBackButton();
-  const { authHeader } = useGame();
+  const { authHeader } = useGameStatus();
   const [metric, setMetric] = useState<Metric>("population");
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);

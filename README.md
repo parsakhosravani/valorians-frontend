@@ -11,7 +11,7 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 | Game rules and balance numbers (costs, rates, rewards) | `src/lib/game/config.ts` |
 | Game engine — pure functions shared by server and client | `src/lib/game/engine.ts` |
 | Telegram sign-in verification (initData HMAC) | `src/server/auth.ts` |
-| Database (Turso or local SQLite, tables auto-created) and players | `src/server/db.ts`, `src/server/players.ts` |
+| Database (Turso or local SQLite, tables auto-created; bump `SCHEMA_VERSION` when you change the schema) and players | `src/server/db.ts`, `src/server/players.ts` |
 | API routes | `src/app/api/*` |
 | Client state, tap batching, live counters | `src/context/resource/ResourceContext.tsx` |
 

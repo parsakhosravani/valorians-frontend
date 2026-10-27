@@ -7,7 +7,8 @@ import clsx from "clsx";
 import bg from "~/images/background/tribe.webp";
 
 import { Card, Tabs, fmt } from "@/components/organisms/war/shared";
-import { Avatar, Button } from "@/components";
+import { Avatar } from "@/components/molecules/Avatar";
+import { Button } from "@/components/atoms/Button";
 import { RESOURCES, useGame } from "@/context";
 import useBackButton from "@/hooks/useBackButton";
 import { apiRequest } from "@/lib/api";

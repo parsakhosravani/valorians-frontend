@@ -2,16 +2,17 @@
 import React, { FunctionComponent, useState } from "react";
 import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
-import viking from "~/images/quest/viking.png";
+import viking from "~/images/quest/viking.webp";
 import Image from "next/image";
 import clsx from "clsx";
-import { ACTIVE_QUESTS, Coin, QUEST_ICONS, QuestDrawer } from "@/components";
+import { ACTIVE_QUESTS, QUEST_ICONS, QuestDrawer } from "@/components/organisms/quest/QuestDrawer";
+import { Coin } from "@/components/molecules/Coin";
 import { EmptyState, SectionTitle } from "@/components/atoms/Ui";
 import { useGame } from "@/context";
 import { QuestId } from "@/lib/game/config";
 import { questStatus } from "@/lib/game/engine";
 
-interface QuestPropsType {}
+type QuestPropsType = Record<string, never>;
 
 export const Quest: FunctionComponent<QuestPropsType> = () => {
   const { state, now } = useGame();

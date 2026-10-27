@@ -140,12 +140,13 @@ export async function acceptTrade(me: Player, id: number, now: number) {
   return p;
 }
 
-/** Hands over every load whose merchants have arrived. */
-export async function resolveDueTrades(now: number) {
+/** Hands over every load whose merchants have arrived (with `playerId`: only that player's). */
+export async function resolveDueTrades(now: number, playerId?: number) {
   const db = await getDb();
+  const mine = playerId == null ? "" : " AND (seller_id = ? OR buyer_id = ?)";
   const rs = await db.execute({
-    sql: "SELECT * FROM trades WHERE status = 'accepted' AND arrives_at <= ? ORDER BY arrives_at ASC LIMIT 20",
-    args: [now],
+    sql: `SELECT * FROM trades WHERE status = 'accepted' AND arrives_at <= ?${mine} ORDER BY arrives_at ASC LIMIT 20`,
+    args: playerId == null ? [now] : [now, playerId, playerId],
   });
 
   for (const row of rs.rows) {

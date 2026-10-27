@@ -17,7 +17,7 @@ import {
 } from "@/lib/game/config";
 import { frenzyActive } from "@/lib/game/engine";
 import type { ResourceId } from "@/lib/game/config";
-import { Button } from "@/components";
+import { Button } from "@/components/atoms/Button";
 
 type Float = { id: number; x: number; y: number; text: string; crit: boolean };
 

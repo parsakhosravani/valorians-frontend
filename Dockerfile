@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 RUN npm install -g bun && bun install --frozen-lockfile
 COPY . .
 # NEXT_PUBLIC_* values are baked in at build time.

@@ -1,6 +1,10 @@
 import React, { FunctionComponent } from "react";
 
-import { Col, Row, Text, ProgressBar, TextImage } from "@/components";
+import { Col } from "@/components/atoms/Col";
+import { Row } from "@/components/atoms/Row";
+import { Text } from "@/components/atoms/Text";
+import { ProgressBar } from "@/components/molecules/ProgressBar";
+import { TextImage } from "@/components/molecules/TextImage";
 import { TResource } from "@/context";
 
 interface resourcePropsType {

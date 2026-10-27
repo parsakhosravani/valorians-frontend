@@ -5,8 +5,8 @@ const GoogleScript = () => {
 
     return (
         <>
-            <Script id='google-script' strategy="beforeInteractive" async src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID}`}></Script>
-            <Script id='google-code' strategy="beforeInteractive">
+            <Script id='google-script' strategy="afterInteractive" async src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID}`}></Script>
+            <Script id='google-code' strategy="afterInteractive">
                 {`
                     window.dataLayer = window.dataLayer || [];
                     function gtag(){dataLayer.push(arguments);}

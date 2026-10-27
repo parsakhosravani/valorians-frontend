@@ -3,8 +3,11 @@
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
-import { useResourceContext, useTelegramContext } from "@/context";
-import { Header, LoadingScreen, Navbar, QrCode } from "@/components";
+import { useGameStatus, useTelegramContext } from "@/context";
+import { Header } from "@/components/organisms/Header";
+import { LoadingScreen } from "@/components/templates/LoadingScreen";
+import { Navbar } from "@/components/organisms/Navbar";
+import { QrCode } from "@/components/templates/QrCode";
 
 const Shell = ({
   children,
@@ -31,7 +34,7 @@ export const Main = ({
   children: React.ReactNode;
 }>) => {
   const { isMobile } = useTelegramContext();
-  const { status, error, retry } = useResourceContext();
+  const { status, error, retry } = useGameStatus();
   const pathname = usePathname();
 
   if (!isMobile || status === "no-auth") {

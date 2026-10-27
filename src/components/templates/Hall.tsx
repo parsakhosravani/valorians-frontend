@@ -16,8 +16,11 @@ import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { PlusDrawer } from "@/components/organisms/PlusDrawer";
-import { ShieldDrawer } from "@/components/organisms/ShieldDrawer";
+import dynamic from "next/dynamic";
+
+// Opened from buttons, so they load separately from the page.
+const PlusDrawer = dynamic(() => import("@/components/organisms/PlusDrawer").then((m) => m.PlusDrawer));
+const ShieldDrawer = dynamic(() => import("@/components/organisms/ShieldDrawer").then((m) => m.ShieldDrawer));
 import { plusActive } from "@/lib/game/engine";
 import { GameIcon } from "@/components/atoms/GameIcon";
 import { Bar, SectionTitle } from "@/components/atoms/Ui";

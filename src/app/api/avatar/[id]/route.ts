@@ -84,9 +84,9 @@ async function botPhoto(userId: number) {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const id = Number(params.id);
+  const id = Number((await params).id);
   const miss = () =>
     new Response(null, {
       status: 404,

@@ -4,7 +4,8 @@ import clsx from "clsx";
 
 import { UnitBadge, fmt } from "./shared";
 
-import { Button, Drawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
 import { useGame, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy } from "@/lib/game/engine";
