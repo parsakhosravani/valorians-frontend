@@ -6,7 +6,9 @@ import Link from "next/link";
 import clsx from "clsx";
 import { usePathname } from "next/navigation";
 
-import { Coin, NAV_ICONS, User } from "@/components";
+import { Coin } from "@/components/molecules/Coin";
+import { NAV_ICONS } from "@/components/organisms/Navbar";
+import { User } from "@/components/molecules/User";
 import { RESOURCES, useGame } from "@/context";
 import { compact } from "@/lib/format";
 

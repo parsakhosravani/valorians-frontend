@@ -6,7 +6,7 @@ import clsx from "clsx";
 import bg from "~/images/background/tribe.webp";
 
 import { Tabs } from "@/components/organisms/war/shared";
-import { Avatar } from "@/components";
+import { Avatar } from "@/components/molecules/Avatar";
 import { useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import useBackButton from "@/hooks/useBackButton";

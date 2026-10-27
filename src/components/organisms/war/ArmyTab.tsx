@@ -5,7 +5,7 @@ import Image from "next/image";
 
 import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
 
-import { Button } from "@/components";
+import { Button } from "@/components/atoms/Button";
 import { RESOURCES, useGame } from "@/context";
 import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef } from "@/lib/game/config";
 import { TrainItem, maxTrainBatches, trainingEndsAt } from "@/lib/game/engine";

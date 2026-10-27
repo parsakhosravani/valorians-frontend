@@ -3,7 +3,7 @@ import clsx from "clsx";
 
 import { ArmyLine } from "./shared";
 
-import { Drawer } from "@/components";
+import { Drawer } from "@/components/molecules/Drawer";
 import { formatDuration } from "@/lib/format";
 import { UNITS } from "@/lib/game/config";
 import type { BattleRound } from "@/lib/game/battle";

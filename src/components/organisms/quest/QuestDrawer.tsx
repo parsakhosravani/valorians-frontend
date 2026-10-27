@@ -8,7 +8,10 @@ import youtubeIcon from "~/images/social/youtube.png";
 import xIcon from "~/images/social/x.png";
 import population from "~/images/resources/population.webp";
 
-import { Button, Coin, Col, Text } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Coin } from "@/components/molecules/Coin";
+import { Col } from "@/components/atoms/Col";
+import { Text } from "@/components/atoms/Text";
 import { Drawer } from "@/components/molecules";
 import { useGame, useTelegramContext } from "@/context";
 import { QUESTS, QuestDef, QuestId, questUrl } from "@/lib/game/config";

@@ -6,7 +6,7 @@ import "@fontsource/alegreya-sans/700.css";
 import "@fontsource/alegreya-sans/800.css";
 import "@/styles/globals.css";
 import type { Metadata, Viewport } from "next";
-import { Main } from "@/components";
+import { Main } from "@/components/organisms/Main";
 import { Providers } from "../providers";
 import { ResourceProvider } from "@/context/resource/ResourceContext";
 import { Toaster } from "react-hot-toast";

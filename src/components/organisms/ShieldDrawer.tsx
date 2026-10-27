@@ -2,7 +2,8 @@
 import { useState } from "react";
 import clsx from "clsx";
 
-import { Button, Drawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
 import { useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS, SHIELDS, ShieldId } from "@/lib/game/config";

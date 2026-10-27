@@ -4,7 +4,10 @@ import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
 import { useGameStatus, useTelegramContext } from "@/context";
-import { Header, LoadingScreen, Navbar, QrCode } from "@/components";
+import { Header } from "@/components/organisms/Header";
+import { LoadingScreen } from "@/components/templates/LoadingScreen";
+import { Navbar } from "@/components/organisms/Navbar";
+import { QrCode } from "@/components/templates/QrCode";
 
 const Shell = ({
   children,

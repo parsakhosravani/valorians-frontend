@@ -3,7 +3,8 @@ import Image from "next/image";
 
 import { ArmyLine, fmt } from "./shared";
 
-import { Button, Drawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";

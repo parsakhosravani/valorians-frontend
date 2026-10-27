@@ -6,7 +6,9 @@ import clsx from "clsx";
 
 import builderImg from "~/images/resources/builder.webp";
 
-import { Building, Drawer, InfoDrawer } from "@/components";
+import { Building } from "@/components/organisms/tribe/Building";
+import { Drawer } from "@/components/molecules/Drawer";
+import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import { Village } from "@/components/organisms/tribe/Village";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { BUILDING_BY_ID, BuildingDef, RESOURCE_NAMES, ResourceId, buildingImage } from "@/lib/game/config";

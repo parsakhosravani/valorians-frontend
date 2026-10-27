@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 
-import { Button, Drawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
 import { useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS } from "@/lib/game/config";

@@ -7,7 +7,8 @@ import time from "~/images/resources/time.webp";
 import { SectionTitle } from "@/components/atoms/Ui";
 import population from "~/images/resources/population.webp";
 
-import { Button, Chip } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Chip } from "@/components/atoms/Chip";
 import { RESOURCES, useGame } from "@/context";
 import {
   BuildingDef,

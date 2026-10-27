@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Row } from "@/components";
+import { Row } from "@/components/atoms/Row";
 
 interface CapacityProps {
   value: number;

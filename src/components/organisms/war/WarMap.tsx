@@ -32,7 +32,9 @@ import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { MapGround, TILE } from "./MapGround";
 import { useMapCamera } from "./useMapCamera";
 
-import { Button, Drawer, InfoDrawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
+import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import {
   BattleReport,
   ScoutReport,

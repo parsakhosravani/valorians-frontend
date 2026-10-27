@@ -1,6 +1,9 @@
 "use client";
 import React, { useState } from "react";
-import { Button, Col, Drawer, Row } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Col } from "@/components/atoms/Col";
+import { Drawer } from "@/components/molecules/Drawer";
+import { Row } from "@/components/atoms/Row";
 import info from "~/images/info.webp";
 import Image from "next/image";
 

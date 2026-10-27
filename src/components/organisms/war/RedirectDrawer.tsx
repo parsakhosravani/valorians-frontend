@@ -5,7 +5,8 @@ import clsx from "clsx";
 import { ArmyLine, UnitBadge, fmt } from "./shared";
 import type { AttackTarget } from "./SendArmyDrawer";
 
-import { Button, Drawer } from "@/components";
+import { Button } from "@/components/atoms/Button";
+import { Drawer } from "@/components/molecules/Drawer";
 import { useGame, useTelegramContext } from "@/context";
 import { RESOURCE_IDS, RESOURCE_NAMES, REDIRECT, UNITS } from "@/lib/game/config";
 import { Army, GameError, emptyArmy } from "@/lib/game/engine";
