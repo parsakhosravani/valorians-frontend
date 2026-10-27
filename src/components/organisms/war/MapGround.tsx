@@ -140,7 +140,7 @@ type Scene = {
   occupied: Set<string>;
   home: Pt | null;
   villages: Pt[];
-  roads: Pt[];
+  roads: [Pt, Pt][];
 };
 
 /** Terrain and per-tile facts with a margin, for neighbours and blending. */
@@ -427,7 +427,7 @@ const grainTile = () => {
 /** Tiles the roads run over: trees and hills stay off them. */
 const roadTiles = (s: Scene) => {
   const tiles = new Set<string>();
-  const routes = s.home ? s.roads.map((t) => marchRoute(s.home!, t)) : [];
+  const routes = s.roads.map(([a, b]) => marchRoute(a, b));
 
   for (const r of routes) for (const p of r.path) tiles.add(`${p.x},${p.y}`);
 
@@ -515,8 +515,8 @@ const paintFlat = (
   g.lineCap = g.lineJoin = "round";
   for (const r of routes) {
     const pts = r.path.map((p, k) => ({
-      x: px(p.x) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 61) - 0.5) * 10 : 0),
-      y: py(p.y) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 62) - 0.5) * 10 : 0),
+      x: px(p.x) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 61) - 0.5) * 4 : 0),
+      y: py(p.y) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 62) - 0.5) * 4 : 0),
       wet: r.wet[k],
     }));
     const curve = (atSea: boolean) => {
@@ -629,11 +629,11 @@ export const MapGround = memo(function MapGround({
   n: number;
   /** "x,y" tiles with a tribe or camp: no trees drawn under them. */
   occupied: string;
-  /** "x,y" of your tribe: your territory is drawn round it, and roads start there. */
+  /** "x,y" of your tribe: your territory is drawn round it. */
   home?: string;
   /** "x,y;…" tribes: fields are tilled round them. */
   villages?: string;
-  /** "x,y;…" places the roads from home lead to. */
+  /** "ax,ay>bx,by;…" roads to paint, each along the route armies march. */
   roads?: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -654,7 +654,13 @@ export const MapGround = memo(function MapGround({
       occupied: new Set(occupied ? occupied.split(";") : []),
       home: parse(home)[0] ?? null,
       villages: parse(villages),
-      roads: parse(roads),
+      roads: roads
+        ? roads.split(";").map((pair) => {
+            const [a, b] = pair.split(">").map((q) => parse(q)[0]);
+
+            return [a, b] as [Pt, Pt];
+          })
+        : [],
     };
     let live = true;
 

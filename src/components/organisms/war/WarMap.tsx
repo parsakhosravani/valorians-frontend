@@ -14,9 +14,7 @@ import clsx from "clsx";
 import {
   ArmyToken,
   CaravanToken,
-  ROUTE_COLORS,
   Road,
-  Route,
   progress,
 } from "./MapTravellers";
 import { AttackTarget } from "./SendArmyDrawer";
@@ -457,19 +455,25 @@ export const WarMap = ({
   // and roads from home to the camps and the tribes close by.
   const ground = useMemo(() => {
     if (!data) return { home: "", villages: "", roads: "" };
-    const xy = (p: { x: number; y: number }) => `${p.x},${p.y}`;
+    const xy = (p: { x: number; y: number }) => `${Math.round(p.x)},${Math.round(p.y)}`;
 
     return {
       home: xy(data.home),
       villages: data.tribes.map(xy).sort().join(";"),
-      roads: [
-        ...data.camps.map(xy),
-        ...data.tribes.filter((t) => !t.isMe && t.distance <= ROAD_REACH).map(xy),
-      ]
+      // Armies and merchants travel on these same painted roads: no lines of their own.
+      roads: Array.from(
+        new Set([
+          ...data.camps.map((c) => `${xy(data.home)}>${xy(c)}`),
+          ...data.tribes.filter((t) => !t.isMe && t.distance <= ROAD_REACH).map((t) => `${xy(data.home)}>${xy(t)}`),
+          ...data.movements.map((m) => `${xy(m.from)}>${xy(m.to)}`),
+          ...state.marches.filter((m) => m.from).map((m) => `${xy(m.from!)}>${xy(data.home)}`),
+          ...(data.caravans ?? []).map((c) => `${xy(c.from)}>${xy(c.to)}`),
+        ]),
+      )
         .sort()
         .join(";"),
     };
-  }, [data]);
+  }, [data, state.marches]);
 
   const strength = (p: number) => {
     const ratio = p / Math.max(1, data?.myPower ?? 1);
@@ -646,56 +650,6 @@ export const WarMap = ({
                 roads={ground.roads}
                 villages={ground.villages}
               />
-              <svg
-                aria-hidden="true"
-                className="absolute inset-0"
-                height={n * T}
-                width={n * T}
-              >
-                {/* Merchant roads, under the armies' */}
-                {(data.caravans ?? [])
-                  .filter((c) => c.arrivesAt > now)
-                  .map((c) => (
-                    <Route
-                      key={`r${c.id}`}
-                      merchant
-                      color={ROUTE_COLORS[c.kind]}
-                      faint={c.kind === "other"}
-                      from={{ x: px(c.from.x), y: py(c.from.y) }}
-                      p={progress(now, c.sentAt, c.arrivesAt)}
-                      to={{ x: px(c.to.x), y: py(c.to.y) }}
-                    />
-                  ))}
-                {/* Marches */}
-                {marching.map((m) => {
-                  const f = progress(now, m.sentAt, m.arrivesAt);
-
-                  return (
-                    <Route
-                      key={`r${m.id}`}
-                      color={ROUTE_COLORS[m.kind]}
-                      from={{ x: px(m.from.x), y: py(m.from.y) }}
-                      p={f}
-                      road={roadOf(m.from, m.to, m.units, f).road}
-                      to={{ x: px(m.to.x), y: py(m.to.y) }}
-                    />
-                  );
-                })}
-                {homeward.map((m) => {
-                  const f = progress(now, m.leftAt, m.returnsAt);
-
-                  return (
-                    <Route
-                      key={`b${m.id}`}
-                      color={ROUTE_COLORS.outgoing}
-                      from={{ x: px(m.from.x), y: py(m.from.y) }}
-                      p={f}
-                      road={roadOf(m.from, data.home, m.units, f).road}
-                      to={{ x: px(data.home.x), y: py(data.home.y) }}
-                    />
-                  );
-                })}
-              </svg>
 
               {/* Barbarian camps */}
               {data.camps.map((c) => {
@@ -854,6 +808,7 @@ export const WarMap = ({
                     left={c.arrivesAt - now}
                     p={progress(now, c.sentAt, c.arrivesAt)}
                     resource={c.resource}
+                    road={roadOf(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)).road}
                     to={{ x: px(c.to.x), y: py(c.to.y) }}
                   />
                 ))}
