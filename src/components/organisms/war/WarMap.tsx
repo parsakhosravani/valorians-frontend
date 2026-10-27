@@ -170,6 +170,13 @@ const TERRAIN_ICON: Record<Terrain, string> = {
 
 const SAND = "#C8B27A";
 
+/** Village markers: smallest picture (Town Hall 0), how much bigger they grow, and the
+ *  tile's centre inside the marker's box. */
+const VILLAGE_MIN = 34;
+const VILLAGE_GROW = 12;
+const VX = 36;
+const VY = 34;
+
 /** From this zoom up, the land on screen is repainted at full detail. */
 const CLOSE_UP_ZOOM = 1.3;
 
@@ -733,18 +740,19 @@ export const WarMap = ({
                     )}
                     style={{
                       left: px(c.x) - 32,
-                      top: py(c.y) - 40,
+                      top: py(c.y) - 34,
                       width: 64,
-                      height: 62,
-                      transformOrigin: "32px 40px",
+                      height: 56,
+                      transformOrigin: "32px 34px",
                       zIndex: picked ? 4 : 1,
                     }}
                     onClick={() => setSelected({ kind: "camp", camp: c })}
                   >
-                    {/* Ground marker */}
+                    {/* Soft shadow, then the ground ring */}
+                    <span className="absolute left-[16px] top-[33px] w-8 h-[12px] rounded-[50%] bg-[radial-gradient(closest-side,rgba(10,7,4,0.55),rgba(10,7,4,0))]" />
                     <span
                       className={clsx(
-                        "absolute left-[10px] top-[30px] w-11 h-[18px] rounded-[50%] border-2",
+                        "absolute left-[17px] top-[34px] w-[30px] h-[10px] rounded-[50%] border-[1.5px]",
                         c.state === "locked"
                           ? "border-line bg-ink/30"
                           : "border-[#C2552E] bg-[#8A3B23]/35",
@@ -754,7 +762,7 @@ export const WarMap = ({
                     <Image
                       draggable={false}
                       alt=""
-                      className="absolute left-[10px] top-0 w-11 h-11 object-contain drop-shadow-[0_4px_3px_rgba(0,0,0,0.65)]"
+                      className="absolute left-[16px] top-[11px] w-8 h-8 object-contain drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
                       height={88}
                       src={buildingImage(BUILDING_BY_ID["barracks"])}
                       width={88}
@@ -762,7 +770,7 @@ export const WarMap = ({
                     {labelsAll || picked ? (
                       <span
                         className={clsx(
-                          "absolute left-1/2 top-[44px] -translate-x-1/2 whitespace-nowrap px-1.5 h-4 inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
+                          "absolute left-1/2 top-[45px] -translate-x-1/2 whitespace-nowrap px-1.5 h-[15px] inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
                           c.state === "new"
                             ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
                             : c.state === "ready"
@@ -784,7 +792,7 @@ export const WarMap = ({
                       // Zoomed out: just the camp's number in a small badge, coloured by its state.
                       <span
                         className={clsx(
-                          "absolute left-1/2 top-[40px] -translate-x-1/2 min-w-[18px] h-[18px] px-1 rounded-full border-2 inline-flex items-center justify-center font-display text-[10px] font-black leading-none shadow-[0_2px_3px_rgba(0,0,0,0.6)]",
+                          "absolute left-1/2 top-[40px] -translate-x-1/2 min-w-[15px] h-[15px] px-0.5 rounded-full border-[1.5px] inline-flex items-center justify-center font-display text-[8.5px] font-black leading-none shadow-[0_2px_3px_rgba(0,0,0,0.6)]",
                           c.state === "new"
                             ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
                             : c.state === "ready"
@@ -817,17 +825,23 @@ export const WarMap = ({
                         ? "border-bad bg-bad/20"
                         : "border-goldtext/80 bg-goldtext/15";
 
+                // Villages grow a little with their Town Hall, so the strong ones stand out.
+                const size = Math.round(VILLAGE_MIN + Math.min(VILLAGE_GROW, t.townHall * 0.6));
+                const half = size / 2;
+                // The marker is drawn round the tile's centre at (VX, VY) inside its box.
+                const foot = VY + 6;
+
                 return (
                   <button
                     key={t.id}
                     aria-label={t.isMe ? "Your tribe" : t.name}
                     className="map-pin absolute"
                     style={{
-                      left: px(t.x) - 40,
-                      top: py(t.y) - 44,
-                      width: 80,
-                      height: 72,
-                      transformOrigin: "40px 44px",
+                      left: px(t.x) - VX,
+                      top: py(t.y) - VY,
+                      width: VX * 2,
+                      height: VY + 26,
+                      transformOrigin: `${VX}px ${VY}px`,
                       zIndex: picked ? 4 : t.isMe ? 3 : 2,
                     }}
                     onClick={() => setSelected({ kind: "tribe", tribe: t })}
@@ -835,26 +849,41 @@ export const WarMap = ({
                     {t.terrain === "sea" && (
                       // Settled before the seas were charted: a little island of their own.
                       <span
-                        className="absolute rounded-[50%] border-2 border-[#E6D3A0]/70"
-                        style={{ left: 8, top: 18, width: 64, height: 40, background: SAND }}
+                        className="absolute rounded-[50%] border border-[#E6D3A0]/70"
+                        style={{ left: VX - half - 6, top: foot - 12, width: size + 12, height: 22, background: SAND }}
                       />
                     )}
-                    {/* Ground marker: its color says how strong they are next to you */}
+                    {/* Soft shadow the village stands in */}
+                    <span
+                      className="absolute rounded-[50%] bg-[radial-gradient(closest-side,rgba(10,7,4,0.55),rgba(10,7,4,0))]"
+                      style={{ left: VX - half - 2, top: foot - 8, width: size + 4, height: 14 }}
+                    />
+                    {/* Ground ring: its colour says how strong they are next to you */}
                     {picked && (
-                      <span className={clsx("absolute left-[12px] top-[32px] w-14 h-[22px] rounded-[50%] border-2 animate-ping", ring)} />
+                      <span
+                        className={clsx("absolute rounded-[50%] border-2 animate-ping", ring)}
+                        style={{ left: VX - half + 1, top: foot - 6, width: size - 2, height: 11 }}
+                      />
                     )}
-                    <span className={clsx("absolute left-[12px] top-[32px] w-14 h-[22px] rounded-[50%] border-2", ring)} />
+                    <span
+                      className={clsx("absolute rounded-[50%] border-[1.5px]", ring)}
+                      style={{ left: VX - half + 1, top: foot - 6, width: size - 2, height: 11 }}
+                    />
                     <Image
                       draggable={false}
                       alt=""
-                      className="absolute left-[14px] top-[-6px] w-[52px] h-[52px] object-contain drop-shadow-[0_5px_4px_rgba(0,0,0,0.65)]"
+                      className="absolute object-contain drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
                       height={104}
                       src={buildingImage(BUILDING_BY_ID["town-hall"])}
+                      style={{ left: VX - half, top: foot - size + 3, width: size, height: size }}
                       width={104}
                     />
-                    {/* Town Hall level: with the name, see `loud` */}
+                    {/* Town Hall level: a small coin tucked at the village's foot */}
                     {loud && (
-                      <span className="absolute left-[8px] top-[28px] w-5 h-5 rounded-full border-2 border-[#F7D58A] bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] font-display text-[10px] font-black leading-none flex items-center justify-center shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
+                      <span
+                        className="absolute w-4 h-4 rounded-full border-[1.5px] border-[#F7D58A] bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] font-display text-[8.5px] font-black leading-none flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                        style={{ left: VX - half - 5, top: foot - 12 }}
+                      >
                         {t.townHall}
                       </span>
                     )}
@@ -862,29 +891,34 @@ export const WarMap = ({
                     {shielded && !t.isMe && (
                       <span
                         className={clsx(
-                          "absolute drop-shadow-[0_2px_2px_rgba(0,0,0,0.7)]",
-                          loud ? "right-[6px] top-[-2px] text-base" : "right-[16px] top-[6px] text-[10px] opacity-75",
+                          "absolute leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]",
+                          loud ? "text-[13px]" : "text-[9px] opacity-75",
                         )}
+                        style={{ left: VX + half - (loud ? 9 : 7), top: foot - size + (loud ? 1 : 5) }}
                       >
                         <GameIcon e="🛡️" />
                       </span>
                     )}
                     {t.clan && (
-                      <span className="absolute left-[4px] top-[-8px] drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                        <ClanFlag flag={t.clan.flag} size={loud ? 20 : 14} title={`[${t.clan.tag}]`} />
+                      <span
+                        className="absolute drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                        style={{ left: VX - half - 4, top: foot - size - 2 }}
+                      >
+                        <ClanFlag flag={t.clan.flag} size={loud ? 16 : 12} title={`[${t.clan.tag}]`} />
                       </span>
                     )}
                     {/* Name plate */}
                     {loud && (
                       <span
                         className={clsx(
-                          "absolute left-1/2 top-[52px] -translate-x-1/2 max-w-[120px] truncate px-1.5 h-[17px] leading-[15px] rounded-md border font-display text-[10px] font-bold tracking-[0.02em] shadow-[0_2px_4px_rgba(0,0,0,0.65)]",
+                          "absolute left-1/2 -translate-x-1/2 max-w-[104px] truncate px-1.5 h-[15px] leading-[13px] rounded-[5px] border font-display text-[9px] font-bold tracking-[0.02em] shadow-[0_2px_3px_rgba(0,0,0,0.6)]",
                           t.isMe
                             ? "bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] border-[#F7D58A]"
                             : t.ally
                               ? "bg-ink/90 text-sea border-sea/60"
                               : "bg-ink/90 text-parch border-frame",
                         )}
+                        style={{ top: foot + 6 }}
                       >
                         {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
                       </span>
