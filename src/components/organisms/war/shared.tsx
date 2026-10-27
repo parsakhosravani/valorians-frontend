@@ -21,7 +21,7 @@ export const UnitEmoji = ({ unit }: { unit: UnitId }) => (
   // eslint-disable-next-line @next/next/no-img-element
   <img
     alt={UNIT_BY_ID[unit].name}
-    className="inline-block align-[-0.3em] w-[1.35em] h-[1.35em] rounded-[0.3em] object-cover"
+    className="inline-block align-[-0.3em] w-[1.45em] h-[1.45em] object-contain"
     draggable={false}
     src={unitImage(unit)}
   />
@@ -35,7 +35,7 @@ export const UnitBadge = ({ unit, size = 36, rank = 0 }: { unit: UnitId; size?: 
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img
       alt={UNIT_BY_ID[unit].name}
-      className="w-full h-full rounded-full object-cover"
+      className="w-full h-full rounded-full object-contain p-[8%]"
       draggable={false}
       src={unitImage(unit)}
     />

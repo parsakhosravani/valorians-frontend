@@ -69,7 +69,7 @@ export const GameIcon = ({ e, className }: { e: string; className?: string }) =>
     <img
       alt=""
       aria-hidden="true"
-      className={clsx("inline-block align-[-0.3em] w-[1.35em] h-[1.35em] rounded-[0.25em] object-cover", className)}
+      className={clsx("inline-block align-[-0.3em] w-[1.35em] h-[1.35em] object-contain", className)}
       draggable={false}
       src={src}
     />
