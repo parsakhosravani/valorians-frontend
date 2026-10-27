@@ -236,6 +236,8 @@ async function activeTrades(id: number) {
 }
 
 export async function playerView(p: Player, now: number) {
+  // Independent lookups: run them together instead of one after another.
+  const [clan, rank, trades] = await Promise.all([clanBadge(p.clanId), rankOf(p.state.population), activeTrades(p.id)]);
 
   return {
     serverTime: now,
@@ -245,10 +247,10 @@ export async function playerView(p: Player, now: number) {
       firstName: p.firstName,
       lastName: p.lastName,
       photoUrl: avatarUrl(p.id),
-      clan: await clanBadge(p.clanId),
-      rank: await rankOf(p.state.population),
+      clan,
+      rank,
       /** Shown as a badge on the header's Trade button. */
-      activeTrades: await activeTrades(p.id),
+      activeTrades: trades,
       /** Monthly Valorians Plus price in Telegram Stars. */
       plusPrice: plusPrice(),
     },
