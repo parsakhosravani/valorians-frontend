@@ -173,7 +173,8 @@ export const Tribe: FunctionComponent = () => {
         view === "village" ? "max-w-6xl lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-5 lg:items-start" : "max-w-md",
       )}
     >
-      <div className="flex flex-col gap-4 w-full max-w-md mx-auto lg:max-w-none lg:sticky lg:top-1">
+      {/* Only stick beside the village on wide screens; in the single-column list it would slide under the cards. */}
+      <div className={clsx("flex flex-col gap-4 w-full max-w-md mx-auto", view === "village" && "lg:max-w-none lg:sticky lg:top-1")}>
         {/* Builders and what they are doing */}
         <section className="card p-3 flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
