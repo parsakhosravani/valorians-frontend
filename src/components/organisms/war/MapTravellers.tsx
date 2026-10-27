@@ -43,7 +43,8 @@ const along = (road: Road, p: number) => {
   return { at: lerp(points[k], points[k + 1] ?? points[k], t), k };
 };
 
-const poly = (pts: Pt[]) => pts.map((q) => `${q.x},${q.y}`).join(" ");
+/** Where a traveller is on its road (px) at `p`. */
+export const spotOnRoad = (from: Pt, to: Pt, road: Road | undefined, p: number) => along(road ?? straight(from, to), p).at;
 
 /** The troop that makes up most of an army, to carry its banner. */
 const leadUnit = (army: Army | null): UnitId | null => {
@@ -61,71 +62,6 @@ const leadUnit = (army: Army | null): UnitId | null => {
 /** Troops in an army (ships don't count). */
 const total = (army: Army | null) =>
   army ? UNITS.reduce((s, u) => s + (u.transport ? 0 : (army[u.id] ?? 0)), 0) : 0;
-
-export const ROUTE_COLORS = {
-  outgoing: "#F2C66D",
-  incoming: "#F06A44",
-  coming: "#9DD07F",
-  going: "#E9D3A1",
-  other: "#D8C9AE",
-} as const;
-
-/**
- * A road on the map (SVG): the stretch already walked is faint, the stretch
- * ahead is a dashed trail that flows toward the target.
- */
-export const Route = ({
-  from,
-  to,
-  road,
-  p,
-  color,
-  merchant,
-  faint,
-}: {
-  from: Pt;
-  to: Pt;
-  /** The winding road; a straight line when left out. */
-  road?: Road;
-  p: number;
-  color: string;
-  merchant?: boolean;
-  faint?: boolean;
-}) => {
-  const r = road ?? straight(from, to);
-  const { at, k } = along(r, p);
-  const walked = [...r.points.slice(0, k + 1), at];
-  const ahead = [at, ...r.points.slice(k + 1)];
-
-  return (
-    <g fill="none" opacity={faint ? 0.45 : 1} strokeLinecap="round" strokeLinejoin="round">
-      {/* road bed */}
-      <polyline points={poly(r.points)} stroke="#1A120B" strokeOpacity="0.35" strokeWidth={merchant ? 6 : 7} />
-      {/* walked */}
-      <polyline points={poly(walked)} stroke={color} strokeOpacity="0.35" strokeWidth={merchant ? 2 : 3} />
-      {/* ahead */}
-      <polyline
-        className="animate-route"
-        points={poly(ahead)}
-        stroke={color}
-        strokeDasharray={merchant ? "1.5 7.5" : "5 4"}
-        strokeWidth={merchant ? 3.5 : 3}
-      />
-      {/* destination */}
-      {!faint && (
-        <circle
-          cx={to.x}
-          cy={to.y}
-          r={merchant ? 9 : 12}
-          stroke={color}
-          strokeDasharray={merchant ? "2 4" : undefined}
-          strokeOpacity="0.8"
-          strokeWidth="2"
-        />
-      )}
-    </g>
-  );
-};
 
 /** Places a token on its road, gliding between the once-a-second ticks. */
 const Rider = ({
@@ -157,6 +93,7 @@ export const ArmyToken = ({
   incoming,
   left,
   atSea = false,
+  quiet = false,
   onClick,
 }: {
   from: Pt;
@@ -169,6 +106,8 @@ export const ArmyToken = ({
   left: number;
   /** Out on the water right now: the army shows as a Longship. */
   atSea?: boolean;
+  /** Crowded spot (on a village, or on top of another traveller): no time label. */
+  quiet?: boolean;
   /** Your own armies can be tapped to give them orders. */
   onClick?: () => void;
 }) => {
@@ -208,16 +147,18 @@ export const ArmyToken = ({
           )}
         </span>
       </Tag>
-      <span
-        className={clsx(
-          "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
-          incoming
-            ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
-            : "bg-panel/90 text-goldtext border-line",
-        )}
-      >
-        {formatDuration(left)}
-      </span>
+      {!quiet && (
+        <span
+          className={clsx(
+            "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
+            incoming
+              ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
+              : "bg-panel/90 text-goldtext border-line",
+          )}
+        >
+          {formatDuration(left)}
+        </span>
+      )}
     </Rider>
   );
 };
@@ -231,9 +172,15 @@ export const CaravanToken = ({
   amount,
   kind,
   left,
+  road,
+  quiet = false,
 }: {
   from: Pt;
   to: Pt;
+  /** The road it follows (the painted one on the map); straight when left out. */
+  road?: Road;
+  /** Crowded spot (on a village, or on top of another traveller): no load label. */
+  quiet?: boolean;
   p: number;
   resource: string;
   amount: number;
@@ -244,7 +191,7 @@ export const CaravanToken = ({
   const img = IMG[resource];
 
   return (
-    <Rider at={lerp(from, to, p)} z={mine ? 4 : 3}>
+    <Rider at={along(road ?? straight(from, to), p).at} z={mine ? 4 : 3}>
       <span
         className={clsx(
           "relative leading-none drop-shadow-[0_3px_3px_rgba(0,0,0,0.7)]",
@@ -259,7 +206,7 @@ export const CaravanToken = ({
           <GameIcon e="🐪" />
         </span>
       </span>
-      {mine && (
+      {mine && !quiet && (
         <span
           className={clsx(
             "-mt-0.5 flex items-center gap-0.5 pl-0.5 pr-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",

@@ -2,165 +2,403 @@
 import { memo, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 
-import { Terrain, terrainAt } from "@/lib/game/map";
+import { Terrain, marchRoute, terrainAt } from "@/lib/game/map";
 
 /**
- * The land under the war map, painted once onto a canvas: soft blended
- * ground with beaches along the sea, and the painted terrain icons standing
- * on it (forests, hills, darker mountains, wheat on the plains). A canvas is
- * one picture the camera can scale for free; the old SVG redrew thousands of
- * tiles on every zoom step.
+ * The land under the war map, painted once onto a canvas and handed to the
+ * camera as one picture.
+ *
+ * 1. Ground, all painted the same way, lit from the top-left:
+ *    - water with a ragged, crisp coastline, beach and foam, light in the
+ *      shallows and dark far out;
+ *    - woods as a canopy of rounded tree crowns, with an edge that fades into
+ *      the meadow and the odd autumn grove;
+ *    - mountains as ridged rock rising out of foothills, snow on the crests;
+ *    - rolling, lumpy hills.
+ * 2. Flat things on the ground: cleared earth under settlements, roads along
+ *    the routes armies really march, your territory, fields round villages,
+ *    grass on the plains.
  */
 
 export const TILE = 46; // tile size in px at zoom 1
 
-// The sea and lakes keep their colors from before.
-const FILL: Record<Terrain, [number, number, number][]> = {
-  plains: [[0x5e, 0x6b, 0x37], [0x62, 0x70, 0x39], [0x5a, 0x67, 0x34]],
-  forest: [[0x34, 0x49, 0x2a], [0x36, 0x50, 0x2b], [0x31, 0x45, 0x27]],
-  hills: [[0x7b, 0x68, 0x48], [0x81, 0x70, 0x4e], [0x76, 0x63, 0x3f]],
-  mountains: [[0x4e, 0x41, 0x30], [0x53, 0x46, 0x33], [0x4a, 0x3d, 0x2c]],
-  lake: [[0x2f, 0x56, 0x64], [0x31, 0x5a, 0x69], [0x2d, 0x52, 0x60]],
-  sea: [[0x1e, 0x42, 0x58], [0x20, 0x46, 0x5d], [0x1c, 0x3f, 0x54]],
+type V3 = [number, number, number];
+
+const LAND: Record<"plains" | "forest" | "hills" | "mountains", V3> = {
+  plains: [0x7a, 0x86, 0x45],
+  forest: [0x3a, 0x55, 0x2c],
+  hills: [0x8f, 0x7c, 0x52],
+  mountains: [0x6c, 0x60, 0x50],
 };
-const SAND: [number, number, number] = [0xb5, 0x9c, 0x66];
-const SHALLOW: [number, number, number] = [0x2b, 0x5e, 0x74];
+const MEADOW: V3 = [0xa8, 0xa0, 0x5a];
+const SHADE: V3 = [0x3e, 0x50, 0x2a];
+const SAND: V3 = [0xd2, 0xbb, 0x84];
+const WETSAND: V3 = [0xa8, 0x90, 0x60];
+const SHALLOW: V3 = [0x3f, 0x8f, 0x98];
+const DEEP: V3 = [0x14, 0x34, 0x4c];
+const LAKE_SHALLOW: V3 = [0x4f, 0x98, 0x96];
+const LAKE_DEEP: V3 = [0x26, 0x5c, 0x6a];
+const FOAM: V3 = [0xe8, 0xf1, 0xe6];
+const CANOPY_FLOOR: V3 = [0x1c, 0x2e, 0x18];
+const PINE_DARK: V3 = [0x2c, 0x4c, 0x26];
+const PINE: V3 = [0x3c, 0x63, 0x2d];
+const PINE_LIGHT: V3 = [0x58, 0x7a, 0x34];
+const GOLD: V3 = [0xb8, 0x8c, 0x2e];
+const RUST: V3 = [0x9c, 0x4e, 0x22];
+const ROCK_LOW: V3 = [0x5e, 0x52, 0x43];
+const ROCK_HIGH: V3 = [0x80, 0x78, 0x6e];
+const SNOW: V3 = [0xee, 0xf1, 0xf3];
+
+const mixV = (a: V3, b: V3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 const wet = (t: Terrain) => t === "sea" || t === "lake";
 
-/** Deterministic 0..1 per tile, so the map looks the same on every visit. */
+/** Deterministic 0..1 per spot, so the map looks the same on every visit. */
 const rnd = (x: number, y: number, k: number) => {
   const s = Math.sin(x * 12.9898 + y * 78.233 + k * 37.719) * 43758.5453;
 
   return s - Math.floor(s);
 };
 
-const mix = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i] - v) * t);
+/** A fast integer hash, 0..1: the noise below calls it hundreds of thousands of times. */
+const hash = (x: number, y: number, s: number) => {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1442695041)) | 0;
 
-// ─── Icons ───────────────────────────────────────────────────────────────────
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
 
-type Icons = {
-  forest: CanvasImageSource;
-  hills: CanvasImageSource;
-  mountains: CanvasImageSource;
-  plains: CanvasImageSource;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
-const load = (src: string) =>
-  new Promise<HTMLImageElement>((ok, fail) => {
-    const img = new window.Image();
+/** Smooth value noise in world space. */
+const vnoise = (x: number, y: number, seed: number) => {
+  const gx = Math.floor(x);
+  const gy = Math.floor(y);
+  const fx = x - gx;
+  const fy = y - gy;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const a = hash(gx, gy, seed);
+  const b = hash(gx + 1, gy, seed);
+  const c = hash(gx, gy + 1, seed);
+  const d = hash(gx + 1, gy + 1, seed);
 
-    img.decoding = "async";
-    img.onload = () => ok(img);
-    img.onerror = fail;
-    img.src = src;
-  });
-
-/** The hill icon, darkened: mountains are the same rock, taller and in shadow. */
-const darken = (img: HTMLImageElement, amount: number) => {
-  const c = document.createElement("canvas");
-
-  c.width = img.naturalWidth;
-  c.height = img.naturalHeight;
-  const g = c.getContext("2d")!;
-
-  g.drawImage(img, 0, 0);
-  g.globalCompositeOperation = "source-atop";
-  g.fillStyle = `rgba(22, 16, 10, ${amount})`;
-  g.fillRect(0, 0, c.width, c.height);
-
-  return c;
+  return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
 };
 
-let icons: Promise<Icons> | null = null;
-const loadIcons = () =>
-  (icons ??= Promise.all([
-    load("/images/icons/forest.webp"),
-    load("/images/icons/mountain.webp"),
-    load("/images/icons/plains.webp"),
-  ])
-    .then(([forest, hill, plains]) => ({ forest, hills: hill, mountains: darken(hill, 0.5), plains }))
-    .catch((e) => {
-      icons = null;
-      throw e;
-    }));
+const fbm = (x: number, y: number, seed: number) =>
+  vnoise(x, y, seed) * 0.5 + vnoise(x * 2.1, y * 2.1, seed + 1) * 0.3 + vnoise(x * 4.3, y * 4.3, seed + 2) * 0.2;
 
-// ─── Painting ────────────────────────────────────────────────────────────────
+/**
+ * Tree crowns: the nearest of one jittered point per cell. Returns the
+ * distance to it and which cell it is, so each crown keeps its own colour.
+ */
+const crowns = (x: number, y: number): [number, number] => {
+  const gx = Math.floor(x);
+  const gy = Math.floor(y);
+  let best = 9;
+  let cell = 0;
 
-const SUB = 4; // color samples per tile side, blurred into soft edges
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const cx = gx + dx;
+      const cy = gy + dy;
+      const px = cx + 0.15 + hash(cx, cy, 51) * 0.7;
+      const py = cy + 0.15 + hash(cx, cy, 52) * 0.7;
+      const d = (x - px) * (x - px) + (y - py) * (y - py);
 
-/** Ground colors, a few samples per tile, softened so the land blends. */
-const colorField = (ox: number, oy: number, n: number, ter: Terrain[][]) => {
-  const w = n * SUB;
-  const px = new Float32Array(w * w * 3);
-  const at = (i: number, j: number) => ter[j + 1]?.[i + 1] ?? terrainAt(ox + i, oy + j);
+      if (d < best) {
+        best = d;
+        cell = cx * 7919 + cy;
+      }
+    }
 
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      const t = at(i, j);
-      const x = ox + i;
-      const y = oy + j;
-      let c: number[] = FILL[t][(((x * 7 + y * 13) % 3) + 3) % 3];
-      let near = false;
+  return [Math.sqrt(best), cell];
+};
 
-      for (let dy = -1; dy <= 1 && !near; dy++)
-        for (let dx = -1; dx <= 1 && !near; dx++) {
-          const o = at(i + dx, j + dy);
+const sstep = (a: number, b: number, x: number) => {
+  const t = x <= a ? 0 : x >= b ? 1 : (x - a) / (b - a);
 
-          near = t === "sea" ? !wet(o) : t !== "lake" && o === "sea";
+  return t * t * (3 - 2 * t);
+};
+
+// ─── What stands on the land ─────────────────────────────────────────────────
+
+type Pt = { x: number; y: number };
+const parse = (s: string): Pt[] =>
+  s
+    ? s.split(";").map((p) => {
+        const [x, y] = p.split(",").map(Number);
+
+        return { x, y };
+      })
+    : [];
+
+type Scene = {
+  ox: number;
+  oy: number;
+  n: number;
+  occupied: Set<string>;
+  home: Pt | null;
+  villages: Pt[];
+  roads: [Pt, Pt][];
+};
+
+/** Terrain and per-tile facts with a margin, for neighbours and blending. */
+const MARGIN = 4;
+
+const survey = ({ ox, oy, n }: Scene) => {
+  const W = n + MARGIN * 2;
+  const ter: Terrain[] = new Array(W * W);
+
+  for (let j = 0; j < W; j++)
+    for (let i = 0; i < W; i++) ter[j * W + i] = terrainAt(ox + i - MARGIN, oy + j - MARGIN);
+
+  const id = (i: number, j: number) => {
+    const a = Math.min(W - 1, Math.max(0, i + MARGIN));
+    const b = Math.min(W - 1, Math.max(0, j + MARGIN));
+
+    return b * W + a;
+  };
+  const at = (i: number, j: number) => ter[id(i, j)];
+
+  const WET = new Float32Array(W * W);
+  const LAKE = new Float32Array(W * W);
+  const ELEV = new Float32Array(W * W);
+  const MTN = new Float32Array(W * W);
+  const FOR = new Float32Array(W * W);
+  const HIL = new Float32Array(W * W);
+  const DIST = new Float32Array(W * W);
+  const COL = new Float32Array(W * W * 3);
+
+  for (let k = 0; k < W * W; k++) {
+    const t = ter[k];
+    const w = wet(t);
+
+    WET[k] = w ? 1 : 0;
+    LAKE[k] = t === "lake" ? 1 : 0;
+    MTN[k] = t === "mountains" ? 1 : 0;
+    FOR[k] = t === "forest" ? 1 : 0;
+    HIL[k] = t === "hills" ? 1 : 0;
+    ELEV[k] = t === "mountains" ? 1 : t === "hills" ? 0.45 : t === "forest" ? 0.12 : w ? -0.2 : 0;
+    const c = LAND[w ? "plains" : (t as keyof typeof LAND)];
+
+    COL[k * 3] = c[0];
+    COL[k * 3 + 1] = c[1];
+    COL[k * 3 + 2] = c[2];
+    // How far (in tiles) to the other side of the shore: depth at sea, beaches on land.
+    let best = 9;
+    const i = k % W;
+    const j = (k - i) / W;
+
+    for (let dy = -4; dy <= 4; dy++)
+      for (let dx = -4; dx <= 4; dx++) {
+        const a = i + dx;
+        const b = j + dy;
+
+        if (a < 0 || b < 0 || a >= W || b >= W) continue;
+        if (wet(ter[b * W + a]) !== w) best = Math.min(best, Math.hypot(dx, dy));
+      }
+    DIST[k] = best;
+  }
+
+  return { W, at, id, WET, LAKE, ELEV, DIST, COL, MTN, FOR, HIL };
+};
+
+type Survey = ReturnType<typeof survey>;
+
+// ─── 1. Ground ───────────────────────────────────────────────────────────────
+
+/** Samples per tile: as many as a phone can afford for this much map. */
+const samplesPerTile = (n: number, detail: boolean) =>
+  detail
+    ? Math.max(16, Math.min(56, Math.floor(Math.sqrt(1_400_000) / n)))
+    : Math.max(8, Math.min(26, Math.floor(Math.sqrt(1_000_000) / n)));
+
+const paintSoil = (s: Scene, v: Survey, detail: boolean) => {
+  const { ox, oy, n } = s;
+  const { W, WET, LAKE, ELEV, DIST, COL, MTN, FOR, HIL } = v;
+  const S = samplesPerTile(n, detail);
+  const w = n * S;
+  const rgb = new Float32Array(w * w * 3);
+  /** A field read at a bent spot: forests and ranges lose the tile grid's corners. */
+  const bent = (f: Float32Array, fx: number, fy: number) => {
+    const x = fx - 0.5;
+    const y = fy - 0.5;
+    const i0 = Math.floor(x);
+    const j0 = Math.floor(y);
+    const tx = sstep(0, 1, x - i0);
+    const ty = sstep(0, 1, y - j0);
+    const a = (j0 + MARGIN) * W + i0 + MARGIN;
+
+    return (
+      (f[a] ?? 0) * (1 - tx) * (1 - ty) +
+      (f[a + 1] ?? 0) * tx * (1 - ty) +
+      (f[a + W] ?? 0) * (1 - tx) * ty +
+      (f[a + W + 1] ?? 0) * tx * ty
+    );
+  };
+  const elev = new Float32Array(w * w);
+
+  for (let sy = 0; sy < w; sy++) {
+    const fy = (sy + 0.5) / S;
+    const y = fy - 0.5;
+    const j0 = Math.floor(y);
+    const ty = sstep(0, 1, y - j0);
+    const r0 = (j0 + MARGIN) * W;
+    const r1 = r0 + W;
+    const wy = oy + fy;
+
+    for (let sx = 0; sx < w; sx++) {
+      const fx = (sx + 0.5) / S;
+      const x = fx - 0.5;
+      const i0 = Math.floor(x);
+      const tx = sstep(0, 1, x - i0);
+      const a = r0 + i0 + MARGIN;
+      const b = a + 1;
+      const c = r1 + i0 + MARGIN;
+      const d = c + 1;
+      const wa = (1 - tx) * (1 - ty);
+      const wb = tx * (1 - ty);
+      const wc = (1 - tx) * ty;
+      const wd = tx * ty;
+      const bil = (f: Float32Array) => f[a] * wa + f[b] * wb + f[c] * wc + f[d] * wd;
+      const wx = ox + fx;
+      const o = sy * w + sx;
+
+      elev[o] = bil(ELEV);
+      // A ragged, organic coast: the water field nudged by noise.
+      const wv = bil(WET) + (fbm(wx * 1.3, wy * 1.3, 5) - 0.5) * 0.42;
+      let R: number;
+      let G: number;
+      let B: number;
+
+      if (wv > 0.5) {
+        const lake = bil(LAKE) > 0.5;
+        const depth = sstep(0.4, 3.2, bil(DIST) + (wv - 0.5) * 2);
+        const lo = lake ? LAKE_SHALLOW : SHALLOW;
+        const hi = lake ? LAKE_DEEP : DEEP;
+
+        R = lo[0] + (hi[0] - lo[0]) * depth;
+        G = lo[1] + (hi[1] - lo[1]) * depth;
+        B = lo[2] + (hi[2] - lo[2]) * depth;
+        // Long soft swells out at sea.
+        const swell = Math.max(0, Math.sin(wx * 2.2 + wy * 1.1 + fbm(wx, wy, 9) * 6) - 0.6) * 0.12 * depth;
+
+        R += (255 - R) * swell;
+        G += (255 - G) * swell;
+        B += (255 - B) * swell;
+        // Foam hugging the shore.
+        const foam = (1 - sstep(0.5, 0.58, wv)) * 0.75;
+
+        R += (FOAM[0] - R) * foam;
+        G += (FOAM[1] - G) * foam;
+        B += (FOAM[2] - B) * foam;
+      } else {
+        R = COL[a * 3] * wa + COL[b * 3] * wb + COL[c * 3] * wc + COL[d * 3] * wd;
+        G = COL[a * 3 + 1] * wa + COL[b * 3 + 1] * wb + COL[c * 3 + 1] * wc + COL[d * 3 + 1] * wd;
+        B = COL[a * 3 + 2] * wa + COL[b * 3 + 2] * wb + COL[c * 3 + 2] * wc + COL[d * 3 + 2] * wd;
+        // Big sunny meadows and shady patches, then fine brush texture.
+        const big = fbm(wx * 0.35, wy * 0.35, 11) - 0.5;
+        const tone = big > 0 ? MEADOW : SHADE;
+        const k = Math.abs(big) * 0.35;
+        const fine = 1 + (vnoise(wx * 5, wy * 5, 12) - 0.5) * 0.12;
+
+        R = (R + (tone[0] - R) * k) * fine;
+        G = (G + (tone[1] - G) * k) * fine;
+        B = (B + (tone[2] - B) * k) * fine;
+        // Hills: rolling ground, lumpy under the light.
+        const hl = bil(HIL);
+
+        if (hl > 0.05) elev[o] += hl * (fbm(wx * 2.3, wy * 2.3, 25) - 0.3) * 0.5;
+
+        // Woods, painted like the sea: a canopy with a ragged edge that fades
+        // into the meadow, made of rounded tree crowns lit from the top-left.
+        const bx = fx + (fbm(wx * 0.9, wy * 0.9, 61) - 0.5) * 0.9;
+        const by = fy + (fbm(wx * 0.9, wy * 0.9, 62) - 0.5) * 0.9;
+        const fv = bent(FOR, bx, by) + (fbm(wx * 1.4, wy * 1.4, 41) - 0.5) * 0.45;
+        const kf = sstep(0.4, 0.62, fv);
+
+        if (kf > 0) {
+          const [dist, cell] = crowns(wx * 3.6, wy * 3.6);
+          // Crowns overlap: only the narrow gaps between them show the dark floor.
+          const dome = Math.max(0, 1 - dist / 0.78);
+          const hue = hash(cell, 7, 53);
+          const grove = fbm(wx * 0.2, wy * 0.2, 77) > 0.66 && hue < 0.6;
+          const leaf = grove ? (hue < 0.3 ? GOLD : RUST) : hue < 0.33 ? PINE_DARK : hue < 0.75 ? PINE : PINE_LIGHT;
+          const body = 0.78 + dome * 0.22;
+          const gap = 1 - sstep(0, 0.22, dome);
+          const tr = leaf[0] * body + (CANOPY_FLOOR[0] - leaf[0] * body) * gap;
+          const tg = leaf[1] * body + (CANOPY_FLOOR[1] - leaf[1] * body) * gap;
+          const tb = leaf[2] * body + (CANOPY_FLOOR[2] - leaf[2] * body) * gap;
+
+          R += (tr - R) * kf;
+          G += (tg - G) * kf;
+          B += (tb - B) * kf;
+          // The canopy stands above the ground, each crown a dome the light catches.
+          elev[o] += kf * (0.3 + Math.sqrt(dome) * 0.35);
         }
-      // Beaches where the land meets the sea, shallows on the other side.
-      if (near) c = mix(c, t === "sea" ? SHALLOW : SAND, t === "sea" ? 0.45 : 0.5);
-      for (let b = 0; b < SUB; b++)
-        for (let a = 0; a < SUB; a++) {
-          const k = ((j * SUB + b) * w + i * SUB + a) * 3;
-          const shade = 1 + (rnd(x * SUB + a, y * SUB + b, 1) - 0.5) * 0.08;
 
-          px[k] = c[0] * shade;
-          px[k + 1] = c[1] * shade;
-          px[k + 2] = c[2] * shade;
+        // Mountains, painted the same way: ridged rock that rises out of the
+        // land, bare and brown low down, grey higher, snow on the tops.
+        const mtn = bent(MTN, bx, by);
+        const mv = mtn + (fbm(wx * 1.2, wy * 1.2, 43) - 0.5) * 0.5 + (vnoise(wx * 3.5, wy * 3.5, 44) - 0.5) * 0.22;
+        const foot = sstep(0.15, 0.45, mv);
+        const km = sstep(0.35, 0.62, mv);
+
+        elev[o] += foot * 0.3;
+        if (km > 0) {
+          const ridge = 1 - Math.abs(2 * fbm(wx * 2, wy * 2, 21) - 1);
+          const crag = 1 - Math.abs(2 * vnoise(wx * 4.5, wy * 4.5, 23) - 1);
+          const core = sstep(0.6, 1, mtn);
+          const h = km * (0.15 + ridge * 0.35 + crag * 0.15 + core * 0.35);
+          const rock = mixV(ROCK_LOW, ROCK_HIGH, sstep(0.25, 0.75, h));
+          // Snow only on the high crests, thinning out down the slopes.
+          const snow = sstep(0.9, 0.98, h + (vnoise(wx * 5, wy * 5, 27) - 0.5) * 0.1) * 0.75;
+
+          R += (rock[0] + (SNOW[0] - rock[0]) * snow - R) * km;
+          G += (rock[1] + (SNOW[1] - rock[1]) * snow - G) * km;
+          B += (rock[2] + (SNOW[2] - rock[2]) * snow - B) * km;
+          elev[o] += h * 1.2;
         }
+        // A beach, then wet sand right at the water.
+        const beach = sstep(0.18, 0.42, wv) * 0.9;
+
+        R += (SAND[0] - R) * beach;
+        G += (SAND[1] - G) * beach;
+        B += (SAND[2] - B) * beach;
+        const damp = sstep(0.44, 0.5, wv) * 0.7;
+
+        R += (WETSAND[0] - R) * damp;
+        G += (WETSAND[1] - G) * damp;
+        B += (WETSAND[2] - B) * damp;
+      }
+      rgb[o * 3] = R;
+      rgb[o * 3 + 1] = G;
+      rgb[o * 3 + 2] = B;
     }
   }
 
-  // Two small box-blur passes each way: land blends, coastlines stay clear.
-  const tmp = new Float32Array(px.length);
-  const r = 1;
-  const pass = (src: Float32Array, dst: Float32Array, horizontal: boolean) => {
-    for (let q = 0; q < w; q++)
-      for (let p = 0; p < w; p++)
-        for (let ch = 0; ch < 3; ch++) {
-          let s = 0;
-          let cnt = 0;
-
-          for (let d = -r; d <= r; d++) {
-            const u = p + d;
-
-            if (u < 0 || u >= w) continue;
-            s += src[((horizontal ? q * w + u : u * w + q) * 3) + ch];
-            cnt++;
-          }
-          dst[((horizontal ? q * w + p : p * w + q) * 3) + ch] = s / cnt;
-        }
-  };
-
-  for (let k = 0; k < 2; k++) {
-    pass(px, tmp, true);
-    pass(tmp, px, false);
-  }
-
+  // Hill-shade: light from the top-left gives the land its relief.
   const c = document.createElement("canvas");
 
   c.width = c.height = w;
   const g = c.getContext("2d")!;
   const img = g.createImageData(w, w);
+  const k = 0.088 * S;
 
-  for (let k = 0, o = 0; k < px.length; k += 3, o += 4) {
-    img.data[o] = px[k];
-    img.data[o + 1] = px[k + 1];
-    img.data[o + 2] = px[k + 2];
-    img.data[o + 3] = 255;
-  }
+  for (let sy = 0; sy < w; sy++)
+    for (let sx = 0; sx < w; sx++) {
+      const o = sy * w + sx;
+      const dx = elev[sy * w + Math.min(w - 1, sx + 1)] - elev[sy * w + Math.max(0, sx - 1)];
+      const dy = elev[Math.min(w - 1, sy + 1) * w + sx] - elev[Math.max(0, sy - 1) * w + sx];
+      const shade = Math.max(0.5, Math.min(1.32, 1 + (-dx - dy) * k));
+      const p = o * 4;
+
+      img.data[p] = rgb[o * 3] * shade;
+      img.data[p + 1] = rgb[o * 3 + 1] * shade;
+      img.data[p + 2] = rgb[o * 3 + 2] * shade;
+      img.data[p + 3] = 255;
+    }
   g.putImageData(img, 0, 0);
 
   return c;
@@ -180,156 +418,201 @@ const grainTile = () => {
     const v = rnd(k, 3, 5) > 0.5 ? 255 : 0;
 
     img.data[k] = img.data[k + 1] = img.data[k + 2] = v;
-    img.data[k + 3] = rnd(k, 7, 9) * 36;
+    img.data[k + 3] = rnd(k, 7, 9) * 26;
   }
   g.putImageData(img, 0, 0);
 
   return (grain = c);
 };
 
-const paintGround = (
+// ─── 2. Flat things on the ground ────────────────────────────────────────────
+
+/** Tiles the roads run over: trees and hills stay off them. */
+const roadTiles = (s: Scene) => {
+  const tiles = new Set<string>();
+  const routes = s.roads.map(([a, b]) => marchRoute(a, b));
+
+  for (const r of routes) for (const p of r.path) tiles.add(`${p.x},${p.y}`);
+
+  return { tiles, routes };
+};
+
+const paintFlat = (
   g: CanvasRenderingContext2D,
-  ox: number,
-  oy: number,
-  n: number,
-  icons: Icons | null,
-  occupied: Set<string>,
+  s: Scene,
+  v: Survey,
+  routes: ReturnType<typeof marchRoute>[],
+  road: Set<string>,
 ) => {
   const T = TILE;
-  const size = n * T;
-  // Terrain with a one-tile margin, for neighbours.
-  const ter: Terrain[][] = [];
+  const { ox, oy, n, occupied } = s;
+  const px = (x: number) => (x - ox) * T + T / 2;
+  const py = (y: number) => (y - oy) * T + T / 2;
 
-  for (let j = -1; j <= n; j++) {
-    const row: Terrain[] = [];
-
-    for (let i = -1; i <= n; i++) row.push(terrainAt(ox + i, oy + j));
-    ter.push(row);
-  }
-  const at = (i: number, j: number) => ter[j + 1][i + 1];
-
-  // 1. Soft ground.
-  g.imageSmoothingEnabled = true;
-  g.imageSmoothingQuality = "high";
-  g.drawImage(colorField(ox, oy, n, ter), 0, 0, size, size);
-
-  // 2. Light and shade in big soft patches, then grain.
-  for (let j = 0; j < n; j += 2)
-    for (let i = 0; i < n; i += 2) {
-      const x = ox + i;
-      const y = oy + j;
-      const r = T * (1.6 + rnd(x, y, 21) * 1.6);
-      const cx = (i + rnd(x, y, 22) * 2) * T;
-      const cy = (j + rnd(x, y, 23) * 2) * T;
-      const light = rnd(x, y, 24) > 0.5;
-      const grad = g.createRadialGradient(cx, cy, 0, cx, cy, r);
-
-      grad.addColorStop(0, light ? "rgba(255,236,190,0.07)" : "rgba(10,8,4,0.12)");
-      grad.addColorStop(1, "rgba(0,0,0,0)");
-      g.fillStyle = grad;
-      g.fillRect(cx - r, cy - r, r * 2, r * 2);
-    }
   g.save();
   g.globalCompositeOperation = "soft-light";
   g.fillStyle = g.createPattern(grainTile(), "repeat")!;
-  g.fillRect(0, 0, size, size);
+  g.fillRect(0, 0, n * T, n * T);
   g.restore();
 
-  // 3. Water: ripples on lakes, waves on the open sea (as before).
+  // Grass tufts on the plains, in two strokes for the whole map.
+  const light = new Path2D();
+  const dark = new Path2D();
+
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      if (v.at(i, j) !== "plains") continue;
+      const x = ox + i;
+      const y = oy + j;
+
+      for (let k = 0; k < 4; k++) {
+        const ax = i * T + rnd(x, y, 100 + k) * T;
+        const ay = j * T + rnd(x, y, 110 + k) * T;
+        const p = rnd(x, y, 120 + k) > 0.5 ? light : dark;
+
+        for (const d of [-3, 0, 3]) {
+          p.moveTo(ax + d, ay);
+          p.quadraticCurveTo(ax + d, ay - 4, ax + d * 1.6, ay - 7);
+        }
+      }
+    }
+  g.lineWidth = 1.2;
   g.lineCap = "round";
-  for (let j = 0; j < n; j++)
-    for (let i = 0; i < n; i++) {
-      const t = at(i, j);
-      const x = ox + i;
-      const y = oy + j;
-      const v = (((x * 7 + y * 13) % 3) + 3) % 3;
-      const px = i * T;
-      const py = j * T;
+  g.strokeStyle = "rgba(190,200,110,0.5)";
+  g.stroke(light);
+  g.strokeStyle = "rgba(40,60,24,0.4)";
+  g.stroke(dark);
 
-      if (t === "lake") {
-        g.strokeStyle = "rgba(191,224,232,0.45)";
-        g.lineWidth = 1.5;
+  // Fields round villages: life where people live.
+  for (const vil of s.villages)
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = vil.x + dx;
+        const y = vil.y + dy;
+
+        if ((!dx && !dy) || occupied.has(`${x},${y}`) || road.has(`${x},${y}`)) continue;
+        if (v.at(x - ox, y - oy) !== "plains") continue;
+        if (rnd(x, y, 130) > 0.55) continue;
+        const gold = rnd(x, y, 132) > 0.45;
+
+        g.save();
+        g.translate(px(x), py(y));
+        g.rotate((rnd(x, y, 131) - 0.5) * 0.6);
+        g.fillStyle = gold ? "rgba(214,180,88,0.85)" : "rgba(122,140,60,0.9)";
+        g.fillRect(-16, -12, 32, 24);
+        g.strokeStyle = gold ? "rgba(160,120,40,0.7)" : "rgba(70,90,34,0.8)";
+        g.lineWidth = 1.2;
         g.beginPath();
-        g.moveTo(px + 8, py + 20);
-        g.quadraticCurveTo(px + 13, py + 16, px + 18, py + 20);
-        g.quadraticCurveTo(px + 23, py + 24, px + 28, py + 20);
-        g.moveTo(px + 16, py + 30);
-        g.quadraticCurveTo(px + 21, py + 26, px + 26, py + 30);
-        g.quadraticCurveTo(px + 31, py + 34, px + 36, py + 30);
+        for (let k = -9; k <= 9; k += 4.5) {
+          g.moveTo(-14, k);
+          g.lineTo(14, k);
+        }
         g.stroke();
-      } else if (t === "sea" && v === 0) {
-        g.strokeStyle = "rgba(159,208,230,0.35)";
-        g.lineWidth = 1.5;
-        g.beginPath();
-        g.moveTo(px + 6, py + 16);
-        g.quadraticCurveTo(px + 12, py + 11, px + 18, py + 16);
-        g.quadraticCurveTo(px + 24, py + 21, px + 30, py + 16);
-        g.moveTo(px + 18, py + 32);
-        g.quadraticCurveTo(px + 24, py + 27, px + 30, py + 32);
-        g.quadraticCurveTo(px + 36, py + 37, px + 42, py + 32);
-        g.stroke();
+        g.strokeStyle = "rgba(60,44,20,0.5)";
+        g.strokeRect(-16, -12, 32, 24);
+        g.restore();
       }
-    }
 
-  // 4. A whisper of grid, so distances still read.
-  g.strokeStyle = "rgba(0,0,0,0.07)";
-  g.lineWidth = 1;
-  g.beginPath();
-  for (let k = 0; k <= n; k++) {
-    g.moveTo(k * T, 0);
-    g.lineTo(k * T, size);
-    g.moveTo(0, k * T);
-    g.lineTo(size, k * T);
+  // Roads: the way armies actually march, so a target's road is plain to see.
+  g.save();
+  g.lineCap = g.lineJoin = "round";
+  for (const r of routes) {
+    const pts = r.path.map((p, k) => ({
+      x: px(p.x) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 61) - 0.5) * 4 : 0),
+      y: py(p.y) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 62) - 0.5) * 4 : 0),
+      wet: r.wet[k],
+    }));
+    const curve = (atSea: boolean) => {
+      const p = new Path2D();
+      let open = false;
+
+      for (let k = 0; k < pts.length - 1; k++) {
+        if ((pts[k].wet || pts[k + 1].wet) !== atSea) {
+          open = false;
+          continue;
+        }
+        const a = pts[k - 1] ?? pts[k];
+        const b = pts[k];
+        const c = pts[k + 1];
+        const d = pts[k + 2] ?? c;
+
+        if (!open) p.moveTo(b.x, b.y);
+        open = true;
+        p.bezierCurveTo(
+          b.x + (c.x - a.x) / 6,
+          b.y + (c.y - a.y) / 6,
+          c.x - (d.x - b.x) / 6,
+          c.y - (d.y - b.y) / 6,
+          c.x,
+          c.y,
+        );
+      }
+
+      return p;
+    };
+    const land = curve(false);
+
+    g.setLineDash([]);
+    g.strokeStyle = "rgba(48,32,16,0.45)";
+    g.lineWidth = 9;
+    g.stroke(land);
+    g.strokeStyle = "rgba(196,164,108,0.9)";
+    g.lineWidth = 5.5;
+    g.stroke(land);
+    g.strokeStyle = "rgba(240,220,170,0.35)";
+    g.lineWidth = 1.5;
+    g.setLineDash([3, 6]);
+    g.stroke(land);
+    // Sea lanes: a dotted wake.
+    g.strokeStyle = "rgba(230,240,235,0.6)";
+    g.lineWidth = 2;
+    g.setLineDash([2, 7]);
+    g.stroke(curve(true));
   }
-  g.stroke();
+  g.restore();
 
-  if (!icons) return;
+  // Cleared, trodden earth under every settlement and camp.
+  for (const key of occupied) {
+    const [x, y] = key.split(",").map(Number);
+    const cx = px(x);
+    const cy = py(y) + 6;
+    const grad = g.createRadialGradient(cx, cy, 2, cx, cy, 30);
 
-  // 5. Painted terrain, back row first so nearer things overlap farther ones.
-  const shadow = (cx: number, cy: number, w: number) => {
-    g.fillStyle = "rgba(12,8,4,0.28)";
+    grad.addColorStop(0, "rgba(120,98,64,0.75)");
+    grad.addColorStop(0.65, "rgba(110,90,58,0.45)");
+    grad.addColorStop(1, "rgba(110,90,58,0)");
+    g.fillStyle = grad;
     g.beginPath();
-    g.ellipse(cx, cy, w / 2, w / 6, 0, 0, Math.PI * 2);
+    g.ellipse(cx, cy, 30, 22, 0, 0, Math.PI * 2);
     g.fill();
-  };
-  const icon = (img: CanvasImageSource, cx: number, bottom: number, s: number, alpha = 1) => {
-    g.globalAlpha = alpha;
-    g.drawImage(img, cx - s / 2, bottom - s, s, s);
-    g.globalAlpha = 1;
-  };
+  }
 
-  for (let j = 0; j < n; j++)
-    for (let i = 0; i < n; i++) {
-      const t = at(i, j);
-      const x = ox + i;
-      const y = oy + j;
+  // Your land: a soft gold claim with a dashed border.
+  if (s.home) {
+    const cx = px(s.home.x);
+    const cy = py(s.home.y);
+    const edge = new Path2D();
 
-      if (occupied.has(`${x},${y}`)) continue;
-      const jx = (rnd(x, y, 31) - 0.5) * 10;
-      const jy = (rnd(x, y, 32) - 0.5) * 6;
-      const cx = i * T + T / 2 + jx;
-      const base = j * T + T * 0.82 + jy;
+    for (let a = 0; a <= 64; a++) {
+      const th = (a / 64) * Math.PI * 2;
+      const r = T * (2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9);
+      const X = cx + Math.cos(th) * r;
+      const Y = cy + Math.sin(th) * r * 0.92;
 
-      if (t === "forest") {
-        const s = 38 + rnd(x, y, 33) * 10;
-
-        shadow(cx, base - 2, s * 0.7);
-        icon(icons.forest, cx, base, s);
-      } else if (t === "hills" && rnd(x, y, 38) < 0.5) {
-        // Every other hill tile: rolling country, not a wall of peaks.
-        const s = 24 + rnd(x, y, 34) * 6;
-
-        shadow(cx, base - 2, s * 0.8);
-        icon(icons.hills, cx, base, s);
-      } else if (t === "mountains") {
-        const s = 46 + rnd(x, y, 35) * 10;
-
-        shadow(cx, base - 2, s * 0.85);
-        icon(icons.mountains, cx, base + 2, s);
-      } else if (t === "plains" && rnd(x, y, 36) < 0.16) {
-        icon(icons.plains, cx, base, 20 + rnd(x, y, 37) * 4, 0.85);
-      }
+      if (a) edge.lineTo(X, Y);
+      else edge.moveTo(X, Y);
     }
+    g.save();
+    g.fillStyle = "rgba(240,190,90,0.10)";
+    g.fill(edge);
+    g.setLineDash([7, 5]);
+    g.lineWidth = 2.2;
+    g.strokeStyle = "rgba(255,214,130,0.75)";
+    g.shadowColor = "rgba(0,0,0,0.5)";
+    g.shadowBlur = 3;
+    g.stroke(edge);
+    g.restore();
+  }
 };
 
 /** Pixels the ground canvas may use: big enough to stay crisp, small enough for phones. */
@@ -340,12 +623,27 @@ export const MapGround = memo(function MapGround({
   oy,
   n,
   occupied,
+  home = "",
+  villages = "",
+  roads = "",
+  detail = false,
 }: {
   ox: number;
   oy: number;
   n: number;
   /** "x,y" tiles with a tribe or camp: no trees drawn under them. */
   occupied: string;
+  /** "x,y" of your tribe: your territory is drawn round it. */
+  home?: string;
+  /** "x,y;…" tribes: fields are tilled round them. */
+  villages?: string;
+  /** "ax,ay>bx,by;…" roads to paint, each along the route armies march. */
+  roads?: string;
+  /**
+   * A close-up: a small piece of the map painted at full detail, laid over
+   * the whole-map picture where you've zoomed in, so the land stays sharp.
+   */
+  detail?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -357,8 +655,24 @@ export const MapGround = memo(function MapGround({
 
     if (!c || !n) return;
     const dpr = window.devicePixelRatio || 1;
-    const scale = Math.max(0.75, Math.min(dpr * 1.25, 2.5, Math.sqrt(MAX_PIXELS) / size));
-    const taken = new Set(occupied ? occupied.split(";") : []);
+    const scale = detail
+      ? Math.min(dpr * 2.2, Math.sqrt(MAX_PIXELS / 3) / size)
+      : Math.max(0.75, Math.min(dpr * 1.25, 2.5, Math.sqrt(MAX_PIXELS) / size));
+    const scene: Scene = {
+      ox,
+      oy,
+      n,
+      occupied: new Set(occupied ? occupied.split(";") : []),
+      home: parse(home)[0] ?? null,
+      villages: parse(villages),
+      roads: roads
+        ? roads.split(";").map((pair) => {
+            const [a, b] = pair.split(">").map((q) => parse(q)[0]);
+
+            return [a, b] as [Pt, Pt];
+          })
+        : [],
+    };
     let live = true;
 
     c.width = Math.round(size * scale);
@@ -366,35 +680,30 @@ export const MapGround = memo(function MapGround({
     const g = c.getContext("2d");
 
     if (!g) return;
-    const paint = (i: Icons | null) => {
-      if (!live) return;
-      g.setTransform(scale, 0, 0, scale, 0, 0);
-      paintGround(g, ox, oy, n, i, taken);
-    };
+    g.setTransform(scale, 0, 0, scale, 0, 0);
+    const v = survey(scene);
+    const { tiles, routes } = roadTiles(scene);
 
-    // Ground first so it's never blank, then again with the icons once loaded.
-    paint(null);
-    loadIcons()
-      .then((i) => {
-        paint(i);
-        // Hand the finished picture over as an image: the browser tiles an
-        // image and only moves the tiles when the map pans or zooms, while a
-        // big canvas gets re-sent to the GPU on every frame.
-        c.toBlob(
-          (blob) => {
-            if (!live || !blob) return;
-            setSrc(URL.createObjectURL(blob));
-          },
-          "image/webp",
-          0.9,
-        );
-      })
-      .catch(() => undefined);
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(paintSoil(scene, v, detail), 0, 0, size, size);
+    paintFlat(g, scene, v, routes, tiles);
+    // Hand the finished picture over as an image: the browser tiles an
+    // image and only moves the tiles when the map pans or zooms, while a
+    // big canvas gets re-sent to the GPU on every frame.
+    c.toBlob(
+      (blob) => {
+        if (!live || !blob) return;
+        setSrc(URL.createObjectURL(blob));
+      },
+      "image/webp",
+      0.9,
+    );
 
     return () => {
       live = false;
     };
-  }, [ox, oy, n, size, occupied]);
+  }, [ox, oy, n, size, occupied, home, villages, roads, detail]);
 
   // Free a picture only once the next one is up: a phone may drop a decoded
   // image from memory and fetch it again, and a freed one comes back blank.
