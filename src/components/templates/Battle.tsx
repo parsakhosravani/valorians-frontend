@@ -4,14 +4,18 @@ import Image from "next/image";
 
 import bg from "~/images/background/battle.webp";
 
-import {
-  ArmyTab,
-  BattleResultDrawer,
-  ReportsTab,
-  SendArmyDrawer,
-  WarMap,
-} from "@/components/organisms/war";
-import type { AttackTarget } from "@/components/organisms/war";
+import dynamic from "next/dynamic";
+
+import { WarMap } from "@/components/organisms/war/WarMap";
+import type { AttackTarget } from "@/components/organisms/war/SendArmyDrawer";
+
+// Tabs and drawers that aren't on screen when the page opens load separately.
+const ArmyTab = dynamic(() => import("@/components/organisms/war/ArmyTab").then((m) => m.ArmyTab));
+const ReportsTab = dynamic(() => import("@/components/organisms/war/ReportsTab").then((m) => m.ReportsTab));
+const SendArmyDrawer = dynamic(() => import("@/components/organisms/war/SendArmyDrawer").then((m) => m.SendArmyDrawer));
+const BattleResultDrawer = dynamic(() =>
+  import("@/components/organisms/war/BattleResultDrawer").then((m) => m.BattleResultDrawer)
+);
 import { Tabs } from "@/components/organisms/war/shared";
 import { BattleReport, useGame } from "@/context";
 
