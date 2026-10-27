@@ -29,12 +29,15 @@ export function useMapCamera({
   minZoom = 0.4,
   maxZoom = 2.2,
   onResize,
+  onSettle,
 }: {
   /** Side of the square map, in px at zoom 1 (0 while nothing is loaded). */
   size: number;
   minZoom?: number;
   maxZoom?: number;
   onResize?: () => void;
+  /** The camera came to rest: where it is (layer offset in px, and zoom). */
+  onSettle?: (cam: { x: number; y: number; z: number }) => void;
 }) {
   const viewport = useRef<HTMLDivElement | null>(null);
   const layer = useRef<HTMLDivElement | null>(null);
@@ -48,9 +51,11 @@ export function useMapCamera({
   /** A finger (or the mouse button) is down on the map. */
   const moving = useRef(false);
   const onResizeRef = useRef(onResize);
+  const onSettleRef = useRef(onSettle);
 
   sizeRef.current = size;
   onResizeRef.current = onResize;
+  onSettleRef.current = onSettle;
 
   /** Smallest zoom that still fills the view, so no empty space shows. */
   const lowest = useCallback(() => {
@@ -99,6 +104,7 @@ export function useMapCamera({
     const pin = pinScale(cam.current.z).toFixed(3);
 
     if (l.style.getPropertyValue("--pin") !== pin) l.style.setProperty("--pin", pin);
+    onSettleRef.current?.({ ...cam.current });
     l.style.willChange = "auto";
     requestAnimationFrame(() => {
       if (layer.current) layer.current.style.willChange = "";

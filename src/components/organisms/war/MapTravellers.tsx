@@ -43,6 +43,9 @@ const along = (road: Road, p: number) => {
   return { at: lerp(points[k], points[k + 1] ?? points[k], t), k };
 };
 
+/** Where a traveller is on its road (px) at `p`. */
+export const spotOnRoad = (from: Pt, to: Pt, road: Road | undefined, p: number) => along(road ?? straight(from, to), p).at;
+
 /** The troop that makes up most of an army, to carry its banner. */
 const leadUnit = (army: Army | null): UnitId | null => {
   if (!army) return null;
@@ -90,6 +93,7 @@ export const ArmyToken = ({
   incoming,
   left,
   atSea = false,
+  quiet = false,
   onClick,
 }: {
   from: Pt;
@@ -102,6 +106,8 @@ export const ArmyToken = ({
   left: number;
   /** Out on the water right now: the army shows as a Longship. */
   atSea?: boolean;
+  /** Crowded spot (on a village, or on top of another traveller): no time label. */
+  quiet?: boolean;
   /** Your own armies can be tapped to give them orders. */
   onClick?: () => void;
 }) => {
@@ -141,16 +147,18 @@ export const ArmyToken = ({
           )}
         </span>
       </Tag>
-      <span
-        className={clsx(
-          "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
-          incoming
-            ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
-            : "bg-panel/90 text-goldtext border-line",
-        )}
-      >
-        {formatDuration(left)}
-      </span>
+      {!quiet && (
+        <span
+          className={clsx(
+            "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
+            incoming
+              ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
+              : "bg-panel/90 text-goldtext border-line",
+          )}
+        >
+          {formatDuration(left)}
+        </span>
+      )}
     </Rider>
   );
 };
@@ -165,11 +173,14 @@ export const CaravanToken = ({
   kind,
   left,
   road,
+  quiet = false,
 }: {
   from: Pt;
   to: Pt;
   /** The road it follows (the painted one on the map); straight when left out. */
   road?: Road;
+  /** Crowded spot (on a village, or on top of another traveller): no load label. */
+  quiet?: boolean;
   p: number;
   resource: string;
   amount: number;
@@ -195,7 +206,7 @@ export const CaravanToken = ({
           <GameIcon e="🐪" />
         </span>
       </span>
-      {mine && (
+      {mine && !quiet && (
         <span
           className={clsx(
             "-mt-0.5 flex items-center gap-0.5 pl-0.5 pr-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",

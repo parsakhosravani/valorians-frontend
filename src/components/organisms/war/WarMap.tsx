@@ -16,6 +16,7 @@ import {
   CaravanToken,
   Road,
   progress,
+  spotOnRoad,
 } from "./MapTravellers";
 import { AttackTarget } from "./SendArmyDrawer";
 import { ArmyOnRoad, ArmyOrdersDrawer, RedirectDrawer, armySpot } from "./RedirectDrawer";
@@ -28,7 +29,7 @@ import {
 } from "./LiveBattle";
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { MapGround, TILE } from "./MapGround";
-import { useMapCamera } from "./useMapCamera";
+import { pinScale, useMapCamera } from "./useMapCamera";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -168,6 +169,9 @@ const TERRAIN_ICON: Record<Terrain, string> = {
 };
 
 const SAND = "#C8B27A";
+
+/** From this zoom up, the land on screen is repainted at full detail. */
+const CLOSE_UP_ZOOM = 1.3;
 
 /** Tribes this close (tiles) get a road drawn to them from home. */
 const ROAD_REACH = 8;
@@ -399,10 +403,34 @@ export const WarMap = ({
 
   // ─── Camera: drag, pinch, wheel and the +/− buttons (see useMapCamera) ────
   const grown = useRef(0);
+  // Zoomed in close, the whole-map picture is stretched and soft: once the
+  // camera rests, the piece on screen is painted again at full detail.
+  const [closeUp, setCloseUp] = useState<{ x: number; y: number; n: number } | null>(null);
+  // The zoom the camera last came to rest at: labels shrink less than the land,
+  // so how crowded the map looks depends on it.
+  const [restZoom, setRestZoom] = useState(1);
   const camera = useMapCamera({
     size: n * T,
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
+    onSettle: ({ x, y, z }) => {
+      const el = camera.viewport.current;
+
+      setRestZoom(Math.round(z * 20) / 20);
+      if (!el || !n || z < CLOSE_UP_ZOOM) {
+        setCloseUp(null);
+
+        return;
+      }
+      // The tiles in view plus a margin, snapped to even tiles so small pans keep the same piece.
+      const even = (v: number) => Math.floor(v / 2) * 2;
+      const i0 = Math.max(0, even(-x / z / T - 2));
+      const j0 = Math.max(0, even(-y / z / T - 2));
+      const span = Math.min(n - Math.max(i0, j0), even(Math.max(el.clientWidth, el.clientHeight) / z / T + 7));
+      const next = { x: ox + i0, y: oy + j0, n: span };
+
+      setCloseUp((c) => (c && c.x === next.x && c.y === next.y && c.n === next.n ? c : next));
+    },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {
       if (wantedRadius(box.current) > radius.current && Date.now() - grown.current > 1000) {
@@ -608,6 +636,32 @@ export const WarMap = ({
     </button>
   );
 
+  // Crowded spots: a traveller standing on a village or camp, or on top of
+  // another traveller, drops its label so names and timers don't pile up.
+  // Armies keep theirs first, then merchants. (The list above still has it all.)
+  const quiet = new Set<string>();
+
+  if (data) {
+    // Labels sit under their token and shrink less than the land when you zoom out.
+    const near = 1.05 * T * pinScale(restZoom);
+    const taken: { x: number; y: number }[] = [
+      ...data.tribes.map((t) => ({ x: px(t.x), y: py(t.y) })),
+      ...data.camps.map((c) => ({ x: px(c.x), y: py(c.y) })),
+      ...battles.map((m) => ({ x: px(m.to.x), y: py(m.to.y) })),
+    ];
+    const place = (key: string, at: { x: number; y: number }) => {
+      if (taken.some((q) => Math.hypot(q.x - at.x, q.y - at.y) < near)) quiet.add(key);
+      taken.push(at);
+    };
+    const spot = (from: { x: number; y: number }, to: { x: number; y: number }, units: Army | null, f: number) =>
+      spotOnRoad({ x: px(from.x), y: py(from.y) }, { x: px(to.x), y: py(to.y) }, roadOf(from, to, units, f).road, f);
+
+    for (const m of marching) place(`t${m.id}`, spot(m.from, m.to, m.units, progress(now, m.sentAt, m.arrivesAt)));
+    for (const m of homeward) place(`b${m.id}`, spot(m.from, data.home, m.units, progress(now, m.leftAt, m.returnsAt)));
+    for (const c of data.caravans ?? [])
+      if (c.arrivesAt > now) place(`c${c.id}`, spot(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)));
+  }
+
   const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
 
   return (
@@ -650,6 +704,28 @@ export const WarMap = ({
                 roads={ground.roads}
                 villages={ground.villages}
               />
+              {closeUp && (
+                <div
+                  className="absolute"
+                  style={{
+                    left: (closeUp.x - ox) * T,
+                    top: (closeUp.y - oy) * T,
+                    width: closeUp.n * T,
+                    height: closeUp.n * T,
+                  }}
+                >
+                  <MapGround
+                    detail
+                    home={ground.home}
+                    n={closeUp.n}
+                    occupied={occupied}
+                    ox={closeUp.x}
+                    oy={closeUp.y}
+                    roads={ground.roads}
+                    villages={ground.villages}
+                  />
+                </div>
+              )}
 
               {/* Barbarian camps */}
               {data.camps.map((c) => {
@@ -807,6 +883,7 @@ export const WarMap = ({
                     kind={c.kind}
                     left={c.arrivesAt - now}
                     p={progress(now, c.sentAt, c.arrivesAt)}
+                    quiet={quiet.has(`c${c.id}`)}
                     resource={c.resource}
                     road={roadOf(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)).road}
                     to={{ x: px(c.to.x), y: py(c.to.y) }}
@@ -824,6 +901,7 @@ export const WarMap = ({
                     incoming={false}
                     left={Math.max(0, m.returnsAt - now)}
                     p={f}
+                    quiet={quiet.has(`b${m.id}`)}
                     road={road}
                     to={{ x: px(data.home.x), y: py(data.home.y) }}
                     units={m.units}
@@ -852,6 +930,7 @@ export const WarMap = ({
                     incoming={m.kind === "incoming"}
                     left={Math.max(0, m.arrivesAt - now)}
                     p={f}
+                    quiet={quiet.has(`t${m.id}`)}
                     road={road}
                     to={{ x: px(m.to.x), y: py(m.to.y) }}
                     units={m.units}

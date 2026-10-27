@@ -209,12 +209,15 @@ type Survey = ReturnType<typeof survey>;
 // ─── 1. Ground ───────────────────────────────────────────────────────────────
 
 /** Samples per tile: as many as a phone can afford for this much map. */
-const samplesPerTile = (n: number) => Math.max(8, Math.min(26, Math.floor(Math.sqrt(1_000_000) / n)));
+const samplesPerTile = (n: number, detail: boolean) =>
+  detail
+    ? Math.max(16, Math.min(56, Math.floor(Math.sqrt(1_400_000) / n)))
+    : Math.max(8, Math.min(26, Math.floor(Math.sqrt(1_000_000) / n)));
 
-const paintSoil = (s: Scene, v: Survey) => {
+const paintSoil = (s: Scene, v: Survey, detail: boolean) => {
   const { ox, oy, n } = s;
   const { W, WET, LAKE, ELEV, DIST, COL, MTN, FOR, HIL } = v;
-  const S = samplesPerTile(n);
+  const S = samplesPerTile(n, detail);
   const w = n * S;
   const rgb = new Float32Array(w * w * 3);
   /** A field read at a bent spot: forests and ranges lose the tile grid's corners. */
@@ -623,6 +626,7 @@ export const MapGround = memo(function MapGround({
   home = "",
   villages = "",
   roads = "",
+  detail = false,
 }: {
   ox: number;
   oy: number;
@@ -635,6 +639,11 @@ export const MapGround = memo(function MapGround({
   villages?: string;
   /** "ax,ay>bx,by;…" roads to paint, each along the route armies march. */
   roads?: string;
+  /**
+   * A close-up: a small piece of the map painted at full detail, laid over
+   * the whole-map picture where you've zoomed in, so the land stays sharp.
+   */
+  detail?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -646,7 +655,9 @@ export const MapGround = memo(function MapGround({
 
     if (!c || !n) return;
     const dpr = window.devicePixelRatio || 1;
-    const scale = Math.max(0.75, Math.min(dpr * 1.25, 2.5, Math.sqrt(MAX_PIXELS) / size));
+    const scale = detail
+      ? Math.min(dpr * 2.2, Math.sqrt(MAX_PIXELS / 3) / size)
+      : Math.max(0.75, Math.min(dpr * 1.25, 2.5, Math.sqrt(MAX_PIXELS) / size));
     const scene: Scene = {
       ox,
       oy,
@@ -675,7 +686,7 @@ export const MapGround = memo(function MapGround({
 
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = "high";
-    g.drawImage(paintSoil(scene, v), 0, 0, size, size);
+    g.drawImage(paintSoil(scene, v, detail), 0, 0, size, size);
     paintFlat(g, scene, v, routes, tiles);
     // Hand the finished picture over as an image: the browser tiles an
     // image and only moves the tiles when the map pans or zooms, while a
@@ -692,7 +703,7 @@ export const MapGround = memo(function MapGround({
     return () => {
       live = false;
     };
-  }, [ox, oy, n, size, occupied, home, villages, roads]);
+  }, [ox, oy, n, size, occupied, home, villages, roads, detail]);
 
   // Free a picture only once the next one is up: a phone may drop a decoded
   // image from memory and fetch it again, and a freed one comes back blank.
