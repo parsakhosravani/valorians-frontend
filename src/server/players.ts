@@ -29,6 +29,8 @@ export type Player = {
   /** The raw Telegram photo URL last checked (photoUrl is null if it was only a letter tile). */
   photoSrc: string | null;
   isPremium: boolean;
+  languageCode: string | null;
+  lastSeenAt: number;
   clanId: number | null;
   createdAt: number;
   version: number;
@@ -45,6 +47,8 @@ const toPlayer = (r: Row): Player => ({
   photoUrl: str(r.photo_url),
   photoSrc: str(r.photo_src),
   isPremium: Number(r.is_premium) === 1,
+  languageCode: str(r.language_code),
+  lastSeenAt: Number(r.last_seen_at ?? 0),
   clanId: r.clan_id == null ? null : Number(r.clan_id),
   createdAt: Number(r.created_at),
   version: Number(r.version),
@@ -93,6 +97,8 @@ const profileArgs = (u: TelegramAuthUser) => [
   u.is_premium ? 1 : 0,
 ];
 
+const LAST_SEEN_PRECISION_MS = 10 * 60_000;
+
 /** Loads the player, creating them on first visit. */
 export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<Player> {
   const db = await getDb();
@@ -100,6 +106,18 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
 
   if (existing) {
     const src = auth.user.photo_url ?? null;
+    const u = auth.user;
+    const unchanged =
+      (u.username ?? null) === existing.username &&
+      (u.first_name ?? "") === existing.firstName &&
+      (u.last_name ?? null) === existing.lastName &&
+      (u.language_code ?? null) === existing.languageCode &&
+      !!u.is_premium === existing.isPremium &&
+      src === existing.photoSrc;
+
+    // Every request used to rewrite the profile. Skip the write when nothing
+    // changed and last_seen_at is recent enough (it's only a rough "last seen").
+    if (unchanged && now - existing.lastSeenAt < LAST_SEEN_PRECISION_MS) return existing;
     // Only re-check the picture when Telegram sends a different URL.
     const photo = src === existing.photoSrc ? existing.photoUrl : await realPhoto(auth.user.photo_url);
     const args = profileArgs(auth.user);
@@ -112,6 +130,7 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
     });
     existing.photoUrl = photo;
     existing.photoSrc = src;
+    existing.lastSeenAt = now;
 
     return existing;
   }
@@ -156,11 +175,13 @@ export async function getOrCreatePlayer(auth: AuthResult, now: number): Promise<
 export async function mutatePlayer(
   id: number,
   now: number,
-  fn: (s: GameState) => GameState
+  fn: (s: GameState) => GameState,
+  /** The player as just loaded, to skip the first read (the version check still guards it). */
+  loaded?: Player
 ): Promise<Player> {
   const db = await getDb();
   for (let attempt = 0; attempt < 8; attempt++) {
-    const player = await findById(id);
+    const player = attempt === 0 && loaded?.id === id ? loaded : await findById(id);
     if (!player) throw new Error("Player not found");
     const next = fn(advance(player.state, now));
     const rs = await db.execute({

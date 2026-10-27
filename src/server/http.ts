@@ -1,6 +1,6 @@
 import "server-only";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 
 import { AuthError, AuthResult, authenticate } from "./auth";
 import { getOrCreatePlayer, mutatePlayer, Player, playerView } from "./players";
@@ -14,6 +14,23 @@ export type ApiError = { error: string; code: string };
 
 const fail = (status: number, error: string, code: string) =>
   NextResponse.json<ApiError>({ error, code }, { status });
+
+/**
+ * Fights every due battle and delivers every due trade, at most once every few
+ * seconds per server instance. Runs after responses (and from the cron), so
+ * results land even for players who aren't online.
+ */
+let lastSweep = 0;
+
+async function sweep() {
+  const now = Date.now();
+
+  if (now - lastSweep < 5_000) return;
+  lastSweep = now;
+  await resolveDueAttacks(now).catch((e) => console.error("resolveDueAttacks", e));
+  await resolveDueTrades(now).catch((e) => console.error("resolveDueTrades", e));
+  await maybeCheckRelease();
+}
 
 type Ctx = { req: NextRequest; auth: AuthResult; player: Player; now: number; body: any };
 
@@ -32,15 +49,15 @@ export function handler(
       const now = Date.now();
 
       if (opts.resolveBattles) {
-        await resolveDueAttacks(now).catch((e) => {
-          // eslint-disable-next-line no-console
-          console.error("resolveDueAttacks", e);
-        });
-        await resolveDueTrades(now).catch((e) => {
-          // eslint-disable-next-line no-console
-          console.error("resolveDueTrades", e);
-        });
-        await maybeCheckRelease();
+        // This player's own battles and trades first, so the response includes them.
+        const me = auth.user.id;
+
+        await Promise.all([
+          resolveDueAttacks(now, me).catch((e) => console.error("resolveDueAttacks", e)),
+          resolveDueTrades(now, me).catch((e) => console.error("resolveDueTrades", e)),
+        ]);
+        // Everyone else's after the response is sent: the player doesn't wait for it.
+        after(sweep);
       }
       const player = await getOrCreatePlayer(auth, now);
       let body: any = {};
@@ -63,7 +80,7 @@ export function handler(
 /** Shortcut for routes that change game state and return the new view. */
 export const action = (apply: (s: GameState, ctx: Ctx) => GameState) =>
   handler(async (ctx) => {
-    const p = await mutatePlayer(ctx.player.id, ctx.now, (s) => apply(s, ctx));
+    const p = await mutatePlayer(ctx.player.id, ctx.now, (s) => apply(s, ctx), ctx.player);
 
     return playerView(p, ctx.now);
   });
