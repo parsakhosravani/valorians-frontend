@@ -44,6 +44,17 @@ body {
   display: none;
 }
 
+/* The war map: the camera (useMapCamera) handles every touch on it, and
+ * markers shrink less than the land when zooming out, so they stay readable. */
+.map-viewport,
+.map-viewport * {
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+.map-pin {
+  scale: var(--pin, 1);
+}
+
 .font-display {
   font-family: "Cinzel", Georgia, serif;
 }

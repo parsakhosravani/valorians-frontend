@@ -141,7 +141,7 @@ const Rider = ({
     className="absolute left-0 top-0 pointer-events-none transition-transform duration-1000 ease-linear"
     style={{ transform: `translate(${at.x}px, ${at.y}px)`, zIndex: z ?? 4 }}
   >
-    <div className="-translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+    <div className="map-pin -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
       {children}
     </div>
   </div>
