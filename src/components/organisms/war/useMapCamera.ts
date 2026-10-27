@@ -22,7 +22,7 @@ type Anim =
   | { kind: "pan"; to: Cam };
 
 /** How much smaller labels and tokens get when zooming out (and bigger zooming in). */
-export const pinScale = (z: number) => Math.min(1.9, Math.max(0.72, z ** -0.6));
+export const pinScale = (z: number) => Math.min(1.5, Math.max(0.8, z ** -0.45));
 
 export function useMapCamera({
   size,
