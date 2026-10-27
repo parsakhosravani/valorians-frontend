@@ -1,5 +1,6 @@
 "use client";
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 
 import { Terrain, terrainAt } from "@/lib/game/map";
 
@@ -347,6 +348,8 @@ export const MapGround = memo(function MapGround({
   occupied: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const [src, setSrc] = useState<string | null>(null);
+  const [shown, setShown] = useState<string | null>(null);
   const size = n * TILE;
 
   useEffect(() => {
@@ -357,6 +360,7 @@ export const MapGround = memo(function MapGround({
     const scale = Math.max(0.75, Math.min(dpr * 1.25, 2.5, Math.sqrt(MAX_PIXELS) / size));
     const taken = new Set(occupied ? occupied.split(";") : []);
     let live = true;
+    let url: string | null = null;
 
     c.width = Math.round(size * scale);
     c.height = Math.round(size * scale);
@@ -371,19 +375,55 @@ export const MapGround = memo(function MapGround({
 
     // Ground first so it's never blank, then again with the icons once loaded.
     paint(null);
-    loadIcons().then(paint, () => undefined);
+    loadIcons()
+      .then((i) => {
+        paint(i);
+        // Hand the finished picture over as an image: the browser tiles an
+        // image and only moves the tiles when the map pans or zooms, while a
+        // big canvas gets re-sent to the GPU on every frame.
+        c.toBlob(
+          (blob) => {
+            if (!live || !blob) return;
+            url = URL.createObjectURL(blob);
+            setSrc(url);
+          },
+          "image/webp",
+          0.9,
+        );
+      })
+      .catch(() => undefined);
 
     return () => {
       live = false;
+      if (url) URL.revokeObjectURL(url);
     };
   }, [ox, oy, n, size, occupied]);
 
   return (
-    <canvas
-      ref={ref}
-      aria-hidden="true"
-      className="absolute left-0 top-0"
-      style={{ width: size, height: size }}
-    />
+    <>
+      <canvas
+        ref={ref}
+        aria-hidden="true"
+        className={clsx("absolute left-0 top-0", shown && shown === src && "hidden")}
+        style={{ width: size, height: size }}
+      />
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          alt=""
+          aria-hidden="true"
+          className="absolute left-0 top-0 max-w-none"
+          decoding="async"
+          draggable={false}
+          src={src}
+          onLoad={() => {
+            setShown(src);
+            // The picture is up: free the canvas's memory.
+            if (ref.current) ref.current.width = ref.current.height = 0;
+          }}
+          style={{ width: size, height: size }}
+        />
+      )}
+    </>
   );
 });

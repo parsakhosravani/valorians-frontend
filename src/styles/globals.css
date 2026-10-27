@@ -53,6 +53,7 @@ body {
 }
 .map-pin {
   scale: var(--pin, 1);
+  transition: scale 0.18s ease-out;
 }
 
 .font-display {

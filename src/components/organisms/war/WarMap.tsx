@@ -678,7 +678,7 @@ export const WarMap = ({
           >
             <div
               ref={camera.layer}
-              className="absolute left-0 top-0 origin-top-left"
+              className="absolute left-0 top-0 origin-top-left will-change-transform"
               style={{ width: n * T, height: n * T }}
             >
               <MapGround n={n} occupied={occupied} ox={ox} oy={oy} />
