@@ -119,7 +119,7 @@ const NARROW: Layout = (() => {
     height: 230,
     size: 19,
     label: 10,
-    plate: 19,
+    plate: 21,
     wall,
     plaza: { x: 50, y: 131 },
     plots: {
@@ -138,15 +138,16 @@ const NARROW: Layout = (() => {
       embassy: { x: 19, y: 116 },
       "town-hall": { x: 50, y: 122 },
       "exploration-center": { x: 81, y: 116 },
-      "war-hall": { x: 18, y: 145 },
-      hospital: { x: 34, y: 149 },
-      "military-command": { x: 66, y: 149 },
-      barracks: { x: 82, y: 145 },
-      stable: { x: 21, y: 172 },
-      arsenal: { x: 38, y: 176 },
-      armory: { x: 62, y: 176 },
-      "siege-workshop": { x: 79, y: 172 },
-      trapmaker: { x: 34, y: 198 },
+      "war-hall": { x: 17, y: 145 },
+      hospital: { x: 37, y: 149 },
+      "military-command": { x: 63, y: 149 },
+      barracks: { x: 83, y: 145 },
+      stable: { x: 20, y: 172 },
+      arsenal: { x: 40, y: 176 },
+      armory: { x: 60, y: 176 },
+      "siege-workshop": { x: 80, y: 172 },
+      // Left of the gate, clear of it.
+      trapmaker: { x: 28, y: 193 },
       // On the wall.
       watchtower: ring(wall.cx, wall.cy, wall.rx, wall.ry, 58),
       "city-gate": ring(wall.cx, wall.cy, wall.rx, wall.ry, 90),
@@ -389,7 +390,7 @@ const UpgradeMark = ({ size }: { size: number }) => {
   const id = useId().replace(/:/g, "");
 
   return (
-    <svg aria-hidden="true" className="shrink-0 animate-nudge drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" height={size} viewBox="0 0 24 24" width={size}>
+    <svg aria-hidden="true" className="absolute -top-[9px] -right-[2px] animate-nudge drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" height={size} viewBox="0 0 24 24" width={size}>
       <defs>
         <radialGradient cx="38%" cy="30%" id={`${id}-gem`} r="75%">
           <stop offset="0" stopColor="#D8F5B8" />
@@ -416,8 +417,8 @@ const UpgradeMark = ({ size }: { size: number }) => {
 
 /**
  * A name plate at each building's foot: the level, the building's name, and
- * an upgrade mark beside them when it can be upgraded now, so the level is
- * never hidden.
+ * an upgrade mark pinned to the plate's corner when it can be upgraded now,
+ * so the level is never hidden and the plate keeps its size.
  */
 const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
   const { x, y } = v.plots[o.building.id];
@@ -429,8 +430,7 @@ const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
     <button
       aria-hidden="true"
       className={clsx(
-        "absolute -translate-x-1/2 z-[10000] flex items-center gap-1 py-[2px] pl-[2px] rounded-[10px] border",
-        ready ? "pr-[2px]" : "pr-1.5",
+        "absolute -translate-x-1/2 z-[10000] min-w-min flex items-center gap-1 py-[2px] pl-[2px] pr-1.5 rounded-[10px] border",
         "bg-[#1A120B]/85 backdrop-blur-[2px] shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
         ready ? "border-good/70" : built ? "border-frame" : "border-line/60",
       )}
@@ -450,7 +450,7 @@ const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
       <span className={clsx("font-bold leading-[1.1] text-left", built || o.job ? "text-parch" : "text-muted")} style={{ fontSize: v.label }}>
         {o.building.name}
       </span>
-      {ready && <UpgradeMark size={v.label + 7} />}
+      {ready && <UpgradeMark size={v.label + 5} />}
     </button>
   );
 };
