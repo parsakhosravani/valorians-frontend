@@ -171,6 +171,9 @@ const TERRAIN_ICON: Record<Terrain, string> = {
 
 const SAND = "#C8B27A";
 
+/** Tribes this close (tiles) get a road drawn to them from home. */
+const ROAD_REACH = 8;
+
 /**
  * Height that makes the map end just above the bottom bar, so on a phone the
  * whole map is on screen and the page around it never needs scrolling (the
@@ -450,6 +453,23 @@ export const WarMap = ({
         : "",
     [data],
   );
+  // What the ground paints round them: your land, fields by every village,
+  // and roads from home to the camps and the tribes close by.
+  const ground = useMemo(() => {
+    if (!data) return { home: "", villages: "", roads: "" };
+    const xy = (p: { x: number; y: number }) => `${p.x},${p.y}`;
+
+    return {
+      home: xy(data.home),
+      villages: data.tribes.map(xy).sort().join(";"),
+      roads: [
+        ...data.camps.map(xy),
+        ...data.tribes.filter((t) => !t.isMe && t.distance <= ROAD_REACH).map(xy),
+      ]
+        .sort()
+        .join(";"),
+    };
+  }, [data]);
 
   const strength = (p: number) => {
     const ratio = p / Math.max(1, data?.myPower ?? 1);
@@ -617,7 +637,15 @@ export const WarMap = ({
               className="absolute left-0 top-0 origin-top-left will-change-transform"
               style={{ width: n * T, height: n * T }}
             >
-              <MapGround n={n} occupied={occupied} ox={ox} oy={oy} />
+              <MapGround
+                home={ground.home}
+                n={n}
+                occupied={occupied}
+                ox={ox}
+                oy={oy}
+                roads={ground.roads}
+                villages={ground.villages}
+              />
               <svg
                 aria-hidden="true"
                 className="absolute inset-0"
@@ -679,7 +707,7 @@ export const WarMap = ({
                     aria-label={`Barbarian camp ${c.level}`}
                     className={clsx(
                       "map-pin absolute",
-                      c.state === "locked" && "opacity-55 grayscale",
+                      c.state === "locked" && "grayscale brightness-[0.6]",
                     )}
                     style={{
                       left: px(c.x) - 32,
