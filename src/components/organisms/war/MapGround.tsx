@@ -2,7 +2,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 
-import { Terrain, marchRoute, terrainAt } from "@/lib/game/map";
+import { Terrain, terrainAt } from "@/lib/game/map";
 
 /**
  * The land under the war map, painted once onto a canvas and handed to the
@@ -15,8 +15,7 @@ import { Terrain, marchRoute, terrainAt } from "@/lib/game/map";
  *      the meadow and the odd autumn grove;
  *    - mountains as ridged rock rising out of foothills, snow on the crests;
  *    - rolling, lumpy hills.
- * 2. Flat things on the ground: cleared earth under settlements, roads along
- *    the routes armies really march, your territory, fields round villages,
+ * 2. Flat things on the ground: cleared earth under settlements, your territory,
  *    grass on the plains.
  */
 
@@ -139,8 +138,6 @@ type Scene = {
   n: number;
   occupied: Set<string>;
   home: Pt | null;
-  villages: Pt[];
-  roads: [Pt, Pt][];
 };
 
 /** Terrain and per-tile facts with a margin, for neighbours and blending. */
@@ -427,22 +424,10 @@ const grainTile = () => {
 
 // ─── 2. Flat things on the ground ────────────────────────────────────────────
 
-/** Tiles the roads run over: trees and hills stay off them. */
-const roadTiles = (s: Scene) => {
-  const tiles = new Set<string>();
-  const routes = s.roads.map(([a, b]) => marchRoute(a, b));
-
-  for (const r of routes) for (const p of r.path) tiles.add(`${p.x},${p.y}`);
-
-  return { tiles, routes };
-};
-
 const paintFlat = (
   g: CanvasRenderingContext2D,
   s: Scene,
   v: Survey,
-  routes: ReturnType<typeof marchRoute>[],
-  road: Set<string>,
 ) => {
   const T = TILE;
   const { ox, oy, n, occupied } = s;
@@ -482,94 +467,6 @@ const paintFlat = (
   g.stroke(light);
   g.strokeStyle = "rgba(40,60,24,0.4)";
   g.stroke(dark);
-
-  // Fields round villages: life where people live.
-  for (const vil of s.villages)
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = vil.x + dx;
-        const y = vil.y + dy;
-
-        if ((!dx && !dy) || occupied.has(`${x},${y}`) || road.has(`${x},${y}`)) continue;
-        if (v.at(x - ox, y - oy) !== "plains") continue;
-        if (rnd(x, y, 130) > 0.55) continue;
-        const gold = rnd(x, y, 132) > 0.45;
-
-        g.save();
-        g.translate(px(x), py(y));
-        g.rotate((rnd(x, y, 131) - 0.5) * 0.6);
-        g.fillStyle = gold ? "rgba(214,180,88,0.85)" : "rgba(122,140,60,0.9)";
-        g.fillRect(-16, -12, 32, 24);
-        g.strokeStyle = gold ? "rgba(160,120,40,0.7)" : "rgba(70,90,34,0.8)";
-        g.lineWidth = 1.2;
-        g.beginPath();
-        for (let k = -9; k <= 9; k += 4.5) {
-          g.moveTo(-14, k);
-          g.lineTo(14, k);
-        }
-        g.stroke();
-        g.strokeStyle = "rgba(60,44,20,0.5)";
-        g.strokeRect(-16, -12, 32, 24);
-        g.restore();
-      }
-
-  // Roads: the way armies actually march, so a target's road is plain to see.
-  g.save();
-  g.lineCap = g.lineJoin = "round";
-  for (const r of routes) {
-    const pts = r.path.map((p, k) => ({
-      x: px(p.x) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 61) - 0.5) * 4 : 0),
-      y: py(p.y) + (k && k < r.path.length - 1 ? (rnd(p.x, p.y, 62) - 0.5) * 4 : 0),
-      wet: r.wet[k],
-    }));
-    const curve = (atSea: boolean) => {
-      const p = new Path2D();
-      let open = false;
-
-      for (let k = 0; k < pts.length - 1; k++) {
-        if ((pts[k].wet || pts[k + 1].wet) !== atSea) {
-          open = false;
-          continue;
-        }
-        const a = pts[k - 1] ?? pts[k];
-        const b = pts[k];
-        const c = pts[k + 1];
-        const d = pts[k + 2] ?? c;
-
-        if (!open) p.moveTo(b.x, b.y);
-        open = true;
-        p.bezierCurveTo(
-          b.x + (c.x - a.x) / 6,
-          b.y + (c.y - a.y) / 6,
-          c.x - (d.x - b.x) / 6,
-          c.y - (d.y - b.y) / 6,
-          c.x,
-          c.y,
-        );
-      }
-
-      return p;
-    };
-    const land = curve(false);
-
-    g.setLineDash([]);
-    g.strokeStyle = "rgba(48,32,16,0.45)";
-    g.lineWidth = 9;
-    g.stroke(land);
-    g.strokeStyle = "rgba(196,164,108,0.9)";
-    g.lineWidth = 5.5;
-    g.stroke(land);
-    g.strokeStyle = "rgba(240,220,170,0.35)";
-    g.lineWidth = 1.5;
-    g.setLineDash([3, 6]);
-    g.stroke(land);
-    // Sea lanes: a dotted wake.
-    g.strokeStyle = "rgba(230,240,235,0.6)";
-    g.lineWidth = 2;
-    g.setLineDash([2, 7]);
-    g.stroke(curve(true));
-  }
-  g.restore();
 
   // Cleared, trodden earth under every settlement and camp.
   for (const key of occupied) {
@@ -624,8 +521,6 @@ export const MapGround = memo(function MapGround({
   n,
   occupied,
   home = "",
-  villages = "",
-  roads = "",
   detail = false,
 }: {
   ox: number;
@@ -635,10 +530,6 @@ export const MapGround = memo(function MapGround({
   occupied: string;
   /** "x,y" of your tribe: your territory is drawn round it. */
   home?: string;
-  /** "x,y;…" tribes: fields are tilled round them. */
-  villages?: string;
-  /** "ax,ay>bx,by;…" roads to paint, each along the route armies march. */
-  roads?: string;
   /**
    * A close-up: a small piece of the map painted at full detail, laid over
    * the whole-map picture where you've zoomed in, so the land stays sharp.
@@ -664,14 +555,6 @@ export const MapGround = memo(function MapGround({
       n,
       occupied: new Set(occupied ? occupied.split(";") : []),
       home: parse(home)[0] ?? null,
-      villages: parse(villages),
-      roads: roads
-        ? roads.split(";").map((pair) => {
-            const [a, b] = pair.split(">").map((q) => parse(q)[0]);
-
-            return [a, b] as [Pt, Pt];
-          })
-        : [],
     };
     let live = true;
 
@@ -682,12 +565,11 @@ export const MapGround = memo(function MapGround({
     if (!g) return;
     g.setTransform(scale, 0, 0, scale, 0, 0);
     const v = survey(scene);
-    const { tiles, routes } = roadTiles(scene);
 
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = "high";
     g.drawImage(paintSoil(scene, v, detail), 0, 0, size, size);
-    paintFlat(g, scene, v, routes, tiles);
+    paintFlat(g, scene, v);
     // Hand the finished picture over as an image: the browser tiles an
     // image and only moves the tiles when the map pans or zooms, while a
     // big canvas gets re-sent to the GPU on every frame.
@@ -703,7 +585,7 @@ export const MapGround = memo(function MapGround({
     return () => {
       live = false;
     };
-  }, [ox, oy, n, size, occupied, home, villages, roads, detail]);
+  }, [ox, oy, n, size, occupied, home, detail]);
 
   // Free a picture only once the next one is up: a phone may drop a decoded
   // image from memory and fetch it again, and a freed one comes back blank.
