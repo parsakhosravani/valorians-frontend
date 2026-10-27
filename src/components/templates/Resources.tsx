@@ -16,23 +16,26 @@ import {
   tapPowerForLevel,
 } from "@/lib/game/config";
 import { frenzyActive } from "@/lib/game/engine";
+import type { ResourceId } from "@/lib/game/config";
 import { Button } from "@/components";
 
 type Float = { id: number; x: number; y: number; text: string; crit: boolean };
 
-/** Spots on the 280px rock where the weak point can appear. */
-const SPOTS: [number, number][] = [
-  [60, 46],
-  [178, 64],
-  [196, 160],
-  [70, 168],
-  [128, 108],
-  [140, 196],
-];
+/**
+ * Where the weak spot can appear on each 280px rock (top-left of the 48px rune),
+ * picked so the rune always sits on the art. Every list has the same length.
+ */
+const SPOTS_BY_RESOURCE: Record<ResourceId, [number, number][]> = {
+  iron: [[122, 110], [24, 148], [215, 154], [121, 32], [187, 91], [59, 94]],
+  wood: [[126, 121], [16, 165], [178, 30], [215, 141], [137, 201], [55, 101]],
+  clay: [[118, 113], [27, 175], [155, 216], [168, 16], [24, 59], [206, 139]],
+  crop: [[115, 99], [103, 215], [125, 17], [49, 62], [185, 72], [126, 159]],
+};
+const SPOT_COUNT = SPOTS_BY_RESOURCE.iron.length;
 
 let floatId = 0;
 const pick = (except: number[]) => {
-  const options = SPOTS.map((_, i) => i).filter((i) => !except.includes(i));
+  const options = Array.from({ length: SPOT_COUNT }, (_, i) => i).filter((i) => !except.includes(i));
 
   return options[Math.floor(Math.random() * options.length)];
 };
@@ -242,7 +245,7 @@ export const Resources = () => {
                     ? "border-[#FFB27A] bg-[#FFB27A]/30 shadow-[0_0_22px_#E8612C]"
                     : "border-gold bg-goldtext/25 shadow-[0_0_22px_#E3A948]"
                 )}
-                style={{ left: SPOTS[s][0], top: SPOTS[s][1] }}
+                style={{ left: SPOTS_BY_RESOURCE[activeResource.id][s][0], top: SPOTS_BY_RESOURCE[activeResource.id][s][1] }}
                 onPointerDown={(e) => strike(e, i)}
               >
                 <span className="w-3.5 h-3.5 rounded-full bg-[#FFF4D6]" />
