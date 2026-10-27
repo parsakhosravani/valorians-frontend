@@ -17,6 +17,10 @@ import iron from "~/images/resources/iron.webp";
 import wood from "~/images/resources/wood.webp";
 import clay from "~/images/resources/clay.webp";
 import crop from "~/images/resources/crop.webp";
+import ironRock from "~/images/resources/rock-iron.webp";
+import woodRock from "~/images/resources/rock-wood.webp";
+import clayRock from "~/images/resources/rock-clay.webp";
+import cropRock from "~/images/resources/rock-crop.webp";
 import ironBg from "~/images/background/iron.webp";
 import woodBg from "~/images/background/wood.webp";
 import clayBg from "~/images/background/clay.webp";
@@ -53,13 +57,15 @@ export type TResource = {
   name: string;
   img: StaticImageData;
   bg: StaticImageData;
+  /** Large art the player strikes in the Daily Mine. */
+  rock: StaticImageData;
 };
 
 export const RESOURCES: TResource[] = [
-  { id: "iron", name: RESOURCE_NAMES.iron, img: iron, bg: ironBg },
-  { id: "wood", name: RESOURCE_NAMES.wood, img: wood, bg: woodBg },
-  { id: "clay", name: RESOURCE_NAMES.clay, img: clay, bg: clayBg },
-  { id: "crop", name: RESOURCE_NAMES.crop, img: crop, bg: cropBg },
+  { id: "iron", name: RESOURCE_NAMES.iron, img: iron, bg: ironBg, rock: ironRock },
+  { id: "wood", name: RESOURCE_NAMES.wood, img: wood, bg: woodBg, rock: woodRock },
+  { id: "clay", name: RESOURCE_NAMES.clay, img: clay, bg: clayBg, rock: clayRock },
+  { id: "crop", name: RESOURCE_NAMES.crop, img: crop, bg: cropBg, rock: cropRock },
 ];
 
 export type GameStatus = "loading" | "ready" | "error" | "no-auth";

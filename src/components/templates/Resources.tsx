@@ -228,7 +228,7 @@ export const Resources = () => {
                   ? "drop-shadow-[0_0_40px_rgba(232,97,44,0.7)]"
                   : "drop-shadow-[0_18px_30px_rgba(0,0,0,0.6)]"
               )}
-              src={activeResource.img}
+              src={activeResource.rock}
             />
           </button>
           {!blocked &&
