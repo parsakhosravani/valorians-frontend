@@ -166,136 +166,149 @@ export const Tribe: FunctionComponent = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 px-3 pt-1 pb-4">
-      {/* Builders and what they are doing */}
-      <section className="card p-3 flex flex-col gap-2.5">
-        <div className="flex items-center gap-2">
-          <Image alt="" className="w-6 h-6" src={builderImg} />
-          <h2 className="title-section flex-1">
-            Builders <span className="text-muted text-xs font-sans font-bold normal-case tracking-normal">{freeBuilders} of {rates.builders} free</span>
-          </h2>
-          <InfoDrawer
-            content="Each builder works on one building at a time. Upgrade your Town Hall to hire more builders at levels 5, 10 and 15, and to build faster."
-            title="Builders"
-          />
-        </div>
-        {jobs.map((j) => {
-          const b = BUILDING_BY_ID[j.building];
+    <div
+      className={clsx(
+        "w-full mx-auto px-3 pt-1 pb-4",
+        // On a wide window (Telegram Desktop) the village takes the room and builders sit beside it.
+        view === "village" ? "max-w-6xl lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-5 lg:items-start" : "max-w-md",
+      )}
+    >
+      <div className="flex flex-col gap-4 w-full max-w-md mx-auto lg:max-w-none lg:sticky lg:top-1">
+        {/* Builders and what they are doing */}
+        <section className="card p-3 flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <Image alt="" className="w-6 h-6" src={builderImg} />
+            <h2 className="title-section flex-1">
+              Builders{" "}
+              <span className="text-muted text-xs font-sans font-bold normal-case tracking-normal">
+                {freeBuilders} of {rates.builders} free
+              </span>
+            </h2>
+            <InfoDrawer
+              content="Each builder works on one building at a time. Upgrade your Town Hall to hire more builders at levels 5, 10 and 15, and to build faster."
+              title="Builders"
+            />
+          </div>
+          {jobs.map((j) => {
+            const b = BUILDING_BY_ID[j.building];
 
-          return (
-            <button key={j.building} className="flex items-center gap-3 text-left" onClick={() => setOpen(b)}>
-              <BuildingThumb b={b} level={j.toLevel - 1} size={44} />
-              <span className="flex-1 min-w-0 flex flex-col gap-1">
-                <span className="flex justify-between gap-2 text-sm font-bold">
-                  <span className="truncate">
-                    {b.name} → {j.toLevel}
+            return (
+              <button key={j.building} className="flex items-center gap-3 text-left" onClick={() => setOpen(b)}>
+                <BuildingThumb b={b} level={j.toLevel - 1} size={44} />
+                <span className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className="flex justify-between gap-2 text-sm font-bold">
+                    <span className="truncate">
+                      {b.name} → {j.toLevel}
+                    </span>
+                    <span className="text-goldtext shrink-0">{formatDuration(j.endsAt - now)}</span>
                   </span>
-                  <span className="text-goldtext shrink-0">{formatDuration(j.endsAt - now)}</span>
+                  <Bar max={j.endsAt - j.startedAt} value={now - j.startedAt} />
                 </span>
-                <Bar max={j.endsAt - j.startedAt} value={now - j.startedAt} />
+              </button>
+            );
+          })}
+          {Array.from({ length: Math.max(0, freeBuilders) }, (_, i) => (
+            <div key={i} className="inset flex items-center gap-3 border-dashed !border-gold/50 px-3 py-2 text-sm text-sub">
+              <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)]" />
+              Free builder · {advice ? "start the upgrade below" : ready.length ? "pick an upgrade below" : "save up for an upgrade"}
+            </div>
+          ))}
+        </section>
+
+        {/* The one best next step */}
+        {best && advice && (
+          <section className="card-hero p-3 flex flex-col gap-2.5">
+            <span className="pill-gold pill self-start text-micro tracking-[0.12em]">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
+            <button className="flex items-center gap-3 text-left" onClick={() => setOpen(best.building)}>
+              <BuildingThumb b={best.building} level={best.level} size={68} />
+              <span className="flex flex-col gap-0.5 min-w-0">
+                <span className="font-display font-black text-[19px] leading-tight">
+                  {best.building.name} <span className="text-muted text-sm font-sans">→ {best.toLevel}</span>
+                </span>
+                <span className="text-sm font-bold text-good">{nextLevelGain(best.building)}</span>
+                <CostLine o={best} />
               </span>
             </button>
-          );
-        })}
-        {Array.from({ length: Math.max(0, freeBuilders) }, (_, i) => (
-          <div key={i} className="inset flex items-center gap-3 border-dashed !border-gold/50 px-3 py-2 text-sm text-sub">
-            <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)]" />
-            Free builder · {advice ? "start the upgrade below" : ready.length ? "pick an upgrade below" : "save up for an upgrade"}
-          </div>
-        ))}
-      </section>
-
-      {/* The one best next step */}
-      {best && advice && (
-        <section className="card-hero p-3 flex flex-col gap-2.5">
-          <span className="pill-gold pill self-start text-micro tracking-[0.12em]">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
-          <button className="flex items-center gap-3 text-left" onClick={() => setOpen(best.building)}>
-            <BuildingThumb b={best.building} level={best.level} size={68} />
-            <span className="flex flex-col gap-0.5 min-w-0">
-              <span className="font-display font-black text-[19px] leading-tight">
-                {best.building.name} <span className="text-muted text-sm font-sans">→ {best.toLevel}</span>
-              </span>
-              <span className="text-sm font-bold text-good">{nextLevelGain(best.building)}</span>
-              <CostLine o={best} />
-            </span>
-          </button>
-          <button className="btn btn-gold btn-lg w-full" disabled={busy === best.building.id} onClick={() => upgrade(best.building.id)}>
-            {best.level === 0 ? "Build" : "Upgrade"} {best.building.name}
-          </button>
-        </section>
-      )}
-
-      {/* Village / List switch */}
-      <SectionTitle
-        right={
-          <Segmented
-            className="!w-auto !p-0.5 [&_.seg-btn]:h-7 [&_.seg-btn]:px-3.5 [&_.seg-btn]:text-xs"
-            tabs={[
-              { id: "village" as View, label: "Village" },
-              { id: "list" as View, label: "List" },
-            ]}
-            value={view}
-            onChange={pickView}
-          />
-        }
-      >
-        {view === "village" ? "Your village" : "All buildings"}
-      </SectionTitle>
-
-      {view === "village" && <Village freeBuilder={freeBuilders > 0} now={now} options={options} onOpen={setOpen} />}
-
-      {/* A few quick wins you can start right now */}
-      {view === "list" && ready.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <SectionTitle right={`${ready.length} ready`}>Quick upgrades</SectionTitle>
-          {ready.slice(0, 3).map((o) => (
-            <UpgradeRow
-              key={o.building.id}
-              busy={busy === o.building.id}
-              freeBuilder={freeBuilders > 0}
-              o={o}
-              onOpen={() => setOpen(o.building)}
-              onUpgrade={() => upgrade(o.building.id)}
-            />
-          ))}
-        </section>
-      )}
-
-      {/* Every building, filterable */}
-      {view === "list" && (
-        <section className="flex flex-col gap-2">
-          <div className="flex gap-1.5 overflow-x-auto scrollable -mx-3 px-3">
-            {(["all", "economy", "military", "defense"] as Filter[]).map((f) => (
-              <button
-                key={f}
-                className={clsx("pill h-8 px-3.5 text-sm shrink-0", filter === f ? "pill-gold !border-gold" : "text-sub")}
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" ? "All" : GROUP_LABEL[f]}
-              </button>
-            ))}
-          </div>
-          {rest.map((o) => (
-            <UpgradeRow
-              key={o.building.id}
-              busy={busy === o.building.id}
-              freeBuilder={freeBuilders > 0}
-              o={o}
-              onOpen={() => setOpen(o.building)}
-              onUpgrade={() => upgrade(o.building.id)}
-            />
-          ))}
-          {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
-        </section>
-      )}
-
-      <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
-        {open && (
-          <div className="pt-1">
-            <Building building={open} />
-          </div>
+            <button className="btn btn-gold btn-lg w-full" disabled={busy === best.building.id} onClick={() => upgrade(best.building.id)}>
+              {best.level === 0 ? "Build" : "Upgrade"} {best.building.name}
+            </button>
+          </section>
         )}
-      </Drawer>
+      </div>
+
+      <div className="flex flex-col gap-4 mt-4 lg:mt-0 min-w-0">
+        {/* Village / List switch */}
+        <SectionTitle
+          right={
+            <Segmented
+              className="!w-auto !p-0.5 [&_.seg-btn]:h-7 [&_.seg-btn]:px-3.5 [&_.seg-btn]:text-xs"
+              tabs={[
+                { id: "village" as View, label: "Village" },
+                { id: "list" as View, label: "List" },
+              ]}
+              value={view}
+              onChange={pickView}
+            />
+          }
+        >
+          {view === "village" ? "Your village" : "All buildings"}
+        </SectionTitle>
+
+        {view === "village" && <Village freeBuilder={freeBuilders > 0} now={now} options={options} onOpen={setOpen} />}
+
+        {/* A few quick wins you can start right now */}
+        {view === "list" && ready.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <SectionTitle right={`${ready.length} ready`}>Quick upgrades</SectionTitle>
+            {ready.slice(0, 3).map((o) => (
+              <UpgradeRow
+                key={o.building.id}
+                busy={busy === o.building.id}
+                freeBuilder={freeBuilders > 0}
+                o={o}
+                onOpen={() => setOpen(o.building)}
+                onUpgrade={() => upgrade(o.building.id)}
+              />
+            ))}
+          </section>
+        )}
+
+        {/* Every building, filterable */}
+        {view === "list" && (
+          <section className="flex flex-col gap-2">
+            <div className="flex gap-1.5 overflow-x-auto scrollable -mx-3 px-3">
+              {(["all", "economy", "military", "defense"] as Filter[]).map((f) => (
+                <button
+                  key={f}
+                  className={clsx("pill h-8 px-3.5 text-sm shrink-0", filter === f ? "pill-gold !border-gold" : "text-sub")}
+                  onClick={() => setFilter(f)}
+                >
+                  {f === "all" ? "All" : GROUP_LABEL[f]}
+                </button>
+              ))}
+            </div>
+            {rest.map((o) => (
+              <UpgradeRow
+                key={o.building.id}
+                busy={busy === o.building.id}
+                freeBuilder={freeBuilders > 0}
+                o={o}
+                onOpen={() => setOpen(o.building)}
+                onUpgrade={() => upgrade(o.building.id)}
+              />
+            ))}
+            {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
+          </section>
+        )}
+
+        <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
+          {open && (
+            <div className="pt-1">
+              <Building building={open} />
+            </div>
+          )}
+        </Drawer>
+      </div>
     </div>
   );
 };
