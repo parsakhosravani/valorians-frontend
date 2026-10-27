@@ -168,13 +168,19 @@ export const Tribe: FunctionComponent = () => {
   return (
     <div
       className={clsx(
-        "w-full mx-auto px-3 pt-1 pb-4",
-        // On a wide window (Telegram Desktop) the village takes the room and builders sit beside it.
-        view === "village" ? "max-w-6xl lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-5 lg:items-start" : "max-w-md",
+        // One centered column under the header. On a wide window (Telegram Desktop) the village gets the room,
+        // and the builders and best next step sit side by side above it instead of in a separate column.
+        "w-full mx-auto px-3 pt-1 pb-4 flex flex-col gap-4",
+        view === "village" ? "max-w-5xl" : "max-w-md",
       )}
     >
-      {/* Only stick beside the village on wide screens; in the single-column list it would slide under the cards. */}
-      <div className={clsx("flex flex-col gap-4 w-full max-w-md mx-auto", view === "village" && "lg:max-w-none lg:sticky lg:top-1")}>
+      <div
+        className={clsx(
+          "grid gap-4 w-full mx-auto items-stretch",
+          view === "village" ? "max-w-md md:max-w-none md:grid-cols-2" : "max-w-md",
+          view === "village" && !best && "md:grid-cols-1",
+        )}
+      >
         {/* Builders and what they are doing */}
         <section className="card p-3 flex flex-col gap-2.5">
           <div className="flex items-center gap-2">
@@ -220,24 +226,32 @@ export const Tribe: FunctionComponent = () => {
         {best && advice && (
           <section className="card-hero p-3 flex flex-col gap-2.5">
             <span className="pill-gold pill self-start text-micro tracking-[0.12em]">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
-            <button className="flex items-center gap-3 text-left" onClick={() => setOpen(best.building)}>
-              <BuildingThumb b={best.building} level={best.level} size={68} />
-              <span className="flex flex-col gap-0.5 min-w-0">
-                <span className="font-display font-black text-[19px] leading-tight">
-                  {best.building.name} <span className="text-muted text-sm font-sans">→ {best.toLevel}</span>
+            {/* Stacked on a phone; side by side next to the builders on a wide window, so the two cards line up. */}
+            <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:gap-3">
+              <button className="flex items-center gap-3 text-left flex-1 min-w-0" onClick={() => setOpen(best.building)}>
+                <BuildingThumb b={best.building} level={best.level} size={68} />
+                <span className="flex flex-col gap-0.5 min-w-0">
+                  <span className="font-display font-black text-[19px] leading-tight">
+                    {best.building.name} <span className="text-muted text-sm font-sans">→ {best.toLevel}</span>
+                  </span>
+                  <span className="text-sm font-bold text-good">{nextLevelGain(best.building)}</span>
+                  <CostLine o={best} />
                 </span>
-                <span className="text-sm font-bold text-good">{nextLevelGain(best.building)}</span>
-                <CostLine o={best} />
-              </span>
-            </button>
-            <button className="btn btn-gold btn-lg w-full" disabled={busy === best.building.id} onClick={() => upgrade(best.building.id)}>
-              {best.level === 0 ? "Build" : "Upgrade"} {best.building.name}
-            </button>
+              </button>
+              <button
+                className="btn btn-gold btn-lg w-full md:w-auto md:shrink-0 md:px-6"
+                disabled={busy === best.building.id}
+                onClick={() => upgrade(best.building.id)}
+              >
+                {best.level === 0 ? "Build" : "Upgrade"}
+                <span className="md:hidden"> {best.building.name}</span>
+              </button>
+            </div>
           </section>
         )}
       </div>
 
-      <div className="flex flex-col gap-4 mt-4 lg:mt-0 min-w-0">
+      <div className="flex flex-col gap-4 min-w-0">
         {/* Village / List switch */}
         <SectionTitle
           right={
