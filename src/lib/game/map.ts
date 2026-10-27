@@ -511,7 +511,11 @@ const reverse = (r: MarchRoute): MarchRoute => ({
  * The road an army takes from `a` to `b`. The same road both ways, so the
  * trip home mirrors the trip out.
  */
-export function marchRoute(a: Point, b: Point): MarchRoute {
+export function marchRoute(a0: Point, b0: Point): MarchRoute {
+  // Roads run tile to tile: a spot between tiles (where a recalled army turned
+  // round) snaps to the nearest one, or the search never reaches it.
+  const a = { x: Math.round(a0.x), y: Math.round(a0.y) };
+  const b = { x: Math.round(b0.x), y: Math.round(b0.y) };
   const flip = a.y * N + a.x > b.y * N + b.x;
   const [p, q] = flip ? [b, a] : [a, b];
   const k = `${p.x},${p.y}>${q.x},${q.y}`;
