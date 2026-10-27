@@ -360,7 +360,6 @@ export const MapGround = memo(function MapGround({
     const scale = Math.max(0.75, Math.min(dpr * 1.25, 2.5, Math.sqrt(MAX_PIXELS) / size));
     const taken = new Set(occupied ? occupied.split(";") : []);
     let live = true;
-    let url: string | null = null;
 
     c.width = Math.round(size * scale);
     c.height = Math.round(size * scale);
@@ -384,8 +383,7 @@ export const MapGround = memo(function MapGround({
         c.toBlob(
           (blob) => {
             if (!live || !blob) return;
-            url = URL.createObjectURL(blob);
-            setSrc(url);
+            setSrc(URL.createObjectURL(blob));
           },
           "image/webp",
           0.9,
@@ -395,9 +393,24 @@ export const MapGround = memo(function MapGround({
 
     return () => {
       live = false;
-      if (url) URL.revokeObjectURL(url);
     };
   }, [ox, oy, n, size, occupied]);
+
+  // Free a picture only once the next one is up: a phone may drop a decoded
+  // image from memory and fetch it again, and a freed one comes back blank.
+  const kept = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!shown || kept.current === shown) return;
+    if (kept.current) URL.revokeObjectURL(kept.current);
+    kept.current = shown;
+  }, [shown]);
+  useEffect(
+    () => () => {
+      if (kept.current) URL.revokeObjectURL(kept.current);
+    },
+    [],
+  );
 
   return (
     <>
