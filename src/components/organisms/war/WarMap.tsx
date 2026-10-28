@@ -32,7 +32,7 @@ import {
   LiveBattleDrawer,
 } from "./LiveBattle";
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
-import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE } from "./MapGround";
+import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
 import { WorldMap } from "./WorldMap";
 
@@ -196,9 +196,6 @@ const VILLAGE_MIN = 34;
 const VILLAGE_GROW = 12;
 const VX = 36;
 const VY = 34;
-
-/** From this zoom up, the land on screen is repainted at full detail. */
-const CLOSE_UP_ZOOM = 1.3;
 
 /**
  * From this zoom up every village shows its name and every camp its full tag.
@@ -642,11 +639,11 @@ export const WarMap = ({
   // piece is only told about what stands on it, so it repaints only when that changes.
   const ground = useMemo(() => {
     if (!view || !n || homeX == null || homeY == null) return [];
-    const out: { key: string; x: number; y: number; n: number; detail: boolean; occupied: string; home: string; prio: number }[] = [];
+    const out: { key: string; x: number; y: number; n: number; detail: boolean; res: number; occupied: string; home: string; prio: number }[] = [];
     const mx = (view.x0 + view.x1) / 2;
     const my = (view.y0 + view.y1) / 2;
     // `margin`: tiles past the screen's edge to have ready before a drag shows them.
-    const add = (size: number, detail: boolean, margin: number) => {
+    const add = (size: number, detail: boolean, res: number, margin: number) => {
       const lo = (v: number) => Math.floor(v / size) * size;
       const x1 = Math.min(ox + n, view.x1 + margin);
       const y1 = Math.min(oy + n, view.y1 + margin);
@@ -667,6 +664,7 @@ export const WarMap = ({
             y,
             n: size,
             detail,
+            res,
             occupied: on,
             home: near ? `${homeX},${homeY}` : "",
             prio: Math.hypot(x + size / 2 - mx, y + size / 2 - my) + (detail ? 12 : 0),
@@ -674,11 +672,14 @@ export const WarMap = ({
         }
     };
 
-    // Half a piece round the screen, not a whole ring of pieces: every piece on
-    // the page is a big decoded picture, and a phone that runs out of room for
-    // them starts dropping parts of the screen (the battle sheet flickered).
-    add(CHUNK, false, CHUNK / 2);
-    if (restZoom >= CLOSE_UP_ZOOM) add(DETAIL_CHUNK, true, 0);
+    // A few tiles round the screen, not a whole ring of pieces: every piece on
+    // the page is a decoded picture the phone must hold, and one that runs out
+    // of room drops parts of the screen (see baseRes in MapGround).
+    add(CHUNK, false, baseRes(), 4);
+    // Zoomed in: the pieces on screen again, only as sharp as this zoom needs.
+    const close = closeUpRes(restZoom);
+
+    if (close) add(DETAIL_CHUNK, true, close, 0);
 
     return out;
   }, [view, n, ox, oy, occupied, homeX, homeY, restZoom]);
@@ -916,6 +917,7 @@ export const WarMap = ({
                   key={p.key}
                   detail={p.detail}
                   home={p.home}
+                  res={p.res}
                   left={(p.x - ox) * T}
                   n={p.n}
                   occupied={p.occupied}

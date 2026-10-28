@@ -527,11 +527,36 @@ const paintFlat = (
 export const CHUNK = 16;
 export const DETAIL_CHUNK = 8;
 
-/** Pixels per map px: about as sharp as the old whole map, close-ups sharper. */
-const pieceScale = (size: number, detail: boolean) => {
-  const dpr = window.devicePixelRatio || 1;
+/*
+ * How sharp the pieces are (picture px per map px). Every piece on the page is
+ * a decoded picture the phone has to hold in memory, and Telegram's Android
+ * WebView only keeps so much: past that it drops parts of the screen, so the
+ * map (and even the header over it) flashed old or blank patches. Pieces used
+ * to be painted at a fixed 2x, some 150-200 MB at once. Now they're painted
+ * only as sharp as the zoom needs, which keeps the land at roughly 40-60 MB:
+ *
+ * - the whole-view pieces (under everything, and round the screen's edge) are
+ *   painted for the most zoomed-out view, where most of them are on screen;
+ * - zoomed in, the pieces on screen are painted again on top, at the step
+ *   that matches the zoom (see `closeUpRes`).
+ */
 
-  return detail ? Math.min(dpr * 2.2, Math.sqrt(1_300_000) / size) : Math.max(0.75, Math.min(dpr * 1.25, 2));
+/** Sharpness of the whole-view pieces: enough for the most zoomed-out view. */
+export const baseRes = () => Math.max(0.75, Math.min(1.25, (window.devicePixelRatio || 1) * 0.5));
+
+/** Steps for the close-up pieces, so a small zoom doesn't repaint them. */
+const CLOSE_UP_STEPS = [1.25, 1.75, 2.5, 3.25, 4.2];
+
+/**
+ * Sharpness for close-up pieces at zoom `z`, or null when the whole-view
+ * pieces are sharp enough. The top step keeps a piece under 1550 px a side.
+ */
+export const closeUpRes = (z: number) => {
+  const need = z * (window.devicePixelRatio || 1);
+
+  if (need <= baseRes() * 1.15) return null;
+
+  return CLOSE_UP_STEPS.find((r) => r >= need * 0.9) ?? CLOSE_UP_STEPS[CLOSE_UP_STEPS.length - 1];
 };
 
 // Painting a piece takes a moment: one at a time, nearest the middle of the
@@ -604,9 +629,8 @@ const release = (key: string) => {
   trim();
 };
 
-const paintPiece = (scene: Scene, detail: boolean, done: (blob: Blob | null) => void) => {
+const paintPiece = (scene: Scene, detail: boolean, scale: number, done: (blob: Blob | null) => void) => {
   const size = scene.n * TILE;
-  const scale = pieceScale(size, detail);
   const c = document.createElement("canvas");
 
   c.width = c.height = Math.round(size * scale);
@@ -643,6 +667,7 @@ export const GroundPiece = memo(function GroundPiece({
   occupied,
   home = "",
   detail = false,
+  res,
   prio = 0,
 }: {
   x: number;
@@ -656,10 +681,12 @@ export const GroundPiece = memo(function GroundPiece({
   home?: string;
   /** A close-up piece, painted at full detail over the whole-view ones. */
   detail?: boolean;
+  /** Picture px per map px (see baseRes and closeUpRes). */
+  res: number;
   /** Lower paints sooner. */
   prio?: number;
 }) {
-  const key = `${detail ? "d" : "b"}|${x},${y},${n}|${occupied}|${home}`;
+  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}`;
   const [shown, setShown] = useState<string | null>(null);
   const held = useRef<string | null>(null);
   const prioRef = useRef(prio);
@@ -701,7 +728,7 @@ export const GroundPiece = memo(function GroundPiece({
           home: parse(home)[0] ?? null,
         };
 
-        paintPiece(scene, detail, (blob) => {
+        paintPiece(scene, detail, res, (blob) => {
           if (!blob) return;
           if (!pieces.has(key)) pieces.set(key, { url: URL.createObjectURL(blob), users: 0, used: Date.now() });
           if (live) show(key);
@@ -714,7 +741,7 @@ export const GroundPiece = memo(function GroundPiece({
       live = false;
       if (job) job.dead = true;
     };
-  }, [key, x, y, n, occupied, home, detail]);
+  }, [key, x, y, n, occupied, home, detail, res]);
 
   useEffect(
     () => () => {
