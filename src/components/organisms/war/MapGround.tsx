@@ -270,10 +270,12 @@ const paintSoil = (s: Scene, v: Survey, detail: boolean) => {
       let B: number;
 
       if (wv > 0.5) {
-        const lake = bil(LAKE) > 0.5;
+        // Lake water fades into sea water where they meet (a hard switch
+        // left square patches along the tile grid).
+        const lake = sstep(0.2, 0.8, bil(LAKE) + (fbm(wx * 1.6, wy * 1.6, 15) - 0.5) * 0.3);
         const depth = sstep(0.4, 3.2, bil(DIST) + (wv - 0.5) * 2);
-        const lo = lake ? LAKE_SHALLOW : SHALLOW;
-        const hi = lake ? LAKE_DEEP : DEEP;
+        const lo = mixV(SHALLOW, LAKE_SHALLOW, lake);
+        const hi = mixV(DEEP, LAKE_DEEP, lake);
 
         R = lo[0] + (hi[0] - lo[0]) * depth;
         G = lo[1] + (hi[1] - lo[1]) * depth;
@@ -537,7 +539,10 @@ export const MapGround = memo(function MapGround({
   detail?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const [src, setSrc] = useState<string | null>(null);
+  // The finished picture and the piece of world it shows: while the next one
+  // paints (after the map moves), the last one stays where its land is.
+  const [pic, setPic] = useState<{ url: string; ox: number; oy: number; size: number } | null>(null);
+  const src = pic?.url ?? null;
   const [shown, setShown] = useState<string | null>(null);
   const size = n * TILE;
 
@@ -576,7 +581,7 @@ export const MapGround = memo(function MapGround({
     c.toBlob(
       (blob) => {
         if (!live || !blob) return;
-        setSrc(URL.createObjectURL(blob));
+        setPic({ url: URL.createObjectURL(blob), ox, oy, size });
       },
       "image/webp",
       0.9,
@@ -611,21 +616,21 @@ export const MapGround = memo(function MapGround({
         className={clsx("absolute left-0 top-0", shown && shown === src && "hidden")}
         style={{ width: size, height: size }}
       />
-      {src && (
+      {pic && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt=""
           aria-hidden="true"
-          className="absolute left-0 top-0 max-w-none"
+          className="absolute max-w-none"
           decoding="async"
           draggable={false}
-          src={src}
+          src={pic.url}
           onLoad={() => {
-            setShown(src);
+            setShown(pic.url);
             // The picture is up: free the canvas's memory.
             if (ref.current) ref.current.width = ref.current.height = 0;
           }}
-          style={{ width: size, height: size }}
+          style={{ left: (pic.ox - ox) * TILE, top: (pic.oy - oy) * TILE, width: pic.size, height: pic.size }}
         />
       )}
     </>

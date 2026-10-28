@@ -156,7 +156,8 @@ const MAX_ZOOM = 2.2;
 const wantedRadius = (el: HTMLElement | null) => {
   const side = el ? Math.max(el.clientWidth, el.clientHeight) : 0;
 
-  return Math.min(30, Math.max(14, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1));
+  // A few tiles more than the screen shows, so short pans don't need a reload.
+  return Math.min(30, Math.max(24, Math.ceil(side / (T * MIN_ZOOM) / 2) + 6));
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
@@ -297,6 +298,10 @@ export const WarMap = ({
   const box = useRef<HTMLDivElement>(null);
   const fill = useFillHeight(box);
   const radius = useRef(0);
+  // The map loads a window of the world. Pan near its edge and the window
+  // moves with you (round `lookAt`), so every tribe can be found by panning.
+  const lookAt = useRef<{ x: number; y: number } | null>(null);
+  const backHome = useRef(false);
   const outgoing = useRef<Set<number>>(new Set());
   const centred = useRef(false);
   const goods = useRef<Set<string>>(new Set());
@@ -307,7 +312,8 @@ export const WarMap = ({
       const d = await apiRequest<MapData>(
         authHeader,
         `war/map?r=${(radius.current = Math.max(radius.current, wantedRadius(box.current)))}` +
-          (focusId ? `&focus=${focusId}` : ""),
+          // Panned away: the world round where you're looking; otherwise round home (or the tribe in focus).
+          (lookAt.current ? `&x=${lookAt.current.x}&y=${lookAt.current.y}` : focusId ? `&focus=${focusId}` : ""),
       );
       const ids = new Set(
         d.movements.filter((m) => m.kind === "outgoing").map((m) => m.id),
@@ -427,6 +433,18 @@ export const WarMap = ({
       const el = camera.viewport.current;
 
       setRestZoom(Math.round(z * 20) / 20);
+      if (el && data) {
+        // The tile in the middle of the screen, and how far the screen reaches from it.
+        const mx = Math.round((-x + el.clientWidth / 2) / z / T - 0.5) + ox;
+        const my = Math.round((-y + el.clientHeight / 2) / z / T - 0.5) + oy;
+        const reach = Math.ceil(Math.max(el.clientWidth, el.clientHeight) / 2 / z / T);
+        const room = data.radius - reach - 2;
+
+        if (Math.abs(mx - data.center.x) > room || Math.abs(my - data.center.y) > room) {
+          lookAt.current = { x: mx, y: my };
+          load();
+        }
+      }
       if (!el || !n || z < CLOSE_UP_ZOOM) {
         setCloseUp(null);
 
@@ -460,6 +478,10 @@ export const WarMap = ({
     if (o && (o.ox !== ox || o.oy !== oy)) camera.shift((o.ox - ox) * T, (o.oy - oy) * T);
     else camera.refit();
     origin.current = { ox, oy };
+    if (backHome.current) {
+      backHome.current = false;
+      camera.centerOn(px(data.home.x), py(data.home.y));
+    }
   }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start centred on your tribe (or the one you came to take revenge on).
@@ -478,7 +500,16 @@ export const WarMap = ({
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recentre = () => {
-    if (data) camera.centerOn(px(data.home.x), py(data.home.y));
+    if (!data) return;
+    const far = Math.max(Math.abs(data.home.x - data.center.x), Math.abs(data.home.y - data.center.y)) > data.radius - 4;
+
+    if (far || lookAt.current) {
+      // Home is outside the loaded window: load the world round home, then go there.
+      lookAt.current = null;
+      backHome.current = true;
+      load();
+    }
+    if (!far) camera.centerOn(px(data.home.x), py(data.home.y));
   };
 
   // Tiles with something standing on them: the ground leaves them clear.
