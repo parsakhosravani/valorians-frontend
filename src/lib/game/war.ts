@@ -32,6 +32,8 @@ import {
   XP_PER_STRENGTH,
   LANDING_DEFENSE,
   REDIRECT,
+  banditStrength,
+  lairBounty,
 } from "./config";
 import {
   Army,
@@ -672,9 +674,54 @@ export function dispatchCamp(s0: GameState, level: number, units: Army, now: num
 
 /** The fight at a barbarian camp, once the army arrives. Survivors march home with the reward. */
 export function campBattle(s0: GameState, level: number, sent: Army, now: number, rand: number, opts: MapOpts = {}) {
+  const outcome = opts.outcome ?? campOutcome(s0, level, sent, rand, opts);
+  return pveBattle(s0, sent, now, rand, opts, outcome, `Barbarian camp ${level}`, (s) => {
+    const reward = campReward(s, level);
+    if (reward.first) s.camps.cleared = Math.max(s.camps.cleared, level);
+    s.camps.lastRaid[level] = now;
+    return reward;
+  });
+}
+
+// ─── Bandit lairs ────────────────────────────────────────────────────────────
+
+/** Decides a fight at a bandit lair the moment the army arrives, without changing anything. */
+export function lairOutcome(s: GameState, level: number, sent: Army, rand: number, opts: Pick<MapOpts, "terrain"> = {}) {
+  const nums = battleNumbers(s, sent, null, opts.terrain, banditStrength(level));
+  return resolve(nums.attack, nums.defense, luckFrom(rand), sent, emptyArmy(), getRates(s).healShare, 0);
+}
+
+/** Troops leave for a bandit lair. Lairs belong to nobody, so (like a camp) this doesn't end your shield. */
+export function dispatchLair(s0: GameState, units: Army) {
+  const s = cloneState(s0);
+  const sent = validateSend(s, units);
+  for (const u of UNIT_IDS) s.army[u] -= sent[u];
+  return { state: s, sent };
+}
+
+/** The fight at a bandit lair. Winners march home with the bandits' hoard. */
+export function lairBattle(s0: GameState, level: number, sent: Army, now: number, rand: number, opts: MapOpts = {}) {
+  const outcome = opts.outcome ?? lairOutcome(s0, level, sent, rand, opts);
+  return pveBattle(s0, sent, now, rand, opts, outcome, "Bandit lair", () => lairBounty(level));
+}
+
+/**
+ * A fight against barbarians or bandits, applied to the attacker: XP, losses,
+ * and the survivors' march home. `onWin` updates the state for a victory and
+ * says what it brings home (each resource + coins).
+ */
+function pveBattle(
+  s0: GameState,
+  sent: Army,
+  now: number,
+  rand: number,
+  opts: MapOpts,
+  outcome: BattleOutcome,
+  target: string,
+  onWin: (s: GameState) => { resources: number; coins: number }
+) {
   const s = cloneState(s0);
   const r = getRates(s);
-  const outcome = opts.outcome ?? campOutcome(s, level, sent, rand, opts);
   const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack");
   const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp);
   const home = survivorsOf(sent, outcome.attackerLosses);
@@ -685,11 +732,9 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
   // Spoils brought from an earlier battle come home only if this one is won.
   const kept = outcome.attackerWon ? keptSpoils(opts.carried, carryOf(survivorsOf(sent, outcome.attackerLosses))) : emptyLoot();
   if (outcome.attackerWon) {
-    const reward = campReward(s, level);
+    const reward = onWin(s);
     for (const res of RESOURCE_IDS) loot[res] = reward.resources;
     coins = reward.coins;
-    if (reward.first) s.camps.cleared = Math.max(s.camps.cleared, level);
-    s.camps.lastRaid[level] = now;
     s.war.attacksWon += 1;
     s.war.resourcesLooted += reward.resources * RESOURCE_IDS.length;
   } else {
@@ -700,7 +745,7 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
   if (armySize(home) > 0) {
     s.marches.push({
       id: marchId(now, rand),
-      target: `Barbarian camp ${level}`,
+      target,
       units: home,
       loot: Object.fromEntries(RESOURCE_IDS.map((r) => [r, loot[r] + kept[r]])) as Loot,
       coins: coins + (outcome.attackerWon ? (opts.carriedCoins ?? 0) : 0),

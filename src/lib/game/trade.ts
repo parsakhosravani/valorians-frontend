@@ -7,7 +7,7 @@
  * Pure functions shared by the server (authoritative) and the client (to show
  * limits and validate the form before sending).
  */
-import { RESOURCE_IDS, ResourceId } from "./config";
+import { RESOURCE_IDS, ResourceId, guardCost } from "./config";
 import { GameError, GameState, cloneState, getRates } from "./engine";
 
 export const TRADING_POST = "trading-post";
@@ -129,6 +129,26 @@ export function receiveGoods(
     s.resources[r],
     Math.min(cap, s.resources[r] + amount),
   );
+
+  return s;
+}
+
+/** Pays guards to escort the merchants bringing a load of `amount` home. */
+export function hireGuards(s0: GameState, amount: number): GameState {
+  const s = cloneState(s0);
+  const cost = guardCost(amount);
+
+  if (s.coins < cost) throw new GameError(`Guards cost ${cost} coins`, "not_enough_coins");
+  s.coins -= cost;
+
+  return s;
+}
+
+/** Guards' pay back (the offer was cancelled before anyone took it). */
+export function refundGuards(s0: GameState, amount: number): GameState {
+  const s = cloneState(s0);
+
+  s.coins += guardCost(amount);
 
   return s;
 }

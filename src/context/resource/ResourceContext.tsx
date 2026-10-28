@@ -96,7 +96,7 @@ interface GameContextType {
   cancelTraining: (startsAt: number) => Promise<boolean>;
   /** Attack a player (target = id) or a barbarian camp (camp = level). */
   /** Sends an army across the map; resolves to its arrival time, or null if it couldn't leave. */
-  attack: (to: { target?: number; camp?: number }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
+  attack: (to: { target?: number; camp?: number; lair?: { x: number; y: number } }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
   recall: (marchId: number) => Promise<boolean>;
   /**
    * New orders for an army on the road (marching out: `attack`; walking home:
@@ -104,7 +104,7 @@ interface GameContextType {
    */
   redirect: (
     from: { attack?: number; march?: string },
-    to: { target?: number; camp?: number },
+    to: { target?: number; camp?: number; lair?: { x: number; y: number } },
     units: Army
   ) => Promise<{ id: number; arrivesAt: number } | null>;
   /** Raises the War Orders card a level (one more new order per expedition). */
@@ -114,8 +114,9 @@ interface GameContextType {
   scout: (target: number) => Promise<ScoutReport | null>;
   /** Marketplace: post an offer, buy one, or take yours back. */
   trade: {
-    post: (o: Offer) => Promise<boolean>;
-    accept: (id: number) => Promise<boolean>;
+    /** `guard`: hire guards for the goods coming back to you. */
+    post: (o: Offer & { guard?: boolean }) => Promise<boolean>;
+    accept: (id: number, guard?: boolean) => Promise<boolean>;
     cancel: (id: number) => Promise<boolean>;
   };
   /** Clans: membership, ranks, the flag, the treasury and clan techs. */
@@ -152,7 +153,12 @@ interface GameContextType {
   authHeader: string | null;
 }
 
-export type BattleReport = RaidReport & { attackerName: string; defenderName: string };
+export type BattleReport = RaidReport & {
+  attackerName: string;
+  defenderName: string;
+  /** Bandits ambushed the attacker's army on the road. */
+  ambush?: boolean;
+};
 
 export type ScoutReport = {
   id: number;
@@ -510,7 +516,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     },
     trade: {
       post: (o) => act("trade/offer", o, "Offer posted on the market"),
-      accept: (id) => act("trade/accept", { id }, "Deal! Merchants are on their way"),
+      accept: (id, guard) => act("trade/accept", { id, guard: !!guard }, "Deal! Merchants are on their way"),
       cancel: (id) => act("trade/cancel", { id }, "Offer cancelled, goods returned"),
     },
     clan: {

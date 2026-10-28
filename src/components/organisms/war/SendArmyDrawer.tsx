@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
-import { UnitBadge, fmt } from "./shared";
+import { BanditWarning, MapLair, UnitBadge, fmt } from "./shared";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -16,7 +16,7 @@ import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 export type AttackTarget = {
   title: string;
-  to: { target?: number; camp?: number };
+  to: { target?: number; camp?: number; lair?: Point };
   /** Known defense before terrain, or a range. */
   defense: { min: number; max: number; exact: boolean };
   /** Tiles from your tribe. */
@@ -28,6 +28,8 @@ export type AttackTarget = {
   /** The target tribe's Harbor level (none for camps). */
   harbor?: number;
   note?: string;
+  /** Bandit lairs around, to warn about ambushes on the road. */
+  bandits?: MapLair[];
 };
 
 /** Attack must beat the top of the defense by this much to count as "enough". */
@@ -292,6 +294,8 @@ export const SendArmyDrawer = ({
               </span>
             </div>
           )}
+
+          <BanditWarning from={target.from} lairs={target.bandits} s={state} to={target.at} units={units} />
 
           {/* Attack vs defense */}
           <div className="inset p-2.5 flex flex-col gap-2">

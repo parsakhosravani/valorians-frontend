@@ -2,13 +2,15 @@ import "server-only";
 
 import crypto from "crypto";
 
+import { clearLair, exposureOn, lairAt, lairManned } from "./bandits";
 import { getDb } from "./db";
 import { campSpots, homeOf } from "./map";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
-import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, campDefense } from "@/lib/game/config";
+import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
+import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, marchRoute, pointAlong, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
@@ -16,6 +18,8 @@ import {
   Loot,
   checkCamp,
   checkOrdersLeft,
+  lairBattle,
+  lairOutcome,
   payFromLoot,
   paySupplyFromHome,
   redirectSupply,
@@ -30,6 +34,7 @@ import {
   cancelRaid,
   defendRaid,
   dispatchCamp,
+  dispatchLair,
   dispatchRaid,
   embark,
   engageDefenders,
@@ -41,6 +46,9 @@ import {
   scoutEstimate,
 } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
+
+/** Where an army can be sent: a tribe, one of your barbarian camps, or a bandit lair (its tile). */
+export type MarchTarget = { target?: number; camp?: number; lair?: Point };
 
 /** Most armies one tribe can have out at once. */
 const MAX_MARCHES = 5;
@@ -93,6 +101,8 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
 type StoredReport = RaidReport & {
   attackerName: string;
   defenderName: string;
+  /** Bandits ambushed the attacker's army on the road (not a battle the attacker chose). */
+  ambush?: boolean;
 };
 
 async function saveReport(
@@ -115,7 +125,7 @@ async function saveReport(
  * Sends an army across the map to a tribe or one of your barbarian camps.
  * Troops leave now; the battle happens when they arrive (see resolveDueAttacks).
  */
-export async function marchTo(me: Player, to: { target?: number; camp?: number }, units: Army, now: number) {
+export async function marchTo(me: Player, to: MarchTarget, units: Army, now: number) {
   const db = await getDb();
   const out = await db.execute({
     sql: `SELECT COUNT(*) AS n FROM attacks WHERE attacker_id = ? AND status IN ${ACTIVE_ATTACK}`,
@@ -124,7 +134,7 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
 
   if (Number(out.rows[0].n) >= MAX_MARCHES) throw new GameError(`You can have ${MAX_MARCHES} armies on the move at once`, "too_many");
   const home = await homeOf(me.id);
-  const { dest, defenderId, campLevel } = await resolveTarget(me, to, now, home);
+  const { dest, defenderId, campLevel, lairLevel } = await resolveTarget(me, to, now, home);
 
   // Across the sea the army sails, and takes the Longships it needs along.
   const naval = seaRoute(home, dest).naval;
@@ -132,7 +142,7 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
   let travel = 0;
   const after = await mutatePlayer(me.id, now, (s) => {
     const boarded = embark(s, units, naval);
-    const d = campLevel ? dispatchCamp(s, campLevel, boarded, now) : dispatchRaid(s, boarded, now);
+    const d = campLevel ? dispatchCamp(s, campLevel, boarded, now) : lairLevel ? dispatchLair(s, boarded) : dispatchRaid(s, boarded, now);
 
     sent = d.sent;
     travel = routeMs(sent, home, dest, getRates(s).marchMultiplier);
@@ -141,10 +151,27 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
   });
 
   try {
+    // Bandits along the road may be lying in wait (decided now, sprung when the army passes).
+    const ambush = await ambushOnRoad(me, sent, home, dest, now, now + travel);
     const ins = await db.execute({
-      sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [me.id, defenderId, campLevel, JSON.stringify(sent), home.x, home.y, dest.x, dest.y, now, now + travel],
+      sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, lair_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
+                                 ambush, ambush_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        me.id,
+        defenderId,
+        campLevel,
+        lairLevel,
+        JSON.stringify(sent),
+        home.x,
+        home.y,
+        dest.x,
+        dest.y,
+        now,
+        now + travel,
+        ambush ? JSON.stringify(ambush) : null,
+        ambush?.at ?? null,
+      ],
     });
 
     if (defenderId) {
@@ -162,11 +189,34 @@ export async function marchTo(me: Player, to: { target?: number; camp?: number }
   }
 }
 
-type Target = { dest: Point; defenderId: number | null; campLevel: number | null; name: string };
+/** Whether bandits on the road from `from` to `to` will ambush this army, and how it goes. */
+async function ambushOnRoad(me: Player, units: Army, from: Point, to: Point, startedAt: number, endsAt: number) {
+  const exposed = await exposureOn(from, to, units, startedAt);
 
-/** Where an attack on a tribe or one of your camps goes, after checking it's allowed. */
-async function resolveTarget(me: Player, to: { target?: number; camp?: number }, now: number, home: Point): Promise<Target> {
+  return rollAmbush(me.state, units, exposed, { startedAt, endsAt }, rand);
+}
+
+type Target = { dest: Point; defenderId: number | null; campLevel: number | null; lairLevel: number | null; name: string };
+
+/** Where an attack on a tribe, one of your camps or a bandit lair goes, after checking it's allowed. */
+async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Point): Promise<Target> {
   const db = await getDb();
+
+  if (to.lair) {
+    const p = { x: Math.floor(Number(to.lair.x)), y: Math.floor(Number(to.lair.y)) };
+    const lair = Number.isFinite(p.x) && Number.isFinite(p.y) ? await lairAt(p, now) : null;
+
+    if (!lair) throw new GameError("There's no bandit lair there");
+    if (!lair.active) throw new GameError("This lair is empty. The bandits were driven out.", "lair_empty");
+    const busy = await db.execute({
+      sql: `SELECT 1 FROM attacks WHERE attacker_id = ? AND lair_level IS NOT NULL AND to_x = ? AND to_y = ? AND status IN ${ACTIVE_ATTACK} LIMIT 1`,
+      args: [me.id, p.x, p.y],
+    });
+
+    if (busy.rows.length) throw new GameError("An army is already on its way to this lair", "busy");
+
+    return { dest: p, defenderId: null, campLevel: null, lairLevel: lair.level, name: "Bandit lair" };
+  }
 
   if (to.camp) {
     const campLevel = Math.floor(Number(to.camp));
@@ -180,7 +230,7 @@ async function resolveTarget(me: Player, to: { target?: number; camp?: number },
 
     if (busy.rows.length) throw new GameError("An army is already on its way to this camp", "busy");
 
-    return { dest, defenderId: null, campLevel, name: `Barbarian camp ${campLevel}` };
+    return { dest, defenderId: null, campLevel, lairLevel: null, name: `Barbarian camp ${campLevel}` };
   }
   const defenderId = Math.floor(Number(to.target));
 
@@ -191,7 +241,7 @@ async function resolveTarget(me: Player, to: { target?: number; camp?: number },
   if (me.clanId != null && target.clanId === me.clanId) throw new GameError("That tribe is in your clan. Clanmates don't raid each other.", "same_clan");
   if (target.state.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
 
-  return { dest: await homeOf(defenderId), defenderId, campLevel: null, name: displayName(target) };
+  return { dest: await homeOf(defenderId), defenderId, campLevel: null, lairLevel: null, name: displayName(target) };
 }
 
 type AttackRow = {
@@ -199,6 +249,8 @@ type AttackRow = {
   attackerId: number;
   defenderId: number | null;
   campLevel: number | null;
+  /** Marching on a bandit lair (at `to`) of this level. */
+  lairLevel: number | null;
   units: Army;
   from: Point;
   to: Point;
@@ -213,6 +265,8 @@ type AttackRow = {
   hops: number;
   /** Set after new orders: the march home from the target takes this long (not the way it came). */
   homeMs: number | null;
+  /** Bandits waiting on the road (or who already struck: `done`). */
+  ambush: Ambush | null;
 };
 
 /** A battle under way: decided when the armies met, played out until plan.endsAt. */
@@ -228,6 +282,7 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   attackerId: Number(r.attacker_id),
   defenderId: r.defender_id == null ? null : Number(r.defender_id),
   campLevel: r.camp_level == null ? null : Number(r.camp_level),
+  lairLevel: r.lair_level == null ? null : Number(r.lair_level),
   units: { ...emptyArmy(), ...JSON.parse(String(r.units)) },
   from: { x: Number(r.from_x), y: Number(r.from_y) },
   to: { x: Number(r.to_x), y: Number(r.to_y) },
@@ -239,6 +294,7 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   coins: Number(r.coins ?? 0),
   hops: Number(r.hops ?? 0),
   homeMs: r.home_ms == null ? null : Number(r.home_ms),
+  ambush: r.ambush == null ? null : (JSON.parse(String(r.ambush)) as Ambush),
 });
 
 /** Spoils and order count an army keeps on its way home. */
@@ -261,7 +317,8 @@ async function turnBack(a: AttackRow, attackerId: number, name: string | null, n
   await mutatePlayer(attackerId, now, (s) =>
     returnHome(s, a.units, name ?? "Abandoned land", at + homeTripMs(a), now, rand(), a.to, at, carriedOf(a))
   );
-  await notify.turnedBack(attackerId, name ?? "The target");
+  if (a.lairLevel) await notify.lairEmpty(attackerId).catch(() => {});
+  else await notify.turnedBack(attackerId, name ?? "The target");
 }
 
 /**
@@ -285,6 +342,15 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
   if (a.campLevel) {
     outcome = campOutcome(attacker.state, a.campLevel, a.units, rand(), { terrain });
     troops += Math.round(campDefense(a.campLevel) / CAMP_DEFENSE_PER_TROOP);
+  } else if (a.lairLevel) {
+    // Someone else cleared it first: nobody left to fight.
+    if (!(await lairManned(a.to, at))) {
+      await turnBack(a, attacker.id, "Bandit lair", now);
+
+      return false;
+    }
+    outcome = lairOutcome(attacker.state, a.lairLevel, a.units, rand(), { terrain });
+    troops += Math.round(banditStrength(a.lairLevel) / CAMP_DEFENSE_PER_TROOP);
   } else {
     const defender = a.defenderId ? await findById(a.defenderId) : null;
 
@@ -369,6 +435,25 @@ async function finishBattle(a: AttackRow, now: number) {
     return;
   }
 
+  if (a.lairLevel) {
+    let report!: RaidReport;
+
+    await mutatePlayer(attacker.id, now, (s) => {
+      const r = lairBattle(s, a.lairLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to, outcome, ...carried });
+
+      report = r.report;
+
+      return r.state;
+    });
+    if (report.attackerWon) await clearLair(a.to, attacker.id, at);
+    const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: `Bandit lair (level ${a.lairLevel})` };
+
+    await saveReport(attacker.id, null, null, full, at, a.id);
+    await notify.attackResult(attacker.id, full.defenderName, report, now);
+
+    return;
+  }
+
   const defender = a.defenderId ? await findById(a.defenderId) : null;
 
   if (!defender) {
@@ -436,6 +521,9 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
   const db = await getDb();
   const mine = playerId == null ? "" : " AND (attacker_id = ? OR defender_id = ?)";
   const who = playerId == null ? [] : [playerId, playerId];
+
+  // Bandits strike first: an ambush always comes before the army arrives.
+  await springAmbushes(now, playerId);
   const arrived = await db.execute({
     sql: `SELECT * FROM attacks WHERE status = 'marching' AND arrives_at <= ?${mine} ORDER BY arrives_at ASC LIMIT 20`,
     args: [now, ...who],
@@ -478,6 +566,90 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
       await abandon(a, now, e);
     }
     await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
+  }
+}
+
+/**
+ * Springs the ambushes whose armies are passing the bandits' lair by now:
+ * the dead leave the army, and bandits who won take half the spoils it
+ * carries. If the lair was cleared before the army got there, nothing happens.
+ */
+async function springAmbushes(now: number, playerId?: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT a.*, du.first_name AS d_name FROM attacks a LEFT JOIN users du ON du.id = a.defender_id
+          WHERE a.status = 'marching' AND a.ambush_at IS NOT NULL AND a.ambush_at <= ?${playerId == null ? "" : " AND a.attacker_id = ?"}
+          ORDER BY a.ambush_at ASC LIMIT 20`,
+    args: playerId == null ? [now] : [now, playerId],
+  });
+
+  for (const row of rs.rows) {
+    const a = toAttack(row as Record<string, unknown>);
+    const amb = a.ambush;
+
+    if (!amb) continue;
+    const manned = await lairManned(amb, amb.at);
+    let units = a.units;
+    let loot = a.loot;
+    let coins = a.coins;
+    let done: Ambush;
+
+    if (!manned) {
+      done = { ...amb, done: true, foiled: true };
+    } else {
+      const sp = spoilsTaken(amb, loot, coins);
+
+      units = afterAmbush(units, amb);
+      loot = a.loot ? ({ ...a.loot, ...sp.left } as typeof a.loot) : null;
+      coins = sp.coinsLeft;
+      done = { ...amb, done: true, loot: sp.taken, coins: sp.coinsTaken };
+    }
+    // Only if nobody else sprang it (or recalled the army) meanwhile.
+    const claim = await db.execute({
+      sql: `UPDATE attacks SET units = ?, loot = ?, coins = ?, ambush = ?, ambush_at = NULL
+            WHERE id = ? AND status = 'marching' AND ambush_at IS NOT NULL`,
+      args: [JSON.stringify(units), loot ? JSON.stringify(loot) : null, coins, JSON.stringify(done), a.id],
+    });
+
+    if (claim.rowsAffected !== 1 || done.foiled) continue;
+    const target = a.campLevel
+      ? `Barbarian camp ${a.campLevel}`
+      : a.lairLevel
+        ? "the bandit lair"
+        : String((row as Record<string, unknown>).d_name || "a tribe");
+
+    await notify.ambushed(a.attackerId, target, done).catch(() => {});
+    const attacker = await findById(a.attackerId);
+    const none = emptyArmy();
+
+    await saveReport(
+      a.attackerId,
+      null,
+      null,
+      {
+        attackerWon: done.won,
+        attack: done.attack,
+        defense: done.strength,
+        luck: done.luck ?? 1,
+        attackerLosses: done.lost,
+        attackerHealed: none,
+        defenderLosses: none,
+        defenderHealed: none,
+        sent: a.units,
+        defenders: none,
+        loot: { iron: 0, wood: 0, clay: 0, crop: 0 },
+        coins: 0,
+        returnsAt: a.arrivesAt,
+        ...(done.coins || RESOURCE_IDS.some((r) => (done.loot?.[r] ?? 0) > 0)
+          ? { carried: { iron: 0, wood: 0, clay: 0, crop: 0, ...done.loot }, carriedCoins: done.coins ?? 0 }
+          : {}),
+        attackerName: attacker ? displayName(attacker) : "Your army",
+        defenderName: `Bandits (level ${done.level})`,
+        ambush: true,
+      },
+      done.at,
+      a.id
+    ).catch(() => {});
   }
 }
 
@@ -539,7 +711,7 @@ type Expedition = {
 export async function redirectMarch(
   me: Player,
   from: { attack?: number; march?: string },
-  to: { target?: number; camp?: number },
+  to: MarchTarget,
   keep: Army,
   now: number
 ) {
@@ -583,7 +755,13 @@ export async function redirectMarch(
   const t = await resolveTarget(me, to, now, home);
   const cur = ex.attack;
 
-  if (cur && cur.defenderId === t.defenderId && cur.campLevel === t.campLevel) {
+  if (
+    cur &&
+    cur.defenderId === t.defenderId &&
+    cur.campLevel === t.campLevel &&
+    cur.lairLevel === t.lairLevel &&
+    (!t.lairLevel || (cur.to.x === t.dest.x && cur.to.y === t.dest.y))
+  ) {
     throw new GameError("The army is already marching there", "same_target");
   }
 
@@ -635,14 +813,16 @@ export async function redirectMarch(
   let id: number;
 
   try {
+    const ambush = await ambushOnRoad(me, go, ex.where, t.dest, now, now + legMs);
     const ins = await db.execute({
-      sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
-                                 loot, coins, hops, home_ms, parent_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, lair_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
+                                 loot, coins, hops, home_ms, parent_id, ambush, ambush_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         me.id,
         t.defenderId,
         t.campLevel,
+        t.lairLevel,
         JSON.stringify(go),
         ex.where.x,
         ex.where.y,
@@ -655,6 +835,8 @@ export async function redirectMarch(
         ex.hops + 1,
         homeMs,
         cur?.id ?? null,
+        ambush ? JSON.stringify(ambush) : null,
+        ambush?.at ?? null,
       ],
     });
 

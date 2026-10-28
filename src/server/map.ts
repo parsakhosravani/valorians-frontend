@@ -1,11 +1,13 @@
 import "server-only";
 
+import { lairsAround } from "./bandits";
 import { getDb } from "./db";
 import { Player, avatarUrl } from "./players";
 
 import { storedFlag } from "@/lib/game/clan";
 import { advance, normalizeState } from "@/lib/game/engine";
-import { campDefense, MAX_CAMP_LEVEL } from "@/lib/game/config";
+import { banditStrength, campDefense, lairBounty, MAX_CAMP_LEVEL } from "@/lib/game/config";
+import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoastal, settledShare, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutEstimate } from "@/lib/game/war";
 import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
@@ -132,6 +134,10 @@ type Movement = {
   /** Visible to defenders with a Watchtower; always for your own armies (and once the fight is on). */
   units: Record<string, number> | null;
   campLevel: number | null;
+  /** Marching on a bandit lair of this level. */
+  lairLevel: number | null;
+  /** Your own armies: bandits ambushed it on the road (only once it happened). */
+  ambush?: Ambush | null;
   /** The army reached its target and the battle is being fought. */
   battle: LiveBattle | null;
   /** Your own armies: spoils carried from an earlier battle, and new orders taken on this expedition. */
@@ -161,6 +167,10 @@ type Caravan = {
   amount: number;
   sentAt: number;
   arrivesAt: number;
+  /** Bandits robbed this load on the road (only once it happened): what's left is `amount`. */
+  robbed: Pick<Robbery, "x" | "y" | "at" | "stolen"> | null;
+  /** Guards walk with it. */
+  guarded: boolean;
 };
 
 /** Everything the War map shows around a point (your home by default). */
@@ -263,12 +273,19 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       to: {
         x: Number(a.to_x),
         y: Number(a.to_y),
-        name: campLevel ? `Barbarian camp ${campLevel}` : outgoing ? String(a.d_name || "A tribe") : "Your tribe",
+        name: campLevel
+          ? `Barbarian camp ${campLevel}`
+          : a.lair_level != null
+            ? "Bandit lair"
+            : outgoing
+              ? String(a.d_name || "A tribe")
+              : "Your tribe",
       },
       sentAt: Number(a.sent_at),
       arrivesAt: Number(a.arrives_at),
       units: outgoing || watch || battle ? JSON.parse(String(a.units)) : null,
       campLevel,
+      lairLevel: a.lair_level == null ? null : Number(a.lair_level),
       battle,
       // Your own army after new orders: the spoils it carries and how many orders it took.
       ...(outgoing
@@ -276,6 +293,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
             loot: a.loot == null ? null : JSON.parse(String(a.loot)),
             coins: Number(a.coins ?? 0),
             hops: Number(a.hops ?? 0),
+            ambush: ambushShown(a.ambush),
           }
         : {}),
     };
@@ -285,7 +303,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   // each way. Yours always show; other tribes' show when they pass through view.
   const tr = await db.execute({
     sql: `SELECT t.id, t.seller_id, t.buyer_id, t.give, t.give_amount, t.want, t.want_amount,
-                 t.accepted_at, t.arrives_at,
+                 t.accepted_at, t.arrives_at, t.guard_seller, t.guard_buyer, t.rob_a, t.rob_b,
                  su.first_name AS s_name, su.map_x AS s_x, su.map_y AS s_y,
                  bu.first_name AS b_name, bu.map_x AS b_x, bu.map_y AS b_y
           FROM trades t
@@ -307,16 +325,23 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       resource: string,
       amount: number,
       side: "a" | "b",
-    ): Caravan => ({
-      id: `${t.id}${side}`,
-      kind: to.id === me.id ? "coming" : from.id === me.id ? "going" : "other",
-      from: { x: from.x, y: from.y, name: from.id === me.id ? "Your tribe" : from.name },
-      to: { x: to.x, y: to.y, name: to.id === me.id ? "Your tribe" : to.name },
-      resource,
-      amount: Number(amount),
-      sentAt: Number(t.accepted_at),
-      arrivesAt: Number(t.arrives_at),
-    });
+    ): Caravan => {
+      const rob = robberyShown(side === "a" ? t.rob_a : t.rob_b);
+
+      return {
+        id: `${t.id}${side}`,
+        kind: to.id === me.id ? "coming" : from.id === me.id ? "going" : "other",
+        from: { x: from.x, y: from.y, name: from.id === me.id ? "Your tribe" : from.name },
+        to: { x: to.x, y: to.y, name: to.id === me.id ? "Your tribe" : to.name },
+        resource,
+        amount: Number(amount) - (rob?.stolen ?? 0),
+        sentAt: Number(t.accepted_at),
+        arrivesAt: Number(t.arrives_at),
+        robbed: rob,
+        // The load to the buyer is guarded if the buyer paid for it, and the other way round.
+        guarded: Number(side === "a" ? t.guard_buyer : t.guard_seller) === 1,
+      };
+    };
 
     return [
       leg(seller, buyer, String(t.give), Number(t.give_amount), "a"),
@@ -324,14 +349,45 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     ];
   });
 
+  // Bandit lairs in view: the same for everyone.
+  const lairs = (await lairsAround({ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }, now)).map((l) => ({
+    x: l.x,
+    y: l.y,
+    level: l.level,
+    active: l.active,
+    backAt: l.backAt,
+    clearedByMe: l.clearedBy === me.id,
+    strength: banditStrength(l.level),
+    bounty: lairBounty(l.level),
+    terrain: terrainAt(l.x, l.y),
+    distance: Math.round(distance(home, l) * 10) / 10,
+  }));
+
   return {
     home,
     center: c,
     radius: r,
     tribes,
     camps,
+    lairs,
     movements,
     caravans,
     myPower: powerScore(me.state),
   };
+}
+
+/** An ambush as its army's owner may see it: only once it has happened, and not if it was foiled. */
+function ambushShown(raw: unknown): Ambush | null {
+  if (raw == null) return null;
+  const a = JSON.parse(String(raw)) as Ambush;
+
+  return a.done && !a.foiled ? a : null;
+}
+
+/** A robbery as the players may see it: only once it has happened. */
+function robberyShown(raw: unknown): Caravan["robbed"] {
+  if (raw == null) return null;
+  const r = JSON.parse(String(raw)) as Robbery;
+
+  return r.done && !r.foiled ? { x: r.x, y: r.y, at: r.at, stolen: r.stolen } : null;
 }

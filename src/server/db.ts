@@ -45,7 +45,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -231,6 +231,34 @@ async function migrate(client: Client) {
   for (const col of ["loot TEXT", "coins INTEGER NOT NULL DEFAULT 0", "hops INTEGER NOT NULL DEFAULT 0", "home_ms INTEGER", "parent_id INTEGER"]) {
     await client.execute(`ALTER TABLE attacks ADD COLUMN ${col}`).catch(() => {});
   }
+  // Bandits. Lairs are placed by the map itself; this keeps when each was last
+  // cleared (and by whom). An army can march on a lair (lair_level, at to_x/to_y),
+  // and be ambushed on the road (ambush JSON, sprung at ambush_at). Merchants'
+  // loads can be guarded, or robbed (rob_a: the seller's load, rob_b: the
+  // buyer's; rob_at is the next robbery still to happen).
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS bandit_lairs (
+      x             INTEGER NOT NULL,
+      y             INTEGER NOT NULL,
+      cleared_at    INTEGER NOT NULL,
+      cleared_by    INTEGER,
+      PRIMARY KEY (x, y)
+    );
+  `);
+  for (const [table, col] of [
+    ["attacks", "lair_level INTEGER"],
+    ["attacks", "ambush TEXT"],
+    ["attacks", "ambush_at INTEGER"],
+    ["trades", "guard_seller INTEGER NOT NULL DEFAULT 0"],
+    ["trades", "guard_buyer INTEGER NOT NULL DEFAULT 0"],
+    ["trades", "rob_a TEXT"],
+    ["trades", "rob_b TEXT"],
+    ["trades", "rob_at INTEGER"],
+  ]) {
+    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${col}`).catch(() => {});
+  }
+  await client.execute("CREATE INDEX IF NOT EXISTS attacks_ambush ON attacks(ambush_at)");
+  await client.execute("CREATE INDEX IF NOT EXISTS trades_rob ON trades(rob_at)");
   await client.executeMultiple(`
     -- Update announcements an admin broadcasts from the bot chat. The post is
     -- copied from the admin's own message (text, photo, video...) to every

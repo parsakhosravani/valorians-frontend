@@ -47,10 +47,16 @@ export const ReportsTab = () => {
         return (
           <button key={it.id} className="text-left" onClick={() => setOpen(it)}>
             <Card className="flex items-center gap-3">
-              <div className="text-[30px] leading-none"><GameIcon e={it.role === "defender" ? "🛡️" : "⚔️"} /></div>
+              <div className="text-[30px] leading-none">
+                <GameIcon e={it.report.ambush ? "🗡️" : it.role === "defender" ? "🛡️" : "⚔️"} />
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold truncate">
-                  {it.role === "attacker" ? `You attacked ${it.opponent}` : `${it.opponent} attacked you`}
+                  {it.report.ambush
+                    ? "Bandits ambushed your army"
+                    : it.role === "attacker"
+                      ? `You attacked ${it.opponent}`
+                      : `${it.opponent} attacked you`}
                 </div>
                 <div className="text-xs text-muted">
                   {formatDuration(now - it.at)} ago
@@ -58,7 +64,7 @@ export const ReportsTab = () => {
                 </div>
               </div>
               <span className={it.won ? "pill pill-good" : "pill pill-bad"}>
-                {it.won ? "Won" : "Lost"}
+                {it.report.ambush ? (it.won ? "Drove off" : "Beaten") : it.won ? "Won" : "Lost"}
               </span>
             </Card>
           </button>

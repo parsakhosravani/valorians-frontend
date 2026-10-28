@@ -36,7 +36,8 @@ export const TERRAIN: Record<Terrain, { name: string; defense: number; march: nu
   sea: { name: "Sea", defense: 0, march: null, note: "Open water. Armies need Longships to cross it." },
 };
 
-const hash = (a: number, b: number, seed = 0) => {
+/** A steady pseudo-random number in [0, 1) for a pair of numbers and a seed. */
+export const hash = (a: number, b: number, seed = 0) => {
   const s = Math.sin(a * 127.1 + b * 311.7 + seed * 74.7) * 43758.5453;
 
   return s - Math.floor(s);

@@ -3,6 +3,7 @@ import "server-only";
 import { RANKS, RESOURCE_IDS, UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
+import type { Ambush } from "@/lib/game/bandits";
 
 /**
  * Battle news sent as Telegram messages from the bot, so players hear about
@@ -175,6 +176,46 @@ export const notify = {
       defenderId,
       `🏳️ <b>${esc(attacker)}</b>'s army turned away from your tribe and marched on another target.`,
       "🗺️ See the map",
+      "/battle?tab=map"
+    );
+  },
+
+  /** Bandits jumped one of your armies on the road. */
+  ambushed(attackerId: number, target: string, a: Ambush) {
+    const dead = armyText(a.lost);
+    const lost = UNITS.some((u) => (a.lost[u.id] ?? 0) > 0);
+    const spoils = RESOURCE_IDS.reduce((n, r) => n + (a.loot?.[r] ?? 0), 0) + (a.coins ?? 0);
+
+    return sendToPlayer(
+      attackerId,
+      (a.won
+        ? `🗡️ <b>Bandits ambushed your army</b> on the way to ${esc(target)}. Your troops drove them off.`
+        : `🗡️ <b>Bandits ambushed your army</b> on the way to ${esc(target)} and got the better of it.`) +
+        (lost ? `\n\nFallen: ${dead}` : "") +
+        (spoils > 0 ? `\nThe bandits made off with <b>${fmt(spoils)}</b> of the spoils.` : "") +
+        `\n\nThe survivors march on. Clear the lair to make that road safe.`,
+      "🗺️ Open the map",
+      "/battle?tab=map"
+    );
+  },
+
+  /** Bandits robbed the merchants bringing you goods. */
+  robbed(receiverId: number, resource: string, stolen: number, delivered: number, from: string) {
+    return sendToPlayer(
+      receiverId,
+      `🗡️ <b>Bandits robbed your merchants</b> on the road from ${esc(from)}: <b>${fmt(stolen)} ${resource}</b> is gone. ` +
+        `The other ${fmt(delivered)} is still on its way.\n\nHire guards for your next trade, or clear the lair on that road.`,
+      "🤝 Open my trades",
+      "/market?tab=mine"
+    );
+  },
+
+  /** The army reached a lair someone else had already cleared. */
+  lairEmpty(attackerId: number) {
+    return sendToPlayer(
+      attackerId,
+      "🏚️ Your army reached the bandit lair, but someone had already driven the bandits out. It's marching home.",
+      "🗺️ Open the map",
       "/battle?tab=map"
     );
   },
