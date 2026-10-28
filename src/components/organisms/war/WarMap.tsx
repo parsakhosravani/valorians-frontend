@@ -27,7 +27,7 @@ import {
   LiveBattleData,
   LiveBattleDrawer,
 } from "./LiveBattle";
-import { ArmyLine, UnitEmoji, fmt } from "./shared";
+import { ArmyLine, MapLair, UnitEmoji, fmt } from "./shared";
 import { MapGround, TILE } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
 
@@ -61,6 +61,8 @@ import {
   terrainAt,
 } from "@/lib/game/map";
 import { landingFactorFor } from "@/lib/game/war";
+import type { Ambush } from "@/lib/game/bandits";
+import { BANDIT } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
@@ -111,6 +113,10 @@ type Movement = {
   arrivesAt: number;
   units: Army | null;
   campLevel: number | null;
+  /** Marching on a bandit lair of this level (older servers don't send it). */
+  lairLevel?: number | null;
+  /** Your armies: bandits ambushed it on the road. */
+  ambush?: Ambush | null;
   /** Arrived: the battle is being fought (older servers don't send it). */
   battle?: LiveBattleData | null;
   /** Your armies: spoils carried from an earlier battle and new orders taken (older servers don't send them). */
@@ -128,7 +134,13 @@ type Caravan = {
   amount: number;
   sentAt: number;
   arrivesAt: number;
+  /** Bandits robbed it on the road (`amount` is what's left). */
+  robbed?: { x: number; y: number; at: number; stolen: number } | null;
+  /** Guards walk with it. */
+  guarded?: boolean;
 };
+
+type Lair = MapLair & { terrain: Terrain; distance: number };
 
 export type MapData = {
   home: { x: number; y: number };
@@ -136,13 +148,18 @@ export type MapData = {
   radius: number;
   tribes: Tribe[];
   camps: Camp[];
+  /** Bandit lairs in view (older servers don't send them). */
+  lairs?: Lair[];
   movements: Movement[];
   caravans?: Caravan[];
   myPower: number;
 };
 
 type Selected =
-  { kind: "tribe"; tribe: Tribe } | { kind: "camp"; camp: Camp } | null;
+  | { kind: "tribe"; tribe: Tribe }
+  | { kind: "camp"; camp: Camp }
+  | { kind: "lair"; lair: Lair }
+  | null;
 
 type ReportItem = { attackId: number | null; report: BattleReport };
 
@@ -516,7 +533,13 @@ export const WarMap = ({
   const occupied = useMemo(
     () =>
       data
-        ? [...data.tribes.map((t) => `${t.x},${t.y}`), ...data.camps.map((c) => `${c.x},${c.y}`)].sort().join(";")
+        ? [
+            ...data.tribes.map((t) => `${t.x},${t.y}`),
+            ...data.camps.map((c) => `${c.x},${c.y}`),
+            ...(data.lairs ?? []).map((l) => `${l.x},${l.y}`),
+          ]
+            .sort()
+            .join(";")
         : "",
     [data],
   );
@@ -607,6 +630,7 @@ export const WarMap = ({
       harbor: t.harbor ?? 0,
       note:
         state.shieldUntil > now ? "Attacking ends your own shield." : undefined,
+      bandits: data?.lairs,
     };
   };
   const campTarget = (c: Camp, from: { x: number; y: number }): AttackTarget => ({
@@ -617,6 +641,17 @@ export const WarMap = ({
     terrain: c.terrain,
     from,
     at: { x: c.x, y: c.y },
+    bandits: data?.lairs,
+  });
+  const lairTarget = (l: Lair, from: { x: number; y: number }): AttackTarget => ({
+    title: `Bandit lair (level ${l.level})`,
+    to: { lair: { x: l.x, y: l.y } },
+    defense: { min: l.strength, max: l.strength, exact: true },
+    distance: Math.round(Math.hypot(l.x - from.x, l.y - from.y) * 10) / 10,
+    terrain: l.terrain,
+    from,
+    at: { x: l.x, y: l.y },
+    bandits: data?.lairs,
   });
 
   const attackTribe = (t: Tribe) => {
@@ -626,6 +661,10 @@ export const WarMap = ({
   const attackCamp = (c: Camp) => {
     setSelected(null);
     onAttack(campTarget(c, data!.home));
+  };
+  const attackLair = (l: Lair) => {
+    setSelected(null);
+    onAttack(lairTarget(l, data!.home));
   };
 
   /** The army waiting for new orders goes for this target instead. */
@@ -667,6 +706,7 @@ export const WarMap = ({
     const taken: { x: number; y: number }[] = [
       ...data.tribes.map((t) => ({ x: px(t.x), y: py(t.y) })),
       ...data.camps.map((c) => ({ x: px(c.x), y: py(c.y) })),
+      ...(data.lairs ?? []).map((l) => ({ x: px(l.x), y: py(l.y) })),
       ...battles.map((m) => ({ x: px(m.to.x), y: py(m.to.y) })),
     ];
     const place = (key: string, at: { x: number; y: number }) => {
@@ -838,6 +878,80 @@ export const WarMap = ({
                 );
               })}
 
+              {/* Bandit lairs: a faint red ring shows how close a road can pass before it's in danger. */}
+              {(data.lairs ?? []).map((l) => {
+                const picked = selected?.kind === "lair" && selected.lair.x === l.x && selected.lair.y === l.y;
+                const reach = BANDIT.reach * T;
+
+                return (
+                  <div key={`l${l.x},${l.y}`}>
+                    {l.active && (
+                      <span
+                        className={clsx(
+                          "pointer-events-none absolute rounded-full border-2 border-dashed",
+                          picked ? "border-[#F06A44]/90 bg-[#8A3B23]/25" : "border-[#E0603A]/60 bg-[#8A3B23]/[0.14]",
+                        )}
+                        style={{ left: px(l.x) - reach, top: py(l.y) - reach, width: reach * 2, height: reach * 2 }}
+                      />
+                    )}
+                    <button
+                      aria-label={l.active ? `Bandit lair, level ${l.level}` : "Empty bandit lair"}
+                      className={clsx("map-pin absolute", !l.active && "grayscale brightness-[0.7]")}
+                      style={{
+                        left: px(l.x) - 32,
+                        top: py(l.y) - 34,
+                        width: 64,
+                        height: 56,
+                        transformOrigin: "32px 34px",
+                        zIndex: picked ? 4 : 1,
+                      }}
+                      onClick={() => setSelected({ kind: "lair", lair: l })}
+                    >
+                      <span className="absolute left-[15px] top-[33px] w-[34px] h-[12px] rounded-[50%] bg-[radial-gradient(closest-side,rgba(10,7,4,0.6),rgba(10,7,4,0))]" />
+                      <span
+                        className={clsx(
+                          "absolute left-[17px] top-[34px] w-[30px] h-[10px] rounded-[50%] border-[1.5px]",
+                          l.active ? "border-[#7A1F1F] bg-[#3A0F0F]/50" : "border-line bg-ink/30",
+                          picked && "shadow-[0_0_14px_rgba(240,106,68,0.9)]",
+                        )}
+                      />
+                      <Image
+                        draggable={false}
+                        alt=""
+                        className="absolute left-[15px] top-[9px] w-[34px] h-[34px] object-contain drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+                        height={88}
+                        src={buildingImage(BUILDING_BY_ID["hideout"])}
+                        width={88}
+                      />
+                      {labelsAll || picked ? (
+                        <span
+                          className={clsx(
+                            "absolute left-1/2 top-[45px] -translate-x-1/2 w-max whitespace-nowrap px-1.5 h-[15px] inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
+                            l.active ? "bg-[#4A1414] text-[#FFD9C7] border-[#C2552E]" : "bg-ink/90 text-sub border-line",
+                          )}
+                        >
+                          {l.active ? (
+                            <>
+                              <GameIcon e="💀" /> Bandits {l.level}
+                            </>
+                          ) : l.backAt ? (
+                            `Empty · ${formatDuration(Math.max(0, l.backAt - now))}`
+                          ) : (
+                            "Empty"
+                          )}
+                        </span>
+                      ) : l.active ? (
+                        // Zoomed out: a small skull with the lair's level.
+                        <span className="absolute left-1/2 top-[38px] -translate-x-1/2 w-max h-[16px] pl-0.5 pr-1 rounded-full border-[1.5px] border-[#C2552E] bg-[#4A1414] inline-flex items-center gap-px font-display text-[8.5px] font-black leading-none text-[#FFD9C7] shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
+                          <GameIcon e="💀" />
+                          {l.level}
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                );
+              })}
+
               {/* Tribes */}
               {data.tribes.map((t) => {
                 const shielded = t.shieldUntil > now;
@@ -966,7 +1080,9 @@ export const WarMap = ({
                     key={`t${c.id}`}
                     amount={c.amount}
                     from={{ x: px(c.from.x), y: py(c.from.y) }}
+                    guarded={!!c.guarded}
                     kind={c.kind}
+                    robbed={!!c.robbed}
                     left={c.arrivesAt - now}
                     p={progress(now, c.sentAt, c.arrivesAt)}
                     quiet={quiet.has(`c${c.id}`)}
@@ -1038,7 +1154,7 @@ export const WarMap = ({
             </span>
             <span className="flex-1 min-w-0 leading-tight">
               <b className="text-goldtext">Pick a new target</b>
-              <span className="block text-[11px] text-sub">Tap a tribe or a camp on the map.</span>
+              <span className="block text-[11px] text-sub">Tap a tribe, a camp or a bandit lair on the map.</span>
             </span>
             <button className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs" onClick={() => setPicking(null)}>
               Cancel
@@ -1133,6 +1249,11 @@ export const WarMap = ({
                     <span className="block text-xs text-muted truncate">
                       {m.units && <ArmyLine army={m.units} />}
                     </span>
+                    {m.ambush && (
+                      <span className="block text-[11px] font-bold text-[#FFB27A] truncate">
+                        <GameIcon e="🗡️" /> Ambushed by bandits{m.ambush.won ? ", drove them off" : ""}
+                      </span>
+                    )}
                   </span>
                   <span className="font-display font-black text-goldtext shrink-0">
                     {formatDuration(m.arrivesAt - now)}
@@ -1187,6 +1308,15 @@ export const WarMap = ({
                         on its way to {c.to.name}
                       </>
                     )}
+                    {c.robbed ? (
+                      <span className="block text-[11px] font-bold text-[#FFB27A] truncate">
+                        <GameIcon e="🗡️" /> Bandits stole {fmt(c.robbed.stolen)}
+                      </span>
+                    ) : c.guarded ? (
+                      <span className="block text-[11px] text-sub truncate">
+                        <GameIcon e="🛡️" /> Guarded
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     className={clsx(
@@ -1255,6 +1385,12 @@ export const WarMap = ({
                   spoils first. One new order per expedition; the War Orders card adds more.
                 </span>
                 <span>
+                  <GameIcon e="💀" /> Bandit lairs sit in the wilds. Merchants and armies whose road passes within{" "}
+                  {BANDIT.reach} tiles of one can be ambushed: bandits steal part of a merchant&apos;s load and cut into
+                  armies too weak to scare them off. Hire guards for your trades, or clear the lair: the roads around it
+                  stay safe for {Math.round(BANDIT.respawnMs / 3_600_000)} hours.
+                </span>
+                <span>
                   <GameIcon e="⚔️" /> When armies meet, the battle lasts from 1 minute up to 30,
                   longer the more troops fight. Tap the crossed swords to watch it
                   round by round; the defenders are on the field until it ends.
@@ -1274,6 +1410,10 @@ export const WarMap = ({
         title={
           selected?.kind === "camp"
             ? `Barbarian camp ${selected.camp.level}`
+            : selected?.kind === "lair"
+              ? selected.lair.active
+                ? `Bandit lair · level ${selected.lair.level}`
+                : "Empty bandit lair"
             : selected?.kind === "tribe"
               ? selected.tribe.isMe
                 ? "Your tribe"
@@ -1503,6 +1643,77 @@ export const WarMap = ({
                   <Button isFull onClick={() => attackCamp(c)}>
                     <GameIcon e="⚔️" /> Attack camp {c.level}
                   </Button>
+                )}
+              </div>
+            );
+          })()}
+
+        {selected?.kind === "lair" &&
+          (() => {
+            const l = selected.lair;
+            const ground = TERRAIN[l.terrain];
+            const here = (m: Pick<Movement, "kind" | "to" | "lairLevel">) =>
+              m.kind === "outgoing" && !!m.lairLevel && m.to.x === l.x && m.to.y === l.y;
+            const fighting = battles.some(here);
+            const busyLair = fighting || mine.some(here);
+
+            return (
+              <div className="flex flex-col gap-3 pt-2">
+                <div className="flex flex-wrap gap-2 text-xs font-bold">
+                  <span className="pill h-7 px-2">
+                    <GameIcon e={TERRAIN_ICON[l.terrain]} /> {ground.name}
+                    {ground.defense > 0 && ` · +${ground.defense * 100}% defense`}
+                  </span>
+                  <span className="pill h-7 px-2">
+                    <GameIcon e="📍" /> {l.distance} tiles
+                  </span>
+                  {l.active && (
+                    <span className="pill pill-bad h-7 px-2">
+                      <GameIcon e="🛡️" /> {fmt(l.strength * (1 + ground.defense))}
+                    </span>
+                  )}
+                </div>
+                {l.active ? (
+                  <>
+                    <p className="text-sm text-sub">
+                      <GameIcon e="🗡️" /> These bandits ambush merchants and armies whose road passes within {BANDIT.reach}{" "}
+                      tiles (the red ring). Drive them out and the roads around stay safe for{" "}
+                      {Math.round(BANDIT.respawnMs / 3_600_000)} hours, for everyone.
+                    </p>
+                    <p className="text-sm text-sub">
+                      <GameIcon e="🎁" /> Their hoard: {fmt(l.bounty.resources)} of each resource + <GameIcon e="🪙" />{" "}
+                      {fmt(l.bounty.coins)}.
+                    </p>
+                    {seaRoute(data!.home, l).naval && (
+                      <SeaNote camp myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />
+                    )}
+                    {busyLair ? (
+                      <p className="text-sm font-bold text-goldtext">
+                        {fighting ? "Your army is fighting here right now." : "Your army is already on its way."}
+                      </p>
+                    ) : picking ? (
+                      <Button isFull onClick={() => redirectTo((from) => lairTarget(l, from))}>
+                        <GameIcon e="🧭" /> Send army to the lair
+                      </Button>
+                    ) : (
+                      <Button isFull onClick={() => attackLair(l)}>
+                        <GameIcon e="⚔️" /> Clear the lair
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-sub">
+                    <GameIcon e="🏚️" /> {l.clearedByMe ? "You drove the bandits out." : "Someone drove the bandits out."}{" "}
+                    The roads around are safe
+                    {l.backAt ? (
+                      <>
+                        {" "}
+                        until new bandits move in, in <b className="text-parch">{formatDuration(Math.max(0, l.backAt - now))}</b>.
+                      </>
+                    ) : (
+                      " for now."
+                    )}
+                  </p>
                 )}
               </div>
             );

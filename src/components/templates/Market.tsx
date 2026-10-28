@@ -18,6 +18,7 @@ import {
   RESOURCE_NAMES,
   ResourceId,
   buildingImage,
+  guardCost,
 } from "@/lib/game/config";
 import {
   MAX_TRADE_RATIO,
@@ -31,6 +32,51 @@ import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 import { ScreenHeader } from "@/components/atoms/Ui";
 
 type Tab = "buy" | "sell" | "mine";
+
+/** A tick box for hiring guards, with what they cost. */
+const GuardToggle = ({
+  on,
+  cost,
+  coins,
+  label,
+  onChange,
+}: {
+  on: boolean;
+  cost: number;
+  coins: number;
+  label: string;
+  onChange: (on: boolean) => void;
+}) => {
+  const short = !on && coins < cost;
+
+  return (
+    <button
+      aria-pressed={on}
+      className={clsx(
+        "flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left text-xs transition-colors disabled:opacity-50",
+        on ? "border-good bg-[#1C2A14] text-good" : "border-line bg-panel/70 text-sub",
+      )}
+      disabled={short}
+      type="button"
+      onClick={() => onChange(!on)}
+    >
+      <span
+        className={clsx(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] font-black",
+          on ? "border-good bg-good text-[#1A120B]" : "border-line",
+        )}
+      >
+        {on ? "✓" : ""}
+      </span>
+      <span className="flex-1 font-bold">
+        <GameIcon e="🛡️" /> {label}
+      </span>
+      <span className="shrink-0 font-extrabold">
+        <GameIcon e="🪙" /> {fmt(cost)}
+      </span>
+    </button>
+  );
+};
 
 const IMG = Object.fromEntries(RESOURCES.map((r) => [r.id, r.img])) as Record<
   ResourceId,
@@ -142,6 +188,9 @@ export const Market = () => {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ResourceId | "all">("all");
   const [busy, setBusy] = useState<number | "post" | null>(null);
+  // Offers you ticked "hire guards" on, and the same for your own offer.
+  const [guards, setGuards] = useState<Record<number, boolean>>({});
+  const [guardPost, setGuardPost] = useState(false);
 
   // Sell form
   const [give, setGive] = useState<ResourceId>("wood");
@@ -210,11 +259,13 @@ export const Market = () => {
               ? `You have only ${fmt(state.resources[give])} ${RESOURCE_NAMES[give].toLowerCase()}`
               : !ratioOk
                 ? "Ask for between half and double what you give"
-                : null;
+                : guardPost && state.coins < guardCost(wantAmount)
+                  ? `Guards cost ${fmt(guardCost(wantAmount))} coins`
+                  : null;
 
   const post = async () => {
     setBusy("post");
-    const ok = await trade.post({ give, giveAmount, want, wantAmount });
+    const ok = await trade.post({ give, giveAmount, want, wantAmount, guard: guardPost });
 
     setBusy(null);
     if (ok) {
@@ -224,7 +275,7 @@ export const Market = () => {
   };
   const accept = async (id: number) => {
     setBusy(id);
-    const ok = await trade.accept(id);
+    const ok = await trade.accept(id, !!guards[id]);
 
     setBusy(null);
     await load();
@@ -333,6 +384,8 @@ export const Market = () => {
               const short = state.resources[o.want] < o.wantAmount;
               const tooBig = o.wantAmount > maxAmount;
               const deal = o.giveAmount / o.wantAmount;
+              const guarded = !!guards[o.id] && o.bandits > 0;
+              const broke = guarded && state.coins < o.guardCost;
 
               return (
                 <Card key={o.id} className="flex flex-col gap-2">
@@ -378,13 +431,29 @@ export const Market = () => {
                       />
                     </div>
                   </div>
+                  {o.bandits > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="text-[11px] text-[#FFB27A]">
+                        <GameIcon e="🗡️" /> <b>Bandit road.</b> Your merchants pass{" "}
+                        {o.bandits === 1 ? "a bandit lair" : `${o.bandits} bandit lairs`} and could lose part of the
+                        load.
+                      </p>
+                      <GuardToggle
+                        coins={state.coins}
+                        cost={o.guardCost}
+                        label="Hire guards"
+                        on={guarded}
+                        onChange={(on) => setGuards((g) => ({ ...g, [o.id]: on }))}
+                      />
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <span className="flex-1 text-xs text-sub">
                       <GameIcon e="⏱" /> Arrives in {formatDuration(o.travelMs)} · {o.tiles}{" "}
                       tiles away
                     </span>
                     <Button
-                      disabled={level < 1 || short || tooBig || busy != null}
+                      disabled={level < 1 || short || tooBig || broke || busy != null}
                       size="small"
                       onClick={() => accept(o.id)}
                     >
@@ -450,8 +519,16 @@ export const Market = () => {
                 {RESOURCE_NAMES[want].toLowerCase()}
               </span>
             </div>
+            <GuardToggle
+              coins={state.coins}
+              cost={guardCost(wantAmount)}
+              label={`Guard the ${RESOURCE_NAMES[want].toLowerCase()} you get back`}
+              on={guardPost}
+              onChange={setGuardPost}
+            />
             <p className="text-[11px] text-muted">
-              Your {RESOURCE_NAMES[give].toLowerCase()} is locked on the market
+              <GameIcon e="🗡️" /> Bandits roam some roads and rob merchants who pass their lairs. Guards keep your
+              load safe; you get their pay back if you cancel. Your {RESOURCE_NAMES[give].toLowerCase()} is locked on the market
               until someone takes the offer or you cancel it. Prices must stay
               between 1 : {MIN_TRADE_RATIO} and 1 : {MAX_TRADE_RATIO}. Storage
               caps what you receive ({fmt(rates.capacity)}).
@@ -485,6 +562,7 @@ export const Market = () => {
               const outgoing = t.selling
                 ? { id: t.give, n: t.giveAmount }
                 : { id: t.want, n: t.wantAmount };
+              const lost = t.robbed?.stolen ?? 0;
 
               return (
                 <Card
@@ -527,9 +605,25 @@ export const Market = () => {
                       <span className="text-[10px] uppercase tracking-wider text-muted">
                         You get
                       </span>
-                      <Res amount={incoming.n} id={incoming.id} />
+                      <Res amount={incoming.n - lost} id={incoming.id} />
                     </div>
                   </div>
+                  {t.robbed ? (
+                    <p className="text-xs font-bold text-[#FFB27A]">
+                      <GameIcon e="🗡️" /> Bandits robbed your merchants of {fmt(lost)}{" "}
+                      {RESOURCE_NAMES[incoming.id].toLowerCase()} on the road.
+                    </p>
+                  ) : t.guarded && t.status !== "delivered" ? (
+                    <p className="text-xs text-good">
+                      <GameIcon e="🛡️" /> Guards escort your {RESOURCE_NAMES[incoming.id].toLowerCase()}.
+                    </p>
+                  ) : null}
+                  {t.robbedOut && (
+                    <p className="text-xs text-sub">
+                      <GameIcon e="🗡️" /> Bandits took {fmt(t.robbedOut.stolen)} of the{" "}
+                      {RESOURCE_NAMES[outgoing.id].toLowerCase()} you sent.
+                    </p>
+                  )}
                   {t.status === "open" && (
                     <Button
                       disabled={busy != null}

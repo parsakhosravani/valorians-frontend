@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import * as E from "./engine";
 import * as Tr from "./trade";
+import { guardCost } from "./config";
 
 const T0 = Date.UTC(2026, 9, 25, 10);
 const withPost = (lvl = 1) => {
@@ -82,4 +83,18 @@ test("accepting pays the price; goods arrive capped by storage", () => {
 test("merchants take time to travel", () => {
   expect(Tr.tradeTravelMs(0)).toBe(30_000);
   expect(Tr.tradeTravelMs(10)).toBe(150_000);
+});
+
+test("guards cost coins for the load they escort, and the pay comes back on cancel", () => {
+  const s0 = E.createInitialState(T0);
+
+  s0.coins = 100;
+  const s = Tr.hireGuards(s0, 1000);
+
+  expect(s.coins).toBe(100 - guardCost(1000));
+  expect(guardCost(1000)).toBe(40);
+  expect(guardCost(50)).toBe(10);
+  expect(Tr.refundGuards(s, 1000).coins).toBe(100);
+  s0.coins = 5;
+  expect(() => Tr.hireGuards(s0, 1000)).toThrow("Guards cost 40 coins");
 });

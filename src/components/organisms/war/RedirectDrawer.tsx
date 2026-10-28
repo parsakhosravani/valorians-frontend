@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
-import { ArmyLine, UnitBadge, fmt } from "./shared";
+import { ArmyLine, BanditWarning, UnitBadge, fmt } from "./shared";
 import type { AttackTarget } from "./SendArmyDrawer";
 
 import { Button } from "@/components/atoms/Button";
@@ -370,6 +370,10 @@ export const RedirectDrawer = ({
               );
             })}
           </div>
+
+          {plan && where && (
+            <BanditWarning from={where} lairs={target.bandits} s={state} to={target.at} units={plan.go} />
+          )}
 
           {plan && (
             <div className="inset p-2.5 flex flex-col gap-1.5 text-xs">

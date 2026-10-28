@@ -484,6 +484,50 @@ export const campFirstReward = (level: number) => ({
 export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
 
+// ─── Bandits ─────────────────────────────────────────────────────────────────
+//
+// Bandit lairs sit in the wilds between villages, the same for every player.
+// Merchants and armies whose road passes close by can be ambushed: bandits
+// steal part of a merchant's load and cut into armies too weak to scare them
+// off. Any player can clear a lair; it stays empty for a while, then new
+// bandits move in.
+
+export const BANDIT = {
+  /** The world is cut into squares this many tiles wide; some hold one lair. */
+  cell: 10,
+  /** Share of squares with a lair. */
+  spawn: 0.5,
+  /** Lairs keep at least this far from every village. */
+  tribeDistance: 3,
+  /** Travellers passing within this many tiles of a lair can be ambushed. */
+  reach: 1.5,
+  /** Chance that a lair the road passes strikes: merchants, armies. */
+  merchantChance: 0.35,
+  armyChance: 0.4,
+  /** Bandits leave alone an army this many times their strength. */
+  shyRatio: 3,
+  /** A cleared lair stays empty this long. */
+  respawnMs: 6 * 3600 * 1000,
+  /** Most lair level. */
+  maxLevel: 5,
+  /** Guards for a merchant's load cost this many coins per resource carried (and at least minGuardCost). */
+  guardPerResource: 0.04,
+  minGuardCost: 10,
+} as const;
+
+/** How hard a lair fights. Level 1 ≈ 5 Swordsmen, level 5 ≈ 50. */
+export const banditStrength = (level: number) => Math.round(150 * Math.pow(1.8, level - 1));
+/** Share of a merchant's load a lair's bandits steal. */
+export const banditTheft = (level: number) => 0.25 + 0.05 * level;
+/** What clearing a lair brings home (each resource + coins). */
+export const lairBounty = (level: number) => ({
+  resources: Math.round(300 * Math.pow(1.5, level - 1)),
+  coins: 80 * level,
+});
+/** Coins to hire guards for a load of `amount`. */
+export const guardCost = (amount: number) =>
+  Math.max(BANDIT.minGuardCost, Math.ceil(amount * BANDIT.guardPerResource));
+
 // ─── New orders on the road ─────────────────────────────────────────────────────
 //
 // An army out on an expedition (marching to a target, or on its way home with

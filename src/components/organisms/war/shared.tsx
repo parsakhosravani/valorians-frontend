@@ -1,9 +1,13 @@
 "use client";
 import clsx from "clsx";
 
-import { UNITS, UnitId, UNIT_BY_ID } from "@/lib/game/config";
+import { BANDIT, UNITS, UnitId, UNIT_BY_ID, banditStrength } from "@/lib/game/config";
 import { Segmented } from "@/components/atoms/Ui";
-import type { Army } from "@/lib/game/engine";
+import { GameIcon } from "@/components/atoms/GameIcon";
+import type { Army, GameState } from "@/lib/game/engine";
+import { Lair, ambushLosses, lairsOnRoute } from "@/lib/game/bandits";
+import { Point, marchRoute } from "@/lib/game/map";
+import { attackPower, fighterCount } from "@/lib/game/war";
 
 export const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
 
@@ -100,5 +104,63 @@ export const Stepper = ({
         Max
       </button>
     </div>
+  );
+};
+
+/** A bandit lair on the map, as the server sends it. */
+export type MapLair = Lair & {
+  /** Bandits are there now. */
+  active: boolean;
+  /** Cleared: when new bandits move in. */
+  backAt: number | null;
+  clearedByMe: boolean;
+  strength: number;
+  bounty: { resources: number; coins: number };
+};
+
+/**
+ * What the bandits on the road mean for this army: how many lairs it passes,
+ * and whether they'd dare to ambush it and what that would cost.
+ */
+export const BanditWarning = ({
+  s,
+  units,
+  from,
+  to,
+  lairs,
+}: {
+  s: GameState;
+  units: Army;
+  from: Point;
+  to: Point;
+  lairs?: MapLair[];
+}) => {
+  const manned = (lairs ?? []).filter((l) => l.active);
+
+  if (!manned.length || fighterCount(units) === 0) return null;
+  const exposed = lairsOnRoute(marchRoute(from, to), manned, units);
+
+  if (!exposed.length) return null;
+  const power = attackPower(s, units);
+  const threats = exposed.filter((e) => power < banditStrength(e.lair.level) * BANDIT.shyRatio);
+  const lairsText = exposed.length === 1 ? "a bandit lair" : `${exposed.length} bandit lairs`;
+
+  if (!threats.length) {
+    return (
+      <p className="rounded-xl border border-line bg-panel/70 px-2.5 py-2 text-xs text-sub">
+        <GameIcon e="🗡️" /> The road passes {lairsText}, but this army is too strong for them to try anything.
+      </p>
+    );
+  }
+  const worst = Math.max(...threats.map((e) => banditStrength(e.lair.level)));
+  const loss = Math.round(ambushLosses(power, worst) * 100);
+  const chance = Math.round((1 - Math.pow(1 - BANDIT.armyChance, threats.length)) * 100);
+
+  return (
+    <p className="rounded-xl border border-[#8A3B23] bg-[#2A140E] px-2.5 py-2 text-xs text-[#FFB27A]">
+      <GameIcon e="🗡️" /> <b>Bandits on the road.</b> It passes {lairsText}: a {chance}% chance of an ambush that would
+      cost about {loss}% of these troops{power < worst ? ", and half the spoils they carry" : ""}. Send more to scare
+      them off, or clear the lair first.
+    </p>
   );
 };

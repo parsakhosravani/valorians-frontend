@@ -174,9 +174,15 @@ export const CaravanToken = ({
   left,
   road,
   quiet = false,
+  guarded = false,
+  robbed = false,
 }: {
   from: Pt;
   to: Pt;
+  /** Guards walk with it. */
+  guarded?: boolean;
+  /** Bandits already robbed it (`amount` is what's left). */
+  robbed?: boolean;
   /** The road it follows (the painted one on the map); straight when left out. */
   road?: Road;
   /** Crowded spot (on a village, or on top of another traveller): no load label. */
@@ -205,6 +211,12 @@ export const CaravanToken = ({
         >
           <GameIcon e="🐪" />
         </span>
+        {/* A guard's shield, or the bandits' blade once they've struck */}
+        {(guarded || robbed) && (
+          <span className="absolute -right-1.5 -top-1 text-[11px] leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+            <GameIcon e={robbed ? "🗡️" : "🛡️"} />
+          </span>
+        )}
       </span>
       {mine && !quiet && (
         <span
