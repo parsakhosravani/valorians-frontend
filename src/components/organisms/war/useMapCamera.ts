@@ -52,8 +52,12 @@ export function useMapCamera({
   const moving = useRef(false);
   const onResizeRef = useRef(onResize);
   const onSettleRef = useRef(onSettle);
+  /** Lets `shift` move a drag or pinch that's under way along with the map. */
+  const gestureShift = useRef<((dx: number, dy: number) => void) | null>(null);
 
   sizeRef.current = size;
+  // The gestures only care that there's a map; a new size mustn't restart them mid-drag.
+  const ready = size > 0;
   onResizeRef.current = onResize;
   onSettleRef.current = onSettle;
 
@@ -241,6 +245,9 @@ export function useMapCamera({
       const c = cam.current;
 
       cam.current = { ...c, x: c.x - dx * c.z, y: c.y - dy * c.z };
+      // A finger still on the map: move where its drag started too, or the
+      // next touch move would snap the map back by the shift.
+      gestureShift.current?.(dx, dy);
       if (anim.current?.kind === "zoom") {
         anim.current.m = { x: anim.current.m.x + dx, y: anim.current.m.y + dy };
       } else if (anim.current?.kind === "pan") {
@@ -260,7 +267,7 @@ export function useMapCamera({
   useEffect(() => {
     const el = viewport.current;
 
-    if (!el || !size) return;
+    if (!el || !ready) return;
     const pointers = new Map<number, Pt>();
     /** A drag, in screen coordinates (the map itself may scroll with the page). */
     let pan: { start: Pt; cam: Cam; moved: boolean; id: number; over: number } | null = null;
@@ -268,6 +275,11 @@ export function useMapCamera({
     let samples: { x: number; y: number; t: number }[] = [];
     let lastTap: { x: number; y: number; t: number } | null = null;
     let gesture: { z: number; f: Pt } | null = null;
+
+    gestureShift.current = (dx, dy) => {
+      if (pan) pan.cam = { ...pan.cam, x: pan.cam.x - dx * pan.cam.z, y: pan.cam.y - dy * pan.cam.z };
+      if (pinch) pinch.m = { x: pinch.m.x + dx, y: pinch.m.y + dy };
+    };
 
     const local = (e: { clientX: number; clientY: number }): Pt => {
       const r = el.getBoundingClientRect();
@@ -521,7 +533,7 @@ export function useMapCamera({
       el.removeEventListener("gestureend", gEnd);
       el.removeEventListener("click", click, true);
     };
-  }, [size, clampZ, lowest, maxZoom, schedule, set, stop, zoomGoal, zoomTo]);
+  }, [ready, clampZ, lowest, maxZoom, schedule, set, stop, zoomGoal, zoomTo]);
 
   // Window resized (Telegram Desktop, rotating a tablet): keep the middle
   // of the view in the middle, and keep the map filling it.
