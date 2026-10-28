@@ -548,7 +548,7 @@ export const Village: FunctionComponent<{
         className={clsx(
           "relative isolate mx-auto rounded-2xl overflow-hidden border border-frame/60 shadow-card bg-[#283016] [container-type:inline-size]",
           // A tall village on a phone is fine to scroll; a wide one should fit the window.
-          v === WIDE ? "max-w-[min(100%,calc((100svh-380px)*100/74))] min-w-[min(100%,600px)]" : "max-w-[480px]",
+          v === WIDE ? "w-full max-w-[var(--village-w)]" : "max-w-[480px]",
           !width && "invisible",
         )}
         style={{ aspectRatio: `100 / ${v.height}` }}

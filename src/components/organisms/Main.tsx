@@ -57,9 +57,12 @@ export const Main = ({
     return <LoadingScreen />;
   }
 
+  const onTribe = pathname.startsWith("/tribe");
+
   return (
-    <Shell wide={pathname.startsWith("/battle") || pathname.startsWith("/tribe")}>
-      <div className="w-full max-w-md">
+    <Shell wide={pathname.startsWith("/battle") || onTribe}>
+      {/* header-col: widens to line up with the village on the Build page (see globals.css). */}
+      <div className="header-col w-full max-w-md">
         <Header />
       </div>
       <main className="relative w-full flex-1 overflow-y-auto overflow-x-hidden scrollable pb-24">
