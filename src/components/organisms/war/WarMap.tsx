@@ -290,10 +290,13 @@ export const WarMap = ({
   onAttack,
   onBattleDone,
   focusId,
+  focusCamp,
 }: {
   onAttack: (t: AttackTarget) => void;
   onBattleDone: (r: BattleReport) => void;
   focusId?: number;
+  /** Open on this barbarian camp (by level) with its card up. */
+  focusCamp?: number;
 }) => {
   const { state, rates, now, authHeader, recall, scout, refresh } = useGame();
   const { telegram } = useTelegramContext();
@@ -505,9 +508,23 @@ export const WarMap = ({
     origin.current = { ox, oy };
   }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start centred on your tribe (or the one you came to take revenge on).
+  // Start centred on your tribe (or the one you came to take revenge on, or
+  // the barbarian camp you came to raid).
   useLayoutEffect(() => {
     if (!data || centred.current || !camera.viewport.current) return;
+    const camp = focusCamp ? data.camps.find((c) => c.level === focusCamp) : undefined;
+
+    if (camp) {
+      const loaded = camp.x >= ox && camp.y >= oy && camp.x < ox + n && camp.y < oy + n;
+
+      // Far off: start at home and glide there once the area round it loads.
+      camera.centerOn(px(loaded ? camp.x : data.home.x), py(loaded ? camp.y : data.home.y), { z: 1, instant: true });
+      centred.current = true;
+      setSelected({ kind: "camp", camp });
+      if (!loaded) goTo(camp);
+
+      return;
+    }
     const focus =
       (focusId && data.tribes.find((t) => t.id === focusId)) || data.home;
 

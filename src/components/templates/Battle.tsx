@@ -27,15 +27,21 @@ export const Battle = () => {
   const [target, setTarget] = useState<AttackTarget | null>(null);
   const [result, setResult] = useState<BattleReport | null>(null);
   const [revenge, setRevenge] = useState<number | undefined>();
+  const [camp, setCamp] = useState<number | undefined>();
 
   // /battle?revenge=<playerId> (Hall) or ?target=<playerId> (Leaderboard) opens the map on
-  // that tribe with its card up; /battle?tab=<tab> picks a tab.
+  // that tribe with its card up; ?camp=<level> (Hall) does the same for a barbarian camp;
+  // /battle?tab=<tab> picks a tab.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const id = Number(q.get("revenge") || q.get("target"));
     const t = q.get("tab");
+    const c = Number(q.get("camp"));
 
-    if (id) {
+    if (c) {
+      setCamp(c);
+      setTab("map");
+    } else if (id) {
       setRevenge(id);
       setTab("map");
     } else if (t === "map" || t === "army" || t === "reports") {
@@ -69,6 +75,7 @@ export const Battle = () => {
         >
           {tab === "map" && (
             <WarMap
+              focusCamp={camp}
               focusId={revenge}
               onAttack={setTarget}
               onBattleDone={showResult}
