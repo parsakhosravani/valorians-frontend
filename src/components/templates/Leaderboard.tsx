@@ -15,7 +15,7 @@ import { ScreenHeader } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Metric = "population" | "power" | "wins";
-type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean; plus?: boolean; ally?: boolean };
+type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean; plus?: boolean };
 type Data = { metric: Metric; me: { rank: number; value: number }; top: Row[] };
 
 const LABEL: Record<Metric, string> = { population: "👥", power: "💪", wins: "🏆" };
@@ -62,16 +62,18 @@ export const Leaderboard = () => {
         {!data && !error && <p className="text-sm text-muted text-center py-6">Loading…</p>}
         <div className="flex flex-col gap-1.5 pb-4">
           {data?.top.map((r) => (
-            <div
+            <Link
               key={r.id}
+              aria-label={r.isMe ? "Your tribe on the map" : `${r.name} on the map`}
               className={clsx(
-                "flex items-center gap-2.5 px-2.5 py-2",
+                "flex items-center gap-2.5 px-2.5 py-2 active:scale-[0.98] transition-transform",
                 r.rank <= 3 ? "card" : "card-flat",
                 r.rank === 1 && "!border-gold/80",
                 r.rank === 2 && "!border-[#C9C9C9]/60",
                 r.rank === 3 && "!border-[#C47A45]/70",
                 r.isMe && "!border-gold shadow-glow"
               )}
+              href={(r.isMe ? "/battle?tab=map" : `/battle?target=${r.id}`) as any}
             >
               <span className="w-8 text-center font-display font-black text-muted">{MEDAL[r.rank - 1] ? <GameIcon className="w-7 h-7" e={MEDAL[r.rank - 1]} /> : r.rank}</span>
               <Avatar className="rounded-lg border border-line" size={34} src={r.photoUrl} />
@@ -83,17 +85,7 @@ export const Leaderboard = () => {
               <span className="stat text-sm text-parch">
                 <GameIcon e={LABEL[metric]} /> {r.value.toLocaleString("en-US")}
               </span>
-              {!r.isMe && !r.ally && (
-                <Link
-                  aria-label={`Attack ${r.name}`}
-                  className="btn btn-sm btn-ember shrink-0 !px-2"
-                  href={`/battle?target=${r.id}` as any}
-                  title={`Attack ${r.name}`}
-                >
-                  <GameIcon e="⚔️" />
-                </Link>
-              )}
-            </div>
+            </Link>
           ))}
         </div>
       </div>

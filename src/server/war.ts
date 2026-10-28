@@ -753,7 +753,7 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   const db = await getDb();
   const [top, mine] = await db.batch(
     [
-      `SELECT id, username, first_name, photo_url, population, power, wins, plus_until, clan_id FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
+      `SELECT id, username, first_name, photo_url, population, power, wins, plus_until FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
       { sql: `SELECT ${col} AS v FROM users WHERE id = ?`, args: [me.id] },
     ],
     "read"
@@ -773,8 +773,6 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
       value: Math.floor(Number(r[col])),
       isMe: Number(r.id) === me.id,
       plus: Number(r.plus_until ?? 0) > now,
-      /** In your clan: can't be attacked. */
-      ally: Number(r.id) !== me.id && me.clanId != null && Number(r.clan_id) === me.clanId,
     })),
   };
 }
