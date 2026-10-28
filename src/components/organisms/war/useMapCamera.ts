@@ -60,8 +60,6 @@ export function useMapCamera({
   const shifts = useRef({ sx: 0, sy: 0, mx: 0, my: 0 });
   const onResizeRef = useRef(onResize);
   const onSettleRef = useRef(onSettle);
-  /** Lets `shift` move a drag or pinch that's under way along with the map. */
-  const gestureShift = useRef<((dx: number, dy: number) => void) | null>(null);
 
   sizeRef.current = size;
   // The gestures only care that there's a map; a new size mustn't restart them mid-drag.
@@ -267,9 +265,10 @@ export function useMapCamera({
       s.mx += dx;
       s.my += dy;
       cam.current = { ...c, x: c.x - dx * c.z, y: c.y - dy * c.z };
-      // A finger still on the map: move where its drag started too, or the
-      // next touch move would snap the map back by the shift.
-      gestureShift.current?.(dx, dy);
+      // A drag or pinch under way picks the shift up from `shifts` (see panCam
+      // and the pinch in `move`). It must not be moved here as well: counted
+      // twice, every new area threw the map a whole area further, which loaded
+      // the next one, and the map ran off across the world.
       if (anim.current?.kind === "zoom") {
         anim.current.m = { x: anim.current.m.x + dx, y: anim.current.m.y + dy };
       } else if (anim.current?.kind === "pan") {
@@ -304,11 +303,6 @@ export function useMapCamera({
     let samples: { x: number; y: number; t: number }[] = [];
     let lastTap: { x: number; y: number; t: number } | null = null;
     let gesture: { z: number; f: Pt } | null = null;
-
-    gestureShift.current = (dx, dy) => {
-      if (pan) pan.cam = { ...pan.cam, x: pan.cam.x - dx * pan.cam.z, y: pan.cam.y - dy * pan.cam.z };
-      if (pinch) pinch.m = { x: pinch.m.x + dx, y: pinch.m.y + dy };
-    };
 
     const local = (e: { clientX: number; clientY: number }): Pt => {
       const r = el.getBoundingClientRect();

@@ -19,6 +19,10 @@ interface DrawerProps {
  * Sheet that slides in over the whole app. It is rendered into <body>
  * through a portal: inside the scrolling <main>, iOS traps fixed elements
  * under the bottom navigation bar and the sheet only peeks out.
+ *
+ * No backdrop blur: on Android WebViews, blurring whatever is underneath (the
+ * war map, with its moving armies) every frame made the sheet flicker and
+ * drop whole parts of itself.
  */
 export const Drawer: React.FC<DrawerProps> = ({ position, children, isOpen, title, onClose }) => {
   const [mounted, setMounted] = useState(false);
@@ -52,7 +56,7 @@ export const Drawer: React.FC<DrawerProps> = ({ position, children, isOpen, titl
       <div
         aria-hidden="true"
         className={clsx(
-          "fixed inset-0 bg-black/65 backdrop-blur-[2px] z-[100] transition-opacity duration-200",
+          "fixed inset-0 bg-black/70 z-[100] transition-opacity duration-200",
           isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}
