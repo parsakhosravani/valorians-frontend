@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import clsx from "clsx";
 
 import bg from "~/images/background/tribe.webp";
@@ -14,7 +15,7 @@ import { ScreenHeader } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Metric = "population" | "power" | "wins";
-type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean; plus?: boolean };
+type Row = { rank: number; id: number; name: string; photoUrl: string | null; value: number; isMe: boolean; plus?: boolean; ally?: boolean };
 type Data = { metric: Metric; me: { rank: number; value: number }; top: Row[] };
 
 const LABEL: Record<Metric, string> = { population: "👥", power: "💪", wins: "🏆" };
@@ -82,6 +83,16 @@ export const Leaderboard = () => {
               <span className="stat text-sm text-parch">
                 <GameIcon e={LABEL[metric]} /> {r.value.toLocaleString("en-US")}
               </span>
+              {!r.isMe && !r.ally && (
+                <Link
+                  aria-label={`Attack ${r.name}`}
+                  className="btn btn-sm btn-ember shrink-0 !px-2"
+                  href={`/battle?target=${r.id}` as any}
+                  title={`Attack ${r.name}`}
+                >
+                  <GameIcon e="⚔️" />
+                </Link>
+              )}
             </div>
           ))}
         </div>
