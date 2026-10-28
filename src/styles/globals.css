@@ -2,6 +2,20 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+/* Width of the village frame on a wide window (Telegram Desktop): as wide as fits the window height,
+   never under 600px, never past the page column. The header, builders and village share it so their
+   edges line up. */
+:root {
+  --village-w: min(62.5rem, max(600px, calc((100svh - 380px) * 100 / 74)));
+}
+
+/* The header pads 0.75rem each side, like the Build page column, so both get the same extra 1.5rem. */
+@media (min-width: 768px) {
+  body:has([data-tribe-view="village"]) .header-col {
+    max-width: calc(var(--village-w) + 1.5rem);
+  }
+}
+
 body {
   font-family: "Alegreya Sans", system-ui, sans-serif;
   background: #120d09;

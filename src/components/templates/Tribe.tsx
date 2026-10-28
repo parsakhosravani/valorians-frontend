@@ -169,18 +169,19 @@ export const Tribe: FunctionComponent = () => {
 
   return (
     <div
+      data-tribe-view={view}
       className={clsx(
-        // One centered column under the header. On a wide window (Telegram Desktop) the village gets the room,
-        // and the builders and best next step sit side by side above it instead of in a separate column.
+        // One centered column under the header. On a wide window (Telegram Desktop) the header, the builders
+        // (side by side with the best next step) and the village all share the village's width, so their edges line up.
         "w-full mx-auto px-3 pt-1 pb-4 flex flex-col gap-4",
-        view === "village" ? "max-w-5xl" : "max-w-md",
+        view === "village" ? "max-w-md md:max-w-[calc(var(--village-w)+1.5rem)]" : "max-w-md",
       )}
     >
       <div
         className={clsx(
-          "grid gap-4 w-full mx-auto items-stretch",
-          view === "village" ? "max-w-md md:max-w-none md:grid-cols-2" : "max-w-md",
-          view === "village" && !best && "md:grid-cols-1",
+          "grid gap-4 w-full items-stretch",
+          // Two columns only when there is a second card; otherwise the builders take the full row.
+          view === "village" && best && "md:grid-cols-2",
         )}
       >
         {/* Builders and what they are doing */}
