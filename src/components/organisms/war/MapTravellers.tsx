@@ -1,4 +1,5 @@
 "use client";
+import { memo } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
@@ -42,6 +43,85 @@ const along = (road: Road, p: number) => {
 
   return { at: lerp(points[k], points[k + 1] ?? points[k], t), k };
 };
+
+// ─── Paths on the map ────────────────────────────────────────────────────────
+
+/** Who is on a path: it picks the colour, like the token walking it. */
+export type PathKind = "army" | "homeward" | "incoming" | "goods-coming" | "goods-going";
+
+/** A stretch of a path, all on land or all on the water (px). */
+export type PathRun = { wet: boolean; points: Pt[] };
+
+export type TravelPath = { key: string; kind: PathKind; runs: PathRun[] };
+
+const PATH_COLOR: Record<PathKind, string> = {
+  army: "#F2C66D",
+  homeward: "#D9B56A",
+  incoming: "#F06A44",
+  "goods-coming": "#9DD07F",
+  "goods-going": "#E6D3A0",
+};
+
+const polyline = (pts: Pt[]) => pts.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" ");
+
+/**
+ * The roads armies and merchants are on, from where they set out to where
+ * they're going: a dashed line on land, a dotted one where they sail, and a
+ * ring on the spot they're headed for. Drawn once per road, under the
+ * villages: the tokens walking them move on their own, so nothing here
+ * repaints every second.
+ */
+export const TravelPaths = memo(function TravelPaths({ paths, size }: { paths: TravelPath[]; size: number }) {
+  if (!paths.length) return null;
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="absolute left-0 top-0 pointer-events-none overflow-visible"
+      height={size}
+      style={{ zIndex: 1 }}
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+    >
+      {paths.map(({ key, kind, runs }) => {
+        const color = PATH_COLOR[kind];
+        const last = runs[runs.length - 1]?.points;
+        const end = last?.[last.length - 1];
+        const goods = kind.startsWith("goods");
+
+        return (
+          <g key={key} opacity={kind === "homeward" || goods ? 0.8 : 0.95}>
+            {runs.map((run, i) => (
+              <g key={i} fill="none" strokeLinecap="round" strokeLinejoin="round">
+                {/* Dark under-stroke so the line reads on sand, grass and sea alike */}
+                <polyline points={polyline(run.points)} stroke="#1A120B" strokeOpacity={0.55} strokeWidth={goods ? 4.5 : 5.5} />
+                {/* Armies: a solid road (the dashed ring is your territory); merchants:
+                    a lighter dashed trail; at sea: dotted, the way ships go. */}
+                <polyline
+                  points={polyline(run.points)}
+                  stroke={run.wet ? "#CFE8F5" : color}
+                  strokeDasharray={run.wet ? "1 6" : goods ? "5 5" : undefined}
+                  strokeWidth={run.wet ? 3 : goods ? 2 : 2.5}
+                />
+              </g>
+            ))}
+            {end && (
+              <circle
+                cx={end.x}
+                cy={end.y}
+                fill="none"
+                r={kind === "incoming" || kind === "army" ? 9 : 6}
+                stroke={color}
+                strokeOpacity={0.9}
+                strokeWidth={2}
+              />
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+});
 
 /** Where a traveller is on its road (px) at `p`. */
 export const spotOnRoad = (from: Pt, to: Pt, road: Road | undefined, p: number) => along(road ?? straight(from, to), p).at;

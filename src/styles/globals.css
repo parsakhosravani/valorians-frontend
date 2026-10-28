@@ -69,6 +69,11 @@ body {
   scale: var(--pin, 1);
   transition: scale 0.18s ease-out;
 }
+/* A sheet is open over the map: its pulsing markers hold still, so the page
+ * under the sheet isn't repainted every frame. */
+.map-viewport[data-covered] * {
+  animation-play-state: paused !important;
+}
 
 .font-display {
   font-family: "Cinzel", Georgia, serif;

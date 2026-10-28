@@ -14,7 +14,11 @@ import clsx from "clsx";
 import {
   ArmyToken,
   CaravanToken,
+  PathKind,
+  PathRun,
   Road,
+  TravelPath,
+  TravelPaths,
   progress,
   spotOnRoad,
 } from "./MapTravellers";
@@ -53,6 +57,7 @@ import {
   buildingImage,
 } from "@/lib/game/config";
 import {
+  MarchRoute,
   TERRAIN,
   Terrain,
   marchRoute,
@@ -238,6 +243,74 @@ const useFillHeight = (box: RefObject<HTMLDivElement | null>) => {
   return h;
 };
 
+// ─── Roads ───────────────────────────────────────────────────────────────────
+
+type Pt = { x: number; y: number };
+
+/**
+ * A trip on the map in px: the road its token follows (corners only, timed
+ * for its troops) and the same road as land and sea stretches for the drawn path.
+ */
+type Trip = { r: MarchRoute; stops: number[]; road: Road; runs: PathRun[] };
+
+/**
+ * Trips worked out so far. The map re-renders every second; finding the road
+ * and laying it out again each time for every traveller was wasted work.
+ */
+const TRIPS = new Map<string, Trip>();
+
+const tripFor = (
+  from: Pt,
+  to: Pt,
+  units: Army | null,
+  px: (x: number) => number,
+  py: (y: number) => number,
+  origin: string,
+): Trip => {
+  const key = `${origin}|${from.x},${from.y}>${to.x},${to.y}|${units ? JSON.stringify(units) : ""}`;
+  const hit = TRIPS.get(key);
+
+  if (hit) return hit;
+  const r = marchRoute(from, to);
+  const stops = routeTimeline(r, units);
+  const at = (q: Pt) => ({ x: px(q.x), y: py(q.y) });
+  const straightOn = (k: number) => {
+    const prev = r.path[k - 1];
+    const next = r.path[k + 1];
+
+    return !!prev && !!next && r.path[k].x - prev.x === next.x - r.path[k].x && r.path[k].y - prev.y === next.y - r.path[k].y;
+  };
+  const points: Pt[] = [];
+  const kept: number[] = [];
+
+  // Only the corners: drop tiles where the road runs straight on.
+  r.path.forEach((q, k) => {
+    if (straightOn(k) && r.wet[k] === r.wet[k - 1]) return;
+    points.push(at(q));
+    kept.push(stops[k]);
+  });
+
+  // The drawn path: a new stretch wherever the road reaches or leaves the water.
+  const runs: PathRun[] = [];
+
+  for (let k = 0; k < r.path.length - 1; k++) {
+    const wet = r.wet[k] || r.wet[k + 1];
+    const run = runs[runs.length - 1];
+
+    if (!run || run.wet !== wet) runs.push({ wet, points: [at(r.path[k]), at(r.path[k + 1])] });
+    else if (straightOn(k) && r.wet[k] === r.wet[k - 1]) run.points[run.points.length - 1] = at(r.path[k + 1]);
+    else run.points.push(at(r.path[k + 1]));
+  }
+  if (!runs.length) runs.push({ wet: false, points: [at(from), at(to)] });
+
+  const trip = { r, stops, road: { points, stops: kept }, runs };
+
+  if (TRIPS.size > 300) TRIPS.delete(TRIPS.keys().next().value!);
+  TRIPS.set(key, trip);
+
+  return trip;
+};
+
 // ─── The sea ─────────────────────────────────────────────────────────────────
 
 /**
@@ -418,28 +491,11 @@ export const WarMap = ({
    * The road an army takes on the map (around mountains, lakes, over the
    * sea), in px, timed for its troops, plus where it is `f` of the way in.
    */
-  const roadOf = (
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-    units: Army | null,
-    f: number,
-  ): { road: Road; atSea: boolean } => {
-    const r = marchRoute(from, to);
-    const stops = routeTimeline(r, units);
-    const points: Road["points"] = [];
-    const kept: number[] = [];
+  const tripOf = (from: Pt, to: Pt, units: Army | null) => tripFor(from, to, units, px, py, `${ox},${oy}`);
+  const roadOf = (from: Pt, to: Pt, units: Army | null, f: number): { road: Road; atSea: boolean } => {
+    const t = tripOf(from, to, units);
 
-    // Only the corners: drop tiles where the road runs straight on.
-    r.path.forEach((q, k) => {
-      const prev = r.path[k - 1];
-      const next = r.path[k + 1];
-
-      if (prev && next && q.x - prev.x === next.x - q.x && q.y - prev.y === next.y - q.y && r.wet[k] === r.wet[k - 1]) return;
-      points.push({ x: px(q.x), y: py(q.y) });
-      kept.push(stops[k]);
-    });
-
-    return { road: { points, stops: kept }, atSea: pointAlong(r, stops, f).atSea };
+    return { road: t.road, atSea: pointAlong(t.r, t.stops, f).atSea };
   };
 
   // ─── Camera: drag, pinch, wheel and the +/− buttons (see useMapCamera) ────
@@ -582,20 +638,21 @@ export const WarMap = ({
   const homeY = data?.home.y;
 
   // The land as square pieces lined up on the world grid: those on screen and
-  // one ring round them, plus full-detail pieces on screen when zoomed in. A
+  // a margin round them, plus full-detail pieces on screen when zoomed in. A
   // piece is only told about what stands on it, so it repaints only when that changes.
   const ground = useMemo(() => {
     if (!view || !n || homeX == null || homeY == null) return [];
     const out: { key: string; x: number; y: number; n: number; detail: boolean; occupied: string; home: string; prio: number }[] = [];
     const mx = (view.x0 + view.x1) / 2;
     const my = (view.y0 + view.y1) / 2;
-    const add = (size: number, detail: boolean, ring: number) => {
+    // `margin`: tiles past the screen's edge to have ready before a drag shows them.
+    const add = (size: number, detail: boolean, margin: number) => {
       const lo = (v: number) => Math.floor(v / size) * size;
-      const x1 = Math.min(ox + n, view.x1 + ring * size);
-      const y1 = Math.min(oy + n, view.y1 + ring * size);
+      const x1 = Math.min(ox + n, view.x1 + margin);
+      const y1 = Math.min(oy + n, view.y1 + margin);
 
-      for (let y = lo(Math.max(oy, view.y0 - ring * size)); y < y1; y += size)
-        for (let x = lo(Math.max(ox, view.x0 - ring * size)); x < x1; x += size) {
+      for (let y = lo(Math.max(oy, view.y0 - margin)); y < y1; y += size)
+        for (let x = lo(Math.max(ox, view.x0 - margin)); x < x1; x += size) {
           const on = occupied
             .filter((p) => p.x >= x - 1 && p.x <= x + size && p.y >= y - 1 && p.y <= y + size)
             .map((p) => `${p.x},${p.y}`)
@@ -617,7 +674,10 @@ export const WarMap = ({
         }
     };
 
-    add(CHUNK, false, 1);
+    // Half a piece round the screen, not a whole ring of pieces: every piece on
+    // the page is a big decoded picture, and a phone that runs out of room for
+    // them starts dropping parts of the screen (the battle sheet flickered).
+    add(CHUNK, false, CHUNK / 2);
     if (restZoom >= CLOSE_UP_ZOOM) add(DETAIL_CHUNK, true, 0);
 
     return out;
@@ -798,6 +858,26 @@ export const WarMap = ({
 
   const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
 
+  // The roads your armies, the armies coming for you and your merchants are on.
+  const paths: TravelPath[] = data
+    ? [
+        ...homeward.map((m) => ({ key: `b${m.id}`, kind: "homeward" as PathKind, runs: tripOf(m.from, data.home, m.units).runs })),
+        ...marching.map((m) => ({
+          key: `t${m.id}`,
+          kind: (m.kind === "incoming" ? "incoming" : "army") as PathKind,
+          runs: tripOf(m.from, m.to, m.units).runs,
+        })),
+        // Merchants last: their thin dashed trail stays visible where it shares a road with an army.
+        ...merchants.map((c) => ({
+          key: `c${c.id}`,
+          kind: (c.kind === "coming" ? "goods-coming" : "goods-going") as PathKind,
+          runs: tripOf(c.from, c.to, null).runs,
+        })),
+      ]
+    : [];
+  // A sheet is open over the map.
+  const covered = !!selected || watching != null || !!ordersFor || !!redirecting || worldOpen;
+
   return (
     <div className="flex flex-col gap-2">
       {/* The map */}
@@ -822,6 +902,7 @@ export const WarMap = ({
         {data && (
           <div
             ref={camera.viewport}
+            data-covered={covered ? "" : undefined}
             className="map-viewport absolute inset-0 overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing"
           >
             <div
@@ -844,6 +925,9 @@ export const WarMap = ({
                   y={p.y}
                 />
               ))}
+
+              {/* Roads armies and merchants are on */}
+              <TravelPaths paths={paths} size={n * T} />
 
               {/* Barbarian camps */}
               {data.camps.map((c) => {
@@ -1321,6 +1405,11 @@ export const WarMap = ({
                   <GameIcon e="⛰️" /> Armies follow roads, not straight lines: they march around
                   mountains and lakes, and forests and hills slow them down. When
                   the way round is too long, they sail.
+                </span>
+                <span>
+                  <GameIcon e="🚩" /> The road each army is on is drawn on the map: gold for yours, red for one
+                  coming for you, dotted where they sail. Your merchants' trails are dashed, green when goods
+                  are coming home.
                 </span>
                 <span>
                   <GameIcon e="⛰️" /> Hills give the defender +20% defense, <GameIcon e="🌲" /> forests +10%, and

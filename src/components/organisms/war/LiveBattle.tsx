@@ -162,8 +162,8 @@ const StrengthBar = ({ label, left, color }: { label: string; left: number; colo
     </div>
     <div className="h-2.5 rounded-full bg-ground overflow-hidden border border-line">
       <div
-        className="h-full rounded-full transition-[width] duration-700 ease-out"
-        style={{ width: `${left * 100}%`, background: color }}
+        className="h-full w-full rounded-full origin-left transition-transform duration-700 ease-out"
+        style={{ transform: `scaleX(${left})`, background: color }}
       />
     </div>
   </div>
@@ -205,7 +205,11 @@ export const LiveBattleDrawer = ({
               <span className="text-goldtext">Result in {formatDuration(b.endsAt - now)}</span>
             </div>
             <div className="h-1.5 rounded-full bg-ground overflow-hidden">
-              <div className="h-full bg-gold transition-[width] duration-1000 ease-linear" style={{ width: `${done * 100}%` }} />
+              {/* Scaled, not resized: the bar moves every second and mustn't repaint the sheet. */}
+              <div
+                className="h-full w-full origin-left bg-gold transition-transform duration-1000 ease-linear"
+                style={{ transform: `scaleX(${done})` }}
+              />
             </div>
           </div>
 
