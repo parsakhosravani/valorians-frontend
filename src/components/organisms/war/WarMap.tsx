@@ -27,9 +27,10 @@ import {
   LiveBattleData,
   LiveBattleDrawer,
 } from "./LiveBattle";
-import { ArmyLine, MapLair, UnitEmoji, fmt } from "./shared";
-import { MapGround, TILE } from "./MapGround";
+import { ArmyLine, UnitEmoji, fmt } from "./shared";
+import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
+import { WorldMap } from "./WorldMap";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -44,6 +45,8 @@ import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import {
   BUILDING_BY_ID,
+  MAP_MAX,
+  MAP_MIN,
   RESOURCE_NAMES,
   ResourceId,
   UnitId,
@@ -61,8 +64,6 @@ import {
   terrainAt,
 } from "@/lib/game/map";
 import { landingFactorFor } from "@/lib/game/war";
-import type { Ambush } from "@/lib/game/bandits";
-import { BANDIT } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
@@ -113,10 +114,6 @@ type Movement = {
   arrivesAt: number;
   units: Army | null;
   campLevel: number | null;
-  /** Marching on a bandit lair of this level (older servers don't send it). */
-  lairLevel?: number | null;
-  /** Your armies: bandits ambushed it on the road. */
-  ambush?: Ambush | null;
   /** Arrived: the battle is being fought (older servers don't send it). */
   battle?: LiveBattleData | null;
   /** Your armies: spoils carried from an earlier battle and new orders taken (older servers don't send them). */
@@ -134,13 +131,7 @@ type Caravan = {
   amount: number;
   sentAt: number;
   arrivesAt: number;
-  /** Bandits robbed it on the road (`amount` is what's left). */
-  robbed?: { x: number; y: number; at: number; stolen: number } | null;
-  /** Guards walk with it. */
-  guarded?: boolean;
 };
-
-type Lair = MapLair & { terrain: Terrain; distance: number };
 
 export type MapData = {
   home: { x: number; y: number };
@@ -148,18 +139,13 @@ export type MapData = {
   radius: number;
   tribes: Tribe[];
   camps: Camp[];
-  /** Bandit lairs in view (older servers don't send them). */
-  lairs?: Lair[];
   movements: Movement[];
   caravans?: Caravan[];
   myPower: number;
 };
 
 type Selected =
-  | { kind: "tribe"; tribe: Tribe }
-  | { kind: "camp"; camp: Camp }
-  | { kind: "lair"; lair: Lair }
-  | null;
+  { kind: "tribe"; tribe: Tribe } | { kind: "camp"; camp: Camp } | null;
 
 type ReportItem = { attackId: number | null; report: BattleReport };
 
@@ -169,12 +155,23 @@ const T = TILE;
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.2;
 
-/** Map radius (tiles) that fills this box even fully zoomed out. */
+/** The middle of a loaded area of radius r, kept so the area stays inside the world. */
+const keepInWorld = (p: { x: number; y: number }, r: number) => ({
+  x: Math.min(MAP_MAX - 1 - r, Math.max(MAP_MIN + r, Math.round(p.x))),
+  y: Math.min(MAP_MAX - 1 - r, Math.max(MAP_MIN + r, Math.round(p.y))),
+});
+
+/** When the screen comes this close (tiles) to the edge of what's loaded, the next area loads. */
+const EDGE = 8;
+
+/**
+ * Map radius (tiles) that fills this box even fully zoomed out, with room to
+ * drag a good way before the next area has to load.
+ */
 const wantedRadius = (el: HTMLElement | null) => {
   const side = el ? Math.max(el.clientWidth, el.clientHeight) : 0;
 
-  // A few tiles more than the screen shows, so short pans don't need a reload.
-  return Math.min(30, Math.max(24, Math.ceil(side / (T * MIN_ZOOM) / 2) + 6));
+  return Math.min(30, Math.max(24, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1 + EDGE));
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
@@ -312,26 +309,34 @@ export const WarMap = ({
   const [redirecting, setRedirecting] = useState<{ army: ArmyOnRoad; target: AttackTarget } | null>(null);
   // The on-the-move list starts folded so it doesn't cover the map; its header shows what's coming.
   const [movesOpen, setMovesOpen] = useState(false);
+  const [worldOpen, setWorldOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const fill = useFillHeight(box);
   const radius = useRef(0);
-  // The map loads a window of the world. Pan near its edge and the window
-  // moves with you (round `lookAt`), so every tribe can be found by panning.
-  const lookAt = useRef<{ x: number; y: number } | null>(null);
-  const backHome = useRef(false);
   const outgoing = useRef<Set<number>>(new Set());
   const centred = useRef(false);
   const goods = useRef<Set<string>>(new Set());
+  // The middle of the loaded area once the player has travelled (null: your
+  // tribe, or the tribe you came to see). Only the newest answer is used, so a
+  // slow poll can't snap the map back to where it was.
+  const centre = useRef<{ x: number; y: number } | null>(null);
+  const asked = useRef(0);
+  // A spot to glide to as soon as the area round it has loaded.
+  const flyTo = useRef<{ x: number; y: number } | null>(null);
 
   const load = useCallback(async () => {
     if (!authHeader) return;
+    const ask = ++asked.current;
+
     try {
+      const r = (radius.current = Math.max(radius.current, wantedRadius(box.current)));
+      const c = centre.current && keepInWorld(centre.current, r);
       const d = await apiRequest<MapData>(
         authHeader,
-        `war/map?r=${(radius.current = Math.max(radius.current, wantedRadius(box.current)))}` +
-          // Panned away: the world round where you're looking; otherwise round home (or the tribe in focus).
-          (lookAt.current ? `&x=${lookAt.current.x}&y=${lookAt.current.y}` : focusId ? `&focus=${focusId}` : ""),
+        `war/map?r=${r}` + (c ? `&x=${c.x}&y=${c.y}` : focusId ? `&focus=${focusId}` : ""),
       );
+
+      if (ask !== asked.current) return;
       const ids = new Set(
         d.movements.filter((m) => m.kind === "outgoing").map((m) => m.id),
       );
@@ -436,9 +441,9 @@ export const WarMap = ({
 
   // ─── Camera: drag, pinch, wheel and the +/− buttons (see useMapCamera) ────
   const grown = useRef(0);
-  // Zoomed in close, the whole-map picture is stretched and soft: once the
-  // camera rests, the piece on screen is painted again at full detail.
-  const [closeUp, setCloseUp] = useState<{ x: number; y: number; n: number } | null>(null);
+  // The tiles on screen when the camera last came to rest: the land is drawn
+  // in pieces round them (and, zoomed in close, again at full detail).
+  const [view, setView] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   // The zoom the camera last came to rest at: labels shrink less than the land,
   // so how crowded the map looks depends on it.
   const [restZoom, setRestZoom] = useState(1);
@@ -450,31 +455,34 @@ export const WarMap = ({
       const el = camera.viewport.current;
 
       setRestZoom(Math.round(z * 20) / 20);
-      if (el && data) {
-        // The tile in the middle of the screen, and how far the screen reaches from it.
-        const mx = Math.round((-x + el.clientWidth / 2) / z / T - 0.5) + ox;
-        const my = Math.round((-y + el.clientHeight / 2) / z / T - 0.5) + oy;
-        const reach = Math.ceil(Math.max(el.clientWidth, el.clientHeight) / 2 / z / T);
-        const room = data.radius - reach - 2;
+      if (!el || !n) return;
+      const next = {
+        x0: Math.floor(ox - x / z / T),
+        y0: Math.floor(oy - y / z / T),
+        x1: Math.ceil(ox + (el.clientWidth - x) / z / T),
+        y1: Math.ceil(oy + (el.clientHeight - y) / z / T),
+      };
 
-        if (Math.abs(mx - data.center.x) > room || Math.abs(my - data.center.y) > room) {
-          lookAt.current = { x: mx, y: my };
+      setView((v) =>
+        v && v.x0 === next.x0 && v.y0 === next.y0 && v.x1 === next.x1 && v.y1 === next.y1 ? v : next,
+      );
+      // Close to the edge of what's loaded (and there's more world that way):
+      // load the area round the middle of the screen.
+      const nearEdge =
+        (next.x0 < ox + EDGE && ox > MAP_MIN) ||
+        (next.y0 < oy + EDGE && oy > MAP_MIN) ||
+        (next.x1 > ox + n - EDGE && ox + n < MAP_MAX) ||
+        (next.y1 > oy + n - EDGE && oy + n < MAP_MAX);
+
+      if (nearEdge) {
+        const want = keepInWorld({ x: (next.x0 + next.x1) / 2, y: (next.y0 + next.y1) / 2 }, radius.current);
+        const was = centre.current ?? data?.center;
+
+        if (!was || was.x !== want.x || was.y !== want.y) {
+          centre.current = want;
           load();
         }
       }
-      if (!el || !n || z < CLOSE_UP_ZOOM) {
-        setCloseUp(null);
-
-        return;
-      }
-      // The tiles in view plus a margin, snapped to even tiles so small pans keep the same piece.
-      const even = (v: number) => Math.floor(v / 2) * 2;
-      const i0 = Math.max(0, even(-x / z / T - 2));
-      const j0 = Math.max(0, even(-y / z / T - 2));
-      const span = Math.min(n - Math.max(i0, j0), even(Math.max(el.clientWidth, el.clientHeight) / z / T + 7));
-      const next = { x: ox + i0, y: oy + j0, n: span };
-
-      setCloseUp((c) => (c && c.x === next.x && c.y === next.y && c.n === next.n ? c : next));
     },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {
@@ -495,10 +503,6 @@ export const WarMap = ({
     if (o && (o.ox !== ox || o.oy !== oy)) camera.shift((o.ox - ox) * T, (o.oy - oy) * T);
     else camera.refit();
     origin.current = { ox, oy };
-    if (backHome.current) {
-      backHome.current = false;
-      camera.centerOn(px(data.home.x), py(data.home.y));
-    }
   }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start centred on your tribe (or the one you came to take revenge on).
@@ -516,35 +520,91 @@ export const WarMap = ({
     }
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const recentre = () => {
-    if (!data) return;
-    const far = Math.max(Math.abs(data.home.x - data.center.x), Math.abs(data.home.y - data.center.y)) > data.radius - 4;
+  // A far spot was asked for: once the area round it has loaded, glide there.
+  useLayoutEffect(() => {
+    const f = flyTo.current;
 
-    if (far || lookAt.current) {
-      // Home is outside the loaded window: load the world round home, then go there.
-      lookAt.current = null;
-      backHome.current = true;
-      load();
+    if (!data || !f || f.x < ox || f.y < oy || f.x >= ox + n || f.y >= oy + n) return;
+    flyTo.current = null;
+    camera.centerOn(px(f.x), py(f.y));
+  }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Go to any tile in the world, loading the area round it first if it's far. */
+  const goTo = (p: { x: number; y: number }) => {
+    if (!data) return;
+    const t = {
+      x: Math.min(MAP_MAX - 1, Math.max(MAP_MIN, Math.round(p.x))),
+      y: Math.min(MAP_MAX - 1, Math.max(MAP_MIN, Math.round(p.y))),
+    };
+    // Well inside what's loaded (or against the world's edge): just glide.
+    const inside = (v: number, o: number) =>
+      v >= (o === MAP_MIN ? o : o + EDGE) && v < (o + n === MAP_MAX ? o + n : o + n - EDGE);
+
+    if (inside(t.x, ox) && inside(t.y, oy)) {
+      flyTo.current = null;
+      camera.centerOn(px(t.x), py(t.y));
+
+      return;
     }
-    if (!far) camera.centerOn(px(data.home.x), py(data.home.y));
+    centre.current = keepInWorld(t, radius.current);
+    flyTo.current = t;
+    load();
+  };
+
+  const recentre = () => {
+    if (data) goTo(data.home);
   };
 
   // Tiles with something standing on them: the ground leaves them clear.
   const occupied = useMemo(
-    () =>
-      data
-        ? [
-            ...data.tribes.map((t) => `${t.x},${t.y}`),
-            ...data.camps.map((c) => `${c.x},${c.y}`),
-            ...(data.lairs ?? []).map((l) => `${l.x},${l.y}`),
-          ]
-            .sort()
-            .join(";")
-        : "",
+    () => (data ? [...data.tribes.map((t) => ({ x: t.x, y: t.y })), ...data.camps.map((c) => ({ x: c.x, y: c.y }))] : []),
     [data],
   );
   // Your tribe: the ground draws your territory round it.
-  const homeAt = data ? `${data.home.x},${data.home.y}` : "";
+  const homeX = data?.home.x;
+  const homeY = data?.home.y;
+
+  // The land as square pieces lined up on the world grid: those on screen and
+  // one ring round them, plus full-detail pieces on screen when zoomed in. A
+  // piece is only told about what stands on it, so it repaints only when that changes.
+  const ground = useMemo(() => {
+    if (!view || !n || homeX == null || homeY == null) return [];
+    const out: { key: string; x: number; y: number; n: number; detail: boolean; occupied: string; home: string; prio: number }[] = [];
+    const mx = (view.x0 + view.x1) / 2;
+    const my = (view.y0 + view.y1) / 2;
+    const add = (size: number, detail: boolean, ring: number) => {
+      const lo = (v: number) => Math.floor(v / size) * size;
+      const x1 = Math.min(ox + n, view.x1 + ring * size);
+      const y1 = Math.min(oy + n, view.y1 + ring * size);
+
+      for (let y = lo(Math.max(oy, view.y0 - ring * size)); y < y1; y += size)
+        for (let x = lo(Math.max(ox, view.x0 - ring * size)); x < x1; x += size) {
+          const on = occupied
+            .filter((p) => p.x >= x - 1 && p.x <= x + size && p.y >= y - 1 && p.y <= y + size)
+            .map((p) => `${p.x},${p.y}`)
+            .sort()
+            .join(";");
+          // Your territory reaches about four tiles out.
+          const near = homeX >= x - 4 && homeX < x + size + 4 && homeY >= y - 4 && homeY < y + size + 4;
+
+          out.push({
+            key: `${detail ? "d" : "b"}${x},${y}`,
+            x,
+            y,
+            n: size,
+            detail,
+            occupied: on,
+            home: near ? `${homeX},${homeY}` : "",
+            prio: Math.hypot(x + size / 2 - mx, y + size / 2 - my) + (detail ? 12 : 0),
+          });
+        }
+    };
+
+    add(CHUNK, false, 1);
+    if (restZoom >= CLOSE_UP_ZOOM) add(DETAIL_CHUNK, true, 0);
+
+    return out;
+  }, [view, n, ox, oy, occupied, homeX, homeY, restZoom]);
 
   const strength = (p: number) => {
     const ratio = p / Math.max(1, data?.myPower ?? 1);
@@ -630,7 +690,6 @@ export const WarMap = ({
       harbor: t.harbor ?? 0,
       note:
         state.shieldUntil > now ? "Attacking ends your own shield." : undefined,
-      bandits: data?.lairs,
     };
   };
   const campTarget = (c: Camp, from: { x: number; y: number }): AttackTarget => ({
@@ -641,17 +700,6 @@ export const WarMap = ({
     terrain: c.terrain,
     from,
     at: { x: c.x, y: c.y },
-    bandits: data?.lairs,
-  });
-  const lairTarget = (l: Lair, from: { x: number; y: number }): AttackTarget => ({
-    title: `Bandit lair (level ${l.level})`,
-    to: { lair: { x: l.x, y: l.y } },
-    defense: { min: l.strength, max: l.strength, exact: true },
-    distance: Math.round(Math.hypot(l.x - from.x, l.y - from.y) * 10) / 10,
-    terrain: l.terrain,
-    from,
-    at: { x: l.x, y: l.y },
-    bandits: data?.lairs,
   });
 
   const attackTribe = (t: Tribe) => {
@@ -661,10 +709,6 @@ export const WarMap = ({
   const attackCamp = (c: Camp) => {
     setSelected(null);
     onAttack(campTarget(c, data!.home));
-  };
-  const attackLair = (l: Lair) => {
-    setSelected(null);
-    onAttack(lairTarget(l, data!.home));
   };
 
   /** The army waiting for new orders goes for this target instead. */
@@ -706,7 +750,6 @@ export const WarMap = ({
     const taken: { x: number; y: number }[] = [
       ...data.tribes.map((t) => ({ x: px(t.x), y: py(t.y) })),
       ...data.camps.map((c) => ({ x: px(c.x), y: py(c.y) })),
-      ...(data.lairs ?? []).map((l) => ({ x: px(l.x), y: py(l.y) })),
       ...battles.map((m) => ({ x: px(m.to.x), y: py(m.to.y) })),
     ];
     const place = (key: string, at: { x: number; y: number }) => {
@@ -769,33 +812,21 @@ export const WarMap = ({
               className="absolute left-0 top-0 origin-top-left will-change-transform"
               style={{ width: n * T, height: n * T }}
             >
-              <MapGround
-                home={homeAt}
-                n={n}
-                occupied={occupied}
-                ox={ox}
-                oy={oy}
-              />
-              {closeUp && (
-                <div
-                  className="absolute"
-                  style={{
-                    left: (closeUp.x - ox) * T,
-                    top: (closeUp.y - oy) * T,
-                    width: closeUp.n * T,
-                    height: closeUp.n * T,
-                  }}
-                >
-                  <MapGround
-                    detail
-                    home={homeAt}
-                    n={closeUp.n}
-                    occupied={occupied}
-                    ox={closeUp.x}
-                    oy={closeUp.y}
-                  />
-                </div>
-              )}
+              <GroundOverview n={n} ox={ox} oy={oy} />
+              {ground.map((p) => (
+                <GroundPiece
+                  key={p.key}
+                  detail={p.detail}
+                  home={p.home}
+                  left={(p.x - ox) * T}
+                  n={p.n}
+                  occupied={p.occupied}
+                  prio={p.prio}
+                  top={(p.y - oy) * T}
+                  x={p.x}
+                  y={p.y}
+                />
+              ))}
 
               {/* Barbarian camps */}
               {data.camps.map((c) => {
@@ -875,80 +906,6 @@ export const WarMap = ({
                       </span>
                     ) : null}
                   </button>
-                );
-              })}
-
-              {/* Bandit lairs: a faint red ring shows how close a road can pass before it's in danger. */}
-              {(data.lairs ?? []).map((l) => {
-                const picked = selected?.kind === "lair" && selected.lair.x === l.x && selected.lair.y === l.y;
-                const reach = BANDIT.reach * T;
-
-                return (
-                  <div key={`l${l.x},${l.y}`}>
-                    {l.active && (
-                      <span
-                        className={clsx(
-                          "pointer-events-none absolute rounded-full border-2 border-dashed",
-                          picked ? "border-[#F06A44]/90 bg-[#8A3B23]/25" : "border-[#E0603A]/60 bg-[#8A3B23]/[0.14]",
-                        )}
-                        style={{ left: px(l.x) - reach, top: py(l.y) - reach, width: reach * 2, height: reach * 2 }}
-                      />
-                    )}
-                    <button
-                      aria-label={l.active ? `Bandit lair, level ${l.level}` : "Empty bandit lair"}
-                      className={clsx("map-pin absolute", !l.active && "grayscale brightness-[0.7]")}
-                      style={{
-                        left: px(l.x) - 32,
-                        top: py(l.y) - 34,
-                        width: 64,
-                        height: 56,
-                        transformOrigin: "32px 34px",
-                        zIndex: picked ? 4 : 1,
-                      }}
-                      onClick={() => setSelected({ kind: "lair", lair: l })}
-                    >
-                      <span className="absolute left-[15px] top-[33px] w-[34px] h-[12px] rounded-[50%] bg-[radial-gradient(closest-side,rgba(10,7,4,0.6),rgba(10,7,4,0))]" />
-                      <span
-                        className={clsx(
-                          "absolute left-[17px] top-[34px] w-[30px] h-[10px] rounded-[50%] border-[1.5px]",
-                          l.active ? "border-[#7A1F1F] bg-[#3A0F0F]/50" : "border-line bg-ink/30",
-                          picked && "shadow-[0_0_14px_rgba(240,106,68,0.9)]",
-                        )}
-                      />
-                      <Image
-                        draggable={false}
-                        alt=""
-                        className="absolute left-[15px] top-[9px] w-[34px] h-[34px] object-contain drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
-                        height={88}
-                        src={buildingImage(BUILDING_BY_ID["hideout"])}
-                        width={88}
-                      />
-                      {labelsAll || picked ? (
-                        <span
-                          className={clsx(
-                            "absolute left-1/2 top-[45px] -translate-x-1/2 w-max whitespace-nowrap px-1.5 h-[15px] inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
-                            l.active ? "bg-[#4A1414] text-[#FFD9C7] border-[#C2552E]" : "bg-ink/90 text-sub border-line",
-                          )}
-                        >
-                          {l.active ? (
-                            <>
-                              <GameIcon e="💀" /> Bandits {l.level}
-                            </>
-                          ) : l.backAt ? (
-                            `Empty · ${formatDuration(Math.max(0, l.backAt - now))}`
-                          ) : (
-                            "Empty"
-                          )}
-                        </span>
-                      ) : l.active ? (
-                        // Zoomed out: a small skull with the lair's level.
-                        <span className="absolute left-1/2 top-[38px] -translate-x-1/2 w-max h-[16px] pl-0.5 pr-1 rounded-full border-[1.5px] border-[#C2552E] bg-[#4A1414] inline-flex items-center gap-px font-display text-[8.5px] font-black leading-none text-[#FFD9C7] shadow-[0_2px_3px_rgba(0,0,0,0.6)]">
-                          <GameIcon e="💀" />
-                          {l.level}
-                        </span>
-                      ) : null}
-                    </button>
-                  </div>
                 );
               })}
 
@@ -1080,9 +1037,7 @@ export const WarMap = ({
                     key={`t${c.id}`}
                     amount={c.amount}
                     from={{ x: px(c.from.x), y: py(c.from.y) }}
-                    guarded={!!c.guarded}
                     kind={c.kind}
-                    robbed={!!c.robbed}
                     left={c.arrivesAt - now}
                     p={progress(now, c.sentAt, c.arrivesAt)}
                     quiet={quiet.has(`c${c.id}`)}
@@ -1154,7 +1109,7 @@ export const WarMap = ({
             </span>
             <span className="flex-1 min-w-0 leading-tight">
               <b className="text-goldtext">Pick a new target</b>
-              <span className="block text-[11px] text-sub">Tap a tribe, a camp or a bandit lair on the map.</span>
+              <span className="block text-[11px] text-sub">Tap a tribe or a camp on the map.</span>
             </span>
             <button className="btn btn-wood btn-sm shrink-0 font-sans font-extrabold text-xs" onClick={() => setPicking(null)}>
               Cancel
@@ -1163,6 +1118,13 @@ export const WarMap = ({
         )}
         {data && (
           <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-2">
+            <button
+              aria-label="The world"
+              className="w-11 h-11 rounded-full border border-frame bg-gradient-to-b from-[#3A2B1E]/95 to-[#1E1610]/95 shadow-raised flex items-center justify-center active:scale-95 transition-transform"
+              onClick={() => setWorldOpen(true)}
+            >
+              <Image draggable={false} alt="" className="w-7 h-7 object-contain" height={64} src="/images/icons/compass.webp" width={64} />
+            </button>
             <button
               aria-label="Back to my tribe"
               className="w-11 h-11 rounded-full border-2 border-gold bg-ink/85 shadow-[0_0_12px_rgba(227,169,72,0.55),0_4px_10px_rgba(0,0,0,0.6)] flex items-center justify-center active:scale-95 transition-transform"
@@ -1249,11 +1211,6 @@ export const WarMap = ({
                     <span className="block text-xs text-muted truncate">
                       {m.units && <ArmyLine army={m.units} />}
                     </span>
-                    {m.ambush && (
-                      <span className="block text-[11px] font-bold text-[#FFB27A] truncate">
-                        <GameIcon e="🗡️" /> Ambushed by bandits{m.ambush.won ? ", drove them off" : ""}
-                      </span>
-                    )}
                   </span>
                   <span className="font-display font-black text-goldtext shrink-0">
                     {formatDuration(m.arrivesAt - now)}
@@ -1308,15 +1265,6 @@ export const WarMap = ({
                         on its way to {c.to.name}
                       </>
                     )}
-                    {c.robbed ? (
-                      <span className="block text-[11px] font-bold text-[#FFB27A] truncate">
-                        <GameIcon e="🗡️" /> Bandits stole {fmt(c.robbed.stolen)}
-                      </span>
-                    ) : c.guarded ? (
-                      <span className="block text-[11px] text-sub truncate">
-                        <GameIcon e="🛡️" /> Guarded
-                      </span>
-                    ) : null}
                   </span>
                   <span
                     className={clsx(
@@ -1385,23 +1333,24 @@ export const WarMap = ({
                   spoils first. One new order per expedition; the War Orders card adds more.
                 </span>
                 <span>
-                  <GameIcon e="💀" /> Bandit lairs sit in the wilds. Merchants and armies whose road passes within{" "}
-                  {BANDIT.reach} tiles of one can be ambushed: bandits steal part of a merchant&apos;s load and cut into
-                  armies too weak to scare them off. Hire guards for your trades, or clear the lair: the roads around it
-                  stay safe for {Math.round(BANDIT.respawnMs / 3_600_000)} hours.
-                </span>
-                <span>
                   <GameIcon e="⚔️" /> When armies meet, the battle lasts from 1 minute up to 30,
                   longer the more troops fight. Tap the crossed swords to watch it
                   round by round; the defenders are on the field until it ends.
                 </span>
-                <span>Drag to move around. Pinch, scroll or double-tap to zoom.</span>
+                <span>
+                  Drag to move around: more of the world loads as you go. Pinch, scroll or double-tap to zoom.
+                  The compass opens the whole world: tap a spot or type its x|y to go there.
+                </span>
               </span>
             }
             title="War on the map"
           />
         </div>
       </div>
+
+      {data && (
+        <WorldMap home={data.home} open={worldOpen} view={view} onClose={() => setWorldOpen(false)} onGo={goTo} />
+      )}
 
       {/* What's on the tile you tapped */}
       <Drawer
@@ -1410,10 +1359,6 @@ export const WarMap = ({
         title={
           selected?.kind === "camp"
             ? `Barbarian camp ${selected.camp.level}`
-            : selected?.kind === "lair"
-              ? selected.lair.active
-                ? `Bandit lair · level ${selected.lair.level}`
-                : "Empty bandit lair"
             : selected?.kind === "tribe"
               ? selected.tribe.isMe
                 ? "Your tribe"
@@ -1643,77 +1588,6 @@ export const WarMap = ({
                   <Button isFull onClick={() => attackCamp(c)}>
                     <GameIcon e="⚔️" /> Attack camp {c.level}
                   </Button>
-                )}
-              </div>
-            );
-          })()}
-
-        {selected?.kind === "lair" &&
-          (() => {
-            const l = selected.lair;
-            const ground = TERRAIN[l.terrain];
-            const here = (m: Pick<Movement, "kind" | "to" | "lairLevel">) =>
-              m.kind === "outgoing" && !!m.lairLevel && m.to.x === l.x && m.to.y === l.y;
-            const fighting = battles.some(here);
-            const busyLair = fighting || mine.some(here);
-
-            return (
-              <div className="flex flex-col gap-3 pt-2">
-                <div className="flex flex-wrap gap-2 text-xs font-bold">
-                  <span className="pill h-7 px-2">
-                    <GameIcon e={TERRAIN_ICON[l.terrain]} /> {ground.name}
-                    {ground.defense > 0 && ` · +${ground.defense * 100}% defense`}
-                  </span>
-                  <span className="pill h-7 px-2">
-                    <GameIcon e="📍" /> {l.distance} tiles
-                  </span>
-                  {l.active && (
-                    <span className="pill pill-bad h-7 px-2">
-                      <GameIcon e="🛡️" /> {fmt(l.strength * (1 + ground.defense))}
-                    </span>
-                  )}
-                </div>
-                {l.active ? (
-                  <>
-                    <p className="text-sm text-sub">
-                      <GameIcon e="🗡️" /> These bandits ambush merchants and armies whose road passes within {BANDIT.reach}{" "}
-                      tiles (the red ring). Drive them out and the roads around stay safe for{" "}
-                      {Math.round(BANDIT.respawnMs / 3_600_000)} hours, for everyone.
-                    </p>
-                    <p className="text-sm text-sub">
-                      <GameIcon e="🎁" /> Their hoard: {fmt(l.bounty.resources)} of each resource + <GameIcon e="🪙" />{" "}
-                      {fmt(l.bounty.coins)}.
-                    </p>
-                    {seaRoute(data!.home, l).naval && (
-                      <SeaNote camp myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />
-                    )}
-                    {busyLair ? (
-                      <p className="text-sm font-bold text-goldtext">
-                        {fighting ? "Your army is fighting here right now." : "Your army is already on its way."}
-                      </p>
-                    ) : picking ? (
-                      <Button isFull onClick={() => redirectTo((from) => lairTarget(l, from))}>
-                        <GameIcon e="🧭" /> Send army to the lair
-                      </Button>
-                    ) : (
-                      <Button isFull onClick={() => attackLair(l)}>
-                        <GameIcon e="⚔️" /> Clear the lair
-                      </Button>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-sub">
-                    <GameIcon e="🏚️" /> {l.clearedByMe ? "You drove the bandits out." : "Someone drove the bandits out."}{" "}
-                    The roads around are safe
-                    {l.backAt ? (
-                      <>
-                        {" "}
-                        until new bandits move in, in <b className="text-parch">{formatDuration(Math.max(0, l.backAt - now))}</b>.
-                      </>
-                    ) : (
-                      " for now."
-                    )}
-                  </p>
                 )}
               </div>
             );
