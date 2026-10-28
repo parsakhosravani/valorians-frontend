@@ -50,6 +50,14 @@ export function useMapCamera({
   const dragged = useRef(false);
   /** A finger (or the mouse button) is down on the map. */
   const moving = useRef(false);
+  /** The finger has held still and onSettle was already told. */
+  const paused = useRef(false);
+  /**
+   * How far the content has moved under the camera (a new area loaded) in
+   * screen px and map px: a drag or pinch under way carries on from the same
+   * spot instead of jumping back.
+   */
+  const shifts = useRef({ sx: 0, sy: 0, mx: 0, my: 0 });
   const onResizeRef = useRef(onResize);
   const onSettleRef = useRef(onSettle);
   /** Lets `shift` move a drag or pinch that's under way along with the map. */
@@ -118,8 +126,16 @@ export function useMapCamera({
   const busy = useCallback(() => {
     clearTimeout(idle.current);
     idle.current = setTimeout(() => {
-      if (anim.current || fling.current || moving.current) busy();
-      else settle();
+      if (anim.current || fling.current) busy();
+      else if (moving.current) {
+        // Held still with a finger down: say where it is (the next area can
+        // load while they hold), but leave the full settle for when they let go.
+        if (!paused.current) {
+          paused.current = true;
+          onSettleRef.current?.({ ...cam.current });
+        }
+        busy();
+      } else settle();
     }, 160);
   }, [settle]);
 
@@ -180,6 +196,7 @@ export function useMapCamera({
   const set = useCallback(
     (c: Cam) => {
       cam.current = fit({ ...c, z: clampZ(c.z) });
+      paused.current = false;
       busy();
       draw();
     },
@@ -243,7 +260,12 @@ export function useMapCamera({
   const shift = useCallback(
     (dx: number, dy: number) => {
       const c = cam.current;
+      const s = shifts.current;
 
+      s.sx -= dx * c.z;
+      s.sy -= dy * c.z;
+      s.mx += dx;
+      s.my += dy;
       cam.current = { ...c, x: c.x - dx * c.z, y: c.y - dy * c.z };
       // A finger still on the map: move where its drag started too, or the
       // next touch move would snap the map back by the shift.
@@ -270,8 +292,15 @@ export function useMapCamera({
     if (!el || !ready) return;
     const pointers = new Map<number, Pt>();
     /** A drag, in screen coordinates (the map itself may scroll with the page). */
-    let pan: { start: Pt; cam: Cam; moved: boolean; id: number; over: number } | null = null;
-    let pinch: { d: number; z: number; m: Pt } | null = null;
+    type Shifts = typeof shifts.current;
+    let pan: { start: Pt; cam: Cam; moved: boolean; id: number; over: number; base: Shifts } | null = null;
+    let pinch: { d: number; z: number; m: Pt; base: Shifts } | null = null;
+    /** Where the gesture's starting camera has moved to since (a new area loaded under it). */
+    const panCam = (p: NonNullable<typeof pan>): Cam => ({
+      ...p.cam,
+      x: p.cam.x + shifts.current.sx - p.base.sx,
+      y: p.cam.y + shifts.current.sy - p.base.sy,
+    });
     let samples: { x: number; y: number; t: number }[] = [];
     let lastTap: { x: number; y: number; t: number } | null = null;
     let gesture: { z: number; f: Pt } | null = null;
@@ -293,14 +322,14 @@ export function useMapCamera({
     };
     const page = () => el.closest<HTMLElement>(".scrollable");
     const startPan = (id: number, p: Pt, moved: boolean) => {
-      pan = { start: p, cam: { ...cam.current }, moved, id, over: 0 };
+      pan = { start: p, cam: { ...cam.current }, moved, id, over: 0, base: { ...shifts.current } };
       samples = [{ ...p, t: performance.now() }];
     };
     const startPinch = () => {
       const { d, mid } = two();
       const c = cam.current;
 
-      pinch = { d, z: c.z, m: { x: (mid.x - c.x) / c.z, y: (mid.y - c.y) / c.z } };
+      pinch = { d, z: c.z, m: { x: (mid.x - c.x) / c.z, y: (mid.y - c.y) / c.z }, base: { ...shifts.current } };
       dragged.current = true;
     };
 
@@ -333,8 +362,10 @@ export function useMapCamera({
       if (pinch && pointers.size >= 2) {
         const { d, mid } = two();
         const z = clampZ(pinch.z * (d / pinch.d));
+        const mx = pinch.m.x + shifts.current.mx - pinch.base.mx;
+        const my = pinch.m.y + shifts.current.my - pinch.base.my;
 
-        set({ z, x: mid.x - pinch.m.x * z, y: mid.y - pinch.m.y * z });
+        set({ z, x: mid.x - mx * z, y: mid.y - my * z });
 
         return;
       }
@@ -350,6 +381,7 @@ export function useMapCamera({
         // Restart from here so the map doesn't jump by the dead zone.
         pan.start = c;
         pan.cam = { ...cam.current };
+        pan.base = { ...shifts.current };
         try {
           el.setPointerCapture(e.pointerId);
         } catch {
@@ -359,10 +391,12 @@ export function useMapCamera({
 
         return;
       }
-      set({ ...pan.cam, x: pan.cam.x + dx, y: pan.cam.y + dy });
+      const from = panCam(pan);
+
+      set({ ...from, x: from.x + dx, y: from.y + dy });
       // Past the map's top or bottom edge, the rest of the drag scrolls the
       // page, like the old scrolling map did, so nothing under it is ever stuck.
-      const over = pan.cam.y + dy - cam.current.y;
+      const over = from.y + dy - cam.current.y;
       const sc = page();
 
       if (sc && over !== pan.over) {
@@ -371,7 +405,7 @@ export function useMapCamera({
         sc.scrollTop -= over - pan.over;
         // Scrolled the page: the map moved on screen, so carry on from here.
         if (sc.scrollTop !== before) pan.start = { ...pan.start, y: pan.start.y + (before - sc.scrollTop) };
-        pan.over = pan.cam.y + (c.y - pan.start.y) - cam.current.y;
+        pan.over = from.y + (c.y - pan.start.y) - cam.current.y;
       }
       const t = performance.now();
 

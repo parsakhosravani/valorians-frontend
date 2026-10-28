@@ -30,6 +30,7 @@ import {
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
+import { WorldMap } from "./WorldMap";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -44,6 +45,8 @@ import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import {
   BUILDING_BY_ID,
+  MAP_MAX,
+  MAP_MIN,
   RESOURCE_NAMES,
   ResourceId,
   UnitId,
@@ -152,11 +155,23 @@ const T = TILE;
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.2;
 
-/** Map radius (tiles) that fills this box even fully zoomed out. */
+/** The middle of a loaded area of radius r, kept so the area stays inside the world. */
+const keepInWorld = (p: { x: number; y: number }, r: number) => ({
+  x: Math.min(MAP_MAX - 1 - r, Math.max(MAP_MIN + r, Math.round(p.x))),
+  y: Math.min(MAP_MAX - 1 - r, Math.max(MAP_MIN + r, Math.round(p.y))),
+});
+
+/** When the screen comes this close (tiles) to the edge of what's loaded, the next area loads. */
+const EDGE = 8;
+
+/**
+ * Map radius (tiles) that fills this box even fully zoomed out, with room to
+ * drag a good way before the next area has to load.
+ */
 const wantedRadius = (el: HTMLElement | null) => {
   const side = el ? Math.max(el.clientWidth, el.clientHeight) : 0;
 
-  return Math.min(30, Math.max(14, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1));
+  return Math.min(30, Math.max(24, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1 + EDGE));
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
@@ -294,21 +309,34 @@ export const WarMap = ({
   const [redirecting, setRedirecting] = useState<{ army: ArmyOnRoad; target: AttackTarget } | null>(null);
   // The on-the-move list starts folded so it doesn't cover the map; its header shows what's coming.
   const [movesOpen, setMovesOpen] = useState(false);
+  const [worldOpen, setWorldOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const fill = useFillHeight(box);
   const radius = useRef(0);
   const outgoing = useRef<Set<number>>(new Set());
   const centred = useRef(false);
   const goods = useRef<Set<string>>(new Set());
+  // The middle of the loaded area once the player has travelled (null: your
+  // tribe, or the tribe you came to see). Only the newest answer is used, so a
+  // slow poll can't snap the map back to where it was.
+  const centre = useRef<{ x: number; y: number } | null>(null);
+  const asked = useRef(0);
+  // A spot to glide to as soon as the area round it has loaded.
+  const flyTo = useRef<{ x: number; y: number } | null>(null);
 
   const load = useCallback(async () => {
     if (!authHeader) return;
+    const ask = ++asked.current;
+
     try {
+      const r = (radius.current = Math.max(radius.current, wantedRadius(box.current)));
+      const c = centre.current && keepInWorld(centre.current, r);
       const d = await apiRequest<MapData>(
         authHeader,
-        `war/map?r=${(radius.current = Math.max(radius.current, wantedRadius(box.current)))}` +
-          (focusId ? `&focus=${focusId}` : ""),
+        `war/map?r=${r}` + (c ? `&x=${c.x}&y=${c.y}` : focusId ? `&focus=${focusId}` : ""),
       );
+
+      if (ask !== asked.current) return;
       const ids = new Set(
         d.movements.filter((m) => m.kind === "outgoing").map((m) => m.id),
       );
@@ -438,6 +466,23 @@ export const WarMap = ({
       setView((v) =>
         v && v.x0 === next.x0 && v.y0 === next.y0 && v.x1 === next.x1 && v.y1 === next.y1 ? v : next,
       );
+      // Close to the edge of what's loaded (and there's more world that way):
+      // load the area round the middle of the screen.
+      const nearEdge =
+        (next.x0 < ox + EDGE && ox > MAP_MIN) ||
+        (next.y0 < oy + EDGE && oy > MAP_MIN) ||
+        (next.x1 > ox + n - EDGE && ox + n < MAP_MAX) ||
+        (next.y1 > oy + n - EDGE && oy + n < MAP_MAX);
+
+      if (nearEdge) {
+        const want = keepInWorld({ x: (next.x0 + next.x1) / 2, y: (next.y0 + next.y1) / 2 }, radius.current);
+        const was = centre.current ?? data?.center;
+
+        if (!was || was.x !== want.x || was.y !== want.y) {
+          centre.current = want;
+          load();
+        }
+      }
     },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {
@@ -475,8 +520,39 @@ export const WarMap = ({
     }
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A far spot was asked for: once the area round it has loaded, glide there.
+  useLayoutEffect(() => {
+    const f = flyTo.current;
+
+    if (!data || !f || f.x < ox || f.y < oy || f.x >= ox + n || f.y >= oy + n) return;
+    flyTo.current = null;
+    camera.centerOn(px(f.x), py(f.y));
+  }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Go to any tile in the world, loading the area round it first if it's far. */
+  const goTo = (p: { x: number; y: number }) => {
+    if (!data) return;
+    const t = {
+      x: Math.min(MAP_MAX - 1, Math.max(MAP_MIN, Math.round(p.x))),
+      y: Math.min(MAP_MAX - 1, Math.max(MAP_MIN, Math.round(p.y))),
+    };
+    // Well inside what's loaded (or against the world's edge): just glide.
+    const inside = (v: number, o: number) =>
+      v >= (o === MAP_MIN ? o : o + EDGE) && v < (o + n === MAP_MAX ? o + n : o + n - EDGE);
+
+    if (inside(t.x, ox) && inside(t.y, oy)) {
+      flyTo.current = null;
+      camera.centerOn(px(t.x), py(t.y));
+
+      return;
+    }
+    centre.current = keepInWorld(t, radius.current);
+    flyTo.current = t;
+    load();
+  };
+
   const recentre = () => {
-    if (data) camera.centerOn(px(data.home.x), py(data.home.y));
+    if (data) goTo(data.home);
   };
 
   // Tiles with something standing on them: the ground leaves them clear.
@@ -1043,6 +1119,13 @@ export const WarMap = ({
         {data && (
           <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-2">
             <button
+              aria-label="The world"
+              className="w-11 h-11 rounded-full border border-frame bg-gradient-to-b from-[#3A2B1E]/95 to-[#1E1610]/95 shadow-raised flex items-center justify-center active:scale-95 transition-transform"
+              onClick={() => setWorldOpen(true)}
+            >
+              <Image draggable={false} alt="" className="w-7 h-7 object-contain" height={64} src="/images/icons/compass.webp" width={64} />
+            </button>
+            <button
               aria-label="Back to my tribe"
               className="w-11 h-11 rounded-full border-2 border-gold bg-ink/85 shadow-[0_0_12px_rgba(227,169,72,0.55),0_4px_10px_rgba(0,0,0,0.6)] flex items-center justify-center active:scale-95 transition-transform"
               onClick={recentre}
@@ -1254,13 +1337,20 @@ export const WarMap = ({
                   longer the more troops fight. Tap the crossed swords to watch it
                   round by round; the defenders are on the field until it ends.
                 </span>
-                <span>Drag to move around. Pinch, scroll or double-tap to zoom.</span>
+                <span>
+                  Drag to move around: more of the world loads as you go. Pinch, scroll or double-tap to zoom.
+                  The compass opens the whole world: tap a spot or type its x|y to go there.
+                </span>
               </span>
             }
             title="War on the map"
           />
         </div>
       </div>
+
+      {data && (
+        <WorldMap home={data.home} open={worldOpen} view={view} onClose={() => setWorldOpen(false)} onGo={goTo} />
+      )}
 
       {/* What's on the tile you tapped */}
       <Drawer
