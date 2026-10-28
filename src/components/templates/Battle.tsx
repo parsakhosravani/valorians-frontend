@@ -28,10 +28,11 @@ export const Battle = () => {
   const [result, setResult] = useState<BattleReport | null>(null);
   const [revenge, setRevenge] = useState<number | undefined>();
 
-  // /battle?revenge=<playerId> and /battle?tab=<tab> come from the Hall.
+  // /battle?revenge=<playerId> (Hall) or ?target=<playerId> (Leaderboard) opens the map on
+  // that tribe with its card up; /battle?tab=<tab> picks a tab.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    const id = Number(q.get("revenge"));
+    const id = Number(q.get("revenge") || q.get("target"));
     const t = q.get("tab");
 
     if (id) {
