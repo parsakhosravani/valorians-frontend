@@ -205,7 +205,7 @@ type Survey = ReturnType<typeof survey>;
 // ─── 1. Ground ───────────────────────────────────────────────────────────────
 
 /** Samples per tile: the whole-view pieces as sharp as the old whole map, close-ups much finer. */
-const samplesPerTile = (detail: boolean) => (detail ? 44 : 16);
+const samplesPerTile = (detail: boolean) => (detail ? 44 : 26);
 
 const paintSoil = (s: Scene, v: Survey, detail: boolean) => {
   const { ox, oy, n } = s;
@@ -531,7 +531,7 @@ export const DETAIL_CHUNK = 8;
 const pieceScale = (size: number, detail: boolean) => {
   const dpr = window.devicePixelRatio || 1;
 
-  return detail ? Math.min(dpr * 2.2, Math.sqrt(1_300_000) / size) : Math.max(0.75, Math.min(dpr * 1.25, 1.25));
+  return detail ? Math.min(dpr * 2.2, Math.sqrt(1_300_000) / size) : Math.max(0.75, Math.min(dpr * 1.25, 2));
 };
 
 // Painting a piece takes a moment: one at a time, nearest the middle of the
@@ -740,7 +740,7 @@ export const GroundPiece = memo(function GroundPiece({
 });
 
 /** Rough colours, one per tile: shown at once, under the pieces still being painted. */
-const ROUGH: Record<Terrain, V3> = {
+export const ROUGH: Record<Terrain, V3> = {
   plains: [0x80, 0x88, 0x4c],
   forest: [0x3e, 0x58, 0x2e],
   hills: [0x8c, 0x7c, 0x55],
