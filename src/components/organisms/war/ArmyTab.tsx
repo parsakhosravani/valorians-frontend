@@ -290,11 +290,14 @@ export const ArmyTab = () => {
         <Card>
           <h3 className="font-bold text-sm mb-1">Armies returning</h3>
           {state.marches.map((m) => (
-            <div key={m.id} className="text-sm flex justify-between gap-2">
-              <span className="truncate">
-                From {m.target}: <ArmyLine army={m.units} />
-              </span>
-              <span className="text-muted shrink-0">{formatDuration(m.returnsAt - now)}</span>
+            // The troops get their own line: inside the one-line name they were
+            // too wide to fit and the whole army showed as "…".
+            <div key={m.id} className="text-sm flex flex-col gap-0.5 py-0.5">
+              <div className="flex justify-between gap-2">
+                <span className="truncate">From {m.target}</span>
+                <span className="text-muted shrink-0">{formatDuration(m.returnsAt - now)}</span>
+              </div>
+              <ArmyLine army={m.units} className="text-xs" />
             </div>
           ))}
         </Card>
