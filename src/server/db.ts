@@ -45,7 +45,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -308,6 +308,26 @@ async function migrate(client: Client) {
     );
     CREATE INDEX IF NOT EXISTS payments_user ON payments(user_id, created_at DESC);
   `);
+
+  // What other players see of a tribe, copied out of the state on every save
+  // so the map doesn't load every village's whole state (see defenseSnapshot).
+  // def_until: when the copy goes stale (NULL: not until the next save). It
+  // starts at 0, so rows saved before these columns existed count as stale:
+  // the map reads their state, and the cron fills them in (refreshTribeColumns).
+  for (const col of [
+    "town_hall INTEGER NOT NULL DEFAULT 0",
+    "harbor INTEGER NOT NULL DEFAULT 0",
+    "def_troops REAL NOT NULL DEFAULT 0",
+    "def_bonus REAL NOT NULL DEFAULT 0",
+    "def_wall REAL NOT NULL DEFAULT 0",
+    "def_pop REAL NOT NULL DEFAULT 0",
+    "def_growth REAL NOT NULL DEFAULT 0",
+    "def_at INTEGER NOT NULL DEFAULT 0",
+    "def_until INTEGER DEFAULT 0",
+  ]) {
+    await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
+  }
+  await client.execute("CREATE INDEX IF NOT EXISTS users_def_until ON users(def_until)");
 }
 
 /** Shared, lazily-initialised database client. */

@@ -200,7 +200,7 @@ export class GameError extends Error {
   }
 }
 
-const HOUR = 3600 * 1000;
+export const HOUR = 3600 * 1000;
 
 export const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 

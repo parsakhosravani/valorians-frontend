@@ -3,13 +3,13 @@ import "server-only";
 import { lairsAround } from "./bandits";
 import { getDb } from "./db";
 import { Player, avatarUrl } from "./players";
+import { TRIBE_FRESH, TRIBE_SELECT, tribeLook } from "./tribeColumns";
 
 import { storedFlag } from "@/lib/game/clan";
-import { advance, normalizeState } from "@/lib/game/engine";
 import { banditStrength, campDefense, lairBounty, MAX_CAMP_LEVEL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoastal, settledShare, terrainAt } from "@/lib/game/map";
-import { campReward, campStatus, powerScore, scoutEstimate } from "@/lib/game/war";
+import { campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
 import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
 import type { StoredBattle } from "./war";
 
@@ -193,14 +193,16 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   // Everything below only needs the view: ask for it all at once instead of
   // one query after another (each a round trip to the database).
   const [rs, spots, mv, tr, lairsIn] = await Promise.all([
+    // A village's state only comes along when its copied columns are stale (see tribeColumns).
     db.execute({
-      sql: `SELECT u.id, u.username, u.first_name, u.photo_url, u.population, u.power, u.shield_until, u.map_x, u.map_y, u.state,
+      sql: `SELECT u.id, u.username, u.first_name, u.photo_url, u.population, u.power, u.shield_until, u.map_x, u.map_y,
+                   ${TRIBE_SELECT}, CASE WHEN ${TRIBE_FRESH} THEN NULL ELSE u.state END AS state,
                    u.clan_id, c.tag AS clan_tag, c.flag AS clan_flag
             FROM users u LEFT JOIN clans c ON c.id = u.clan_id
             WHERE u.map_x BETWEEN ? AND ? AND u.map_y BETWEEN ? AND ?
             ORDER BY (u.map_x - ?) * (u.map_x - ?) + (u.map_y - ?) * (u.map_y - ?) ASC
             LIMIT ${MAX_TRIBES}`,
-      args: [c.x - r, c.x + r, c.y - r, c.y + r, c.x, c.x, c.y, c.y],
+      args: [now, c.x - r, c.x + r, c.y - r, c.y + r, c.x, c.x, c.y, c.y],
     }),
     // Your own barbarian camps: beaten ones, the next one, and two you can see beyond.
     campSpots(me.id, home, shown),
@@ -238,7 +240,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const tribes = rs.rows.map((row) => {
     const id = Number(row.id);
     const p = { x: Number(row.map_x), y: Number(row.map_y) };
-    const s = advance(normalizeState(JSON.parse(String(row.state))), now);
+    const look = tribeLook(row, now);
 
     return {
       id,
@@ -249,15 +251,15 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       isMe: id === me.id,
       population: Math.floor(Number(row.population)),
       power: Math.round(Number(row.power)),
-      townHall: s.buildings["town-hall"] ?? 0,
+      townHall: look.townHall,
       /** On the sea's edge: can be attacked from the sea, and fights better there. */
       coastal: isCoastal(p),
       /** Harbors are seen from afar; each level makes landings harder. */
-      harbor: s.buildings["harbor"] ?? 0,
+      harbor: look.harbor,
       shieldUntil: Number(row.shield_until),
       terrain: terrainAt(p.x, p.y),
       distance: Math.round(distance(home, p) * 10) / 10,
-      defense: id === me.id ? null : scoutEstimate(s, me.state),
+      defense: id === me.id ? null : scoutFromDefense(look.defense, me.state),
       clan:
         row.clan_id == null
           ? null

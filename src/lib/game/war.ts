@@ -39,6 +39,7 @@ import {
   Army,
   GameError,
   GameState,
+  HOUR,
   breakShield,
   cloneState,
   emptyArmy,
@@ -962,9 +963,58 @@ export function checkCamp(s: GameState, level: number, now: number) {
   if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");
 }
 
+/**
+ * A tribe's defense as others see it, kept with every save so the map doesn't
+ * have to load and advance every village's whole state. Defense only changes
+ * in steps (a building finishing, an army coming home, a troop finishing
+ * training) and, between them, with population, which grows at a steady
+ * rate. So until the next step (`until`, null for none) `defenseAt` gives
+ * exactly what `defensePower` of the advanced state would.
+ */
+export type DefenseSnapshot = {
+  /** Troops and the Watchtower's flat defense. */
+  troops: number;
+  bonus: number;
+  wall: number;
+  /** Population at `at`, and its growth per hour. */
+  pop: number;
+  growth: number;
+  at: number;
+  until: number | null;
+};
+
+export function defenseSnapshot(s: GameState): DefenseSnapshot {
+  const r = getRates(s);
+  const troops = UNIT_IDS.reduce((sum, u) => sum + unitDefense(s, u) * s.army[u], 0);
+  const steps = [
+    ...s.queue.map((q) => q.endsAt),
+    ...s.marches.map((m) => m.returnsAt),
+    ...s.training.filter((t) => t.done < t.count).map((t) => t.startsAt + (t.done + 1) * t.perUnitMs),
+  ];
+
+  return {
+    troops: troops + r.flatDefense,
+    bonus: r.defenseBonus,
+    wall: r.wallBonus,
+    pop: s.population,
+    growth: r.growthPerHour,
+    at: s.updatedAt,
+    until: steps.length ? Math.min(...steps) : null,
+  };
+}
+
+/** Defense at `now`, from a snapshot still good then (now < until). Same sums as defensePower. */
+export const defenseAt = (d: DefenseSnapshot, now: number) =>
+  (d.troops + militiaDefense(d.pop + d.growth * (Math.max(0, now - d.at) / HOUR))) * (1 + d.bonus) * (1 + d.wall);
+
 /** What the attacker sees about a target before attacking. */
 export function scoutEstimate(target: GameState, attacker: GameState) {
-  const exact = Math.round(defensePower(target));
+  return scoutFromDefense(defensePower(target), attacker);
+}
+
+/** scoutEstimate from the target's defense (see defenseAt). */
+export function scoutFromDefense(defense: number, attacker: GameState) {
+  const exact = Math.round(defense);
   if (getRates(attacker).canScout) return { min: exact, max: exact, exact: true };
   // Without scouts you only learn the range it falls in (e.g. 512–1,024).
   const low = Math.pow(2, Math.floor(Math.log2(Math.max(1, exact))));
