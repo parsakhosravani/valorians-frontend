@@ -737,42 +737,69 @@ export const WarMap = ({
   // The zoom the camera last came to rest at: labels shrink less than the land,
   // so how crowded the map looks depends on it.
   const [restZoom, setRestZoom] = useState(1);
+  // An area round a new spot is on its way: no other is asked for until it
+  // lands. Asking again on every move threw each answer away for the next,
+  // so while you kept dragging nothing ever arrived.
+  const edgeLoading = useRef(false);
+
+  /** The tiles on screen for camera (x, y, z), or null before the map is laid out. */
+  const tilesOnScreen = (x: number, y: number, z: number) => {
+    const el = camera.viewport.current;
+
+    if (!el || !n) return null;
+
+    return {
+      x0: Math.floor(ox - x / z / T),
+      y0: Math.floor(oy - y / z / T),
+      x1: Math.ceil(ox + (el.clientWidth - x) / z / T),
+      y1: Math.ceil(oy + (el.clientHeight - y) / z / T),
+    };
+  };
+
+  /**
+   * Close to the edge of what's loaded (and there's more world that way):
+   * load the area round the middle of the screen.
+   */
+  const loadIfNearEdge = (next: { x0: number; y0: number; x1: number; y1: number }) => {
+    const nearEdge =
+      (next.x0 < ox + EDGE && ox > MAP_MIN) ||
+      (next.y0 < oy + EDGE && oy > MAP_MIN) ||
+      (next.x1 > ox + n - EDGE && ox + n < MAP_MAX) ||
+      (next.y1 > oy + n - EDGE && oy + n < MAP_MAX);
+
+    if (!nearEdge || edgeLoading.current) return;
+    const want = keepInWorld({ x: (next.x0 + next.x1) / 2, y: (next.y0 + next.y1) / 2 }, radius.current);
+    const was = centre.current ?? data?.center;
+
+    if (!was || was.x !== want.x || was.y !== want.y) {
+      centre.current = want;
+      edgeLoading.current = true;
+      load().finally(() => {
+        edgeLoading.current = false;
+      });
+    }
+  };
+
   const camera = useMapCamera({
     size: n * T,
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
     onSettle: ({ x, y, z }) => {
-      const el = camera.viewport.current;
-
       setRestZoom(Math.round(z * 20) / 20);
-      if (!el || !n) return;
-      const next = {
-        x0: Math.floor(ox - x / z / T),
-        y0: Math.floor(oy - y / z / T),
-        x1: Math.ceil(ox + (el.clientWidth - x) / z / T),
-        y1: Math.ceil(oy + (el.clientHeight - y) / z / T),
-      };
+      const next = tilesOnScreen(x, y, z);
 
+      if (!next) return;
       setView((v) =>
         v && v.x0 === next.x0 && v.y0 === next.y0 && v.x1 === next.x1 && v.y1 === next.y1 ? v : next,
       );
-      // Close to the edge of what's loaded (and there's more world that way):
-      // load the area round the middle of the screen.
-      const nearEdge =
-        (next.x0 < ox + EDGE && ox > MAP_MIN) ||
-        (next.y0 < oy + EDGE && oy > MAP_MIN) ||
-        (next.x1 > ox + n - EDGE && ox + n < MAP_MAX) ||
-        (next.y1 > oy + n - EDGE && oy + n < MAP_MAX);
+      loadIfNearEdge(next);
+    },
+    // Mid-drag too: the next area loads before the map runs out under the
+    // finger, not only once it comes to rest against the edge.
+    onMove: ({ x, y, z }) => {
+      const next = tilesOnScreen(x, y, z);
 
-      if (nearEdge) {
-        const want = keepInWorld({ x: (next.x0 + next.x1) / 2, y: (next.y0 + next.y1) / 2 }, radius.current);
-        const was = centre.current ?? data?.center;
-
-        if (!was || was.x !== want.x || was.y !== want.y) {
-          centre.current = want;
-          load();
-        }
-      }
+      if (next) loadIfNearEdge(next);
     },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {

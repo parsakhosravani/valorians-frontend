@@ -1,5 +1,5 @@
 "use client";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Terrain, terrainAt } from "@/lib/game/map";
 
@@ -784,7 +784,9 @@ export const ROUGH: Record<Terrain, V3> = {
 export const GroundOverview = memo(function GroundOverview({ ox, oy, n }: { ox: number; oy: number; n: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
+  // Before the frame is shown: drawn after it, a new area showed the old
+  // area's colours for a frame, shifted by the whole move, and the land jumped.
+  useLayoutEffect(() => {
     const c = ref.current;
 
     if (!c || !n) return;
