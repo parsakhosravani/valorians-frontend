@@ -1,5 +1,5 @@
 "use client";
-import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 
 import { PieceJob, TILE, V3, paintBlob } from "./landPaint";
 
@@ -178,14 +178,13 @@ const paint = (job: PieceJob): Promise<Blob | null> => {
 
 /**
  * One square piece of land, `n` tiles a side with its top-left tile at
- * (x, y), placed at (left, top) on the map layer.
+ * (x, y). Puts nothing on the page: it hands its decoded picture to the
+ * map's canvas (null when it goes).
  */
 export const GroundPiece = memo(function GroundPiece({
   x,
   y,
   n,
-  left,
-  top,
   occupied,
   home = "",
   detail = false,
@@ -196,13 +195,7 @@ export const GroundPiece = memo(function GroundPiece({
   x: number;
   y: number;
   n: number;
-  left: number;
-  top: number;
-  /**
-   * For a map drawn on a canvas: the piece hands over its decoded picture
-   * (null when it goes) instead of putting an <img> on the page.
-   */
-  onImage?: (img: HTMLImageElement | null) => void;
+  onImage: (img: HTMLImageElement | null) => void;
   /** "x,y" tiles with a tribe or camp on or next to this piece: no trees under them. */
   occupied: string;
   /** "x,y" of your tribe when its territory reaches this piece. */
@@ -215,7 +208,6 @@ export const GroundPiece = memo(function GroundPiece({
   prio?: number;
 }) {
   const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}`;
-  const [shown, setShown] = useState<string | null>(null);
   const held = useRef<string | null>(null);
   const prioRef = useRef(prio);
   const onImageRef = useRef(onImage);
@@ -242,8 +234,7 @@ export const GroundPiece = memo(function GroundPiece({
           const prev = held.current;
 
           held.current = k;
-          if (onImageRef.current) onImageRef.current(img);
-          else setShown(e.url);
+          onImageRef.current(img);
           if (prev) release(prev);
         });
     };
@@ -271,24 +262,12 @@ export const GroundPiece = memo(function GroundPiece({
     () => () => {
       if (held.current) release(held.current);
       held.current = null;
-      onImageRef.current?.(null);
+      onImageRef.current(null);
     },
     [],
   );
 
-  if (!shown || onImage) return null;
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      alt=""
-      aria-hidden="true"
-      className="absolute max-w-none pointer-events-none"
-      draggable={false}
-      src={shown}
-      style={{ left, top, width: n * TILE, height: n * TILE }}
-    />
-  );
+  return null;
 });
 
 /** Rough colours, one per tile: shown at once, under the pieces still being painted. */
@@ -304,7 +283,8 @@ export const ROUGH: Record<Terrain, V3> = {
 /**
  * The whole loaded area at one pixel per tile, stretched soft under the
  * pieces: while a piece is still being painted, the land under it shows in
- * its rough colours instead of an empty blue box.
+ * its rough colours instead of an empty blue box. Painted on a hidden canvas
+ * and handed to the map's canvas.
  */
 export const GroundOverview = memo(function GroundOverview({
   ox,
@@ -315,14 +295,13 @@ export const GroundOverview = memo(function GroundOverview({
   ox: number;
   oy: number;
   n: number;
-  /** For a map drawn on a canvas: hands over the painted backdrop instead of showing it. */
-  onCanvas?: (c: HTMLCanvasElement | null) => void;
+  onCanvas: (c: HTMLCanvasElement | null) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const onCanvasRef = useRef(onCanvas);
 
   onCanvasRef.current = onCanvas;
-  useEffect(() => () => onCanvasRef.current?.(null), []);
+  useEffect(() => () => onCanvasRef.current(null), []);
 
   // Before the frame is shown: drawn after it, a new area showed the old
   // area's colours for a frame, shifted by the whole move, and the land jumped.
@@ -347,15 +326,8 @@ export const GroundOverview = memo(function GroundOverview({
         img.data[p + 3] = 255;
       }
     g.putImageData(img, 0, 0);
-    onCanvasRef.current?.(c);
+    onCanvasRef.current(c);
   }, [ox, oy, n]);
 
-  return (
-    <canvas
-      ref={ref}
-      aria-hidden="true"
-      className={onCanvas ? "hidden" : "absolute left-0 top-0"}
-      style={{ width: n * TILE, height: n * TILE }}
-    />
-  );
+  return <canvas ref={ref} aria-hidden="true" className="hidden" />;
 });
