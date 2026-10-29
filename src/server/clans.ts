@@ -323,6 +323,51 @@ export async function clanView(player: Player, search?: string) {
 
 export type ClanView = Awaited<ReturnType<typeof clanView>>;
 
+/**
+ * Any clan as the world sees it, for exploring from outside: banner, motto,
+ * rank, techs and who's in it. Never its treasury, log or join requests.
+ */
+export async function clanPublic(clanId: number) {
+  const db = await getDb();
+  const [own, members, rank] = await db.batch(
+    [
+      { sql: `SELECT * FROM (${CLAN_TOTALS}) t WHERE t.id = ?`, args: [clanId] },
+      {
+        sql: `SELECT id, username, first_name, population, power, wins, clan_role
+              FROM users WHERE clan_id = ? ORDER BY population DESC, id ASC`,
+        args: [clanId],
+      },
+      {
+        sql: `SELECT COUNT(*) + 1 AS rank FROM (${CLAN_TOTALS}) t
+              WHERE t.population > (SELECT COALESCE(SUM(population), 0) FROM users WHERE clan_id = ?)`,
+        args: [clanId],
+      },
+    ],
+    "read"
+  );
+  const row = own.rows[0];
+
+  if (!row) throw new GameError("That clan is gone", "not_found");
+  const techs = techsOf(row);
+
+  return {
+    ...summary(row),
+    rank: Number(rank.rows[0].rank),
+    techs: CLAN_TECHS.map((t) => ({ id: t.id, level: techs[t.id] })),
+    members: members.rows.map((m) => ({
+      id: Number(m.id),
+      name: memberName(m),
+      photoUrl: avatarUrl(Number(m.id)),
+      population: Math.floor(Number(m.population)),
+      power: Math.floor(Number(m.power)),
+      wins: Number(m.wins ?? 0),
+      role: roleOf(row, Number(m.id), m.clan_role),
+    })),
+  };
+}
+
+export type ClanPublic = Awaited<ReturnType<typeof clanPublic>>;
+
 // ─── Founding & membership ───────────────────────────────────────────────────
 
 const checkName = (name: string) => {

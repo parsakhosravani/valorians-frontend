@@ -1,6 +1,7 @@
 "use client";
 import React, { FunctionComponent, useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import clsx from "clsx";
 
 import bg from "~/images/background/friends.webp";
@@ -11,6 +12,7 @@ import coinImg from "~/images/resources/coin.webp";
 import { Card, Tabs, fmt } from "@/components/organisms/war/shared";
 import { FlagDesigner } from "@/components/organisms/clan/FlagDesigner";
 import { Avatar } from "@/components/molecules/Avatar";
+import { Drawer } from "@/components/molecules/Drawer";
 import { Button } from "@/components/atoms/Button";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
 import { Coin } from "@/components/molecules/Coin";
@@ -36,13 +38,13 @@ import {
   canKick,
   defaultFlag,
 } from "@/lib/game/clan";
-import type { ClanView } from "@/server/clans";
+import type { ClanPublic, ClanView } from "@/server/clans";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 type Mine = NonNullable<ClanView["mine"]>;
 type Member = Mine["members"][number];
 type BrowseTab = "browse" | "found";
-type ClanTab = "members" | "treasury" | "banner" | "chronicle";
+type ClanTab = "members" | "treasury" | "banner" | "chronicle" | "explore";
 
 const inputCls = "inset w-full h-10 px-3 text-sm font-bold text-parch placeholder:text-muted/70 outline-none focus:border-gold";
 
@@ -168,6 +170,115 @@ const AmountInput = ({ value, onChange, max }: { value: string; onChange: (v: st
   </div>
 );
 
+/** A clan's techs as small chips: what each one gives, or "none yet". */
+const TechChips = ({ techs }: { techs: { id: TechId; level: number }[] }) => (
+  <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
+    {CLAN_TECHS.filter((t) => t.id !== "hall").map((t) => {
+      const lvl = techs.find((x) => x.id === t.id)?.level ?? 0;
+
+      return (
+        <span
+          key={t.id}
+          className={clsx(
+            "px-2 py-1 rounded-lg border",
+            lvl ? "bg-[#1C2A14] border-good/60 text-good" : "bg-ink/50 border-line text-muted"
+          )}
+        >
+          <GameIcon e={t.icon} /> {lvl ? t.effect(lvl) : `${t.name}: none yet`}
+        </span>
+      );
+    })}
+  </div>
+);
+
+/**
+ * Any clan, seen from outside: its banner, standing, techs and members.
+ * A member opens their village on the war map.
+ */
+const ClanSheet = ({ id, meId, onClose }: { id: number | null; meId: number; onClose: () => void }) => {
+  const { authHeader } = useGame();
+  const [c, setC] = useState<ClanPublic | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (id == null || !authHeader) return;
+    let live = true;
+
+    setC(null);
+    setError(null);
+    apiRequest<ClanPublic>(authHeader, `clan/view?id=${id}`)
+      .then((v) => live && setC(v))
+      .catch((e) => live && setError((e as Error).message));
+
+    return () => {
+      live = false;
+    };
+  }, [id, authHeader]);
+
+  return (
+    <Drawer isOpen={id != null} position="bottom" title={c ? c.name : "Clan"} onClose={onClose}>
+      {error && <p className="text-sm text-bad py-4 text-center">{error}</p>}
+      {!c && !error && (
+        <div className="flex flex-col gap-2 py-2">
+          <Bone className="h-16 rounded-xl" />
+          <Bone className="h-12 rounded-xl" />
+          <Bone className="h-12 rounded-xl" />
+        </div>
+      )}
+      {c && (
+        <div className="flex flex-col gap-3 pt-1 pb-2">
+          <div className="flex items-center gap-3">
+            <ClanFlag flag={c.flag} size={64} title={`${c.name} flag`} />
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Tag tag={c.tag} />
+                <span className="text-[11px] font-bold text-goldtext">Level {c.level}</span>
+                {c.joinMode !== "open" && (
+                  <span className="text-[11px] font-bold text-muted">
+                    <IconText text={c.joinMode === "request" ? "✉️ By request" : "🔒 Closed"} />
+                  </span>
+                )}
+              </div>
+              <span className="text-sub text-xs">{c.description || "Stand together, raid together, rise together."}</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            <Stat label="Rank" value={`#${fmt(c.rank)}`} />
+            <Stat label="Members" value={`${c.members.length}/${c.maxMembers}`} />
+            <Stat label="Population" value={compact(c.population)} />
+            <Stat label="Power" value={compact(c.power)} />
+          </div>
+
+          <TechChips techs={c.techs} />
+
+          <SectionTitle>Members</SectionTitle>
+          <div className="flex flex-col gap-1.5">
+            {[...c.members]
+              .sort((a, b) => ROLE_ORDER[a.role] - ROLE_ORDER[b.role] || b.population - a.population)
+              .map((m) => (
+                <Link
+                  key={m.id}
+                  aria-label={m.id === meId ? "Your tribe on the map" : `${m.name} on the map`}
+                  className="card-flat flex items-center gap-2.5 px-2.5 py-2 active:scale-[0.98] transition-transform"
+                  href={(m.id === meId ? "/battle?tab=map" : `/battle?target=${m.id}`) as any}
+                >
+                  <Avatar className="rounded-lg border border-line" size={32} src={m.photoUrl} />
+                  <span className="flex-1 min-w-0 truncate font-bold text-sm">
+                    {ROLE_ICON[m.role] && <GameIcon e={ROLE_ICON[m.role]} />} {m.name}
+                    {m.id === meId && " (you)"}
+                  </span>
+                  <TextImage direction="row" imgAlt="population" imgSrc={population} size="small" title={compact(m.population)} />
+                  <span className="text-muted text-xs"><GameIcon e="🗺️" /></span>
+                </Link>
+              ))}
+          </div>
+        </div>
+      )}
+    </Drawer>
+  );
+};
+
 /** The last clan screen loaded, so coming back to the tab is instant. */
 let cache: { playerId: number; view: ClanView } | null = null;
 
@@ -217,6 +328,8 @@ export const Clan: FunctionComponent = () => {
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [openMember, setOpenMember] = useState<number | null>(null);
   const [confirmTransfer, setConfirmTransfer] = useState<number | null>(null);
+  // A clan opened from the list, seen from outside.
+  const [viewing, setViewing] = useState<number | null>(null);
 
   // Found-a-clan form
   const [name, setName] = useState("");
@@ -728,6 +841,61 @@ export const Clan: FunctionComponent = () => {
     );
   };
 
+  /**
+   * Every clan, strongest first: tap one to see it from outside. Out of a
+   * clan you can join from here; in one, it's for keeping an eye on the rest.
+   */
+  const clanList = data && (
+    <div className="flex flex-col gap-2">
+      <input
+        className={inputCls}
+        placeholder="Search by name or tag"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      {data.clans.length === 0 && (
+        <Card className="text-center text-sm text-sub">
+          {query ? "No clans match that search." : "No clans yet. Be the first to found one!"}
+        </Card>
+      )}
+      {data.clans.map((c, i) => (
+        <Card key={c.id} className={clsx("flex items-center gap-2.5 !py-2", c.id === mine?.id && "!border-gold")}>
+          <button
+            aria-label={`See ${c.name}`}
+            className="flex items-center gap-2.5 min-w-0 flex-1 text-left active:scale-[0.98] transition-transform"
+            type="button"
+            onClick={() => setViewing(c.id)}
+          >
+            <div className="flex flex-col items-center w-9 shrink-0">
+              <ClanFlag flag={c.flag} size={40} title={`${c.name} flag`} />
+              {!query && <span className="text-[10px] font-extrabold text-muted">#{i + 1}</span>}
+            </div>
+            <div className="flex flex-col min-w-0 flex-1 gap-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Tag tag={c.tag} />
+                <span className="font-bold truncate">{c.name}</span>
+                {c.id === mine?.id && <span className="text-[10px] font-extrabold text-goldtext shrink-0">YOURS</span>}
+              </div>
+              {c.description && <span className="text-[11px] text-sub line-clamp-2">{c.description}</span>}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-bold text-sub">
+                <span className="text-goldtext">Lv {c.level}</span>
+                <span>
+                  <GameIcon e="👥" /> {c.members}/{c.maxMembers}
+                </span>
+                <TextImage direction="row" imgAlt="population" imgSrc={population} size="small" title={compact(c.population)} />
+                {c.joinMode !== "open" && (
+                  <span className="text-muted"><IconText text={c.joinMode === "request" ? "✉️ By request" : "🔒 Closed"} /></span>
+                )}
+                {c.minPopulation > 0 && <span className="text-muted">min {compact(c.minPopulation)}</span>}
+              </div>
+            </div>
+          </button>
+          {mine ? <span className="text-muted shrink-0">›</span> : joinButton(c)}
+        </Card>
+      ))}
+    </div>
+  );
+
   // Before the clan has loaded, the player's badge already says which clan they're in.
   const badge = !data && me.clan ? me.clan : null;
 
@@ -814,23 +982,7 @@ export const Clan: FunctionComponent = () => {
               <Stat label="Power" value={compact(mine.power)} />
             </div>
 
-            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
-              {CLAN_TECHS.filter((t) => t.id !== "hall").map((t) => {
-                const lvl = mine.techs.find((x) => x.id === t.id)?.level ?? 0;
-
-                return (
-                  <span
-                    key={t.id}
-                    className={clsx(
-                      "px-2 py-1 rounded-lg border",
-                      lvl ? "bg-[#1C2A14] border-good/60 text-good" : "bg-ink/50 border-line text-muted"
-                    )}
-                  >
-                    <GameIcon e={t.icon} /> {lvl ? t.effect(lvl) : `${t.name}: none yet`}
-                  </span>
-                );
-              })}
-            </div>
+            <TechChips techs={mine.techs} />
 
             <Tabs
               tabs={[
@@ -838,6 +990,7 @@ export const Clan: FunctionComponent = () => {
                 { id: "treasury", label: "Treasury" },
                 { id: "banner", label: "Banner" },
                 { id: "chronicle", label: "Log" },
+                { id: "explore", label: "Explore" },
               ]}
               value={tab}
               onChange={setTab}
@@ -847,6 +1000,8 @@ export const Clan: FunctionComponent = () => {
             {tab === "treasury" && treasuryTab}
             {tab === "banner" && bannerTab}
             {tab === "chronicle" && chronicleTab}
+            {/* Being in a clan doesn't shut you off from the rest of the world. */}
+            {tab === "explore" && clanList}
           </>
         )}
 
@@ -861,48 +1016,7 @@ export const Clan: FunctionComponent = () => {
               onChange={setBrowseTab}
             />
 
-            {browseTab === "browse" && (
-              <div className="flex flex-col gap-2">
-                <input
-                  className={inputCls}
-                  placeholder="Search by name or tag"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {data.clans.length === 0 && (
-                  <Card className="text-center text-sm text-sub">
-                    {query ? "No clans match that search." : "No clans yet. Be the first to found one!"}
-                  </Card>
-                )}
-                {data.clans.map((c, i) => (
-                  <Card key={c.id} className="flex items-center gap-2.5 !py-2">
-                    <div className="flex flex-col items-center w-9 shrink-0">
-                      <ClanFlag flag={c.flag} size={40} title={`${c.name} flag`} />
-                      {!query && <span className="text-[10px] font-extrabold text-muted">#{i + 1}</span>}
-                    </div>
-                    <div className="flex flex-col min-w-0 flex-1 gap-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Tag tag={c.tag} />
-                        <span className="font-bold truncate">{c.name}</span>
-                      </div>
-                      {c.description && <span className="text-[11px] text-sub line-clamp-2">{c.description}</span>}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] font-bold text-sub">
-                        <span className="text-goldtext">Lv {c.level}</span>
-                        <span>
-                          <GameIcon e="👥" /> {c.members}/{c.maxMembers}
-                        </span>
-                        <TextImage direction="row" imgAlt="population" imgSrc={population} size="small" title={compact(c.population)} />
-                        {c.joinMode !== "open" && (
-                          <span className="text-muted"><IconText text={c.joinMode === "request" ? "✉️ By request" : "🔒 Closed"} /></span>
-                        )}
-                        {c.minPopulation > 0 && <span className="text-muted">min {compact(c.minPopulation)}</span>}
-                      </div>
-                    </div>
-                    {joinButton(c)}
-                  </Card>
-                ))}
-              </div>
-            )}
+            {browseTab === "browse" && clanList}
 
             {browseTab === "found" && (
               <Card className="flex flex-col gap-3">
@@ -989,6 +1103,8 @@ export const Clan: FunctionComponent = () => {
           </>
         )}
       </div>
+
+      <ClanSheet id={viewing} meId={me.id} onClose={() => setViewing(null)} />
 
       <Image
         priority
