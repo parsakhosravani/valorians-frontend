@@ -1132,12 +1132,16 @@ export const WarMap = ({
                 );
               })}
 
-              {/* Caravans and armies on the road */}
+              {/* Caravans and armies on the road. Keyed on the loaded area too: a
+                  new area moves every token's px by a whole area at once, and the
+                  camera makes up for it instantly, but the tokens' one-second glide
+                  would slide them across the map from the wrong spot. A new token
+                  starts where it belongs. */}
               {(data.caravans ?? [])
                 .filter((c) => c.arrivesAt > now)
                 .map((c) => (
                   <CaravanToken
-                    key={`t${c.id}`}
+                    key={`${ox},${oy}t${c.id}`}
                     amount={c.amount}
                     from={{ x: px(c.from.x), y: py(c.from.y) }}
                     kind={c.kind}
@@ -1155,7 +1159,7 @@ export const WarMap = ({
 
                 return (
                   <ArmyToken
-                    key={`b${m.id}`}
+                    key={`${ox},${oy}b${m.id}`}
                     atSea={atSea}
                     from={{ x: px(m.from.x), y: py(m.from.y) }}
                     incoming={false}
@@ -1184,7 +1188,7 @@ export const WarMap = ({
 
                 return (
                   <ArmyToken
-                    key={`t${m.id}`}
+                    key={`${ox},${oy}t${m.id}`}
                     atSea={atSea}
                     from={{ x: px(m.from.x), y: py(m.from.y) }}
                     incoming={m.kind === "incoming"}
