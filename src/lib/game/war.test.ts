@@ -52,6 +52,21 @@ test("camp: strong army wins, gets reward on return, unlocks next camp", () => {
   expect(back.coins).toBeGreaterThan(state.coins + 99);
 });
 
+test("loot all lands at home, even past the warehouse's capacity", () => {
+  const s = withBarracks();
+  s.army.spearman = 50;
+  const { state, report } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 50 }, T0, 0.5);
+  expect(report.attackerWon).toBe(true);
+  const cap = E.getRates(state).capacity;
+  // Storage full when the army gets home.
+  state.resources = { iron: cap, wood: cap, clay: cap, crop: cap };
+  state.updatedAt = report.returnsAt;
+
+  const back = E.advance(state, report.returnsAt + 1);
+  expect(state.marches[0].loot.iron).toBeGreaterThan(0);
+  expect(back.resources.iron).toBe(cap + state.marches[0].loot.iron);
+});
+
 test("camp: weak army is wiped out", () => {
   const s = withBarracks();
   s.army.spearman = 2; // 24 attack vs 80
