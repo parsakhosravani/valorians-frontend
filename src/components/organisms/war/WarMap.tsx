@@ -1387,7 +1387,8 @@ export const WarMap = ({
                   <span className="text-base"><GameIcon e="⚔️" /></span>
                   <span className="flex-1 min-w-0 truncate">
                     To <b>{m.to.name}</b>
-                    <span className="block text-xs text-muted truncate">
+                    {/* Not truncated: a whole army too wide for one line showed as "…". */}
+                    <span className="block text-xs text-muted">
                       {m.units && <ArmyLine army={m.units} />}
                     </span>
                   </span>
@@ -1405,7 +1406,7 @@ export const WarMap = ({
                   <span className="text-base">↩️</span>
                   <span className="flex-1 min-w-0 truncate">
                     Back from <b>{m.target}</b>
-                    <span className="block text-xs text-muted truncate">
+                    <span className="block text-xs text-muted">
                       <ArmyLine army={m.units} />
                     </span>
                   </span>
