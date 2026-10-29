@@ -35,6 +35,7 @@ import {
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
+import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, SAND, VILLAGE_GROW, VILLAGE_MIN, VX, VY } from "./MapCanvas";
 import { WorldMap } from "./WorldMap";
 
 import { Button } from "@/components/atoms/Button";
@@ -196,14 +197,27 @@ const TERRAIN_ICON: Record<Terrain, string> = {
   sea: "🌊",
 };
 
-const SAND = "#C8B27A";
+// Village markers: smallest picture (Town Hall 0), how much bigger they grow,
+// and the tile's centre inside the marker's box. Shared with the canvas map
+// (MapCanvas), so both draw villages the same.
 
-/** Village markers: smallest picture (Town Hall 0), how much bigger they grow, and the
- *  tile's centre inside the marker's box. */
-const VILLAGE_MIN = 34;
-const VILLAGE_GROW = 12;
-const VX = 36;
-const VY = 34;
+/**
+ * The map drawn on a canvas (MapCanvas) instead of as page elements. On with
+ * `?map=canvas`, off with `?map=dom`; remembered on this device.
+ */
+const MAP_RENDERER_KEY = "war-map-renderer";
+const canvasMapWanted = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    const asked = new URLSearchParams(window.location.search).get("map");
+
+    if (asked === "canvas" || asked === "dom") localStorage.setItem(MAP_RENDERER_KEY, asked);
+
+    return localStorage.getItem(MAP_RENDERER_KEY) === "canvas";
+  } catch {
+    return false;
+  }
+};
 
 /**
  * From this zoom up every village shows its name and every camp its full tag.
@@ -761,6 +775,9 @@ export const WarMap = ({
   // The on-the-move list starts folded so it doesn't cover the map; its header shows what's coming.
   const [movesOpen, setMovesOpen] = useState(false);
   const [worldOpen, setWorldOpen] = useState(false);
+  // Read once: before the map has loaded the page shows the same either way.
+  const [canvasMap] = useState(canvasMapWanted);
+  const painter = useRef<MapPainter | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const fill = useFillHeight(box);
   const radius = useRef(0);
@@ -894,17 +911,32 @@ export const WarMap = ({
 
   /** The tiles on screen for camera (x, y, z), or null before the map is laid out. */
   const tilesOnScreen = (x: number, y: number, z: number) => {
-    const el = camera.viewport.current;
+    // The camera's kept size: reading it from the page here forced a layout on every move.
+    const s = camera.size();
 
-    if (!el || !n) return null;
+    if (!s || !n) return null;
 
     return {
       x0: Math.floor(MAP_MIN - x / z / T),
       y0: Math.floor(MAP_MIN - y / z / T),
-      x1: Math.ceil(MAP_MIN + (el.clientWidth - x) / z / T),
-      y1: Math.ceil(MAP_MIN + (el.clientHeight - y) / z / T),
+      x1: Math.ceil(MAP_MIN + (s.w - x) / z / T),
+      y1: Math.ceil(MAP_MIN + (s.h - y) / z / T),
     };
   };
+
+  type Tiles = { x0: number; y0: number; x1: number; y1: number };
+  /**
+   * Which land pieces a view needs (see `ground`): a drag only has to re-lay
+   * the ground when this changes, every 8 or 16 tiles, not every few tiles.
+   */
+  const pieceSpan = (v: Tiles) =>
+    [CHUNK, DETAIL_CHUNK]
+      .map((size, i) => {
+        const m = i ? 0 : 4;
+
+        return [v.x0 - m, v.y0 - m, v.x1 + m - 1, v.y1 + m - 1].map((t) => Math.floor(t / size)).join(",");
+      })
+      .join("|");
 
   /**
    * Close to the edge of what's loaded (and there's more world that way):
@@ -953,6 +985,8 @@ export const WarMap = ({
   const camera = useMapCamera({
     // The whole world: the camera is never fenced in by what's loaded.
     size: data ? MAP_SIZE * T : 0,
+    // Canvas map: drawn again every frame the camera moves.
+    onDraw: canvasMap ? (c) => painter.current?.setCamera(c) : undefined,
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
     onSettle: ({ x, y, z }) => {
@@ -963,7 +997,8 @@ export const WarMap = ({
       setView((v) =>
         v && v.x0 === next.x0 && v.y0 === next.y0 && v.x1 === next.x1 && v.y1 === next.y1 ? v : next,
       );
-      updateCull(next);
+      // The canvas draws only what's on screen by itself.
+      if (!canvasMap) updateCull(next);
       loadIfNearEdge(next);
     },
     // Mid-drag too: the next area loads before the map runs out under the
@@ -973,15 +1008,11 @@ export const WarMap = ({
       const next = tilesOnScreen(x, y, z);
 
       if (!next) return;
-      updateCull(next);
+      if (!canvasMap) updateCull(next);
       loadIfNearEdge(next);
       // The land follows a long drag too (it can now go past what's loaded),
-      // but only every few tiles: each new view re-lays the ground pieces.
-      setView((v) =>
-        v && Math.abs(v.x0 - next.x0) < 4 && Math.abs(v.y0 - next.y0) < 4 && Math.abs(v.x1 - next.x1) < 4 && Math.abs(v.y1 - next.y1) < 4
-          ? v
-          : next,
-      );
+      // but only when the drag needs other pieces: each new view redraws the map's page.
+      setView((v) => (v && pieceSpan(v) === pieceSpan(next) ? v : next));
     },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {
@@ -1278,6 +1309,72 @@ export const WarMap = ({
 
   const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
 
+  // ─── Canvas map: the markers it draws, by the same rules as Village and CampMarker ───
+  const canvasTribes: CanvasTribe[] =
+    canvasMap && data
+      ? data.tribes.map((t) => {
+          const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
+
+          return {
+            id: t.id,
+            x: px(t.x),
+            y: py(t.y),
+            size: Math.round(VILLAGE_MIN + Math.min(VILLAGE_GROW, t.townHall * 0.6)),
+            ring: t.isMe ? "me" : t.ally ? "ally" : strength(t.power),
+            island: t.terrain === "sea",
+            picked,
+            loud: labelsAll || t.isMe || t.ally || picked || atWar.has(`${t.x},${t.y}`),
+            shielded: t.shieldUntil > now,
+            isMe: t.isMe,
+            townHall: t.townHall,
+            flag: t.clan?.flag ?? null,
+            name: t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name,
+          };
+        })
+      : [];
+  const canvasCamps: CanvasCamp[] =
+    canvasMap && data
+      ? data.camps.map((c) => {
+          const picked = selected?.kind === "camp" && selected.camp.level === c.level;
+
+          return { level: c.level, x: px(c.x), y: py(c.y), state: c.state, readyAt: c.readyAt, picked, label: labelsAll || picked };
+        })
+      : [];
+  // A camp's cooldown on screen counts down every second; nothing else on the canvas does.
+  const cooldownShown = canvasCamps.some((c) => c.label && c.state === "cooldown");
+  const campClock = useLive((l) => (cooldownShown ? l.now : 0));
+
+  useEffect(() => {
+    const p = painter.current;
+
+    if (!p) return;
+    p.now = campClock || now;
+    p.setMarkers(canvasTribes, canvasCamps);
+  });
+
+  /** Canvas map: a tap on the land picks the village or camp under it. */
+  const pickOnCanvas = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Armies, caravans and battles are page elements with their own buttons.
+    if ((e.target as Element).closest("button") || !data) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const hit = painter.current?.hit(e.clientX - r.left, e.clientY - r.top);
+
+    if (hit?.kind === "tribe") {
+      const t = data.tribes.find((x) => x.id === hit.id);
+
+      if (t) setSelected({ kind: "tribe", tribe: t });
+    } else if (hit?.kind === "camp") {
+      const c = data.camps.find((x) => x.level === hit.level);
+
+      if (c) setSelected({ kind: "camp", camp: c });
+    }
+  };
+
+  // The canvas appears with the map: start it where the camera already is.
+  useEffect(() => {
+    if (canvasMap && data) painter.current?.setCamera(camera.get());
+  }, [canvasMap, !!data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // The roads your armies, the armies coming for you and your merchants are on.
   const paths: TravelPath[] = data
     ? [
@@ -1324,14 +1421,39 @@ export const WarMap = ({
             ref={camera.viewport}
             data-covered={covered ? "" : undefined}
             className="map-viewport absolute inset-0 overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing"
+            onClick={canvasMap ? pickOnCanvas : undefined}
           >
+            {/* Canvas map: the land, villages and camps, under the few page elements that move on them. */}
+            {canvasMap && (
+              <MapCanvas
+                onPainter={(p) => {
+                  painter.current = p;
+                }}
+              />
+            )}
             <div
               ref={camera.layer}
-              className="absolute left-0 top-0 origin-top-left will-change-transform"
+              className={clsx(
+                "absolute left-0 top-0 origin-top-left will-change-transform",
+                // Taps go through to the canvas, except on the armies' and battles' own buttons.
+                canvasMap && "pointer-events-none [&_button]:pointer-events-auto",
+              )}
               style={{ width: MAP_SIZE * T, height: MAP_SIZE * T }}
             >
               <div className="absolute" style={{ left: (backX - MAP_MIN) * T, top: (backY - MAP_MIN) * T }}>
-                <GroundOverview n={backSide} ox={backX} oy={backY} />
+                <GroundOverview
+                  n={backSide}
+                  ox={backX}
+                  oy={backY}
+                  onCanvas={
+                    canvasMap
+                      ? (c) =>
+                          painter.current?.setBackdrop(
+                            c && { canvas: c, left: (backX - MAP_MIN) * T, top: (backY - MAP_MIN) * T, size: backSide * T },
+                          )
+                      : undefined
+                  }
+                />
               </div>
               {ground.map((p) => (
                 <GroundPiece
@@ -1346,14 +1468,23 @@ export const WarMap = ({
                   top={(p.y - MAP_MIN) * T}
                   x={p.x}
                   y={p.y}
+                  onImage={
+                    canvasMap
+                      ? (img) =>
+                          painter.current?.setPiece(
+                            p.key,
+                            img && { img, left: (p.x - MAP_MIN) * T, top: (p.y - MAP_MIN) * T, size: p.n * T, detail: p.detail },
+                          )
+                      : undefined
+                  }
                 />
               ))}
 
               {/* Roads armies and merchants are on */}
               <TravelPaths paths={paths} size={MAP_SIZE * T} />
 
-              {/* Barbarian camps */}
-              {data.camps.map((c) => {
+              {/* Barbarian camps (on the canvas when the map is drawn there) */}
+              {!canvasMap && data.camps.map((c) => {
                 const picked = selected?.kind === "camp" && selected.camp.level === c.level;
 
                 if (!picked && !onPage(c)) return null;
@@ -1371,8 +1502,8 @@ export const WarMap = ({
                 );
               })}
 
-              {/* Tribes */}
-              {data.tribes.map((t) => {
+              {/* Tribes (on the canvas when the map is drawn there) */}
+              {!canvasMap && data.tribes.map((t) => {
                 const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
 
                 if (!picked && !t.isMe && !onPage(t)) return null;

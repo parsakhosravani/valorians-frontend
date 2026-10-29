@@ -31,6 +31,7 @@ export function useMapCamera({
   onResize,
   onSettle,
   onMove,
+  onDraw,
 }: {
   /** Side of the square map, in px at zoom 1 (0 while nothing is loaded). */
   size: number;
@@ -41,6 +42,8 @@ export function useMapCamera({
   onSettle?: (cam: { x: number; y: number; z: number }) => void;
   /** The camera is moving (a few times a second at most, never every frame). */
   onMove?: (cam: { x: number; y: number; z: number }) => void;
+  /** Every frame the camera moves: for a canvas that draws the map itself. */
+  onDraw?: (cam: { x: number; y: number; z: number }) => void;
 }) {
   const viewport = useRef<HTMLDivElement | null>(null);
   const layer = useRef<HTMLDivElement | null>(null);
@@ -64,6 +67,7 @@ export function useMapCamera({
   const onResizeRef = useRef(onResize);
   const onSettleRef = useRef(onSettle);
   const onMoveRef = useRef(onMove);
+  const onDrawRef = useRef(onDraw);
   /** When onMove was last told (ms, performance clock). */
   const lastMove = useRef(0);
 
@@ -73,6 +77,7 @@ export function useMapCamera({
   onResizeRef.current = onResize;
   onSettleRef.current = onSettle;
   onMoveRef.current = onMove;
+  onDrawRef.current = onDraw;
 
   /** Tells onMove where the camera is, at most every 250 ms. */
   const moved = useCallback(() => {
@@ -83,30 +88,45 @@ export function useMapCamera({
     onMoveRef.current({ ...cam.current });
   }, []);
 
+  /**
+   * The viewport's size, kept current by the resize observer below. Read from
+   * the page on every move (fit and clampZ run on each one), it forced the
+   * browser to lay the page out again mid-drag, every time.
+   */
+  const viewSize = useRef<{ w: number; h: number } | null>(null);
+  const view = useCallback(() => {
+    const el = viewport.current;
+
+    if (!el) return null;
+    viewSize.current ??= { w: el.clientWidth, h: el.clientHeight };
+
+    return viewSize.current;
+  }, []);
+
   /** Smallest zoom that still fills the view, so no empty space shows. */
   const lowest = useCallback(() => {
-    const el = viewport.current;
+    const v = view();
     const s = sizeRef.current;
 
-    if (!el || !s) return minZoom;
+    if (!v || !s) return minZoom;
 
-    return Math.min(maxZoom, Math.max(minZoom, el.clientWidth / s, el.clientHeight / s));
-  }, [minZoom, maxZoom]);
+    return Math.min(maxZoom, Math.max(minZoom, v.w / s, v.h / s));
+  }, [minZoom, maxZoom, view]);
 
   const clampZ = useCallback((z: number) => Math.min(maxZoom, Math.max(lowest(), z)), [lowest, maxZoom]);
 
   /** Keeps the map covering the view. */
   const fit = useCallback(
     (c: Cam): Cam => {
-      const el = viewport.current;
+      const v = view();
       const s = sizeRef.current * c.z;
 
-      if (!el) return c;
-      const axis = (t: number, view: number) => (s <= view ? (view - s) / 2 : Math.min(0, Math.max(view - s, t)));
+      if (!v) return c;
+      const axis = (t: number, room: number) => (s <= room ? (room - s) / 2 : Math.min(0, Math.max(room - s, t)));
 
-      return { z: c.z, x: axis(c.x, el.clientWidth), y: axis(c.y, el.clientHeight) };
+      return { z: c.z, x: axis(c.x, v.w), y: axis(c.y, v.h) };
     },
-    [],
+    [view],
   );
 
   const draw = useCallback(() => {
@@ -115,6 +135,7 @@ export function useMapCamera({
 
     if (!l) return;
     l.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${z})`;
+    onDrawRef.current?.(cam.current);
   }, []);
 
   /** The zoom the layer was last drawn sharp at. */
@@ -605,9 +626,12 @@ export function useMapCamera({
     if (!el || !size || typeof ResizeObserver === "undefined") return;
     let w = el.clientWidth;
     let h = el.clientHeight;
+
+    viewSize.current = { w, h };
     const ro = new ResizeObserver(() => {
       const c = cam.current;
 
+      viewSize.current = { w: el.clientWidth, h: el.clientHeight };
       set({ ...c, z: Math.max(c.z, lowest()), x: c.x + (el.clientWidth - w) / 2, y: c.y + (el.clientHeight - h) / 2 });
       w = el.clientWidth;
       h = el.clientHeight;
@@ -636,5 +660,9 @@ export function useMapCamera({
     refit,
     lowest,
     zoom: () => cam.current.z,
+    /** Where the camera is now (layer offset in px, and zoom). */
+    get: () => cam.current,
+    /** The viewport's size in px (kept current without reading the page on every move). */
+    size: view,
   };
 }
