@@ -6,7 +6,7 @@ import { BanditWarning, MapLair, UnitBadge, fmt } from "./shared";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
-import { useGame, useTelegramContext } from "@/context";
+import { useGameActions, useLiveWhile, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy } from "@/lib/game/engine";
 import { Point, TERRAIN, Terrain, armySpeed, marchRoute, routeMs, shipsNeeded } from "@/lib/game/map";
@@ -71,7 +71,9 @@ export const SendArmyDrawer = ({
   onClose: () => void;
   onSent: (march: { id: number; arrivesAt: number }) => void;
 }) => {
-  const { state, rates, now, attack } = useGame();
+  // The clock only while open: closed, it stays mounted under the map without redrawing.
+  const { state, rates, now } = useLiveWhile(!!target);
+  const { attack } = useGameActions();
   const { telegram } = useTelegramContext();
   const [units, setUnits] = useState<Army>(emptyArmy());
   const [busy, setBusy] = useState(false);
