@@ -411,6 +411,16 @@ export const UNITS: UnitDef[] = [
 
 export const UNIT_BY_ID = Object.fromEntries(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
 
+/** A troop's name for many of them: Spearmen, Axemen, Light Cavalry, Archers. */
+export const unitPlural = (id: UnitId) => {
+  const name = UNIT_BY_ID[id].name;
+
+  if (name.endsWith("man")) return `${name.slice(0, -3)}men`;
+  if (name.endsWith("Cavalry")) return name;
+
+  return `${name}s`;
+};
+
 /** Most training batches a player can queue. */
 export const MAX_TRAIN_BATCHES = 5;
 /** Most units in one batch. */
