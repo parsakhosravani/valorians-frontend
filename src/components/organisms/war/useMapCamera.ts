@@ -30,6 +30,7 @@ export function useMapCamera({
   maxZoom = 2.2,
   onResize,
   onSettle,
+  onMove,
 }: {
   /** Side of the square map, in px at zoom 1 (0 while nothing is loaded). */
   size: number;
@@ -38,6 +39,8 @@ export function useMapCamera({
   onResize?: () => void;
   /** The camera came to rest: where it is (layer offset in px, and zoom). */
   onSettle?: (cam: { x: number; y: number; z: number }) => void;
+  /** The camera is moving (a few times a second at most, never every frame). */
+  onMove?: (cam: { x: number; y: number; z: number }) => void;
 }) {
   const viewport = useRef<HTMLDivElement | null>(null);
   const layer = useRef<HTMLDivElement | null>(null);
@@ -60,12 +63,25 @@ export function useMapCamera({
   const shifts = useRef({ sx: 0, sy: 0, mx: 0, my: 0 });
   const onResizeRef = useRef(onResize);
   const onSettleRef = useRef(onSettle);
+  const onMoveRef = useRef(onMove);
+  /** When onMove was last told (ms, performance clock). */
+  const lastMove = useRef(0);
 
   sizeRef.current = size;
   // The gestures only care that there's a map; a new size mustn't restart them mid-drag.
   const ready = size > 0;
   onResizeRef.current = onResize;
   onSettleRef.current = onSettle;
+  onMoveRef.current = onMove;
+
+  /** Tells onMove where the camera is, at most every 250 ms. */
+  const moved = useCallback(() => {
+    const t = performance.now();
+
+    if (!onMoveRef.current || t - lastMove.current < 250) return;
+    lastMove.current = t;
+    onMoveRef.current({ ...cam.current });
+  }, []);
 
   /** Smallest zoom that still fills the view, so no empty space shows. */
   const lowest = useCallback(() => {
@@ -180,10 +196,13 @@ export function useMapCamera({
         again = !!fling.current;
         busy();
       }
-      if (a || f) draw();
+      if (a || f) {
+        draw();
+        moved();
+      }
       if (again) raf.current = requestAnimationFrame(tick);
     },
-    [busy, draw, fit],
+    [busy, draw, fit, moved],
   );
 
   const schedule = useCallback(() => {
@@ -197,8 +216,9 @@ export function useMapCamera({
       paused.current = false;
       busy();
       draw();
+      moved();
     },
-    [busy, clampZ, draw, fit],
+    [busy, clampZ, draw, fit, moved],
   );
 
   const stop = useCallback(() => {
