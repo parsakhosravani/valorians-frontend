@@ -362,6 +362,11 @@ const SeaNote = ({
 // again each second, even mid-drag, and the drag stuttered on every tick.
 // As memoized pieces with plain props, a marker only renders again when
 // something it shows has changed.
+//
+// No CSS filters (drop-shadow) on markers: every one had to be painted
+// through its own offscreen pass whenever the map layer was redrawn, and
+// with hundreds on the page that made each redraw slow. The soft shadow spot
+// under each village does the same job for free.
 
 const CampMarker = memo(function CampMarker({
   c,
@@ -412,7 +417,7 @@ const CampMarker = memo(function CampMarker({
       <Image
         draggable={false}
         alt=""
-        className="absolute left-[16px] top-[11px] w-8 h-8 object-contain drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+        className="absolute left-[16px] top-[11px] w-8 h-8 object-contain"
         height={88}
         src={buildingImage(BUILDING_BY_ID["barracks"])}
         width={88}
@@ -533,7 +538,7 @@ const Village = memo(function Village({
       <Image
         draggable={false}
         alt=""
-        className="absolute object-contain drop-shadow-[0_3px_2px_rgba(0,0,0,0.6)]"
+        className="absolute object-contain"
         height={104}
         src={buildingImage(BUILDING_BY_ID["town-hall"])}
         style={{ left: VX - half, top: foot - size + 3, width: size, height: size }}
@@ -552,7 +557,7 @@ const Village = memo(function Village({
       {shielded && !t.isMe && (
         <span
           className={clsx(
-            "absolute leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]",
+            "absolute leading-none",
             loud ? "text-[13px]" : "text-[9px] opacity-75",
           )}
           style={{ left: VX + half - (loud ? 9 : 7), top: foot - size + (loud ? 1 : 5) }}
@@ -562,7 +567,7 @@ const Village = memo(function Village({
       )}
       {t.clan && (
         <span
-          className="absolute drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          className="absolute"
           style={{ left: VX - half - 4, top: foot - size - 2 }}
         >
           <ClanFlag flag={t.clan.flag} size={loud ? 16 : 12} title={`[${t.clan.tag}]`} />
@@ -780,6 +785,26 @@ export const WarMap = ({
     }
   };
 
+  // The tiles whose villages and camps are on the page: the screen and a
+  // screen's width or height round it, snapped to an 8-tile grid so it only
+  // changes when the view crosses a line. A whole loaded area holds hundreds
+  // of villages; drawing them all, mostly off screen, was most of the map's cost.
+  const [cull, setCull] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const updateCull = (v: { x0: number; y0: number; x1: number; y1: number }) => {
+    const mx = Math.max(6, v.x1 - v.x0);
+    const my = Math.max(6, v.y1 - v.y0);
+    const next = {
+      x0: Math.floor((v.x0 - mx) / 8) * 8,
+      y0: Math.floor((v.y0 - my) / 8) * 8,
+      x1: Math.ceil((v.x1 + mx) / 8) * 8,
+      y1: Math.ceil((v.y1 + my) / 8) * 8,
+    };
+
+    setCull((c) => (c && c.x0 === next.x0 && c.y0 === next.y0 && c.x1 === next.x1 && c.y1 === next.y1 ? c : next));
+  };
+  const onPage = (p: { x: number; y: number }) =>
+    !cull || (p.x >= cull.x0 && p.x < cull.x1 && p.y >= cull.y0 && p.y < cull.y1);
+
   const camera = useMapCamera({
     size: n * T,
     minZoom: MIN_ZOOM,
@@ -792,14 +817,18 @@ export const WarMap = ({
       setView((v) =>
         v && v.x0 === next.x0 && v.y0 === next.y0 && v.x1 === next.x1 && v.y1 === next.y1 ? v : next,
       );
+      updateCull(next);
       loadIfNearEdge(next);
     },
     // Mid-drag too: the next area loads before the map runs out under the
-    // finger, not only once it comes to rest against the edge.
+    // finger, not only once it comes to rest against the edge, and villages
+    // ahead are put on the page before they scroll into view.
     onMove: ({ x, y, z }) => {
       const next = tilesOnScreen(x, y, z);
 
-      if (next) loadIfNearEdge(next);
+      if (!next) return;
+      updateCull(next);
+      loadIfNearEdge(next);
     },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {
@@ -1196,6 +1225,8 @@ export const WarMap = ({
               {data.camps.map((c) => {
                 const picked = selected?.kind === "camp" && selected.camp.level === c.level;
 
+                if (!picked && !onPage(c)) return null;
+
                 return (
                   <CampMarker
                     key={`c${c.level}`}
@@ -1213,6 +1244,8 @@ export const WarMap = ({
               {/* Tribes */}
               {data.tribes.map((t) => {
                 const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
+
+                if (!picked && !t.isMe && !onPage(t)) return null;
 
                 return (
                   <Village

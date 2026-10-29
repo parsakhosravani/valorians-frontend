@@ -65,13 +65,15 @@ body {
   touch-action: none;
   -webkit-touch-callout: none;
 }
+/* No transition on `scale`: every marker eased at once after each zoom, each
+ * lifted onto a layer of its own for the length of it. */
 .map-pin {
   scale: var(--pin, 1);
-  transition: scale 0.18s ease-out;
 }
-/* A sheet is open over the map: its pulsing markers hold still, so the page
- * under the sheet isn't repainted every frame. */
-.map-viewport[data-covered] * {
+/* A sheet is open over the map, or the map is moving: its pulsing and
+ * trotting markers hold still, so the frame has only the camera to draw. */
+.map-viewport[data-covered] *,
+.map-viewport[data-moving] * {
   animation-play-state: paused !important;
 }
 
