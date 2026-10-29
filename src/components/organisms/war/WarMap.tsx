@@ -52,6 +52,7 @@ import {
   BUILDING_BY_ID,
   MAP_MAX,
   MAP_MIN,
+  MAP_SIZE,
   RESOURCE_NAMES,
   ResourceId,
   UnitId,
@@ -717,17 +718,23 @@ export const WarMap = ({
     return () => clearTimeout(t);
   }, [nextArrival, load]);
 
+  // The area loaded from the server: (ox, oy) is its top-left tile, n tiles a side.
   const n = data ? data.radius * 2 + 1 : 0;
   const ox = data ? data.center.x - data.radius : 0;
   const oy = data ? data.center.y - data.radius : 0;
-  const px = (x: number) => (x - ox) * T + T / 2;
-  const py = (y: number) => (y - oy) * T + T / 2;
+  // The map itself is laid out over the whole world, not the loaded area: the
+  // camera can go anywhere, the land is worked out right here in the browser,
+  // and only villages and camps wait for the server. Laid out over the loaded
+  // area, the camera hit a wall at its edge until the next area arrived, and
+  // everything jumped when it did.
+  const px = (x: number) => (x - MAP_MIN) * T + T / 2;
+  const py = (y: number) => (y - MAP_MIN) * T + T / 2;
 
   /**
    * The road an army takes on the map (around mountains, lakes, over the
    * sea), in px, timed for its troops, plus where it is `f` of the way in.
    */
-  const tripOf = (from: Pt, to: Pt, units: Army | null) => tripFor(from, to, units, px, py, `${ox},${oy}`);
+  const tripOf = (from: Pt, to: Pt, units: Army | null) => tripFor(from, to, units, px, py, "world");
   const roadOf = (from: Pt, to: Pt, units: Army | null, f: number): { road: Road; atSea: boolean } => {
     const t = tripOf(from, to, units);
 
@@ -754,10 +761,10 @@ export const WarMap = ({
     if (!el || !n) return null;
 
     return {
-      x0: Math.floor(ox - x / z / T),
-      y0: Math.floor(oy - y / z / T),
-      x1: Math.ceil(ox + (el.clientWidth - x) / z / T),
-      y1: Math.ceil(oy + (el.clientHeight - y) / z / T),
+      x0: Math.floor(MAP_MIN - x / z / T),
+      y0: Math.floor(MAP_MIN - y / z / T),
+      x1: Math.ceil(MAP_MIN + (el.clientWidth - x) / z / T),
+      y1: Math.ceil(MAP_MIN + (el.clientHeight - y) / z / T),
     };
   };
 
@@ -806,7 +813,8 @@ export const WarMap = ({
     !cull || (p.x >= cull.x0 && p.x < cull.x1 && p.y >= cull.y0 && p.y < cull.y1);
 
   const camera = useMapCamera({
-    size: n * T,
+    // The whole world: the camera is never fenced in by what's loaded.
+    size: data ? MAP_SIZE * T : 0,
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
     onSettle: ({ x, y, z }) => {
@@ -829,6 +837,13 @@ export const WarMap = ({
       if (!next) return;
       updateCull(next);
       loadIfNearEdge(next);
+      // The land follows a long drag too (it can now go past what's loaded),
+      // but only every few tiles: each new view re-lays the ground pieces.
+      setView((v) =>
+        v && Math.abs(v.x0 - next.x0) < 4 && Math.abs(v.y0 - next.y0) < 4 && Math.abs(v.x1 - next.x1) < 4 && Math.abs(v.y1 - next.y1) < 4
+          ? v
+          : next,
+      );
     },
     // A bigger window: load more of the world if it no longer fills it.
     onResize: () => {
@@ -839,17 +854,6 @@ export const WarMap = ({
     },
   });
 
-  // A bigger window loads a bigger area: keep the same spot in view.
-  const origin = useRef<{ ox: number; oy: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const o = origin.current;
-
-    if (!data) return;
-    if (o && (o.ox !== ox || o.oy !== oy)) camera.shift((o.ox - ox) * T, (o.oy - oy) * T);
-    else camera.refit();
-    origin.current = { ox, oy };
-  }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start centred on your tribe (or the one you came to take revenge on, or
   // the barbarian camp you came to raid).
@@ -933,13 +937,15 @@ export const WarMap = ({
     const mx = (view.x0 + view.x1) / 2;
     const my = (view.y0 + view.y1) / 2;
     // `margin`: tiles past the screen's edge to have ready before a drag shows them.
+    // Anywhere in the world: the land doesn't need the server, so it's drawn
+    // even where villages haven't loaded yet (they're painted around later).
     const add = (size: number, detail: boolean, res: number, margin: number) => {
       const lo = (v: number) => Math.floor(v / size) * size;
-      const x1 = Math.min(ox + n, view.x1 + margin);
-      const y1 = Math.min(oy + n, view.y1 + margin);
+      const x1 = Math.min(MAP_MAX, view.x1 + margin);
+      const y1 = Math.min(MAP_MAX, view.y1 + margin);
 
-      for (let y = lo(Math.max(oy, view.y0 - margin)); y < y1; y += size)
-        for (let x = lo(Math.max(ox, view.x0 - margin)); x < x1; x += size) {
+      for (let y = lo(Math.max(MAP_MIN, view.y0 - margin)); y < y1; y += size)
+        for (let x = lo(Math.max(MAP_MIN, view.x0 - margin)); x < x1; x += size) {
           const on = occupied
             .filter((p) => p.x >= x - 1 && p.x <= x + size && p.y >= y - 1 && p.y <= y + size)
             .map((p) => `${p.x},${p.y}`)
@@ -972,7 +978,13 @@ export const WarMap = ({
     if (close) add(DETAIL_CHUNK, true, close, 0);
 
     return out;
-  }, [view, n, ox, oy, occupied, homeX, homeY, restZoom]);
+  }, [view, n, occupied, homeX, homeY, restZoom]);
+
+  // The rough-colour backdrop under the pieces: the loaded area and as much
+  // again round it (all of the world at once took too long to work out on a phone).
+  const backSide = Math.min(MAP_SIZE, n + 2 * (data?.radius ?? 0));
+  const backX = Math.min(MAP_MAX - backSide, Math.max(MAP_MIN, ox - (data?.radius ?? 0)));
+  const backY = Math.min(MAP_MAX - backSide, Math.max(MAP_MIN, oy - (data?.radius ?? 0)));
 
   const strength = (p: number) => {
     const ratio = p / Math.max(1, data?.myPower ?? 1);
@@ -1199,27 +1211,29 @@ export const WarMap = ({
             <div
               ref={camera.layer}
               className="absolute left-0 top-0 origin-top-left will-change-transform"
-              style={{ width: n * T, height: n * T }}
+              style={{ width: MAP_SIZE * T, height: MAP_SIZE * T }}
             >
-              <GroundOverview n={n} ox={ox} oy={oy} />
+              <div className="absolute" style={{ left: (backX - MAP_MIN) * T, top: (backY - MAP_MIN) * T }}>
+                <GroundOverview n={backSide} ox={backX} oy={backY} />
+              </div>
               {ground.map((p) => (
                 <GroundPiece
                   key={p.key}
                   detail={p.detail}
                   home={p.home}
                   res={p.res}
-                  left={(p.x - ox) * T}
+                  left={(p.x - MAP_MIN) * T}
                   n={p.n}
                   occupied={p.occupied}
                   prio={p.prio}
-                  top={(p.y - oy) * T}
+                  top={(p.y - MAP_MIN) * T}
                   x={p.x}
                   y={p.y}
                 />
               ))}
 
               {/* Roads armies and merchants are on */}
-              <TravelPaths paths={paths} size={n * T} />
+              <TravelPaths paths={paths} size={MAP_SIZE * T} />
 
               {/* Barbarian camps */}
               {data.camps.map((c) => {
@@ -1264,16 +1278,13 @@ export const WarMap = ({
                 );
               })}
 
-              {/* Caravans and armies on the road. Keyed on the loaded area too: a
-                  new area moves every token's px by a whole area at once, and the
-                  camera makes up for it instantly, but the tokens' one-second glide
-                  would slide them across the map from the wrong spot. A new token
-                  starts where it belongs. */}
+              {/* Caravans and armies on the road (in world px, so a new area
+                  loading never moves them). */}
               {(data.caravans ?? [])
                 .filter((c) => c.arrivesAt > now)
                 .map((c) => (
                   <CaravanToken
-                    key={`${ox},${oy}t${c.id}`}
+                    key={`t${c.id}`}
                     amount={c.amount}
                     from={{ x: px(c.from.x), y: py(c.from.y) }}
                     kind={c.kind}
@@ -1291,7 +1302,7 @@ export const WarMap = ({
 
                 return (
                   <ArmyToken
-                    key={`${ox},${oy}b${m.id}`}
+                    key={`b${m.id}`}
                     atSea={atSea}
                     from={{ x: px(m.from.x), y: py(m.from.y) }}
                     incoming={false}
@@ -1320,7 +1331,7 @@ export const WarMap = ({
 
                 return (
                   <ArmyToken
-                    key={`${ox},${oy}t${m.id}`}
+                    key={`m${m.id}`}
                     atSea={atSea}
                     from={{ x: px(m.from.x), y: py(m.from.y) }}
                     incoming={m.kind === "incoming"}
