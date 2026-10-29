@@ -32,12 +32,19 @@ export const Battle = () => {
 
   // /battle?revenge=<playerId> (Hall) or ?target=<playerId> (Leaderboard) opens the map on
   // that tribe with its card up; ?camp=<level> (Hall) does the same for a barbarian camp;
-  // /battle?tab=<tab> picks a tab.
+  // /battle?tab=<tab> picks a tab. A jump to a tribe or camp happens once: it's taken off
+  // the address, and leaving the map forgets it (see pickTab).
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
+    const url = new URL(window.location.href);
+    const q = url.searchParams;
     const id = Number(q.get("revenge") || q.get("target"));
     const t = q.get("tab");
     const c = Number(q.get("camp"));
+
+    if (q.has("revenge") || q.has("target") || q.has("camp")) {
+      ["revenge", "target", "camp"].forEach((k) => q.delete(k));
+      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    }
 
     if (c) {
       setCamp(c);
@@ -52,6 +59,14 @@ export const Battle = () => {
     }
   }, []);
   const showResult = useCallback((r: BattleReport) => setResult(r), []);
+  // Back on the map after another tab: it opens on your own tribe, not the one you jumped to.
+  const pickTab = (t: Tab) => {
+    if (t !== tab) {
+      setRevenge(undefined);
+      setCamp(undefined);
+    }
+    setTab(t);
+  };
 
   return (
     <>
@@ -68,7 +83,7 @@ export const Battle = () => {
               { id: "reports", label: "Reports" },
             ]}
             value={tab}
-            onChange={setTab}
+            onChange={pickTab}
           />
         </div>
         <div
