@@ -6,6 +6,7 @@ import { ensureBotSetup } from "@/server/bot";
 import { checkRelease, deliverAnnouncements } from "@/server/announce";
 import { settleAll } from "@/server/map";
 import { refreshTribeColumns } from "@/server/tribeColumns";
+import { maybeRefreshRanks } from "@/server/ranks";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -44,6 +45,10 @@ export async function GET(req: NextRequest) {
   await refreshTribeColumns(started, 8_000).catch((e) =>
     // eslint-disable-next-line no-console
     console.error("refreshing tribe columns failed", e)
+  );
+  await maybeRefreshRanks(started).catch((e) =>
+    // eslint-disable-next-line no-console
+    console.error("refreshing ranks failed", e)
   );
   const bot = await ensureBotSetup().catch(() => null);
   // A new version went live: draft an announcement for the admins to approve.

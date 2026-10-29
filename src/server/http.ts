@@ -9,6 +9,7 @@ import { resolveDueTrades } from "./trade";
 
 import { GameError, GameState } from "@/lib/game/engine";
 import { maybeCheckRelease } from "./announce";
+import { maybeRefreshRanks } from "./ranks";
 
 export type ApiError = { error: string; code: string };
 
@@ -30,6 +31,8 @@ async function sweep() {
   await resolveDueAttacks(now).catch((e) => console.error("resolveDueAttacks", e));
   await resolveDueTrades(now).catch((e) => console.error("resolveDueTrades", e));
   await maybeCheckRelease();
+  // At most once a minute for the whole game (see ranks.ts).
+  await maybeRefreshRanks(now).catch((e) => console.error("maybeRefreshRanks", e));
 }
 
 type Ctx = { req: NextRequest; auth: AuthResult; player: Player; now: number; body: any };

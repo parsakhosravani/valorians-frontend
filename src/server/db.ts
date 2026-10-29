@@ -45,7 +45,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -328,6 +328,27 @@ async function migrate(client: Client) {
     await client.execute(`ALTER TABLE users ADD COLUMN ${col}`).catch(() => {});
   }
   await client.execute("CREATE INDEX IF NOT EXISTS users_def_until ON users(def_until)");
+
+  // Ranks kept in columns, worked out for everyone at once (see ranks.ts).
+  // NULL until the first pass: readers count instead meanwhile.
+  for (const [table, col] of [
+    ["users", "pop_rank INTEGER"],
+    ["users", "power_rank INTEGER"],
+    ["users", "wins_rank INTEGER"],
+    ["clans", "sum_members INTEGER NOT NULL DEFAULT 0"],
+    ["clans", "sum_population REAL NOT NULL DEFAULT 0"],
+    ["clans", "sum_power REAL NOT NULL DEFAULT 0"],
+    ["clans", "sum_wins INTEGER NOT NULL DEFAULT 0"],
+    ["clans", "pop_rank INTEGER"],
+  ]) {
+    await client.execute(`ALTER TABLE ${table} ADD COLUMN ${col}`).catch(() => {});
+  }
+  await client.executeMultiple(`
+    CREATE INDEX IF NOT EXISTS users_pop_rank ON users(pop_rank);
+    CREATE INDEX IF NOT EXISTS users_power_rank ON users(power_rank);
+    CREATE INDEX IF NOT EXISTS users_wins_rank ON users(wins_rank);
+    CREATE INDEX IF NOT EXISTS clans_pop_rank ON clans(pop_rank);
+  `);
 }
 
 /** Shared, lazily-initialised database client. */
