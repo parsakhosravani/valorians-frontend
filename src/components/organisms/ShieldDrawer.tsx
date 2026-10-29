@@ -4,7 +4,7 @@ import clsx from "clsx";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
-import { useGame } from "@/context";
+import { useGameActions, useLiveWhile } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS, SHIELDS, ShieldId } from "@/lib/game/config";
 import { plusActive, plusShieldReadyAt, shieldBlocked } from "@/lib/game/engine";
@@ -23,7 +23,9 @@ export const ShieldDrawer = ({
   onClose: () => void;
   onOpenPlus: () => void;
 }) => {
-  const { state, now, shields } = useGame();
+  // The clock only while open: closed, it stays mounted (for its animation) without redrawing.
+  const { state, now } = useLiveWhile(isOpen);
+  const { shields } = useGameActions();
   const [busy, setBusy] = useState<ShieldId | "plus" | null>(null);
   const shielded = state.shieldUntil > now;
   const recharging = state.shield.cooldownUntil > now;

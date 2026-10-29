@@ -5,9 +5,11 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import toast from "react-hot-toast";
 import { IconText } from "@/components/atoms/GameIcon";
@@ -190,6 +192,17 @@ export type GameActions = Omit<GameContextType, StatusKeys | LiveKeys>;
 const StatusContext = createContext<GameStatusValue | undefined>(undefined);
 const ActionsContext = createContext<GameActions | undefined>(undefined);
 const LiveContext = createContext<GameLiveValue | undefined>(undefined);
+
+/**
+ * The live values again, as a store a component can subscribe to a slice of
+ * (see useLive). Reading LiveContext re-renders every second; most screens
+ * only show a few numbers that change far less often than that.
+ */
+type LiveStore = {
+  get: () => GameLiveValue;
+  subscribe: (fn: () => void) => () => void;
+};
+const LiveStoreContext = createContext<LiveStore | undefined>(undefined);
 
 /**
  * Wraps every function in `get()` (recursing into nested groups like `clan`)
@@ -571,10 +584,35 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     [state, rates, now, activeResource, combo]
   );
 
+  // The store holds the value this render shows, so a component rendering in
+  // the same pass (say, the header appearing as the game finishes loading)
+  // reads it, not the last one; subscribers hear about it before it's painted.
+  const [liveStore] = useState(() => {
+    const store = {
+      value: liveValue,
+      listeners: new Set<() => void>(),
+      get: () => store.value,
+      subscribe: (fn: () => void) => {
+        store.listeners.add(fn);
+
+        return () => store.listeners.delete(fn);
+      },
+    };
+
+    return store;
+  });
+
+  liveStore.value = liveValue;
+  useLayoutEffect(() => {
+    liveStore.listeners.forEach((fn) => fn());
+  }, [liveValue, liveStore]);
+
   return (
     <StatusContext.Provider value={statusValue}>
       <ActionsContext.Provider value={actions}>
-        <LiveContext.Provider value={liveValue}>{children}</LiveContext.Provider>
+        <LiveStoreContext.Provider value={liveStore}>
+          <LiveContext.Provider value={liveValue}>{children}</LiveContext.Provider>
+        </LiveStoreContext.Provider>
       </ActionsContext.Provider>
     </StatusContext.Provider>
   );
@@ -606,3 +644,50 @@ export const useGame = () => {
   const ctx = useResourceContext();
   return ctx as GameContextType & { state: GameState; rates: Rates; me: PlayerView["me"] };
 };
+
+/** Live values once the game has loaded (state and rates are set). */
+export type ReadyLive = GameLiveValue & { state: GameState; rates: Rates };
+
+/** Two values that print the same: for small selections like a few numbers or flags. */
+export const sameJson = <T,>(a: T, b: T) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * One slice of the live state: the component re-renders only when what
+ * `select` returns changes (by `isEqual`), not every second.
+ *
+ *   const coins = useLive((l) => Math.floor(l.state.coins));
+ *
+ * Return primitives where you can; for a small object or array pass `sameJson`.
+ * Only for components that render once the game is ready.
+ */
+export function useLive<T>(select: (live: ReadyLive) => T, isEqual: (a: T, b: T) => boolean = Object.is): T {
+  const store = need(useContext(LiveStoreContext));
+  const last = useRef<{ value: T } | null>(null);
+  const snapshot = () => {
+    const next = select(store.get() as ReadyLive);
+
+    if (last.current && isEqual(last.current.value, next)) return last.current.value;
+    last.current = { value: next };
+
+    return next;
+  };
+
+  return useSyncExternalStore(store.subscribe, snapshot, snapshot);
+}
+
+/**
+ * All the live values, but only while `active` (say, while a drawer is open).
+ * Inactive, it keeps the last ones and doesn't re-render: closed drawers stay
+ * mounted for their animation, and used to redraw every second unseen.
+ */
+export function useLiveWhile(active: boolean): ReadyLive {
+  const store = need(useContext(LiveStoreContext));
+  const kept = useRef<ReadyLive | null>(null);
+  const snapshot = () => {
+    if (active || !kept.current) kept.current = store.get() as ReadyLive;
+
+    return kept.current;
+  };
+
+  return useSyncExternalStore(store.subscribe, snapshot, snapshot);
+}

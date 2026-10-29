@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
 import { Coin } from "@/components/molecules/Coin";
 import { NAV_ICONS } from "@/components/organisms/Navbar";
 import { User } from "@/components/molecules/User";
-import { RESOURCES, useGame } from "@/context";
+import { RESOURCES, sameJson, useGameStatus, useLive } from "@/context";
 import { compact } from "@/lib/format";
 
 /** 0.75rem below the device notch plus Telegram's own full-screen controls. */
@@ -18,7 +18,20 @@ const HEADER_TOP_PADDING =
 
 /** Top bar on every screen (with the Market button); Build, War and Market also show your stock. */
 export const Header: React.FC = () => {
-  const { state, rates, me } = useGame();
+  const { me } = useGameStatus();
+  // Only what's printed: whole coins, and each stock as shown ("2.4K"). The
+  // header is on every screen; it used to redraw every second for numbers
+  // that change far less often.
+  const coins = useLive((l) => Math.floor(l.state.coins));
+  const stock = useLive(
+    (l) =>
+      RESOURCES.map((r) => ({
+        shown: compact(l.state.resources[r.id]),
+        full: l.state.resources[r.id] >= l.rates.capacity,
+        perHour: Math.round(l.rates.productionPerHour[r.id]),
+      })),
+    sameJson,
+  );
   const trades = me?.marketOffers ?? 0;
   const pathname = usePathname();
   const showResources =
@@ -40,7 +53,7 @@ export const Header: React.FC = () => {
         <User />
         <div className="flex-1" />
         <div className="pill h-8 pl-1.5 pr-3 border-frame/70">
-          <Coin amount={Math.floor(state.coins)} />
+          <Coin amount={coins} />
         </div>
         <Link
           aria-label={trades ? `Market, ${trades} offer${trades === 1 ? "" : "s"} from other players` : "Market"}
@@ -67,9 +80,8 @@ export const Header: React.FC = () => {
 
       {showResources && (
         <div className="inset grid grid-cols-4 divide-x divide-line/50 py-1">
-          {RESOURCES.map((r) => {
-            const full = state.resources[r.id] >= rates.capacity;
-            const perHour = rates.productionPerHour[r.id];
+          {RESOURCES.map((r, i) => {
+            const { shown, full, perHour } = stock[i];
 
             return (
               <div
@@ -85,7 +97,7 @@ export const Header: React.FC = () => {
                         : "text-xs font-extrabold"
                     }
                   >
-                    {compact(state.resources[r.id])}
+                    {shown}
                   </span>
                   <span
                     className={
@@ -95,7 +107,7 @@ export const Header: React.FC = () => {
                     }
                   >
                     {perHour >= 0 ? "+" : ""}
-                    {Math.round(perHour)}/h
+                    {perHour}/h
                   </span>
                 </div>
               </div>

@@ -18,7 +18,7 @@ import { ClanFlag } from "@/components/molecules/ClanFlag";
 import { Coin } from "@/components/molecules/Coin";
 import { TextImage } from "@/components/molecules/TextImage";
 import useBackButton from "@/hooks/useBackButton";
-import { RESOURCES, useGame } from "@/context";
+import { RESOURCES, useGame, useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
 import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
@@ -196,7 +196,7 @@ const TechChips = ({ techs }: { techs: { id: TechId; level: number }[] }) => (
  * A member opens their village on the war map.
  */
 const ClanSheet = ({ id, meId, onClose }: { id: number | null; meId: number; onClose: () => void }) => {
-  const { authHeader } = useGame();
+  const { authHeader } = useGameStatus();
   const [c, setC] = useState<ClanPublic | null>(null);
   const [error, setError] = useState<string | null>(null);
 

@@ -17,12 +17,13 @@ const BattleResultDrawer = dynamic(() =>
   import("@/components/organisms/war/BattleResultDrawer").then((m) => m.BattleResultDrawer)
 );
 import { Tabs } from "@/components/organisms/war/shared";
-import { BattleReport, useGame } from "@/context";
+import { BattleReport, useLive } from "@/context";
 
 type Tab = "map" | "army" | "reports";
 
 export const Battle = () => {
-  const { state } = useGame();
+  // Only the training badge: the screen (and every tab under it) no longer redraws every second.
+  const training = useLive((l) => l.state.training.length);
   const [tab, setTab] = useState<Tab>("map");
   const [target, setTarget] = useState<AttackTarget | null>(null);
   const [result, setResult] = useState<BattleReport | null>(null);
@@ -62,7 +63,7 @@ export const Battle = () => {
               {
                 id: "army",
                 label: "Army",
-                badge: state.training.length || undefined,
+                badge: training || undefined,
               },
               { id: "reports", label: "Reports" },
             ]}

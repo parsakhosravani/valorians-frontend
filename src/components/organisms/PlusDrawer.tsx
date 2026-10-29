@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
-import { useGame } from "@/context";
+import { useGameActions, useGameStatus, useLiveWhile } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS } from "@/lib/game/config";
 import { plusActive } from "@/lib/game/engine";
@@ -20,7 +20,10 @@ const trialDays = Math.round(PLUS.trialMs / 86400e3);
 
 /** What Valorians Plus gives, with the free trial and the Stars subscription. */
 export const PlusDrawer = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
-  const { state, now, me, plus } = useGame();
+  // The clock only while open: closed, it stays mounted (for its animation) without redrawing.
+  const { state, now } = useLiveWhile(isOpen);
+  const me = useGameStatus().me!;
+  const { plus } = useGameActions();
   const [busy, setBusy] = useState<"trial" | "pay" | null>(null);
   const active = plusActive(state);
   const canTrial = !active && !state.plus.trialUsed;
