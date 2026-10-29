@@ -117,20 +117,30 @@ export function useMapCamera({
     l.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${z})`;
   }, []);
 
+  /** The zoom the layer was last drawn sharp at. */
+  const sharpAt = useRef(1);
+
   /**
    * The camera stopped: resize the markers for this zoom and let the browser
    * redraw the layer sharp at the new scale. Both repaint the whole map, so
    * they wait until nothing moves; while it moves, the GPU only slides and
    * scales the picture it already has.
+   *
+   * The sharp redraw only happens when the zoom really changed: after a pan
+   * the picture is already sharp, and redrawing the whole layer after every
+   * drag was the hitch you felt each time the map stopped.
    */
   const settle = useCallback(() => {
     const l = layer.current;
 
+    viewport.current?.removeAttribute("data-moving");
     if (!l) return;
     const pin = pinScale(cam.current.z).toFixed(3);
 
     if (l.style.getPropertyValue("--pin") !== pin) l.style.setProperty("--pin", pin);
     onSettleRef.current?.({ ...cam.current });
+    if (Math.abs(cam.current.z / sharpAt.current - 1) < 0.1) return;
+    sharpAt.current = cam.current.z;
     l.style.willChange = "auto";
     requestAnimationFrame(() => {
       if (layer.current) layer.current.style.willChange = "";
@@ -138,6 +148,10 @@ export function useMapCamera({
   }, []);
 
   const busy = useCallback(() => {
+    // Moving: decorative animations wait (see .map-viewport[data-moving] in globals.css).
+    const v = viewport.current;
+
+    if (v && !v.hasAttribute("data-moving")) v.setAttribute("data-moving", "");
     clearTimeout(idle.current);
     idle.current = setTimeout(() => {
       if (anim.current || fling.current) busy();
