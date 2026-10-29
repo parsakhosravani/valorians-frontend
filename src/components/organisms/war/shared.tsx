@@ -8,8 +8,9 @@ import type { Army, GameState } from "@/lib/game/engine";
 import { Lair, ambushLosses, lairsOnRoute } from "@/lib/game/bandits";
 import { Point, marchRoute } from "@/lib/game/map";
 import { attackPower, fighterCount } from "@/lib/game/war";
+import { grouped } from "@/lib/format";
 
-export const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
+export const fmt = (n: number) => grouped(Math.floor(n));
 
 export const Card = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <div className={clsx("card p-3", className)}>

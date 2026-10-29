@@ -6,6 +6,7 @@ import { Text } from "@/components/atoms/Text";
 import { ProgressBar } from "@/components/molecules/ProgressBar";
 import { TextImage } from "@/components/molecules/TextImage";
 import { TResource } from "@/context";
+import { grouped } from "@/lib/format";
 
 interface resourcePropsType {
   resourceData: TResource;
@@ -16,7 +17,7 @@ interface resourcePropsType {
   onChangeResource?: (resourceData: TResource) => void;
 }
 
-export const formatPerHour = (n: number) => `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString("en-US")} per hour`;
+export const formatPerHour = (n: number) => `${n >= 0 ? "+" : ""}${grouped(Math.round(n))} per hour`;
 
 export const Resource: FunctionComponent<resourcePropsType> = ({
   resourceData,
@@ -52,7 +53,7 @@ export const Resource: FunctionComponent<resourcePropsType> = ({
       </Row>
       <Col className="gap-1 text-red-50 text-center">
         <Text color={isActive ? "dark" : "white"} size="tiny">
-          {shown.toLocaleString("en-US")}
+          {grouped(shown)}
         </Text>
 
         <ProgressBar size="small" totalValue={resourceCapacity} value={count} />

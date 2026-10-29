@@ -189,8 +189,10 @@ body {
   .pill-bad { @apply border-bad/60 text-bad; background: rgba(240, 138, 108, 0.1); }
   .pill-sea { @apply border-sea/60 text-sea; background: rgba(127, 179, 208, 0.1); }
   .bar { @apply h-2 w-full rounded-full overflow-hidden border border-line/60; background: rgba(11, 8, 6, 0.8); }
+  /* No transition on width: bars update every second, and easing `width`
+   * re-laid out the page every frame for half of each second. */
   .bar-fill {
-    @apply block h-full rounded-full transition-[width] duration-500;
+    @apply block h-full rounded-full;
     background: linear-gradient(90deg, #E3A948 0%, #F2C66D 60%, #E8612C 100%);
   }
   .divider { @apply h-px w-full; background: linear-gradient(90deg, rgba(74, 54, 36, 0), #4A3624 20%, #4A3624 80%, rgba(74, 54, 36, 0)); }

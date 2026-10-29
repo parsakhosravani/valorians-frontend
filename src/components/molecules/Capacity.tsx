@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { Row } from "@/components/atoms/Row";
+import { grouped } from "@/lib/format";
 
 interface CapacityProps {
   value: number;
@@ -22,11 +23,9 @@ export const Capacity: React.FC<CapacityProps> = ({
   return (
     <Row className={`flex gap-1 font-bold ${fontSizeClasses[size]}`}>
       <p className={clsx(value >= totalValue && "text-bad")}>
-        {value < totalValue
-          ? value.toLocaleString("en-US")
-          : totalValue.toLocaleString("en-US")}
+        {grouped(value < totalValue ? value : totalValue)}
       </p>
-      /<p>{totalValue.toLocaleString("en-US")}</p>
+      /<p>{grouped(totalValue)}</p>
     </Row>
   );
 };
