@@ -676,6 +676,25 @@ export function useLive<T>(select: (live: ReadyLive) => T, isEqual: (a: T, b: T)
 }
 
 /**
+ * Reads the live values when called (in an event handler, say) without
+ * subscribing: the component doesn't re-render as they change.
+ */
+export function useLiveGetter(): () => ReadyLive {
+  const store = need(useContext(LiveStoreContext));
+
+  return store.get as () => ReadyLive;
+}
+
+/**
+ * The game clock in steps of `stepMs`: for "has this ended yet" checks that
+ * can be a few seconds late, so the component isn't redrawn every second.
+ */
+export const useClock = (stepMs: number) => useLive((l) => Math.floor(l.now / stepMs) * stepMs);
+
+/** Renders `children(now)` every second: the per-second bit of a component that otherwise isn't. */
+export const WithNow = ({ children }: { children: (now: number) => ReactNode }) => <>{children(useLive((l) => l.now))}</>;
+
+/**
  * All the live values, but only while `active` (say, while a drawer is open).
  * Inactive, it keeps the last ones and doesn't re-render: closed drawers stay
  * mounted for their animation, and used to redraw every second unseen.

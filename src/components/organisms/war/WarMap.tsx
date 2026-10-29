@@ -43,11 +43,16 @@ import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import {
   BattleReport,
   ScoutReport,
-  useGame,
+  WithNow,
+  sameJson,
+  useClock,
+  useGameActions,
+  useGameStatus,
+  useLive,
+  useLiveGetter,
   useTelegramContext,
 } from "@/context";
 import { apiRequest } from "@/lib/api";
-import { formatDuration } from "@/lib/format";
 import {
   BUILDING_BY_ID,
   MAP_MAX,
@@ -75,6 +80,7 @@ import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
+import { Countdown, Since } from "@/components/atoms/Countdown";
 
 // ─── Data from /api/war/map ──────────────────────────────────────────────────
 
@@ -375,7 +381,6 @@ const CampMarker = memo(function CampMarker({
   top,
   picked,
   labelsAll,
-  timer,
   onPick,
 }: {
   c: Camp;
@@ -383,8 +388,6 @@ const CampMarker = memo(function CampMarker({
   top: number;
   picked: boolean;
   labelsAll: boolean;
-  /** Time left on its cooldown, when that label shows. */
-  timer?: string;
   onPick: (s: Selected) => void;
 }) {
   return (
@@ -439,7 +442,8 @@ const CampMarker = memo(function CampMarker({
               <GameIcon e="🔒" /> {c.level}
             </>
           ) : c.state === "cooldown" ? (
-            timer
+            // Ticks on its own: the marker itself isn't redrawn every second.
+            <Countdown to={c.readyAt} />
           ) : (
             `Camp ${c.level}`
           )}
@@ -594,6 +598,130 @@ const Village = memo(function Village({
   );
 });
 
+// ─── On the road ─────────────────────────────────────────────────────────────
+
+/** One of your armies walking home, placed on the map. */
+type Homeward = { id: string; units: Army; from: Pt; returnsAt: number; leftAt: number };
+
+/**
+ * Caravans, armies and battles on the map. The only part of the map that
+ * moves every second, so it follows the clock on its own and the rest of
+ * the map (villages, ground, sheets) isn't redrawn with it.
+ */
+const Travellers = ({
+  data,
+  homeward,
+  marching,
+  battles,
+  px,
+  py,
+  roadOf,
+  restZoom,
+  onHomeOrders,
+  onOutOrders,
+  onWatch,
+}: {
+  data: MapData;
+  homeward: Homeward[];
+  marching: Movement[];
+  battles: BattleMovement[];
+  px: (x: number) => number;
+  py: (y: number) => number;
+  roadOf: (from: Pt, to: Pt, units: Army | null, f: number) => { road: Road; atSea: boolean };
+  restZoom: number;
+  onHomeOrders: (m: Homeward) => void;
+  onOutOrders: (m: Movement) => void;
+  onWatch: (id: number) => void;
+}) => {
+  const now = useLive((l) => l.now);
+  const home = homeward.filter((m) => m.returnsAt > now);
+  const caravans = (data.caravans ?? []).filter((c) => c.arrivesAt > now);
+
+  // Crowded spots: a traveller standing on a village or camp, or on top of
+  // another traveller, drops its label so names and timers don't pile up.
+  // Armies keep theirs first, then merchants. (The list above still has it all.)
+  const quiet = new Set<string>();
+  // Labels sit under their token and shrink less than the land when you zoom out.
+  const near = 1.05 * T * pinScale(restZoom);
+  const taken: Pt[] = [
+    ...data.tribes.map((t) => ({ x: px(t.x), y: py(t.y) })),
+    ...data.camps.map((c) => ({ x: px(c.x), y: py(c.y) })),
+    ...battles.map((m) => ({ x: px(m.to.x), y: py(m.to.y) })),
+  ];
+  const place = (key: string, at: Pt) => {
+    if (taken.some((q) => Math.hypot(q.x - at.x, q.y - at.y) < near)) quiet.add(key);
+    taken.push(at);
+  };
+  const spot = (from: Pt, to: Pt, units: Army | null, f: number) =>
+    spotOnRoad({ x: px(from.x), y: py(from.y) }, { x: px(to.x), y: py(to.y) }, roadOf(from, to, units, f).road, f);
+
+  for (const m of marching) place(`t${m.id}`, spot(m.from, m.to, m.units, progress(now, m.sentAt, m.arrivesAt)));
+  for (const m of home) place(`b${m.id}`, spot(m.from, data.home, m.units, progress(now, m.leftAt, m.returnsAt)));
+  for (const c of caravans) place(`c${c.id}`, spot(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)));
+
+  return (
+    <>
+      {caravans.map((c) => (
+        <CaravanToken
+          key={`t${c.id}`}
+          amount={c.amount}
+          from={{ x: px(c.from.x), y: py(c.from.y) }}
+          kind={c.kind}
+          left={c.arrivesAt - now}
+          p={progress(now, c.sentAt, c.arrivesAt)}
+          quiet={quiet.has(`c${c.id}`)}
+          resource={c.resource}
+          road={roadOf(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)).road}
+          to={{ x: px(c.to.x), y: py(c.to.y) }}
+        />
+      ))}
+      {home.map((m) => {
+        const f = progress(now, m.leftAt, m.returnsAt);
+        const { road, atSea } = roadOf(m.from, data.home, m.units, f);
+
+        return (
+          <ArmyToken
+            key={`b${m.id}`}
+            atSea={atSea}
+            from={{ x: px(m.from.x), y: py(m.from.y) }}
+            incoming={false}
+            left={Math.max(0, m.returnsAt - now)}
+            p={f}
+            quiet={quiet.has(`b${m.id}`)}
+            road={road}
+            to={{ x: px(data.home.x), y: py(data.home.y) }}
+            units={m.units}
+            onClick={() => onHomeOrders(m)}
+          />
+        );
+      })}
+      {battles.map((m) => (
+        <BattleToken key={`f${m.id}`} at={{ x: px(m.to.x), y: py(m.to.y) }} m={m} now={now} onClick={() => onWatch(m.id)} />
+      ))}
+      {marching.map((m) => {
+        const f = progress(now, m.sentAt, m.arrivesAt);
+        const { road, atSea } = roadOf(m.from, m.to, m.units, f);
+
+        return (
+          <ArmyToken
+            key={`m${m.id}`}
+            atSea={atSea}
+            from={{ x: px(m.from.x), y: py(m.from.y) }}
+            incoming={m.kind === "incoming"}
+            left={Math.max(0, m.arrivesAt - now)}
+            p={f}
+            quiet={quiet.has(`t${m.id}`)}
+            road={road}
+            to={{ x: px(m.to.x), y: py(m.to.y) }}
+            units={m.units}
+            onClick={m.kind === "outgoing" ? () => onOutOrders(m) : undefined}
+          />
+        );
+      })}
+    </>
+  );
+};
+
 // ─── The map ─────────────────────────────────────────────────────────────────
 
 export const WarMap = ({
@@ -608,7 +736,17 @@ export const WarMap = ({
   /** Open on this barbarian camp (by level) with its card up. */
   focusCamp?: number;
 }) => {
-  const { state, rates, now, authHeader, recall, scout, refresh } = useGame();
+  const { authHeader } = useGameStatus();
+  const { recall, scout, refresh } = useGameActions();
+  // The map follows the clock in 5-second steps (has a shield run out, has a
+  // caravan arrived). What moves or counts down every second does so on its
+  // own (Travellers, Countdown), so the whole map isn't redrawn every second.
+  const now = useClock(5000);
+  const getLive = useLiveGetter();
+  const returning = useLive((l) => l.state.marches, sameJson);
+  const myHarbor = useLive((l) => l.state.buildings["harbor"] ?? 0);
+  const myShips = useLive((l) => l.state.army.longship);
+  const canScout = useLive((l) => l.rates.canScout);
   const { telegram } = useTelegramContext();
   const [data, setData] = useState<MapData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -992,7 +1130,6 @@ export const WarMap = ({
     return ratio < 0.75 ? "weaker" : ratio > 1.33 ? "stronger" : "even";
   };
 
-  const returning = state.marches;
   // Armies walking home that we can place on the map. Marches saved before
   // `leftAt` existed fall back to an estimate of the trip from the route.
   const homeward = data
@@ -1013,6 +1150,8 @@ export const WarMap = ({
   const incoming = marching.filter((m) => m.kind === "incoming");
   const mine = marching.filter((m) => m.kind === "outgoing");
   const watched = battles.find((m) => m.id === watching) ?? null;
+  // Every second only while a battle is being watched (its rounds play out live); 0 otherwise.
+  const battleNow = useLive((l) => (watching != null ? l.now : 0));
   const merchants =
     data?.caravans?.filter((c) => c.kind !== "other" && c.arrivesAt > now) ??
     [];
@@ -1068,8 +1207,11 @@ export const WarMap = ({
       from,
       at: { x: t.x, y: t.y },
       harbor: t.harbor ?? 0,
-      note:
-        state.shieldUntil > now ? "Attacking ends your own shield." : undefined,
+      note: (() => {
+        const l = getLive();
+
+        return l.state.shieldUntil > l.now ? "Attacking ends your own shield." : undefined;
+      })(),
     };
   };
   const campTarget = (c: Camp, from: { x: number; y: number }): AttackTarget => ({
@@ -1095,7 +1237,7 @@ export const WarMap = ({
   const redirectTo = (target: (from: { x: number; y: number }) => AttackTarget) => {
     if (!picking) return;
     setSelected(null);
-    setRedirecting({ army: picking, target: target(armySpot(picking, now).tile) });
+    setRedirecting({ army: picking, target: target(armySpot(picking, getLive().now).tile) });
     setPicking(null);
   };
 
@@ -1119,31 +1261,6 @@ export const WarMap = ({
     </button>
   );
 
-  // Crowded spots: a traveller standing on a village or camp, or on top of
-  // another traveller, drops its label so names and timers don't pile up.
-  // Armies keep theirs first, then merchants. (The list above still has it all.)
-  const quiet = new Set<string>();
-
-  if (data) {
-    // Labels sit under their token and shrink less than the land when you zoom out.
-    const near = 1.05 * T * pinScale(restZoom);
-    const taken: { x: number; y: number }[] = [
-      ...data.tribes.map((t) => ({ x: px(t.x), y: py(t.y) })),
-      ...data.camps.map((c) => ({ x: px(c.x), y: py(c.y) })),
-      ...battles.map((m) => ({ x: px(m.to.x), y: py(m.to.y) })),
-    ];
-    const place = (key: string, at: { x: number; y: number }) => {
-      if (taken.some((q) => Math.hypot(q.x - at.x, q.y - at.y) < near)) quiet.add(key);
-      taken.push(at);
-    };
-    const spot = (from: { x: number; y: number }, to: { x: number; y: number }, units: Army | null, f: number) =>
-      spotOnRoad({ x: px(from.x), y: py(from.y) }, { x: px(to.x), y: py(to.y) }, roadOf(from, to, units, f).road, f);
-
-    for (const m of marching) place(`t${m.id}`, spot(m.from, m.to, m.units, progress(now, m.sentAt, m.arrivesAt)));
-    for (const m of homeward) place(`b${m.id}`, spot(m.from, data.home, m.units, progress(now, m.leftAt, m.returnsAt)));
-    for (const c of data.caravans ?? [])
-      if (c.arrivesAt > now) place(`c${c.id}`, spot(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)));
-  }
 
   // Zoomed out, labels stay quiet: everyone's names only from LABELS_ZOOM up.
   const labelsAll = restZoom >= LABELS_ZOOM;
@@ -1248,7 +1365,6 @@ export const WarMap = ({
                     labelsAll={labelsAll}
                     left={px(c.x)}
                     picked={picked}
-                    timer={c.state === "cooldown" && (labelsAll || picked) ? formatDuration(c.readyAt - now) : undefined}
                     top={py(c.y)}
                     onPick={setSelected}
                   />
@@ -1279,72 +1395,21 @@ export const WarMap = ({
               })}
 
               {/* Caravans and armies on the road (in world px, so a new area
-                  loading never moves them). */}
-              {(data.caravans ?? [])
-                .filter((c) => c.arrivesAt > now)
-                .map((c) => (
-                  <CaravanToken
-                    key={`t${c.id}`}
-                    amount={c.amount}
-                    from={{ x: px(c.from.x), y: py(c.from.y) }}
-                    kind={c.kind}
-                    left={c.arrivesAt - now}
-                    p={progress(now, c.sentAt, c.arrivesAt)}
-                    quiet={quiet.has(`c${c.id}`)}
-                    resource={c.resource}
-                    road={roadOf(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)).road}
-                    to={{ x: px(c.to.x), y: py(c.to.y) }}
-                  />
-                ))}
-              {homeward.map((m) => {
-                const f = progress(now, m.leftAt, m.returnsAt);
-                const { road, atSea } = roadOf(m.from, data.home, m.units, f);
-
-                return (
-                  <ArmyToken
-                    key={`b${m.id}`}
-                    atSea={atSea}
-                    from={{ x: px(m.from.x), y: py(m.from.y) }}
-                    incoming={false}
-                    left={Math.max(0, m.returnsAt - now)}
-                    p={f}
-                    quiet={quiet.has(`b${m.id}`)}
-                    road={road}
-                    to={{ x: px(data.home.x), y: py(data.home.y) }}
-                    units={m.units}
-                    onClick={() => setOrdersFor(homebound(m))}
-                  />
-                );
-              })}
-              {battles.map((m) => (
-                <BattleToken
-                  key={`f${m.id}`}
-                  at={{ x: px(m.to.x), y: py(m.to.y) }}
-                  m={m}
-                  now={now}
-                  onClick={() => setWatching(m.id)}
-                />
-              ))}
-              {marching.map((m) => {
-                const f = progress(now, m.sentAt, m.arrivesAt);
-                const { road, atSea } = roadOf(m.from, m.to, m.units, f);
-
-                return (
-                  <ArmyToken
-                    key={`m${m.id}`}
-                    atSea={atSea}
-                    from={{ x: px(m.from.x), y: py(m.from.y) }}
-                    incoming={m.kind === "incoming"}
-                    left={Math.max(0, m.arrivesAt - now)}
-                    p={f}
-                    quiet={quiet.has(`t${m.id}`)}
-                    road={road}
-                    to={{ x: px(m.to.x), y: py(m.to.y) }}
-                    units={m.units}
-                    onClick={m.kind === "outgoing" ? () => setOrdersFor(outbound(m)) : undefined}
-                  />
-                );
-              })}
+                  loading never moves them). They move every second on their
+                  own; the rest of the map doesn't redraw with them. */}
+              <Travellers
+                battles={battles}
+                data={data}
+                homeward={homeward}
+                marching={marching}
+                px={px}
+                py={py}
+                restZoom={restZoom}
+                roadOf={roadOf}
+                onHomeOrders={(m) => setOrdersFor(homebound(m))}
+                onOutOrders={(m) => setOrdersFor(outbound(m))}
+                onWatch={setWatching}
+              />
             </div>
           </div>
         )}
@@ -1427,7 +1492,7 @@ export const WarMap = ({
             {movesOpen && (
               <div className="map-list flex flex-col gap-1.5 max-h-[30svh] overflow-y-auto overscroll-contain">
       {battles.map((m) => (
-                <BattleRow key={`f${m.id}`} m={m} now={now} onWatch={() => setWatching(m.id)} />
+                <WithNow key={`f${m.id}`}>{(t) => <BattleRow m={m} now={t} onWatch={() => setWatching(m.id)} />}</WithNow>
               ))}
               {incoming.map((m) => (
                 <div
@@ -1446,7 +1511,7 @@ export const WarMap = ({
                     </span>
                   </span>
                   <span className="font-display font-black text-[#FFB27A] shrink-0">
-                    {formatDuration(m.arrivesAt - now)}
+                    <Countdown to={m.arrivesAt} />
                   </span>
                 </div>
               ))}
@@ -1464,7 +1529,7 @@ export const WarMap = ({
                     </span>
                   </span>
                   <span className="font-display font-black text-goldtext shrink-0">
-                    {formatDuration(m.arrivesAt - now)}
+                    <Countdown to={m.arrivesAt} />
                   </span>
                   {ordersButton(outbound(m))}
                 </div>
@@ -1482,7 +1547,7 @@ export const WarMap = ({
                     </span>
                   </span>
                   <span className="font-display font-black text-sub shrink-0">
-                    {formatDuration(m.returnsAt - now)}
+                    <Countdown to={m.returnsAt} />
                   </span>
                   {(() => {
                     const h = homeward.find((x) => x.id === m.id);
@@ -1523,7 +1588,7 @@ export const WarMap = ({
                       c.kind === "coming" ? "text-good" : "text-sub",
                     )}
                   >
-                    {formatDuration(c.arrivesAt - now)}
+                    <Countdown to={c.arrivesAt} />
                   </span>
                 </div>
               ))}
@@ -1699,11 +1764,11 @@ export const WarMap = ({
                   </>
                 ) : (
                   <>
-                    {seaRoute(data!.home, t).naval && <SeaNote harbor={t.harbor ?? 0} myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />}
+                    {seaRoute(data!.home, t).naval && <SeaNote harbor={t.harbor ?? 0} myHarbor={myHarbor} ships={myShips} />}
                     {sc ? (
                       <div className="inset p-2.5 flex flex-col gap-1.5 text-sm">
                         <div className="text-[10px] font-extrabold tracking-[0.12em] text-muted">
-                          SCOUT REPORT · {formatDuration(now - sc.at)} AGO
+                          SCOUT REPORT · <Since at={sc.at} /> AGO
                         </div>
                         <div>
                           <GameIcon e="🛡️" /> Defense <b>{fmt(sc.defense)}</b>{" "}
@@ -1744,12 +1809,12 @@ export const WarMap = ({
                     )}
                     {shielded && (
                       <p className="text-sm font-bold text-gold">
-                        <GameIcon e="🛡️" /> Shielded for {formatDuration(t.shieldUntil - now)}.
+                        <GameIcon e="🛡️" /> Shielded for <Countdown to={t.shieldUntil} />.
                         You can't attack until it ends.
                       </p>
                     )}
                     <div className="flex gap-2">
-                      {rates.canScout ? (
+                      {canScout ? (
                         <Button
                           className="flex-1"
                           disabled={busy}
@@ -1814,7 +1879,7 @@ export const WarMap = ({
                   </span>
                 </div>
                 {seaRoute(data!.home, c).naval && (
-                  <SeaNote camp myHarbor={state.buildings["harbor"] ?? 0} ships={state.army.longship} />
+                  <SeaNote camp myHarbor={myHarbor} ships={myShips} />
                 )}
                 <p className="text-sm text-sub">
                   <GameIcon e="🎁" /> {fmt(c.reward.resources)} of each resource + <GameIcon e="🪙" />{" "}
@@ -1830,7 +1895,7 @@ export const WarMap = ({
                   </p>
                 ) : c.state === "cooldown" ? (
                   <p className="text-sm font-bold text-muted">
-                    The barbarians regroup in {formatDuration(c.readyAt - now)}.
+                    The barbarians regroup in <Countdown to={c.readyAt} />.
                   </p>
                 ) : busyCamp ? (
                   <p className="text-sm font-bold text-goldtext">
@@ -1849,7 +1914,7 @@ export const WarMap = ({
             );
           })()}
       </Drawer>
-      <LiveBattleDrawer m={watched} now={now} onClose={() => setWatching(null)} />
+      <LiveBattleDrawer m={watched} now={battleNow || now} onClose={() => setWatching(null)} />
       <ArmyOrdersDrawer
         army={ordersFor}
         onClose={() => setOrdersFor(null)}
