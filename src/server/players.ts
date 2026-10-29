@@ -35,6 +35,8 @@ export type Player = {
   createdAt: number;
   version: number;
   state: GameState;
+  /** Their tile on the war map, once they've been given one. */
+  home?: { x: number; y: number } | null;
 };
 
 const str = (v: unknown) => (v == null ? null : String(v));
@@ -53,6 +55,7 @@ const toPlayer = (r: Row): Player => ({
   createdAt: Number(r.created_at),
   version: Number(r.version),
   state: normalizeState(JSON.parse(String(r.state))),
+  home: r.map_x == null ? null : { x: Number(r.map_x), y: Number(r.map_y) },
 });
 
 export async function findById(id: number) {

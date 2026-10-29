@@ -4,6 +4,7 @@ import { resolveDueAttacks } from "@/server/war";
 import { resolveDueTrades } from "@/server/trade";
 import { ensureBotSetup } from "@/server/bot";
 import { checkRelease, deliverAnnouncements } from "@/server/announce";
+import { settleAll } from "@/server/map";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -33,6 +34,11 @@ export async function GET(req: NextRequest) {
 
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
+  // New tribes get their tile on the map here (it used to slow every map request).
+  await settleAll().catch((e) =>
+    // eslint-disable-next-line no-console
+    console.error("settling new tribes failed", e)
+  );
   const bot = await ensureBotSetup().catch(() => null);
   // A new version went live: draft an announcement for the admins to approve.
   const release = await checkRelease().catch((e) => {
