@@ -27,7 +27,10 @@ export const Header: React.FC = () => {
 
   return (
     <header
-      className="w-full flex flex-col gap-2 px-3 pb-2 z-20 bg-gradient-to-b from-ink via-ground/95 to-ground/80 backdrop-blur-sm border-b border-line/40"
+      // No backdrop-blur: nothing scrolls under the header, and blurring what's
+      // behind it on every repaint (the counters tick each second) cost frames
+      // on weak phones for nothing you could see.
+      className="w-full flex flex-col gap-2 px-3 pb-2 z-20 bg-gradient-to-b from-ink via-ground/95 to-ground/80 border-b border-line/40"
       // In full-screen Telegram (e.g. iPhones with a Dynamic Island) its Close and ⋯
       // buttons float over the top corners and swallow taps on the avatar and Trade.
       // Telegram reports that area in these CSS variables (0 when not full-screen).

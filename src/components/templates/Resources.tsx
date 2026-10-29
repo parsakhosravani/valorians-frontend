@@ -6,7 +6,7 @@ import clsx from "clsx";
 
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { compact, formatDuration } from "@/lib/format";
+import { compact, formatDuration, grouped } from "@/lib/format";
 import {
   FRENZY_METER_MAX,
   MAX_SKILL_LEVEL,
@@ -286,7 +286,7 @@ export const Resources = () => {
         <div className="flex-1 flex flex-col gap-1">
           <div className="flex justify-between text-sm font-extrabold">
             <span>
-              Daily stamina {Math.floor(state.energy).toLocaleString("en-US")} / {rates.energyCapacity.toLocaleString("en-US")}
+              Daily stamina {grouped(Math.floor(state.energy))} / {grouped(rates.energyCapacity)}
             </span>
             <span className="text-muted text-xs font-bold self-end">refills in {formatDuration(msToUtcMidnight(now))}</span>
           </div>

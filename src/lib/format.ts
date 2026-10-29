@@ -11,7 +11,18 @@ export function formatDuration(ms: number) {
   return `${s}s`;
 }
 
+// One formatter each, made once: building an Intl.NumberFormat is slow on a
+// phone, and counters on every screen format numbers every second.
+// (`n.toLocaleString("en-US")` builds a new one on every call, too.)
+const COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+const GROUPED = new Intl.NumberFormat("en-US");
+
 /** 15300 → "15.3K" */
 export function compact(n: number) {
-  return Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(Math.floor(n));
+  return COMPACT.format(Math.floor(n));
+}
+
+/** 15300 → "15,300", the same as `n.toLocaleString("en-US")`. */
+export function grouped(n: number) {
+  return GROUPED.format(n);
 }

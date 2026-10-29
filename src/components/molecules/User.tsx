@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { useGame } from "@/context";
 import { plusActive } from "@/lib/game/engine";
+import { grouped } from "@/lib/format";
 
 import { Avatar } from "./Avatar";
 import { GameIcon } from "@/components/atoms/GameIcon";
@@ -20,7 +21,7 @@ export const User = () => {
           {name}
           {plus && <span aria-label="Plus" className="ml-1" title="Valorians Plus"><GameIcon e="👑" /></span>}
         </span>
-        <span className="text-goldtext text-xs font-bold">Rank #{me.rank.toLocaleString("en-US")} ›</span>
+        <span className="text-goldtext text-xs font-bold">Rank #{grouped(me.rank)} ›</span>
       </div>
     </Link>
   );
