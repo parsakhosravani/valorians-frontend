@@ -36,6 +36,7 @@ import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeU
 import { pinScale, useMapCamera } from "./useMapCamera";
 import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, VILLAGE_GROW, VILLAGE_MIN } from "./MapCanvas";
 import { WorldMap } from "./WorldMap";
+import { roadShape, timeAt } from "./roadShape";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -73,6 +74,7 @@ import {
   routeTimeline,
   scoutCost,
   seaRoute,
+  terrainAt,
 } from "@/lib/game/map";
 import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
@@ -243,8 +245,9 @@ const useFillHeight = (box: RefObject<HTMLDivElement | null>) => {
 type Pt = { x: number; y: number };
 
 /**
- * A trip on the map in px: the road its token follows (corners only, timed
- * for its troops) and the same road as land and sea stretches for the drawn path.
+ * A trip on the map in px: the road its token follows (drawn winding, see
+ * roadShape, and timed for its troops) and the same road as land and sea
+ * stretches for the drawn path.
  */
 type Trip = { r: MarchRoute; stops: number[]; road: Road; runs: PathRun[] };
 
@@ -269,36 +272,35 @@ const tripFor = (
   const r = marchRoute(from, to);
   const stops = routeTimeline(r, units);
   const at = (q: Pt) => ({ x: px(q.x), y: py(q.y) });
-  const straightOn = (k: number) => {
-    const prev = r.path[k - 1];
-    const next = r.path[k + 1];
+  const last = r.path.length - 1;
+  const wetAt = (u: number) => {
+    const k = Math.max(0, Math.min(last - 1, Math.floor(u)));
 
-    return !!prev && !!next && r.path[k].x - prev.x === next.x - r.path[k].x && r.path[k].y - prev.y === next.y - r.path[k].y;
+    return r.wet[k] || r.wet[k + 1];
   };
-  const points: Pt[] = [];
-  const kept: number[] = [];
+  // The road drawn the way a worn track runs (see roadShape), never off what
+  // it crosses: walkable ground on land, open sea where it sails. Each point
+  // knows where along the tiles it is (u), and so when the traveller gets there.
+  const shape = roadShape(r.path.map(at), T, (p, u) => {
+    const t = terrainAt(Math.floor(p.x / T) + MAP_MIN, Math.floor(p.y / T) + MAP_MIN);
 
-  // Only the corners: drop tiles where the road runs straight on.
-  r.path.forEach((q, k) => {
-    if (straightOn(k) && r.wet[k] === r.wet[k - 1]) return;
-    points.push(at(q));
-    kept.push(stops[k]);
+    return wetAt(u) ? t === "sea" : TERRAIN[t].march != null;
   });
 
   // The drawn path: a new stretch wherever the road reaches or leaves the water.
   const runs: PathRun[] = [];
 
-  for (let k = 0; k < r.path.length - 1; k++) {
-    const wet = r.wet[k] || r.wet[k + 1];
+  shape.points.forEach((q, i) => {
+    if (i === 0) return;
+    const wet = wetAt((shape.u[i - 1] + shape.u[i]) / 2);
     const run = runs[runs.length - 1];
 
-    if (!run || run.wet !== wet) runs.push({ wet, points: [at(r.path[k]), at(r.path[k + 1])] });
-    else if (straightOn(k) && r.wet[k] === r.wet[k - 1]) run.points[run.points.length - 1] = at(r.path[k + 1]);
-    else run.points.push(at(r.path[k + 1]));
-  }
+    if (!run || run.wet !== wet) runs.push({ wet, points: [shape.points[i - 1], q] });
+    else run.points.push(q);
+  });
   if (!runs.length) runs.push({ wet: false, points: [at(from), at(to)] });
 
-  const trip = { r, stops, road: { points, stops: kept }, runs };
+  const trip = { r, stops, road: { points: shape.points, stops: shape.u.map((u) => timeAt(stops, u)) }, runs };
 
   if (TRIPS.size > 300) TRIPS.delete(TRIPS.keys().next().value!);
   TRIPS.set(key, trip);
