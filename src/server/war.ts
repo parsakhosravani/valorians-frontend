@@ -930,32 +930,55 @@ export async function listReports(me: Player) {
 
 export type LeaderboardMetric = "population" | "power" | "wins";
 
+/** Players listed from the top. */
+const LEADERBOARD_TOP = 50;
+/** Below the top: this many players just above you, and just below. */
+const AROUND_ABOVE = 3;
+const AROUND_BELOW = 2;
+
 export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   const col = metric === "power" ? "power" : metric === "wins" ? "wins" : "population";
+  const cols = "id, username, first_name, photo_url, population, power, wins, plus_until";
   const db = await getDb();
   const [top, mine] = await db.batch(
     [
-      `SELECT id, username, first_name, photo_url, population, power, wins, plus_until FROM users ORDER BY ${col} DESC, id ASC LIMIT 50`,
+      `SELECT ${cols} FROM users ORDER BY ${col} DESC, id ASC LIMIT ${LEADERBOARD_TOP}`,
       { sql: `SELECT ${col} AS v FROM users WHERE id = ?`, args: [me.id] },
     ],
     "read"
   );
   const myValue = Number(mine.rows[0]?.v ?? 0);
-  const rankRs = await db.execute({ sql: `SELECT COUNT(*) + 1 AS r FROM users WHERE ${col} > ?`, args: [myValue] });
+  // Ties break by id, as in the list, so "your rank" and your row agree.
+  const rankRs = await db.execute({
+    sql: `SELECT COUNT(*) + 1 AS r FROM users WHERE ${col} > ? OR (${col} = ? AND id < ?)`,
+    args: [myValue, myValue, me.id],
+  });
+  const myRank = Number(rankRs.rows[0].r);
+  // Out of the top: show who's just ahead (the next to beat) and just behind.
+  const from = Math.max(LEADERBOARD_TOP, myRank - 1 - AROUND_ABOVE);
+  const around =
+    myRank > LEADERBOARD_TOP
+      ? await db.execute({
+          sql: `SELECT ${cols} FROM users ORDER BY ${col} DESC, id ASC LIMIT ? OFFSET ?`,
+          args: [myRank + AROUND_BELOW - from, from],
+        })
+      : null;
   const now = Date.now();
+  const row = (r: (typeof top.rows)[number], rank: number) => ({
+    rank,
+    id: Number(r.id),
+    name: String(r.first_name || (r.username ? `@${r.username}` : "Player")),
+    photoUrl: avatarUrl(Number(r.id)),
+    value: Math.floor(Number(r[col])),
+    isMe: Number(r.id) === me.id,
+    plus: Number(r.plus_until ?? 0) > now,
+  });
 
   return {
     metric,
-    me: { rank: Number(rankRs.rows[0].r), value: Math.floor(myValue) },
-    top: top.rows.map((r, i) => ({
-      rank: i + 1,
-      id: Number(r.id),
-      name: String(r.first_name || (r.username ? `@${r.username}` : "Player")),
-      photoUrl: avatarUrl(Number(r.id)),
-      value: Math.floor(Number(r[col])),
-      isMe: Number(r.id) === me.id,
-      plus: Number(r.plus_until ?? 0) > now,
-    })),
+    me: { rank: myRank, value: Math.floor(myValue) },
+    top: top.rows.map((r, i) => row(r, i + 1)),
+    around: around?.rows.map((r, i) => row(r, from + i + 1)) ?? [],
   };
 }
 
