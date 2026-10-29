@@ -18,8 +18,8 @@ import { formatDuration } from "@/lib/format";
  * screen, not the world. Armies, caravans and roads (a handful) stay page
  * elements on top, moved by the same camera.
  *
- * Markers are drawn as WarMap's Village and CampMarker draw them in the
- * page: same boxes, same sizes, same colours.
+ * Markers are drawn as the map's old page-element markers drew them: same
+ * boxes, same sizes, same colours.
  */
 
 // Shared with WarMap: a village's box, and the tile's centre inside it.
@@ -444,7 +444,7 @@ export class MapPainter {
     for (const c of this.camps) if (c.picked && near(c.x, c.y)) this.camp(c, pin, redraw);
   }
 
-  /** A village, as WarMap's Village draws it (box origin at the tile's centre minus (VX, VY)). */
+  /** A village (box origin at the tile's centre minus (VX, VY)). */
   private village(t: CanvasTribe, pin: number, redraw: () => void) {
     const { g } = this;
     const { size } = t;
@@ -558,7 +558,7 @@ export class MapPainter {
     g.restore();
   }
 
-  /** A barbarian camp, as WarMap's CampMarker draws it (box origin at the tile's centre minus (32, 34)). */
+  /** A barbarian camp (box origin at the tile's centre minus (32, 34)). */
   private camp(c: CanvasCamp, pin: number, redraw: () => void) {
     const { g } = this;
     const locked = c.state === "locked";

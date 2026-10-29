@@ -1,6 +1,5 @@
 "use client";
 import {
-  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -35,7 +34,7 @@ import {
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
-import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, SAND, VILLAGE_GROW, VILLAGE_MIN, VX, VY } from "./MapCanvas";
+import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, VILLAGE_GROW, VILLAGE_MIN } from "./MapCanvas";
 import { WorldMap } from "./WorldMap";
 
 import { Button } from "@/components/atoms/Button";
@@ -74,7 +73,6 @@ import {
   routeTimeline,
   scoutCost,
   seaRoute,
-  terrainAt,
 } from "@/lib/game/map";
 import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
@@ -195,29 +193,6 @@ const TERRAIN_ICON: Record<Terrain, string> = {
   mountains: "⛰️",
   lake: "💧",
   sea: "🌊",
-};
-
-// Village markers: smallest picture (Town Hall 0), how much bigger they grow,
-// and the tile's centre inside the marker's box. Shared with the canvas map
-// (MapCanvas), so both draw villages the same.
-
-/**
- * The map drawn on a canvas (MapCanvas) instead of as page elements: the
- * default. `?map=dom` goes back to page elements (and `?map=canvas` returns);
- * remembered on this device.
- */
-const MAP_RENDERER_KEY = "war-map-renderer";
-const canvasMapWanted = () => {
-  if (typeof window === "undefined") return true;
-  try {
-    const asked = new URLSearchParams(window.location.search).get("map");
-
-    if (asked === "canvas" || asked === "dom") localStorage.setItem(MAP_RENDERER_KEY, asked);
-
-    return localStorage.getItem(MAP_RENDERER_KEY) !== "dom";
-  } catch {
-    return true;
-  }
 };
 
 /**
@@ -376,242 +351,6 @@ const SeaNote = ({
     </div>
   );
 };
-
-// ─── Villages and camps ──────────────────────────────────────────────────────
-//
-// The map re-renders every second (the game clock), and a loaded area can
-// hold hundreds of villages. Built inline, every one of them was laid out
-// again each second, even mid-drag, and the drag stuttered on every tick.
-// As memoized pieces with plain props, a marker only renders again when
-// something it shows has changed.
-//
-// No CSS filters (drop-shadow) on markers: every one had to be painted
-// through its own offscreen pass whenever the map layer was redrawn, and
-// with hundreds on the page that made each redraw slow. The soft shadow spot
-// under each village does the same job for free.
-
-const CampMarker = memo(function CampMarker({
-  c,
-  left,
-  top,
-  picked,
-  labelsAll,
-  onPick,
-}: {
-  c: Camp;
-  left: number;
-  top: number;
-  picked: boolean;
-  labelsAll: boolean;
-  onPick: (s: Selected) => void;
-}) {
-  return (
-    <button
-      aria-label={`Barbarian camp ${c.level}`}
-      className={clsx(
-        "map-pin absolute",
-        c.state === "locked" && "grayscale brightness-[0.6]",
-      )}
-      style={{
-        left: left - 32,
-        top: top - 34,
-        width: 64,
-        height: 56,
-        transformOrigin: "32px 34px",
-        zIndex: picked ? 4 : 1,
-      }}
-      onClick={() => onPick({ kind: "camp", camp: c })}
-    >
-      {/* Soft shadow, then the ground ring */}
-      <span className="absolute left-[16px] top-[33px] w-8 h-[12px] rounded-[50%] bg-[radial-gradient(closest-side,rgba(10,7,4,0.55),rgba(10,7,4,0))]" />
-      <span
-        className={clsx(
-          "absolute left-[17px] top-[34px] w-[30px] h-[10px] rounded-[50%] border-[1.5px]",
-          c.state === "locked"
-            ? "border-line bg-ink/30"
-            : "border-[#C2552E] bg-[#8A3B23]/35",
-          picked && "shadow-[0_0_14px_rgba(240,106,68,0.9)]",
-        )}
-      />
-      <Image
-        draggable={false}
-        alt=""
-        className="absolute left-[16px] top-[11px] w-8 h-8 object-contain"
-        height={88}
-        src={buildingImage(BUILDING_BY_ID["barracks"])}
-        width={88}
-      />
-      {labelsAll || picked ? (
-        <span
-          className={clsx(
-            "absolute left-1/2 top-[45px] -translate-x-1/2 whitespace-nowrap px-1.5 h-[15px] inline-flex items-center gap-0.5 rounded-md border font-display text-[9.5px] font-black leading-none shadow-[0_2px_4px_rgba(0,0,0,0.6)]",
-            c.state === "new"
-              ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
-              : c.state === "ready"
-                ? "bg-good text-[#1A120B] border-[#E6F5D9]"
-                : "bg-ink/90 text-sub border-line",
-          )}
-        >
-          {c.state === "locked" ? (
-            <>
-              <GameIcon e="🔒" /> {c.level}
-            </>
-          ) : c.state === "cooldown" ? (
-            // Ticks on its own: the marker itself isn't redrawn every second.
-            <Countdown to={c.readyAt} />
-          ) : (
-            `Camp ${c.level}`
-          )}
-        </span>
-      ) : c.state !== "locked" ? (
-        // Zoomed out: just the camp's number in a small badge, coloured by its state.
-        <span
-          className={clsx(
-            "absolute left-1/2 top-[40px] -translate-x-1/2 min-w-[15px] h-[15px] px-0.5 rounded-full border-[1.5px] inline-flex items-center justify-center font-display text-[8.5px] font-black leading-none shadow-[0_2px_3px_rgba(0,0,0,0.6)]",
-            c.state === "new"
-              ? "bg-ember text-[#FFF4EA] border-[#FFD2B0]"
-              : c.state === "ready"
-                ? "bg-good text-[#1A120B] border-[#E6F5D9]"
-                : "bg-ink/90 text-sub border-line",
-          )}
-        >
-          {c.level}
-        </span>
-      ) : null}
-    </button>
-  );
-});
-
-const Village = memo(function Village({
-  t,
-  left,
-  top,
-  picked,
-  loud,
-  shielded,
-  strength,
-  onPick,
-}: {
-  t: Tribe;
-  left: number;
-  top: number;
-  picked: boolean;
-  /** Full labels (name, level, big shield). */
-  loud: boolean;
-  shielded: boolean;
-  strength: "weaker" | "stronger" | "even";
-  onPick: (s: Selected) => void;
-}) {
-  const ring = t.isMe
-    ? "border-gold bg-gold/30 shadow-[0_0_18px_rgba(227,169,72,0.85)]"
-    : t.ally
-      ? "border-sea bg-sea/25 shadow-[0_0_10px_rgba(127,179,208,0.6)]"
-      : strength === "weaker"
-        ? "border-good bg-good/20"
-        : strength === "stronger"
-          ? "border-bad bg-bad/20"
-          : "border-goldtext/80 bg-goldtext/15";
-
-  // Villages grow a little with their Town Hall, so the strong ones stand out.
-  const size = Math.round(VILLAGE_MIN + Math.min(VILLAGE_GROW, t.townHall * 0.6));
-  const half = size / 2;
-  // The marker is drawn round the tile's centre at (VX, VY) inside its box.
-  const foot = VY + 6;
-
-  return (
-    <button
-      aria-label={t.isMe ? "Your tribe" : t.name}
-      className="map-pin absolute"
-      style={{
-        left: left - VX,
-        top: top - VY,
-        width: VX * 2,
-        height: VY + 26,
-        transformOrigin: `${VX}px ${VY}px`,
-        zIndex: picked ? 4 : t.isMe ? 3 : 2,
-      }}
-      onClick={() => onPick({ kind: "tribe", tribe: t })}
-    >
-      {t.terrain === "sea" && (
-        // Settled before the seas were charted: a little island of their own.
-        <span
-          className="absolute rounded-[50%] border border-[#E6D3A0]/70"
-          style={{ left: VX - half - 6, top: foot - 12, width: size + 12, height: 22, background: SAND }}
-        />
-      )}
-      {/* Soft shadow the village stands in */}
-      <span
-        className="absolute rounded-[50%] bg-[radial-gradient(closest-side,rgba(10,7,4,0.55),rgba(10,7,4,0))]"
-        style={{ left: VX - half - 2, top: foot - 8, width: size + 4, height: 14 }}
-      />
-      {/* Ground ring: its colour says how strong they are next to you */}
-      {picked && (
-        <span
-          className={clsx("absolute rounded-[50%] border-2 animate-ping", ring)}
-          style={{ left: VX - half + 1, top: foot - 6, width: size - 2, height: 11 }}
-        />
-      )}
-      <span
-        className={clsx("absolute rounded-[50%] border-[1.5px]", ring)}
-        style={{ left: VX - half + 1, top: foot - 6, width: size - 2, height: 11 }}
-      />
-      <Image
-        draggable={false}
-        alt=""
-        className="absolute object-contain"
-        height={104}
-        src={buildingImage(BUILDING_BY_ID["town-hall"])}
-        style={{ left: VX - half, top: foot - size + 3, width: size, height: size }}
-        width={104}
-      />
-      {/* Town Hall level: a small coin tucked at the village's foot */}
-      {loud && (
-        <span
-          className="absolute w-4 h-4 rounded-full border-[1.5px] border-[#F7D58A] bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] font-display text-[8.5px] font-black leading-none flex items-center justify-center shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-          style={{ left: VX - half - 5, top: foot - 12 }}
-        >
-          {t.townHall}
-        </span>
-      )}
-      {/* Shield: full size with the labels, a small faint mark otherwise */}
-      {shielded && !t.isMe && (
-        <span
-          className={clsx(
-            "absolute leading-none",
-            loud ? "text-[13px]" : "text-[9px] opacity-75",
-          )}
-          style={{ left: VX + half - (loud ? 9 : 7), top: foot - size + (loud ? 1 : 5) }}
-        >
-          <GameIcon e="🛡️" />
-        </span>
-      )}
-      {t.clan && (
-        <span
-          className="absolute"
-          style={{ left: VX - half - 4, top: foot - size - 2 }}
-        >
-          <ClanFlag flag={t.clan.flag} size={loud ? 16 : 12} title={`[${t.clan.tag}]`} />
-        </span>
-      )}
-      {/* Name plate */}
-      {loud && (
-        <span
-          className={clsx(
-            "absolute left-1/2 -translate-x-1/2 max-w-[104px] truncate px-1.5 h-[15px] leading-[13px] rounded-[5px] border font-display text-[9px] font-bold tracking-[0.02em] shadow-[0_2px_3px_rgba(0,0,0,0.6)]",
-            t.isMe
-              ? "bg-gradient-to-b from-[#F6CC72] to-[#C98C2E] text-[#1A120B] border-[#F7D58A]"
-              : t.ally
-                ? "bg-ink/90 text-sea border-sea/60"
-                : "bg-ink/90 text-parch border-frame",
-          )}
-          style={{ top: foot + 6 }}
-        >
-          {t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name}
-        </span>
-      )}
-    </button>
-  );
-});
 
 // ─── On the road ─────────────────────────────────────────────────────────────
 
@@ -776,8 +515,6 @@ export const WarMap = ({
   // The on-the-move list starts folded so it doesn't cover the map; its header shows what's coming.
   const [movesOpen, setMovesOpen] = useState(false);
   const [worldOpen, setWorldOpen] = useState(false);
-  // Read once: before the map has loaded the page shows the same either way.
-  const [canvasMap] = useState(canvasMapWanted);
   const painter = useRef<MapPainter | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const fill = useFillHeight(box);
@@ -963,31 +700,11 @@ export const WarMap = ({
     }
   };
 
-  // The tiles whose villages and camps are on the page: the screen and a
-  // screen's width or height round it, snapped to an 8-tile grid so it only
-  // changes when the view crosses a line. A whole loaded area holds hundreds
-  // of villages; drawing them all, mostly off screen, was most of the map's cost.
-  const [cull, setCull] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
-  const updateCull = (v: { x0: number; y0: number; x1: number; y1: number }) => {
-    const mx = Math.max(6, v.x1 - v.x0);
-    const my = Math.max(6, v.y1 - v.y0);
-    const next = {
-      x0: Math.floor((v.x0 - mx) / 8) * 8,
-      y0: Math.floor((v.y0 - my) / 8) * 8,
-      x1: Math.ceil((v.x1 + mx) / 8) * 8,
-      y1: Math.ceil((v.y1 + my) / 8) * 8,
-    };
-
-    setCull((c) => (c && c.x0 === next.x0 && c.y0 === next.y0 && c.x1 === next.x1 && c.y1 === next.y1 ? c : next));
-  };
-  const onPage = (p: { x: number; y: number }) =>
-    !cull || (p.x >= cull.x0 && p.x < cull.x1 && p.y >= cull.y0 && p.y < cull.y1);
-
   const camera = useMapCamera({
     // The whole world: the camera is never fenced in by what's loaded.
     size: data ? MAP_SIZE * T : 0,
-    // Canvas map: drawn again every frame the camera moves.
-    onDraw: canvasMap ? (c) => painter.current?.setCamera(c) : undefined,
+    // The canvas is drawn again every frame the camera moves.
+    onDraw: (c) => painter.current?.setCamera(c),
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
     onSettle: ({ x, y, z }) => {
@@ -998,18 +715,14 @@ export const WarMap = ({
       setView((v) =>
         v && v.x0 === next.x0 && v.y0 === next.y0 && v.x1 === next.x1 && v.y1 === next.y1 ? v : next,
       );
-      // The canvas draws only what's on screen by itself.
-      if (!canvasMap) updateCull(next);
       loadIfNearEdge(next);
     },
     // Mid-drag too: the next area loads before the map runs out under the
-    // finger, not only once it comes to rest against the edge, and villages
-    // ahead are put on the page before they scroll into view.
+    // finger, not only once it comes to rest against the edge.
     onMove: ({ x, y, z }) => {
       const next = tilesOnScreen(x, y, z);
 
       if (!next) return;
-      if (!canvasMap) updateCull(next);
       loadIfNearEdge(next);
       // The land follows a long drag too (it can now go past what's loaded),
       // but only when the drag needs other pieces: each new view redraws the map's page.
@@ -1310,9 +1023,9 @@ export const WarMap = ({
 
   const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
 
-  // ─── Canvas map: the markers it draws, by the same rules as Village and CampMarker ───
+  // ─── The villages and camps the canvas draws ───
   const canvasTribes: CanvasTribe[] =
-    canvasMap && data
+    data
       ? data.tribes.map((t) => {
           const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
 
@@ -1334,7 +1047,7 @@ export const WarMap = ({
         })
       : [];
   const canvasCamps: CanvasCamp[] =
-    canvasMap && data
+    data
       ? data.camps.map((c) => {
           const picked = selected?.kind === "camp" && selected.camp.level === c.level;
 
@@ -1353,7 +1066,7 @@ export const WarMap = ({
     p.setMarkers(canvasTribes, canvasCamps);
   });
 
-  /** Canvas map: a tap on the land picks the village or camp under it. */
+  /** A tap on the land picks the village or camp under it. */
   const pickOnCanvas = (e: React.MouseEvent<HTMLDivElement>) => {
     // Armies, caravans and battles are page elements with their own buttons.
     if ((e.target as Element).closest("button") || !data) return;
@@ -1373,8 +1086,8 @@ export const WarMap = ({
 
   // The canvas appears with the map: start it where the camera already is.
   useEffect(() => {
-    if (canvasMap && data) painter.current?.setCamera(camera.get());
-  }, [canvasMap, !!data]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (data) painter.current?.setCamera(camera.get());
+  }, [!!data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The roads your armies, the armies coming for you and your merchants are on.
   const paths: TravelPath[] = data
@@ -1422,109 +1135,52 @@ export const WarMap = ({
             ref={camera.viewport}
             data-covered={covered ? "" : undefined}
             className="map-viewport absolute inset-0 overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing"
-            onClick={canvasMap ? pickOnCanvas : undefined}
+            onClick={pickOnCanvas}
           >
-            {/* Canvas map: the land, villages and camps, under the few page elements that move on them. */}
-            {canvasMap && (
-              <MapCanvas
-                onPainter={(p) => {
-                  painter.current = p;
-                }}
-              />
-            )}
+            {/* The land, villages and camps, under the few page elements that move on them. */}
+            <MapCanvas
+              onPainter={(p) => {
+                painter.current = p;
+              }}
+            />
+            {/* Taps go through to the canvas, except on the armies' and battles' own buttons. */}
             <div
               ref={camera.layer}
-              className={clsx(
-                "absolute left-0 top-0 origin-top-left will-change-transform",
-                // Taps go through to the canvas, except on the armies' and battles' own buttons.
-                canvasMap && "pointer-events-none [&_button]:pointer-events-auto",
-              )}
+              className="absolute left-0 top-0 origin-top-left will-change-transform pointer-events-none [&_button]:pointer-events-auto"
               style={{ width: MAP_SIZE * T, height: MAP_SIZE * T }}
             >
-              <div className="absolute" style={{ left: (backX - MAP_MIN) * T, top: (backY - MAP_MIN) * T }}>
-                <GroundOverview
-                  n={backSide}
-                  ox={backX}
-                  oy={backY}
-                  onCanvas={
-                    canvasMap
-                      ? (c) =>
-                          painter.current?.setBackdrop(
-                            c && { canvas: c, left: (backX - MAP_MIN) * T, top: (backY - MAP_MIN) * T, size: backSide * T },
-                          )
-                      : undefined
-                  }
-                />
-              </div>
+              <GroundOverview
+                n={backSide}
+                ox={backX}
+                oy={backY}
+                onCanvas={(c) =>
+                  painter.current?.setBackdrop(
+                    c && { canvas: c, left: (backX - MAP_MIN) * T, top: (backY - MAP_MIN) * T, size: backSide * T },
+                  )
+                }
+              />
               {ground.map((p) => (
                 <GroundPiece
                   key={p.key}
                   detail={p.detail}
                   home={p.home}
                   res={p.res}
-                  left={(p.x - MAP_MIN) * T}
                   n={p.n}
                   occupied={p.occupied}
                   prio={p.prio}
-                  top={(p.y - MAP_MIN) * T}
                   x={p.x}
                   y={p.y}
-                  onImage={
-                    canvasMap
-                      ? (img) =>
-                          painter.current?.setPiece(
-                            p.key,
-                            img && { img, left: (p.x - MAP_MIN) * T, top: (p.y - MAP_MIN) * T, size: p.n * T, detail: p.detail },
-                          )
-                      : undefined
+                  onImage={(img) =>
+                    painter.current?.setPiece(
+                      p.key,
+                      img && { img, left: (p.x - MAP_MIN) * T, top: (p.y - MAP_MIN) * T, size: p.n * T, detail: p.detail },
+                    )
                   }
                 />
               ))}
 
               {/* Roads armies and merchants are on */}
               <TravelPaths paths={paths} size={MAP_SIZE * T} />
-
-              {/* Barbarian camps (on the canvas when the map is drawn there) */}
-              {!canvasMap && data.camps.map((c) => {
-                const picked = selected?.kind === "camp" && selected.camp.level === c.level;
-
-                if (!picked && !onPage(c)) return null;
-
-                return (
-                  <CampMarker
-                    key={`c${c.level}`}
-                    c={c}
-                    labelsAll={labelsAll}
-                    left={px(c.x)}
-                    picked={picked}
-                    top={py(c.y)}
-                    onPick={setSelected}
-                  />
-                );
-              })}
-
-              {/* Tribes (on the canvas when the map is drawn there) */}
-              {!canvasMap && data.tribes.map((t) => {
-                const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
-
-                if (!picked && !t.isMe && !onPage(t)) return null;
-
-                return (
-                  <Village
-                    key={t.id}
-                    left={px(t.x)}
-                    // Full labels zoomed in; zoomed out only for you, your clan, the
-                    // village you picked and anyone you're dealing with now.
-                    loud={labelsAll || t.isMe || t.ally || picked || atWar.has(`${t.x},${t.y}`)}
-                    picked={picked}
-                    shielded={t.shieldUntil > now}
-                    strength={strength(t.power)}
-                    t={t}
-                    top={py(t.y)}
-                    onPick={setSelected}
-                  />
-                );
-              })}
 
               {/* Caravans and armies on the road (in world px, so a new area
                   loading never moves them). They move every second on their
