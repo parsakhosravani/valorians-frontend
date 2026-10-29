@@ -202,20 +202,21 @@ const TERRAIN_ICON: Record<Terrain, string> = {
 // (MapCanvas), so both draw villages the same.
 
 /**
- * The map drawn on a canvas (MapCanvas) instead of as page elements. On with
- * `?map=canvas`, off with `?map=dom`; remembered on this device.
+ * The map drawn on a canvas (MapCanvas) instead of as page elements: the
+ * default. `?map=dom` goes back to page elements (and `?map=canvas` returns);
+ * remembered on this device.
  */
 const MAP_RENDERER_KEY = "war-map-renderer";
 const canvasMapWanted = () => {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return true;
   try {
     const asked = new URLSearchParams(window.location.search).get("map");
 
     if (asked === "canvas" || asked === "dom") localStorage.setItem(MAP_RENDERER_KEY, asked);
 
-    return localStorage.getItem(MAP_RENDERER_KEY) === "canvas";
+    return localStorage.getItem(MAP_RENDERER_KEY) !== "dom";
   } catch {
-    return false;
+    return true;
   }
 };
 
