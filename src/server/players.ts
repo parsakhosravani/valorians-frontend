@@ -43,6 +43,8 @@ export type Player = {
   state: GameState;
   /** Their tile on the war map, once they've been given one. */
   home?: { x: number; y: number } | null;
+  /** Place by population, as of the last ranking (see ranks.ts); null before their first. */
+  popRank?: number | null;
 };
 
 const str = (v: unknown) => (v == null ? null : String(v));
@@ -62,6 +64,7 @@ const toPlayer = (r: Row): Player => ({
   version: Number(r.version),
   state: normalizeState(JSON.parse(String(r.state))),
   home: r.map_x == null ? null : { x: Number(r.map_x), y: Number(r.map_y) },
+  popRank: r.pop_rank == null ? null : Number(r.pop_rank),
 });
 
 export async function findById(id: number) {
@@ -209,11 +212,17 @@ export async function mutatePlayer(
  */
 export const avatarUrl = (id: number) => `/api/avatar/${id}`;
 
-export async function rankOf(population: number) {
+/**
+ * The player's place by population: kept in a column (see ranks.ts), counted
+ * only for someone not ranked yet (just joined). Ties go to the older id, as
+ * on the leaderboard.
+ */
+export async function rankOf(p: Pick<Player, "id" | "popRank" | "state">) {
+  if (p.popRank != null) return p.popRank;
   const db = await getDb();
   const rs = await db.execute({
-    sql: "SELECT COUNT(*) + 1 AS rank FROM users WHERE population > ?",
-    args: [population],
+    sql: "SELECT COUNT(*) + 1 AS rank FROM users WHERE population > ? OR (population = ? AND id < ?)",
+    args: [p.state.population, p.state.population, p.id],
   });
   return Number(rs.rows[0].rank);
 }
@@ -243,7 +252,7 @@ async function marketOffers(id: number) {
 
 export async function playerView(p: Player, now: number) {
   // Independent lookups: run them together instead of one after another.
-  const [clan, rank, trades] = await Promise.all([clanBadge(p.clanId), rankOf(p.state.population), marketOffers(p.id)]);
+  const [clan, rank, trades] = await Promise.all([clanBadge(p.clanId), rankOf(p), marketOffers(p.id)]);
 
   return {
     serverTime: now,

@@ -139,7 +139,7 @@ async function myTribe(chatId: number, userId: number) {
   }
   const now = Date.now();
   const s = advance(p.state, now);
-  const rank = await rankOf(s.population);
+  const rank = await rankOf({ ...p, state: s });
   const shield = s.shieldUntil > now ? Math.ceil((s.shieldUntil - now) / 3600e3) : 0;
   const busy = s.queue.length;
   const res = RESOURCE_IDS.map((r) => `${RESOURCE_NAMES[r]} ${compact(s.resources[r])}`).join(" · ");

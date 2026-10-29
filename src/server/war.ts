@@ -7,6 +7,7 @@ import { getDb } from "./db";
 import { campSpots, homeOf } from "./map";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
+import { maybeRefreshRanks } from "./ranks";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
@@ -938,29 +939,42 @@ const AROUND_BELOW = 2;
 
 export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   const col = metric === "power" ? "power" : metric === "wins" ? "wins" : "population";
+  // Places are kept in columns (see ranks.ts): the list and "your rank" come
+  // straight from them, instead of counting or skipping past everyone ahead.
+  const rk = metric === "power" ? "power_rank" : metric === "wins" ? "wins_rank" : "pop_rank";
   const cols = "id, username, first_name, photo_url, population, power, wins, plus_until";
   const db = await getDb();
+
+  // Someone is looking: rank now if the last pass is over a minute old.
+  // eslint-disable-next-line no-console
+  await maybeRefreshRanks().catch((e) => console.error("maybeRefreshRanks", e));
   const [top, mine] = await db.batch(
     [
-      `SELECT ${cols} FROM users ORDER BY ${col} DESC, id ASC LIMIT ${LEADERBOARD_TOP}`,
-      { sql: `SELECT ${col} AS v FROM users WHERE id = ?`, args: [me.id] },
+      `SELECT ${cols}, ${rk} AS rk FROM users WHERE ${rk} <= ${LEADERBOARD_TOP} ORDER BY ${rk} ASC`,
+      { sql: `SELECT ${col} AS v, ${rk} AS rk FROM users WHERE id = ?`, args: [me.id] },
     ],
     "read"
   );
   const myValue = Number(mine.rows[0]?.v ?? 0);
-  // Ties break by id, as in the list, so "your rank" and your row agree.
-  const rankRs = await db.execute({
-    sql: `SELECT COUNT(*) + 1 AS r FROM users WHERE ${col} > ? OR (${col} = ? AND id < ?)`,
-    args: [myValue, myValue, me.id],
-  });
-  const myRank = Number(rankRs.rows[0].r);
+  // Not ranked yet (joined in the last minute): count, ties by id as in the list.
+  const myRank =
+    mine.rows[0]?.rk != null
+      ? Number(mine.rows[0].rk)
+      : Number(
+          (
+            await db.execute({
+              sql: `SELECT COUNT(*) + 1 AS r FROM users WHERE ${col} > ? OR (${col} = ? AND id < ?)`,
+              args: [myValue, myValue, me.id],
+            })
+          ).rows[0].r
+        );
   // Out of the top: show who's just ahead (the next to beat) and just behind.
   const from = Math.max(LEADERBOARD_TOP, myRank - 1 - AROUND_ABOVE);
   const around =
     myRank > LEADERBOARD_TOP
       ? await db.execute({
-          sql: `SELECT ${cols} FROM users ORDER BY ${col} DESC, id ASC LIMIT ? OFFSET ?`,
-          args: [myRank + AROUND_BELOW - from, from],
+          sql: `SELECT ${cols}, ${rk} AS rk FROM users WHERE ${rk} > ? AND ${rk} <= ? ORDER BY ${rk} ASC`,
+          args: [from, myRank + AROUND_BELOW],
         })
       : null;
   const now = Date.now();
@@ -977,8 +991,8 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   return {
     metric,
     me: { rank: myRank, value: Math.floor(myValue) },
-    top: top.rows.map((r, i) => row(r, i + 1)),
-    around: around?.rows.map((r, i) => row(r, from + i + 1)) ?? [],
+    top: top.rows.map((r) => row(r, Number(r.rk))),
+    around: around?.rows.map((r) => row(r, Number(r.rk))) ?? [],
   };
 }
 

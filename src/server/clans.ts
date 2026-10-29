@@ -5,6 +5,7 @@ import type { InStatement } from "@libsql/client";
 import { getDb } from "./db";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
+import { maybeRefreshRanks } from "./ranks";
 
 import {
   CLAN_TECHS,
@@ -64,15 +65,37 @@ const TECH_COL: Record<TechId, string> = {
 };
 const TREASURY_COL = Object.fromEntries(TREASURY_KEYS.map((k) => [k, `t_${k}`])) as Record<keyof Treasury, string>;
 
-/** Clans with their size and strength. */
+/**
+ * Clans with their size and strength, as of the last ranking (see ranks.ts).
+ * Adding up every member of every clan used to happen on each visit to the
+ * Clan screen. A clan you open shows its members' totals as they are now
+ * (liveTotals); the list may be up to a minute behind.
+ */
 const CLAN_TOTALS = `
   SELECT c.*,
-         COUNT(u.id) AS members,
-         COALESCE(SUM(u.population), 0) AS population,
-         COALESCE(SUM(u.power), 0) AS power,
-         COALESCE(SUM(u.wins), 0) AS wins
-  FROM clans c LEFT JOIN users u ON u.clan_id = c.id
-  GROUP BY c.id`;
+         c.sum_members AS members,
+         c.sum_population AS population,
+         c.sum_power AS power,
+         c.sum_wins AS wins
+  FROM clans c`;
+
+/** A clan's totals from its members as loaded. */
+const liveTotals = (members: ClanRow[]) => ({
+  members: members.length,
+  population: Math.floor(members.reduce((a, m) => a + Number(m.population ?? 0), 0)),
+  power: Math.floor(members.reduce((a, m) => a + Number(m.power ?? 0), 0)),
+  wins: members.reduce((a, m) => a + Number(m.wins ?? 0), 0),
+});
+
+/**
+ * A clan's place by total population: from the last ranking, or for a clan
+ * too new to have one, counted among the ranked (few rows: one per clan).
+ */
+const CLAN_RANK = `
+  SELECT COALESCE(c.pop_rank,
+           (SELECT COUNT(*) + 1 FROM clans o WHERE o.sum_population > c.sum_population
+              OR (o.sum_population = c.sum_population AND o.id < c.id))) AS rank
+  FROM clans c WHERE c.id = ?`;
 
 type ClanRow = Record<string, unknown>;
 
@@ -212,12 +235,16 @@ async function afterMembership(player: Player, clanId: number | null, now: numbe
 export async function clanView(player: Player, search?: string) {
   const db = await getDb();
   const q = clean(search).slice(0, CLAN.nameMax);
+
+  // Someone is looking: rank now if the last pass is over a minute old.
+  // eslint-disable-next-line no-console
+  await maybeRefreshRanks().catch((e) => console.error("maybeRefreshRanks", e));
   const [list, reqs] = await db.batch(
     [
       {
         sql: `SELECT * FROM (${CLAN_TOTALS}) t
               ${q ? "WHERE t.name LIKE ? OR t.tag LIKE ?" : ""}
-              ORDER BY t.population DESC, t.id ASC LIMIT 50`,
+              ORDER BY t.pop_rank IS NULL, t.pop_rank ASC, t.id ASC LIMIT 50`,
         args: q ? [`%${q}%`, `%${q}%`] : [],
       },
       { sql: "SELECT clan_id FROM clan_requests WHERE user_id = ?", args: [player.id] },
@@ -236,11 +263,7 @@ export async function clanView(player: Player, search?: string) {
                 FROM users WHERE clan_id = ? ORDER BY population DESC, id ASC`,
           args: [player.clanId],
         },
-        {
-          sql: `SELECT COUNT(*) + 1 AS rank FROM (${CLAN_TOTALS}) t
-                WHERE t.population > (SELECT COALESCE(SUM(population), 0) FROM users WHERE clan_id = ?)`,
-          args: [player.clanId],
-        },
+        { sql: CLAN_RANK, args: [player.clanId] },
         {
           sql: `SELECT u.id, u.username, u.first_name, u.population, u.power, u.clan_id, r.created_at
                 FROM clan_requests r JOIN users u ON u.id = r.user_id
@@ -261,7 +284,7 @@ export async function clanView(player: Player, search?: string) {
 
     if (own.rows[0]) {
       const row = own.rows[0];
-      const c = summary(row);
+      const c = { ...summary(row), ...liveTotals(members.rows) };
       const techs = techsOf(row);
       const mapped = members.rows.map((m) => ({
         id: Number(m.id),
@@ -337,11 +360,7 @@ export async function clanPublic(clanId: number) {
               FROM users WHERE clan_id = ? ORDER BY population DESC, id ASC`,
         args: [clanId],
       },
-      {
-        sql: `SELECT COUNT(*) + 1 AS rank FROM (${CLAN_TOTALS}) t
-              WHERE t.population > (SELECT COALESCE(SUM(population), 0) FROM users WHERE clan_id = ?)`,
-        args: [clanId],
-      },
+      { sql: CLAN_RANK, args: [clanId] },
     ],
     "read"
   );
@@ -352,6 +371,7 @@ export async function clanPublic(clanId: number) {
 
   return {
     ...summary(row),
+    ...liveTotals(members.rows),
     rank: Number(rank.rows[0].rank),
     techs: CLAN_TECHS.map((t) => ({ id: t.id, level: techs[t.id] })),
     members: members.rows.map((m) => ({
