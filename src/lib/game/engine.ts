@@ -519,10 +519,12 @@ export function advance(state: GameState, now: number): GameState {
 
 function returnMarch(s: GameState, m: March) {
   for (const u of UNIT_IDS) s.army[u] += m.units[u] ?? 0;
-  const cap = getRates(s).capacity;
+  // Loot always lands, even past the warehouse's capacity: the report already
+  // promised it, and capping here silently threw the rest away. Over capacity,
+  // production just waits until it's spent back down (see flow).
   for (const r of RESOURCE_IDS) {
     const add = m.loot[r] ?? 0;
-    if (add > 0) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + add));
+    if (add > 0) s.resources[r] += add;
   }
   s.coins += m.coins;
 }
