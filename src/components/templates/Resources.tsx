@@ -4,9 +4,10 @@ import React, { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
-import { RESOURCES, useGame, useTelegramContext } from "@/context";
+import { RESOURCES, ReadyLive, useGameActions, useLive, useTelegramContext } from "@/context";
+import { Countdown } from "@/components/atoms/Countdown";
 import useBackButtonReset from "@/hooks/useBackButtonReset";
-import { compact, formatDuration, grouped } from "@/lib/format";
+import { compact, grouped } from "@/lib/format";
 import {
   FRENZY_METER_MAX,
   MAX_SKILL_LEVEL,
@@ -40,11 +41,33 @@ const pick = (except: number[]) => {
   return options[Math.floor(Math.random() * options.length)];
 };
 
-const msToUtcMidnight = (now: number) => {
+/** When stamina refills: the next UTC midnight. */
+const nextUtcMidnight = (now: number) => {
   const d = new Date(now);
 
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - now;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
 };
+
+/**
+ * Everything the Mine shows, at the precision it shows it. The screen redraws
+ * when this changes (a tap, a shown number ticking over), not every second:
+ * the clock only counts while a frenzy's 8-second bar is running, and the
+ * refill countdown ticks on its own.
+ */
+const mineKey = (l: ReadyLive) =>
+  JSON.stringify([
+    RESOURCES.map((r) => [compact(l.state.resources[r.id]), l.state.resources[r.id] >= l.rates.capacity]),
+    Math.floor(l.state.energy),
+    Math.floor(l.state.coins),
+    l.state.frenzy,
+    l.state.skills,
+    l.rates.capacity,
+    l.rates.energyCapacity,
+    l.activeResource.id,
+    l.combo,
+    frenzyActive(l.state, l.now) ? l.now : 0,
+    nextUtcMidnight(l.now),
+  ]);
 
 const Upgrade = ({
   title,
@@ -90,7 +113,8 @@ const Upgrade = ({
 export const Resources = () => {
   useBackButtonReset();
   const { telegram } = useTelegramContext();
-  const { state, rates, now, activeResource, setActiveResource, tap, combo, upgradeSkill } = useGame();
+  const { state, rates, now, activeResource, combo } = useLive((l) => l, (a, b) => mineKey(a) === mineKey(b));
+  const { setActiveResource, tap, upgradeSkill } = useGameActions();
   const [spots, setSpots] = useState<number[]>([0]);
   const [floats, setFloats] = useState<Float[]>([]);
 
@@ -268,7 +292,7 @@ export const Resources = () => {
           {isFull ? (
             <span className="text-bad font-bold">{activeResource.name} storage is full — upgrade your Resource Warehouse</span>
           ) : outOfStamina ? (
-            <span>Your miners rest. Stamina returns in {formatDuration(msToUtcMidnight(now))}.</span>
+            <span>Your miners rest. Stamina returns in <Countdown to={nextUtcMidnight(now)} />.</span>
           ) : (
             <>
               Hit the <b className="text-goldtext">glowing rune</b> for ×3. Keep a rhythm to grow your combo.
@@ -288,7 +312,7 @@ export const Resources = () => {
             <span>
               Daily stamina {grouped(Math.floor(state.energy))} / {grouped(rates.energyCapacity)}
             </span>
-            <span className="text-muted text-xs font-bold self-end">refills in {formatDuration(msToUtcMidnight(now))}</span>
+            <span className="text-muted text-xs font-bold self-end">refills in <Countdown to={nextUtcMidnight(now)} /></span>
           </div>
           <div className="bar h-2">
             <span className="bar-fill" style={{ width: `${(state.energy / rates.energyCapacity) * 100}%` }} />
