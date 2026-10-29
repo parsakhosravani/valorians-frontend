@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 
-import { useGame } from "@/context";
+import { useGameStatus, useLive } from "@/context";
 import { plusActive } from "@/lib/game/engine";
 import { grouped } from "@/lib/format";
 
@@ -9,8 +9,9 @@ import { Avatar } from "./Avatar";
 import { GameIcon } from "@/components/atoms/GameIcon";
 
 export const User = () => {
-  const { me, state } = useGame();
-  const plus = plusActive(state);
+  const me = useGameStatus().me!;
+  // Only whether Plus is on: the rest of the live state doesn't show here.
+  const plus = useLive((l) => plusActive(l.state));
   const name = me.firstName || me.username || "Player";
 
   return (
