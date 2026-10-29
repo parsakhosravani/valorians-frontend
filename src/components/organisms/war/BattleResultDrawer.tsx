@@ -8,7 +8,7 @@ import { Drawer } from "@/components/molecules/Drawer";
 import { BattleReport, RESOURCES, useGame } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";
-import { RANKS, UNIT_BY_ID } from "@/lib/game/config";
+import { RANKS, unitPlural } from "@/lib/game/config";
 import { GameIcon } from "@/components/atoms/GameIcon";
 
 export const BattleSummary = ({ report, asDefender = false }: { report: BattleReport; asDefender?: boolean }) => {
@@ -77,7 +77,7 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
       )}
       {promoted.map((p) => (
         <div key={p.unit} className="text-center font-bold text-gold">
-          <GameIcon e="🎖️" /> {UNIT_BY_ID[p.unit].name}s promoted to {RANKS[p.rank].name}!
+          <GameIcon e="🎖️" /> {unitPlural(p.unit)} promoted to {RANKS[p.rank].name}!
         </div>
       ))}
       {lootTotal > 0 || report.coins > 0 ? (

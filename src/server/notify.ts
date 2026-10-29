@@ -1,6 +1,6 @@
 import "server-only";
 
-import { RANKS, RESOURCE_IDS, UNITS, UNIT_BY_ID } from "@/lib/game/config";
+import { RANKS, RESOURCE_IDS, UNITS, unitPlural } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
@@ -30,7 +30,7 @@ const armyText = (a: Army | null | undefined) => {
 /** "\n\n🎖️ Your Spearmen are now Veterans!" for each regiment that went up a rank. */
 const promotionText = (p: Promotion[] | undefined) =>
   p?.length
-    ? "\n\n" + p.map((x) => `🎖️ Your ${UNIT_BY_ID[x.unit].name}s are now <b>${RANKS[x.rank].name}s</b>!`).join("\n")
+    ? "\n\n" + p.map((x) => `🎖️ Your ${unitPlural(x.unit)} are now <b>${RANKS[x.rank].name}s</b>!`).join("\n")
     : "";
 
 const lootTotal = (r: RaidReport) => RESOURCE_IDS.reduce((s, k) => s + (r.loot[k] ?? 0), 0);
@@ -121,9 +121,14 @@ export const notify = {
   },
 
   raided(defenderId: number, attacker: string, r: RaidReport, attackerId?: number) {
+    const taken = lootTotal(r);
+
     return sendToPlayer(
       defenderId,
-      `💀 <b>${esc(attacker)} raided your tribe</b> and took ${fmt(lootTotal(r))} resources.\n\n` +
+      // Nothing taken (all of it hidden in the Hideout, or no room to carry more): say so, not "took 0".
+      (taken > 0
+        ? `💀 <b>${esc(attacker)} raided your tribe</b> and took ${fmt(taken)} resources.\n\n`
+        : `💀 <b>${esc(attacker)} beat your defenders</b>, but your stores were safe: they carried nothing off.\n\n`) +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
         `You lost: ${armyText(r.defenderLosses)}\nYou're shielded for 2 hours. Time for revenge?` +
         promotionText(r.defenderPromoted),
