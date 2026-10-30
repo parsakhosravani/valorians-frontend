@@ -76,6 +76,7 @@ import {
   seaRoute,
   terrainAt,
 } from "@/lib/game/map";
+import { ISLAND_REACH } from "@/lib/game/island";
 import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
@@ -836,8 +837,9 @@ export const WarMap = ({
             .map((p) => `${p.x},${p.y}`)
             .sort()
             .join(";");
-          // Your territory reaches about four tiles out.
-          const near = homeX >= x - 4 && homeX < x + size + 4 && homeY >= y - 4 && homeY < y + size + 4;
+          // Your territory (and, at sea, the shore of your island) reaches a few tiles out.
+          const R = ISLAND_REACH;
+          const near = homeX >= x - R && homeX < x + size + R && homeY >= y - R && homeY < y + size + R;
 
           out.push({
             key: `${detail ? "d" : "b"}${x},${y}`,
@@ -1152,6 +1154,7 @@ export const WarMap = ({
               style={{ width: MAP_SIZE * T, height: MAP_SIZE * T }}
             >
               <GroundOverview
+                home={data?.home}
                 n={backSide}
                 ox={backX}
                 oy={backY}

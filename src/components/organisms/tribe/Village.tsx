@@ -13,14 +13,16 @@ import { Button } from "@/components/atoms/Button";
 import { useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { BuildingDef, buildingImage } from "@/lib/game/config";
-import { Point, terrainAt } from "@/lib/game/map";
+import { islandTerrain } from "@/lib/game/island";
+import { Point } from "@/lib/game/map";
 import { UpgradeOption, canStart } from "@/lib/game/advice";
 import { formatDuration } from "@/lib/format";
 
 /**
  * Your village, up close on your own land: the war map's ground round your
  * tribe, the gold border of your territory, and every building standing on
- * it where the land suits it (see villagePlan). Pinch, drag and double-tap
+ * it where the land suits it (see villagePlan). A tribe that settled at sea
+ * stands on an island of its own (see islandTerrain). Pinch, drag and double-tap
  * like the war map; tap a building to open it.
  *
  * The ground is painted and drawn exactly as on the war map (land pieces from
@@ -246,7 +248,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
 
   const ids = options.map((o) => o.building.id).sort().join(",");
   const plan = useMemo(
-    () => villagePlan(home, ids.split(","), terrainAt, neighbours.map((t) => ({ x: t.x, y: t.y }))),
+    () => villagePlan(home, ids.split(","), islandTerrain(home), neighbours.map((t) => ({ x: t.x, y: t.y }))),
     [home, ids, neighbours],
   );
 
@@ -438,6 +440,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
         />
         <div ref={camera.layer} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: SIDE, height: SIDE }}>
           <GroundOverview
+            home={home}
             n={2 * R + 1}
             ox={ox}
             oy={oy}

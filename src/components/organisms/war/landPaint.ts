@@ -1,4 +1,5 @@
-import { Terrain, terrainAt } from "@/lib/game/map";
+import { islandTerrain } from "@/lib/game/island";
+import { Terrain } from "@/lib/game/map";
 
 /**
  * The land under the war map, painted onto canvases in square pieces (see
@@ -166,12 +167,14 @@ type Scene = {
 /** Terrain and per-tile facts with a margin, for neighbours and blending. */
 const MARGIN = 4;
 
-const survey = ({ ox, oy, n }: Scene) => {
+const survey = ({ ox, oy, n, home }: Scene) => {
   const W = n + MARGIN * 2;
   const ter: Terrain[] = new Array(W * W);
+  // Your land, with the island raised under it if you settled at sea.
+  const ground = islandTerrain(home);
 
   for (let j = 0; j < W; j++)
-    for (let i = 0; i < W; i++) ter[j * W + i] = terrainAt(ox + i - MARGIN, oy + j - MARGIN);
+    for (let i = 0; i < W; i++) ter[j * W + i] = ground(ox + i - MARGIN, oy + j - MARGIN);
 
   const id = (i: number, j: number) => {
     const a = Math.min(W - 1, Math.max(0, i + MARGIN));
