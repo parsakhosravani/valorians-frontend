@@ -58,6 +58,7 @@ export async function claimAdmin(chatId: number, userId: number, payload: string
     commands: [
       { command: "announce", description: "📢 Send an update announcement" },
       { command: "cancel", description: "✖️ Cancel the announcement" },
+      { command: "stats", description: "📊 Player numbers" },
       { command: "start", description: "⚔️ Begin your legend" },
       { command: "tribe", description: "🏰 Your tribe at a glance" },
       { command: "top", description: "🏆 Top chiefs" },
