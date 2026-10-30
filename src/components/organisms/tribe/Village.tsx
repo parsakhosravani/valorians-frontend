@@ -1,390 +1,86 @@
 "use client";
 
 import clsx from "clsx";
-import { CSSProperties, FunctionComponent, useEffect, useId, useRef, useState } from "react";
+import { CSSProperties, FunctionComponent, memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { Plot, claimOutline, villagePlan } from "./villagePlan";
+
+import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "@/components/organisms/war/MapGround";
+import { CanvasTribe, MapCanvas, MapPainter, VILLAGE_GROW, VILLAGE_MIN } from "@/components/organisms/war/MapCanvas";
+import { useMapCamera } from "@/components/organisms/war/useMapCamera";
+import type { MapData } from "@/components/organisms/war/WarMap";
+import { Button } from "@/components/atoms/Button";
+import { useGameStatus } from "@/context";
+import { apiRequest } from "@/lib/api";
 import { BuildingDef, buildingImage } from "@/lib/game/config";
+import { Point, terrainAt } from "@/lib/game/map";
 import { UpgradeOption, canStart } from "@/lib/game/advice";
 import { formatDuration } from "@/lib/format";
 
 /**
- * A walled village in the Travian manner: the Town Hall on its square in the
- * middle, the village's buildings in streets around it, a palisade with the
- * City Gate and Watchtower set into it, and the mines, fields and harbor
- * outside.
+ * Your village, up close on your own land: the war map's ground round your
+ * tribe, the gold border of your territory, and every building standing on
+ * it where the land suits it (see villagePlan). Pinch, drag and double-tap
+ * like the war map; tap a building to open it.
  *
- * Plots sit on a street grid, so a building and its name plate never cover a
- * neighbour at any width. Everything is in village units: the village is 100
- * units wide and `height` tall. A plot's point is the foot of its building.
+ * The ground is painted and drawn exactly as on the war map (land pieces from
+ * the ground worker onto MapCanvas, moved by useMapCamera); the buildings are
+ * page elements on the camera's layer, so they stay buttons. Their name
+ * plates keep one size on screen at any zoom, and only as many show as fit
+ * without covering each other: zooming in names them all.
  */
-type Pt = { x: number; y: number };
 
-type Layout = {
-  height: number;
-  /** Building width. */
-  size: number;
-  /** Name plate text size, as a share of the village's width (cqw), before clamping. */
-  label: number;
-  /** Widest a name plate may get, in village units. */
-  plate: number;
-  /** The palisade, a rounded rectangle. */
-  wall: { x: number; y: number; w: number; h: number; r: number };
-  plots: Record<string, Pt>;
-  /** Streets inside the wall, as polylines. */
-  streets: Pt[][];
-  /** Clumps of trees outside the wall: x, y, radius. */
-  woods: [number, number, number][];
-  /** Tilled fields outside the wall: x, y, width, height, angle. */
-  fields: [number, number, number, number, number][];
-};
+const T = TILE;
+/** Tiles shown either side of your tile: your land and a little of your neighbours'. */
+const R = 6;
+const SIDE = (2 * R + 1) * T;
+/** A building's width on the ground (px at zoom 1); a few landmarks are bigger. */
+const SIZE = 40;
+const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 3.6;
 
-const row = (y: number, spots: [string, number][]) => Object.fromEntries(spots.map(([id, x]) => [id, { x, y }]));
-const line = (...pts: [number, number][]) => pts.map(([x, y]) => ({ x, y }));
+// ─── Your land ───────────────────────────────────────────────────────────────
 
-/** Wide windows (Telegram Desktop, tablets on their side): three streets across. */
-const WIDE: Layout = (() => {
-  const wall = { x: 13, y: 13, w: 74, h: 51, r: 6 };
+type Land = { home: Point; neighbours: MapData["tribes"]; myPower: number };
 
-  return {
-    height: 74,
-    size: 9,
-    label: 1.1,
-    plate: 11,
-    wall,
-    plots: {
-      ...row(27, [
-        ["hideout", 20],
-        ["treasury", 32],
-        ["academy", 44],
-        ["embassy", 56],
-        ["trading-post", 68],
-        ["resource-warehouse", 80],
-      ]),
-      ...row(41.5, [
-        ["exploration-center", 20],
-        ["war-hall", 32],
-        ["town-hall", 50],
-        ["hospital", 68],
-        ["military-command", 80],
-      ]),
-      // The front street leaves room for the gate in the middle.
-      ...row(55.5, [
-        ["barracks", 19],
-        ["stable", 29],
-        ["siege-workshop", 39],
-        ["arsenal", 61],
-        ["armory", 71],
-        ["trapmaker", 81],
-      ]),
-      // On the wall.
-      "city-gate": { x: 50, y: wall.y + wall.h + 0.5 },
-      watchtower: { x: wall.x + wall.w, y: wall.y + 1 },
-      // Outside: mines and the sawmill to the west, fields and the windmill to the east, the harbor on the shore.
-      "iron-mine": { x: 6.5, y: 27 },
-      sawmill: { x: 6.5, y: 45 },
-      windmill: { x: 93.5, y: 27 },
-      brickyard: { x: 93.5, y: 45 },
-      "fertilizer-workshop": { x: 93.5, y: 63 },
-      harbor: { x: 7, y: 68 },
-    },
-    streets: [
-      line([wall.x + 2, 33.5], [wall.x + wall.w - 2, 33.5]),
-      line([wall.x + 2, 48], [wall.x + wall.w - 2, 48]),
-      line([50, 20], [50, wall.y + wall.h + 1]),
-      line([50, wall.y + wall.h], [50, 70], [57, 75]),
-    ],
-    woods: [
-      [27, 5, 3.6],
-      [63, 4.5, 3.2],
-      [3, 5, 3.4],
-      [97, 6, 3.4],
-      [45, 70, 2.6],
-      [76, 70, 3],
-    ],
-    fields: [
-      [44, 5.5, 10, 4.5, -3],
-      [81, 5, 8, 4, 4],
-      [28, 70, 9, 4, 3],
-      [93.5, 9, 6, 6, 0],
-    ],
-  };
-})();
+/** Kept for the session: your tile doesn't move, and neighbours rarely do. */
+let landCache: Land | null = null;
 
-/** Phones: the same village stood upright, three plots to a street. */
-const NARROW: Layout = (() => {
-  const wall = { x: 4, y: 53, w: 92, h: 185, r: 10 };
-  const cols = { l: 19, m: 50, r: 81 };
+/** Your tile and the tribes round it, from the war map's own request (it also settles a new tribe). */
+const useLand = () => {
+  const { authHeader } = useGameStatus();
+  const [land, setLand] = useState(landCache);
+  const [error, setError] = useState<string | null>(null);
+  const [tries, setTries] = useState(0);
+
+  useEffect(() => {
+    if (landCache || !authHeader) return;
+    let live = true;
+
+    apiRequest<MapData>(authHeader, "war/map?r=8")
+      .then((d) => {
+        landCache = { home: d.home, neighbours: d.tribes.filter((t) => !t.isMe), myPower: d.myPower };
+        if (live) setLand(landCache);
+      })
+      .catch((e: Error) => live && setError(e.message));
+
+    return () => {
+      live = false;
+    };
+  }, [authHeader, tries]);
 
   return {
-    height: 274,
-    size: 18,
-    label: 3,
-    plate: 30,
-    wall,
-    plots: {
-      // Outside the wall, at the back: mines and fields.
-      "iron-mine": { x: 17, y: 20 },
-      sawmill: { x: 50, y: 17 },
-      brickyard: { x: 83, y: 20 },
-      windmill: { x: 31, y: 43 },
-      "fertilizer-workshop": { x: 69, y: 43 },
-      // Inside, street by street from the back to the gate.
-      ...row(76, [
-        ["hideout", cols.l],
-        ["treasury", cols.m],
-        ["resource-warehouse", cols.r],
-      ]),
-      ...row(102, [
-        ["academy", cols.l],
-        ["embassy", cols.m],
-        ["trading-post", cols.r],
-      ]),
-      ...row(133, [
-        ["exploration-center", cols.l],
-        ["town-hall", cols.m],
-        ["war-hall", cols.r],
-      ]),
-      ...row(163, [
-        ["hospital", cols.l],
-        ["military-command", cols.m],
-        ["armory", cols.r],
-      ]),
-      ...row(189, [
-        ["barracks", cols.l],
-        ["arsenal", cols.m],
-        ["stable", cols.r],
-      ]),
-      ...row(213, [
-        ["siege-workshop", cols.l],
-        ["trapmaker", cols.r],
-      ]),
-      // On the wall.
-      "city-gate": { x: 50, y: wall.y + wall.h + 1 },
-      // Beside the gate, at the wall's corner.
-      watchtower: { x: wall.x + 8, y: wall.y + wall.h + 1 },
-      // On the shore.
-      harbor: { x: 17, y: 261 },
+    land,
+    error,
+    retry: () => {
+      setError(null);
+      setTries((n) => n + 1);
     },
-    streets: [
-      ...[88, 117, 147, 175, 201, 225].map((y) => line([wall.x + 3, y], [wall.x + wall.w - 3, y])),
-      line([34.5, 62], [34.5, 225]),
-      line([65.5, 62], [65.5, 225]),
-      line([50, 225], [50, 248], [58, 274]),
-    ],
-    woods: [
-      [5, 6, 6],
-      [95, 5, 5.5],
-      [5, 44, 4.5],
-      [95, 45, 4.5],
-      [93, 262, 6],
-      [70, 268, 4.5],
-    ],
-    fields: [
-      [33, 6, 12, 5.5, -5],
-      [67, 6, 12, 5.5, 5],
-      [50, 41, 9, 7, 0],
-      [83, 252, 10, 5, 4],
-    ],
   };
-})();
-
-/** Wider than this (in px), the village switches to the wide layout. */
-const WIDE_FROM = 600;
-
-/** A few landmarks are drawn bigger. */
-const BIG: Record<string, number> = { "town-hall": 1.4, "city-gate": 1.15, watchtower: 1.05 };
-
-const sizeOf = (v: Layout, id: string) => v.size * (BIG[id] ?? 1);
-
-const pathOf = (pts: Pt[]) => pts.map((p, i) => `${i ? "L" : "M"}${p.x} ${p.y}`).join(" ");
-
-/** The ground: grass, the palisade, streets, the square, woods, fields and the shore. */
-const Ground = ({ v }: { v: Layout }) => {
-  const id = useId().replace(/:/g, "");
-  const u = (name: string) => `url(#${id}-${name})`;
-  const H = v.height;
-  const { x: wx, y: wy, w: ww, h: wh, r } = v.wall;
-  const hall = v.plots["town-hall"];
-  const gate = v.plots["city-gate"];
-  const harbor = v.plots["harbor"];
-  const hallSize = sizeOf(v, "town-hall");
-  const gateGap = sizeOf(v, "city-gate") * 0.42;
-  const bottom = wy + wh;
-
-  // The palisade runs from the right of the gate, all the way round, to the left of the gate.
-  const palisade = [
-    `M${gate.x + gateGap} ${bottom}`,
-    `L${wx + ww - r} ${bottom}`,
-    `Q${wx + ww} ${bottom} ${wx + ww} ${bottom - r}`,
-    `L${wx + ww} ${wy + r}`,
-    `Q${wx + ww} ${wy} ${wx + ww - r} ${wy}`,
-    `L${wx + r} ${wy}`,
-    `Q${wx} ${wy} ${wx} ${wy + r}`,
-    `L${wx} ${bottom - r}`,
-    `Q${wx} ${bottom} ${wx + r} ${bottom}`,
-    `L${gate.x - gateGap} ${bottom}`,
-  ].join(" ");
-  const corners: Pt[] = [
-    { x: wx + 1.2, y: wy + 1.2 },
-    { x: wx + ww - 1.2, y: wy + 1.2 },
-    { x: wx + 1.2, y: bottom - 1.2 },
-    { x: wx + ww - 1.2, y: bottom - 1.2 },
-  ];
-  const post = v.size * 0.09;
-
-  return (
-    <svg aria-hidden="true" className="absolute inset-0 w-full h-full" viewBox={`0 0 100 ${H}`}>
-      <defs>
-        <radialGradient cx="50%" cy="48%" id={`${id}-grass`} r="70%">
-          <stop offset="0" stopColor="#66752F" />
-          <stop offset="0.6" stopColor="#4B5926" />
-          <stop offset="1" stopColor="#283016" />
-        </radialGradient>
-        <radialGradient cx="50%" cy="50%" id={`${id}-inside`} r="65%">
-          <stop offset="0" stopColor="#8E7447" stopOpacity="0.5" />
-          <stop offset="0.7" stopColor="#7C6A3D" stopOpacity="0.28" />
-          <stop offset="1" stopColor="#6A6A33" stopOpacity="0.12" />
-        </radialGradient>
-        <radialGradient id={`${id}-plaza`}>
-          <stop offset="0" stopColor="#B49668" />
-          <stop offset="0.75" stopColor="#957650" />
-          <stop offset="1" stopColor="#6E5534" />
-        </radialGradient>
-        <radialGradient cx="40%" cy="35%" id={`${id}-tree`}>
-          <stop offset="0" stopColor="#56722F" />
-          <stop offset="0.6" stopColor="#30461A" />
-          <stop offset="1" stopColor="#1A2610" />
-        </radialGradient>
-        <linearGradient id={`${id}-sea`} x1="0" x2="1" y1="1" y2="0">
-          <stop offset="0" stopColor="#163343" />
-          <stop offset="1" stopColor="#2F5866" />
-        </linearGradient>
-        <pattern height="1.4" id={`${id}-rows`} patternTransform="rotate(90)" patternUnits="userSpaceOnUse" width="1.4">
-          <rect fill="#A08D40" height="1.4" width="1.4" />
-          <rect fill="#7C6E2E" height="1.4" width="0.55" />
-        </pattern>
-        <pattern height="2.2" id={`${id}-cobble`} patternUnits="userSpaceOnUse" width="2.2">
-          <rect fill="#9A7C52" height="2.2" width="2.2" />
-          <circle cx="0.55" cy="0.55" fill="#B39466" r="0.42" />
-          <circle cx="1.65" cy="1.65" fill="#B39466" r="0.42" />
-          <circle cx="1.65" cy="0.55" fill="#87693F" r="0.36" />
-          <circle cx="0.55" cy="1.65" fill="#87693F" r="0.36" />
-        </pattern>
-        {/* Rough, painterly edges for streets, fields and the shore */}
-        <filter id={`${id}-rough`}>
-          <feTurbulence baseFrequency="0.35" numOctaves="2" seed="7" type="fractalNoise" />
-          <feDisplacementMap in="SourceGraphic" scale="1.1" />
-        </filter>
-        {/* Patchy grass */}
-        <filter height="100%" id={`${id}-patches`} width="100%" x="0" y="0">
-          <feTurbulence baseFrequency="0.06" numOctaves="3" seed="11" type="fractalNoise" />
-          <feColorMatrix values="0 0 0 0 0.12  0 0 0 0 0.16  0 0 0 0 0.05  0 0 0 1.4 -0.55" />
-        </filter>
-        <filter height="100%" id={`${id}-grain`} width="100%" x="0" y="0">
-          <feTurbulence baseFrequency="0.9" numOctaves="2" seed="4" type="fractalNoise" />
-          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.28 0" />
-        </filter>
-        <filter id={`${id}-shadow`}>
-          <feGaussianBlur stdDeviation="0.5" />
-        </filter>
-      </defs>
-
-      {/* Grass, darker toward the edges, in patches */}
-      <rect fill={u("grass")} height={H} width="100" />
-      <rect filter={u("patches")} height={H} width="100" />
-
-      {/* Sea in the corner by the Harbor, with a sandy shore */}
-      <path
-        d={`M0 ${harbor.y - 13} Q${harbor.x + 3} ${harbor.y - 9} ${harbor.x + 5} ${harbor.y - 1} Q${harbor.x + 9} ${H - 3} ${harbor.x + 17} ${H} L0 ${H} Z`}
-        fill="#8E7B52"
-        filter={u("rough")}
-      />
-      <path
-        d={`M0 ${harbor.y - 11} Q${harbor.x + 1} ${harbor.y - 7.5} ${harbor.x + 3.5} ${harbor.y} Q${harbor.x + 7} ${H - 2.5} ${harbor.x + 15} ${H} L0 ${H} Z`}
-        fill={u("sea")}
-        filter={u("rough")}
-      />
-      <g fill="none" stroke="#9CC4D6" strokeLinecap="round" strokeOpacity="0.35" strokeWidth="0.3">
-        <path d={`M${harbor.x - 12} ${H - 4} q1.5 -0.8 3 0 t3 0`} />
-        <path d={`M${harbor.x - 6} ${H - 1.5} q1.5 -0.8 3 0 t3 0`} />
-      </g>
-
-      {/* Tilled fields */}
-      {v.fields.map(([x, y, w, h, a], i) => (
-        <g key={i} filter={u("rough")} transform={`rotate(${a} ${x} ${y})`}>
-          <rect fill={u("rows")} height={h} opacity="0.8" rx="0.8" width={w} x={x - w / 2} y={y - h / 2} />
-        </g>
-      ))}
-
-      {/* Worn ground inside the wall */}
-      <rect fill={u("inside")} height={wh} rx={r} width={ww} x={wx} y={wy} />
-
-      {/* Streets: a dark bed, then the packed-earth top */}
-      <g fill="none" filter={u("rough")} strokeLinecap="round" strokeLinejoin="round">
-        {v.streets.map((s, i) => (
-          <path key={`b${i}`} d={pathOf(s)} stroke="#5E4529" strokeOpacity="0.55" strokeWidth={v.size * 0.24} />
-        ))}
-        {v.streets.map((s, i) => (
-          <path key={`t${i}`} d={pathOf(s)} stroke="#9A7A4C" strokeOpacity="0.85" strokeWidth={v.size * 0.16} />
-        ))}
-      </g>
-
-      {/* The Town Hall square, cobbled */}
-      <ellipse cx={hall.x} cy={hall.y - hallSize * 0.12} fill="#000" filter={u("shadow")} opacity="0.35" rx={hallSize * 0.72} ry={hallSize * 0.4} />
-      <ellipse cx={hall.x} cy={hall.y - hallSize * 0.16} fill={u("cobble")} filter={u("rough")} rx={hallSize * 0.7} ry={hallSize * 0.38} />
-      <ellipse cx={hall.x} cy={hall.y - hallSize * 0.16} fill={u("plaza")} opacity="0.55" rx={hallSize * 0.7} ry={hallSize * 0.38} />
-
-      {/* Palisade: shadow, dark logs, light log tops */}
-      <path d={palisade} fill="none" filter={u("shadow")} stroke="#000" strokeOpacity="0.45" strokeWidth={post * 3.4} transform="translate(0.4 0.7)" />
-      <path d={palisade} fill="none" stroke="#3A2614" strokeLinecap="round" strokeLinejoin="round" strokeWidth={post * 2.8} />
-      <path d={palisade} fill="none" stroke="#8A6236" strokeDasharray={`${post * 0.9} ${post * 0.55}`} strokeWidth={post * 1.7} />
-      <path
-        d={palisade}
-        fill="none"
-        stroke="#D3A869"
-        strokeDasharray={`${post * 0.9} ${post * 0.55}`}
-        strokeOpacity="0.5"
-        strokeWidth={post * 0.45}
-        transform={`translate(0 ${-post * 0.6})`}
-      />
-
-      {/* Corner posts */}
-      {corners.map((c, i) => (
-        <g key={i}>
-          <circle cx={c.x + 0.3} cy={c.y + 0.5} fill="#000" filter={u("shadow")} opacity="0.5" r={post * 2.6} />
-          <circle cx={c.x} cy={c.y} fill="#3A2614" r={post * 2.4} />
-          <circle cx={c.x} cy={c.y} fill="#7E5730" r={post * 1.8} />
-          <circle cx={c.x - post * 0.4} cy={c.y - post * 0.4} fill="#C49A5E" opacity="0.55" r={post * 0.8} />
-        </g>
-      ))}
-
-      {/* Woods */}
-      {v.woods.map(([x, y, rad], i) => (
-        <g key={i}>
-          {[
-            [-0.45, 0.1, 0.62],
-            [0.42, 0.18, 0.58],
-            [0, -0.25, 0.66],
-            [-0.15, 0.5, 0.5],
-            [0.25, 0.55, 0.45],
-          ].map(([dx, dy, s], j) => (
-            <g key={j}>
-              <ellipse cx={x + dx * rad + 0.4} cy={y + dy * rad + 0.6} fill="#000" filter={u("shadow")} opacity="0.4" rx={rad * s} ry={rad * s * 0.8} />
-              <circle cx={x + dx * rad} cy={y + dy * rad} fill={u("tree")} filter={u("rough")} r={rad * s} />
-            </g>
-          ))}
-        </g>
-      ))}
-
-      <rect filter={u("grain")} height={H} width="100" />
-    </svg>
-  );
 };
 
-type PlotProps = { v: Layout; o: UpgradeOption; freeBuilder: boolean; now: number; onOpen: (b: BuildingDef) => void };
-
-/** Position of a plot as CSS percentages of the village box. */
-const at = (v: Layout, x: number, y: number) => ({ left: `${x}%`, top: `${(y / v.height) * 100}%` });
+// ─── Buildings ───────────────────────────────────────────────────────────────
 
 /**
  * The "upgrade now" mark: a green gem with a gold rim and a raised double
@@ -417,152 +113,435 @@ const UpgradeMark = ({ className, style }: { className?: string; style?: CSSProp
   );
 };
 
-/** The building art on its plot, layered so nearer buildings overlap farther ones. */
-const Art = ({ v, o, freeBuilder, now, onOpen }: PlotProps) => {
-  const { x, y } = v.plots[o.building.id];
-  const size = sizeOf(v, o.building.id);
-  const built = o.level > 0;
-  const ready = !o.job && freeBuilder && canStart(o);
-  const progress = o.job ? Math.min(1, (now - o.job.startedAt) / (o.job.endsAt - o.job.startedAt)) : 0;
-
-  return (
-    <button
-      aria-label={`${o.building.name}, level ${o.level}${ready ? ", ready to upgrade" : ""}`}
-      className="group absolute -translate-x-1/2 -translate-y-[74%] aspect-square outline-none"
-      style={{ ...at(v, x, y), width: `${size}%`, zIndex: Math.round(y * 10) }}
-      title={o.building.name}
-      onClick={() => onOpen(o.building)}
-    >
-      {/* The plot: trampled earth under a building, a staked-out patch on an empty one */}
-      <span
-        className={clsx(
-          "absolute left-[8%] right-[8%] bottom-[6%] h-[28%] rounded-[50%]",
-          built || o.job
-            ? "bg-[radial-gradient(closest-side,rgba(0,0,0,0.5),rgba(0,0,0,0.25)_60%,transparent)]"
-            : "bg-[#6B5232]/50 border border-dashed border-goldhi/45",
-        )}
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        alt=""
-        className={clsx(
-          "relative w-full h-full object-contain drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)] transition-[transform,filter,opacity] duration-200",
-          "group-hover:-translate-y-[3%] group-hover:brightness-110 group-active:scale-95 group-focus-visible:brightness-125",
-          !built && !o.job && "opacity-40 grayscale-[0.9] brightness-75 group-hover:opacity-70",
-        )}
-        draggable={false}
-        src={buildingImage(o.building)}
-      />
-      {/* Ready to upgrade: a bobbing gem over the roof */}
-      {ready && <UpgradeMark className="absolute right-[6%] top-[4%] w-[26%] h-[26%] min-w-[18px] min-h-[18px] max-w-[30px] max-h-[30px]" />}
-      {/* Under construction: time left and progress, over the roof */}
-      {o.job && (
-        <span className="absolute left-[10%] right-[10%] top-[2%] flex flex-col items-center gap-0.5">
-          <span className="px-1.5 rounded bg-[#1A120B]/90 border border-gold/40 text-[10px] leading-[14px] font-bold text-goldtext whitespace-nowrap">
-            {formatDuration(o.job.endsAt - now)}
-          </span>
-          <span className="w-full h-1.5 rounded-full bg-[#1A120B]/90 border border-black/40 overflow-hidden">
-            <span className="block h-full bg-gradient-to-r from-gold to-ember" style={{ width: `${progress * 100}%` }} />
-          </span>
-        </span>
-      )}
-    </button>
-  );
-};
-
 /**
- * A name plate at each building's foot: a level medallion and the name. The
- * plate is kept inside the village box, and its text scales with the village.
+ * Something that keeps one size on screen at any zoom, pinned to a point on
+ * the ground: the camera's layer carries the zoom in --vz (set when the
+ * camera comes to rest), and this undoes it round the point.
  */
-const Plate = ({ v, o, freeBuilder, onOpen }: PlotProps) => {
-  const { x, y } = v.plots[o.building.id];
-  const size = sizeOf(v, o.building.id);
+const OnScreen = ({ x, y, z, children }: { x: number; y: number; z: number; children: React.ReactNode }) => (
+  <div className="absolute w-0 h-0 pointer-events-none" style={{ left: x, top: y, zIndex: z, scale: "calc(1 / var(--vz, 1))", transformOrigin: "0 0" }}>
+    {children}
+  </div>
+);
+
+type PlotProps = {
+  o: UpgradeOption;
+  at: Point;
+  freeBuilder: boolean;
+  now: number;
+  named: boolean;
+  onOpen: (b: BuildingDef) => void;
+};
+
+/** A building on its plot: the art (zooms with the land), a level medallion and name at its foot, and what's going on over its roof. */
+const Building = memo(function Building({ o, at, freeBuilder, now, named, onOpen }: PlotProps) {
+  const size = SIZE * (BIG[o.building.id] ?? 1);
   const built = o.level > 0;
   const ready = !o.job && freeBuilder && canStart(o);
-  const half = v.plate / 2;
-  const cx = Math.min(Math.max(x, half + 0.5), 100 - half - 0.5);
+  // The gem is for upgrading what stands; an empty plot you can build on shows a green "+".
+  const gem = ready && built;
+  const progress = o.job ? Math.min(1, (now - o.job.startedAt) / (o.job.endsAt - o.job.startedAt)) : 0;
+  // Nearer buildings (lower on screen) stand in front.
+  const depth = Math.round(at.y * 10);
 
   return (
-    <button
-      aria-hidden="true"
-      className={clsx(
-        "absolute -translate-x-1/2 z-[10000] flex items-center gap-[0.3em] py-[0.15em] pl-[0.15em] pr-[0.55em] rounded-full border",
-        "bg-[#1A120B]/85 backdrop-blur-[2px] shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
-        ready ? "border-good/80" : o.job ? "border-gold/70" : built ? "border-frame" : "border-line/60 border-dashed",
-      )}
-      style={{
-        ...at(v, cx, y + size * 0.2),
-        maxWidth: `${v.plate}%`,
-        fontSize: `clamp(9px, ${v.label}cqw, 13px)`,
-      }}
-      tabIndex={-1}
-      onClick={() => onOpen(o.building)}
-    >
-      <span
-        className={clsx(
-          "shrink-0 w-[1.6em] h-[1.6em] rounded-full border flex items-center justify-center font-display font-black leading-none text-[0.9em]",
-          built ? "bg-gradient-to-b from-goldhi to-gold text-[#1A120B] border-[#FBE3A6]" : "bg-panel2 text-muted border-line",
-        )}
+    <>
+      <button
+        aria-label={`${o.building.name}, level ${o.level}${ready ? ", ready to upgrade" : ""}`}
+        className="group absolute outline-none"
+        style={{ left: at.x - size / 2, top: at.y - size * 0.8, width: size, height: size, zIndex: depth }}
+        title={o.building.name}
+        type="button"
+        onClick={() => onOpen(o.building)}
       >
-        {o.maxed ? "★" : built ? o.level : "+"}
-      </span>
-      <span className={clsx("font-bold leading-[1.1] text-left", built || o.job ? "text-parch" : "text-muted")}>{o.building.name}</span>
-    </button>
+        {/* The plot: trampled earth under a building, a staked-out patch on an empty one */}
+        <span
+          className={clsx(
+            "absolute left-[6%] right-[6%] bottom-[8%] h-[30%] rounded-[50%]",
+            built || o.job
+              ? "bg-[radial-gradient(closest-side,rgba(0,0,0,0.5),rgba(0,0,0,0.25)_60%,transparent)]"
+              : "bg-[#6B5232]/55 border border-dashed border-goldhi/50",
+          )}
+        />
+        <img
+          alt=""
+          className={clsx(
+            "relative w-full h-full object-contain drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)] transition-[transform,filter,opacity] duration-200",
+            "group-hover:-translate-y-[3%] group-hover:brightness-110 group-active:scale-95 group-focus-visible:brightness-125",
+            !built && !o.job && "opacity-45 grayscale-[0.9] brightness-75 group-hover:opacity-75",
+          )}
+          draggable={false}
+          src={buildingImage(o.building)}
+        />
+      </button>
+
+      {/* Over the roof: ready to upgrade, or the work under way */}
+      {(gem || o.job) && (
+        <OnScreen x={at.x} y={at.y - size * 0.72} z={20000 + depth}>
+          <div className="absolute left-0 bottom-0 -translate-x-1/2 flex flex-col items-center gap-0.5">
+            {o.job ? (
+              <>
+                <span className="px-1.5 rounded bg-[#1A120B]/90 border border-gold/40 text-[10px] leading-[14px] font-bold text-goldtext whitespace-nowrap">
+                  {formatDuration(o.job.endsAt - now)}
+                </span>
+                <span className="w-10 h-1.5 rounded-full bg-[#1A120B]/90 border border-black/40 overflow-hidden">
+                  <span className="block h-full bg-gradient-to-r from-gold to-ember" style={{ width: `${progress * 100}%` }} />
+                </span>
+              </>
+            ) : (
+              <UpgradeMark className="w-[18px] h-[18px]" />
+            )}
+          </div>
+        </OnScreen>
+      )}
+
+      {/* At its foot: the level, and the name when there's room for it */}
+      <OnScreen x={at.x} y={at.y + 1} z={10000 + depth}>
+        <button
+          aria-hidden="true"
+          className={clsx(
+            "absolute left-0 top-0 -translate-x-1/2 pointer-events-auto flex items-center gap-1 py-0.5 rounded-full border text-[11px] whitespace-nowrap",
+            "bg-[#1A120B]/85 shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
+            named ? "pl-0.5 pr-2" : "px-0.5",
+            ready ? "border-good/80" : o.job ? "border-gold/70" : built ? "border-frame" : "border-line/60 border-dashed",
+          )}
+          tabIndex={-1}
+          type="button"
+          onClick={() => onOpen(o.building)}
+        >
+          <span
+            className={clsx(
+              "shrink-0 w-[18px] h-[18px] rounded-full border flex items-center justify-center font-display font-black leading-none text-[10px]",
+              built
+                ? "bg-gradient-to-b from-goldhi to-gold text-[#1A120B] border-[#FBE3A6]"
+                : ready
+                  ? "bg-good/25 text-good border-good/80"
+                  : "bg-panel2 text-muted border-line",
+            )}
+          >
+            {o.maxed ? "★" : built ? o.level : "+"}
+          </span>
+          {named && <span className={clsx("font-bold leading-none", built || o.job ? "text-parch" : "text-muted")}>{o.building.name}</span>}
+        </button>
+      </OnScreen>
+    </>
+  );
+});
+
+/** Rough size of a name plate on screen (px), for deciding which fit. */
+const plateSize = (name: string, named: boolean) => ({ w: named ? 30 + name.length * 6.2 : 22, h: 22 });
+
+// ─── The village ─────────────────────────────────────────────────────────────
+
+type Cam = { x: number; y: number; z: number };
+
+const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land } & VillageProps) => {
+  const { home, neighbours, myPower } = land;
+  // The box shown: your tile in the middle, R tiles either side. All positions are px in it at zoom 1.
+  const ox = home.x - R;
+  const oy = home.y - R;
+  const mid = R * T + T / 2;
+  const toPx = (p: Plot): Point => ({ x: mid + p.x * T, y: mid + p.y * T });
+  const tilePx = (x: number, y: number): Point => ({ x: (x - ox) * T + T / 2, y: (y - oy) * T + T / 2 });
+
+  const ids = options.map((o) => o.building.id).sort().join(",");
+  const plan = useMemo(
+    () => villagePlan(home, ids.split(","), terrainAt, neighbours.map((t) => ({ x: t.x, y: t.y }))),
+    [home, ids, neighbours],
+  );
+
+  const painter = useRef<MapPainter | null>(null);
+  const [rest, setRest] = useState<Cam | null>(null);
+  const camera = useMapCamera({
+    size: SIDE,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    onDraw: (c) => painter.current?.setCamera(c),
+    onSettle: (c) => {
+      camera.layer.current?.style.setProperty("--vz", String(c.z));
+      setRest((r) => (r && r.x === c.x && r.y === c.y && r.z === c.z ? r : { ...c }));
+    },
+  });
+
+  // Start on the Town Hall, with your whole territory in view.
+  useLayoutEffect(() => {
+    const v = camera.size();
+
+    if (!v) return;
+    // Close enough that the buildings read well; the edges of your land are a short drag away.
+    const z = Math.min(2.2, Math.max(1.1, Math.min(v.w, v.h) / (5.4 * T)));
+
+    camera.centerOn(mid, mid, { z, instant: true });
+    const c = camera.get();
+
+    camera.layer.current?.style.setProperty("--vz", String(c.z));
+    painter.current?.setCamera(c);
+    setRest({ ...c });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tiles with something on them: the ground clears them (trodden earth, no trees).
+  const occupied = useMemo(() => {
+    const keys = new Set<string>();
+
+    for (const t of neighbours) keys.add(`${t.x},${t.y}`);
+    for (const p of Object.values(plan.plots)) keys.add(`${Math.round(home.x + p.x)},${Math.round(home.y + p.y)}`);
+
+    return Array.from(keys).map((k) => k.split(",").map(Number) as [number, number]);
+  }, [neighbours, plan, home]);
+
+  // The land in pieces lined up on the world grid, as on the war map: the
+  // whole box at the whole-view sharpness, and on screen again as sharp as
+  // the zoom needs.
+  const ground = useMemo(() => {
+    const out: { key: string; x: number; y: number; n: number; detail: boolean; res: number; occupied: string; prio: number }[] = [];
+    const add = (size: number, detail: boolean, res: number, x0: number, y0: number, x1: number, y1: number) => {
+      for (let y = Math.floor(y0 / size) * size; y < y1; y += size)
+        for (let x = Math.floor(x0 / size) * size; x < x1; x += size) {
+          const on = occupied
+            .filter(([px, py]) => px >= x - 1 && px <= x + size && py >= y - 1 && py <= y + size)
+            .map(([px, py]) => `${px},${py}`)
+            .sort()
+            .join(";");
+
+          out.push({
+            key: `${detail ? "d" : "b"}${x},${y}`,
+            x,
+            y,
+            n: size,
+            detail,
+            res,
+            occupied: on,
+            prio: Math.hypot(x + size / 2 - home.x, y + size / 2 - home.y) + (detail ? 12 : 0),
+          });
+        }
+    };
+
+    add(CHUNK, false, baseRes(), ox, oy, ox + 2 * R + 1, oy + 2 * R + 1);
+    const close = rest && closeUpRes(rest.z);
+    const v = camera.size();
+
+    if (close && rest && v) {
+      // Just what's on screen, within the box.
+      const x0 = Math.max(ox, ox + Math.floor(-rest.x / rest.z / T));
+      const y0 = Math.max(oy, oy + Math.floor(-rest.y / rest.z / T));
+      const x1 = Math.min(ox + 2 * R + 1, ox + Math.ceil((v.w - rest.x) / rest.z / T));
+      const y1 = Math.min(oy + 2 * R + 1, oy + Math.ceil((v.h - rest.y) / rest.z / T));
+
+      add(DETAIL_CHUNK, true, close, x0, y0, x1, y1);
+    }
+
+    return out;
+  }, [occupied, rest, ox, oy, home]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Your neighbours at the edge of view, drawn as on the war map.
+  useEffect(() => {
+    const ring = (p: number) => {
+      const r = p / Math.max(1, myPower);
+
+      return r < 0.75 ? "weaker" : r > 1.33 ? "stronger" : "even";
+    };
+    const tribes: CanvasTribe[] = neighbours.map((t) => ({
+      id: t.id,
+      ...tilePx(t.x, t.y),
+      size: Math.round(VILLAGE_MIN + Math.min(VILLAGE_GROW, t.townHall * 0.6)),
+      ring: t.ally ? "ally" : ring(t.power),
+      island: t.terrain === "sea",
+      picked: false,
+      loud: false,
+      shielded: false,
+      isMe: false,
+      townHall: t.townHall,
+      flag: t.clan?.flag ?? null,
+      name: t.name,
+    }));
+
+    painter.current?.setMarkers(tribes, []);
+  }, [neighbours, myPower]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Which buildings are named: as many as fit on screen without covering one
+  // another, the ones that matter most first.
+  const named = useMemo(() => {
+    const out = new Set<string>();
+
+    if (!rest) return out;
+    const ready = (o: UpgradeOption) => !o.job && freeBuilder && canStart(o);
+    // The Town Hall first, then work under way, upgrades ready, what stands, empty plots.
+    const weight = (o: UpgradeOption) =>
+      (o.building.id === "town-hall" ? 0 : o.job ? 1 : ready(o) && o.level > 0 ? 2 : o.level > 0 ? 3 : 4) * 100 - o.level;
+    const placed = options.filter((o) => plan.plots[o.building.id]);
+    const screen = (o: UpgradeOption) => {
+      const p = toPx(plan.plots[o.building.id]);
+
+      return { x: rest.x + p.x * rest.z, y: rest.y + (p.y + 1) * rest.z };
+    };
+    const box = (o: UpgradeOption, withName: boolean) => {
+      const s = screen(o);
+      const { w, h } = plateSize(o.building.name, withName);
+
+      return { x0: s.x - w / 2 - 2, y0: s.y - 1, x1: s.x + w / 2 + 2, y1: s.y + h + 1 };
+    };
+    type Box = ReturnType<typeof box>;
+    const hit = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    // Everyone's level medallion stays; names go round them, and round the gems and timers over roofs.
+    const bare = new Map(placed.map((o) => [o.building.id, box(o, false)]));
+    const v = camera.size();
+    // A name cut off by the edge of the view doesn't count as shown.
+    const inView = (b: Box) => !v || (b.x0 >= 2 && b.x1 <= v.w - 2 && b.y0 >= 2 && b.y1 <= v.h - 2);
+    const taken: Box[] = [
+      // The zoom buttons in the bottom-right corner.
+      ...(v ? [{ x0: v.w - 50, y0: v.h - 128, x1: v.w, y1: v.h }] : []),
+      ...placed
+        .filter((o) => o.job || (ready(o) && o.level > 0))
+      .map((o) => {
+        const p = toPx(plan.plots[o.building.id]);
+        const s = { x: rest.x + p.x * rest.z, y: rest.y + (p.y - SIZE * (BIG[o.building.id] ?? 1) * 0.72) * rest.z };
+        const w = o.job ? 44 : 18;
+
+        return { x0: s.x - w / 2, y0: s.y - (o.job ? 22 : 18), x1: s.x + w / 2, y1: s.y };
+      }),
+    ];
+
+    for (const o of [...placed].sort((a, b) => weight(a) - weight(b))) {
+      const b = box(o, true);
+
+      if (!inView(b) || taken.some((t) => hit(t, b))) continue;
+      if (Array.from(bare.entries()).some(([id, m]) => id !== o.building.id && !out.has(id) && hit(m, b))) continue;
+      out.add(o.building.id);
+      taken.push(b);
+    }
+
+    return out;
+  }, [rest, options, plan, freeBuilder]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const border = useMemo(() => claimOutline().map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
+  const borderPath = border.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") + "Z";
+  // Tracks: a gentle bend each, the same way every time.
+  const tracks = plan.tracks.map(([a, b]) => {
+    const p = toPx(plan.plots[a]);
+    const q = toPx(plan.plots[b]);
+    const bend = ((a.length * 7 + b.length * 3) % 5) / 5 - 0.4;
+    const cx = (p.x + q.x) / 2 - (q.y - p.y) * bend * 0.25;
+    const cy = (p.y + q.y) / 2 + (q.x - p.x) * bend * 0.25;
+
+    return `M${p.x.toFixed(1)} ${p.y.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${q.x.toFixed(1)} ${q.y.toFixed(1)}`;
+  });
+  const hall = toPx(plan.plots["town-hall"]);
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden border border-frame/80 bg-[#1C3F54] shadow-card h-[clamp(380px,64svh,680px)]">
+      <div ref={camera.viewport} className="map-viewport absolute inset-0 overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing">
+        <MapCanvas
+          onPainter={(p) => {
+            painter.current = p;
+          }}
+        />
+        <div ref={camera.layer} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: SIDE, height: SIDE }}>
+          <GroundOverview
+            n={2 * R + 1}
+            ox={ox}
+            oy={oy}
+            onCanvas={(c) => painter.current?.setBackdrop(c && { canvas: c, left: 0, top: 0, size: SIDE })}
+          />
+          {ground.map((p) => (
+            <GroundPiece
+              key={p.key}
+              detail={p.detail}
+              home={`${home.x},${home.y}`}
+              n={p.n}
+              occupied={p.occupied}
+              prio={p.prio}
+              res={p.res}
+              x={p.x}
+              y={p.y}
+              onImage={(img) =>
+                painter.current?.setPiece(p.key, img && { img, left: (p.x - ox) * T, top: (p.y - oy) * T, size: p.n * T, detail: p.detail })
+              }
+            />
+          ))}
+
+          <svg aria-hidden="true" className="absolute left-0 top-0 pointer-events-none" height={SIDE} viewBox={`0 0 ${SIDE} ${SIDE}`} width={SIDE}>
+            {/* Beyond your border the land is someone else's: dimmed */}
+            <path d={`M0 0H${SIDE}V${SIDE}H0Z ${borderPath}`} fill="rgba(14,10,6,0.38)" fillRule="evenodd" />
+            {/* Tracks worn between the buildings: a dark bed, then the packed-earth top */}
+            <g fill="none" strokeLinecap="round">
+              {tracks.map((d, i) => (
+                <path key={`b${i}`} d={d} stroke="#4E3A22" strokeOpacity="0.5" strokeWidth="6" />
+              ))}
+              {tracks.map((d, i) => (
+                <path key={`t${i}`} d={d} stroke="#A88A5C" strokeOpacity="0.75" strokeWidth="3.6" />
+              ))}
+            </g>
+            {/* The Town Hall's square */}
+            <ellipse cx={hall.x} cy={hall.y - 4} fill="#9A7C52" opacity="0.7" rx={SIZE * 0.95} ry={SIZE * 0.5} stroke="#6E5534" strokeOpacity="0.6" />
+          </svg>
+
+          {options.map((o) =>
+            plan.plots[o.building.id] ? (
+              <Building
+                key={o.building.id}
+                at={toPx(plan.plots[o.building.id])}
+                freeBuilder={freeBuilder}
+                named={named.has(o.building.id)}
+                now={now}
+                o={o}
+                onOpen={onOpen}
+              />
+            ) : null,
+          )}
+        </div>
+      </div>
+
+      {/* Zoom, and back to the Town Hall */}
+      <div className="absolute right-2 bottom-2 z-10 flex flex-col rounded-xl overflow-hidden border border-line bg-[#1A120B]/85 shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
+        {[
+          { label: "Zoom in", text: "+", act: () => camera.zoomBy(1.6) },
+          { label: "Zoom out", text: "−", act: () => camera.zoomBy(1 / 1.6) },
+          { label: "Back to the Town Hall", text: "⌂", act: () => camera.centerOn(mid, mid) },
+        ].map((b) => (
+          <button
+            key={b.label}
+            aria-label={b.label}
+            className="w-9 h-9 flex items-center justify-center text-lg font-bold text-parch hover:bg-white/10 border-b border-line last:border-b-0"
+            type="button"
+            onClick={b.act}
+          >
+            {b.text}
+          </button>
+        ))}
+      </div>
+      {/* A soft vignette ties the edges into the frame */}
+      <span className="pointer-events-none absolute inset-0 z-[5] rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,0.5)]" />
+    </div>
   );
 };
 
-/** Tracks an element's width so the village can pick its layout. */
-const useWidth = () => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-
-  useEffect(() => {
-    const el = ref.current;
-
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
-
-    ro.observe(el);
-
-    return () => ro.disconnect();
-  }, []);
-
-  return [ref, width] as const;
-};
-
-/** The tribe as a walled village: every building on its own named plot. Tap one to open it. */
-export const Village: FunctionComponent<{
+type VillageProps = {
   options: UpgradeOption[];
   freeBuilder: boolean;
   now: number;
   onOpen: (b: BuildingDef) => void;
-}> = ({ options, freeBuilder, now, onOpen }) => {
-  // Measure the room the village has, not the village itself, so switching layouts can't loop.
-  const [ref, width] = useWidth();
-  const v = width >= WIDE_FROM ? WIDE : NARROW;
-  const placed = options.filter((o) => v.plots[o.building.id]);
+};
 
-  return (
-    <div ref={ref} className="w-full">
-      <div
-        className={clsx(
-          "relative isolate mx-auto rounded-2xl overflow-hidden border border-frame/60 shadow-card bg-[#283016] [container-type:inline-size]",
-          // A tall village on a phone is fine to scroll; a wide one should fit the window.
-          v === WIDE ? "w-full max-w-[var(--village-w)]" : "max-w-[480px]",
-          !width && "invisible",
+/** The tribe as a village on its own land: every building on its own plot. Tap one to open it. */
+export const Village: FunctionComponent<VillageProps> = (props) => {
+  const { land, error, retry } = useLand();
+
+  if (!land) {
+    return (
+      <div className="relative rounded-2xl overflow-hidden border border-frame/80 bg-[#1C3F54] shadow-card h-[clamp(380px,64svh,680px)] flex flex-col items-center justify-center gap-2 text-sm">
+        {error ? (
+          <>
+            <span className="text-bad">{error}</span>
+            <Button size="small" variant="outline" onClick={retry}>
+              Try again
+            </Button>
+          </>
+        ) : (
+          <span className="text-muted font-display">Unrolling your land…</span>
         )}
-        style={{ aspectRatio: `100 / ${v.height}` }}
-      >
-        <Ground v={v} />
-        {placed.map((o) => (
-          <Art key={o.building.id} freeBuilder={freeBuilder} now={now} o={o} v={v} onOpen={onOpen} />
-        ))}
-        {placed.map((o) => (
-          <Plate key={o.building.id} freeBuilder={freeBuilder} now={now} o={o} v={v} onOpen={onOpen} />
-        ))}
-        {/* A soft vignette ties the edges into the frame */}
-        <span className="pointer-events-none absolute inset-0 z-[10001] rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,0.45)]" />
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <VillageLand land={land} {...props} />;
 };

@@ -100,6 +100,17 @@ const fbm = (x: number, y: number, seed: number) =>
   vnoise(x, y, seed) * 0.5 + vnoise(x * 2.1, y * 2.1, seed + 1) * 0.3 + vnoise(x * 4.3, y * 4.3, seed + 2) * 0.2;
 
 /**
+ * The edge of your territory at angle `th`, in tiles from your tile's centre
+ * (about two and a half tiles out, a little squashed up and down). The map
+ * paints it; the village lays its buildings out inside it.
+ */
+export const claimEdge = (th: number) => {
+  const r = 2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9;
+
+  return { x: Math.cos(th) * r, y: Math.sin(th) * r * 0.92 };
+};
+
+/**
  * Tree crowns: the nearest of one jittered point per cell. Returns the
  * distance to it and which cell it is, so each crown keeps its own colour.
  */
@@ -501,9 +512,9 @@ const paintFlat = (
 
     for (let a = 0; a <= 64; a++) {
       const th = (a / 64) * Math.PI * 2;
-      const r = T * (2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9);
-      const X = cx + Math.cos(th) * r;
-      const Y = cy + Math.sin(th) * r * 0.92;
+      const e = claimEdge(th);
+      const X = cx + e.x * T;
+      const Y = cy + e.y * T;
 
       if (a) edge.lineTo(X, Y);
       else edge.moveTo(X, Y);
