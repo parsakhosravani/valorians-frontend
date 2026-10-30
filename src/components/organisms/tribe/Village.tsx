@@ -429,7 +429,8 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
 
   return (
     <div className="relative rounded-2xl overflow-hidden border border-frame/80 bg-[#1C3F54] shadow-card h-[clamp(380px,64svh,680px)]">
-      <div ref={camera.viewport} className="map-viewport absolute inset-0 overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing">
+      {/* isolate: the buildings' labels stack among themselves, never over the zoom buttons */}
+      <div ref={camera.viewport} className="map-viewport absolute inset-0 isolate overflow-hidden select-none cursor-grab data-[dragging]:cursor-grabbing">
         <MapCanvas
           onPainter={(p) => {
             painter.current = p;
