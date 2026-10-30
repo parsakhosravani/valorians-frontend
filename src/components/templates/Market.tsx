@@ -10,7 +10,6 @@ import { Card, Tabs, fmt } from "@/components/organisms/war/shared";
 import { Avatar } from "@/components/molecules/Avatar";
 import { Button } from "@/components/atoms/Button";
 import { RESOURCES, useGame } from "@/context";
-import useBackButton from "@/hooks/useBackButton";
 import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import {
@@ -174,7 +173,6 @@ const AmountInput = ({
 );
 
 export const Market = () => {
-  useBackButton();
   const { authHeader, state, rates, now, trade, refresh } = useGame();
   const [tab, setTab] = useState<Tab>("buy");
 

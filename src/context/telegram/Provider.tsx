@@ -6,6 +6,7 @@ import useDisableScroll from "@/hooks/useDisableScroll";
 import useMobilePlatform from "@/hooks/useMobilePlatform";
 import { Telegram } from "@twa-dev/types";
 import { useRouter } from "next/navigation";
+import { useTelegramBackButton } from "@/hooks/useBackHandler";
 
 interface TelegramProviderProps {
   children: ReactNode;
@@ -58,13 +59,11 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
   useDisableScroll(true);
   const isMobile = useMobilePlatform(telegram);
 
+  // Telegram's back button, for every page and drawer (see useBackHandler).
+  useTelegramBackButton(telegram);
+
   const router = useRouter();
-  const navigateTo = (address: string, actionType: "on" | "off" = "on") => {
-    if (actionType === "on") {
-      telegram?.WebApp.BackButton.show();
-    } else {
-      telegram?.WebApp.BackButton.hide();
-    }
+  const navigateTo = (address: string) => {
     router.push(address as any);
   };
 

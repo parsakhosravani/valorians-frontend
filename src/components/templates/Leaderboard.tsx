@@ -10,7 +10,6 @@ import { Tabs } from "@/components/organisms/war/shared";
 import { Avatar } from "@/components/molecules/Avatar";
 import { useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
-import useBackButton from "@/hooks/useBackButton";
 import { ScreenHeader } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
 
@@ -49,7 +48,6 @@ const RankRow = ({ r, metric }: { r: Row; metric: Metric }) => (
 );
 
 export const Leaderboard = () => {
-  useBackButton();
   const { authHeader } = useGameStatus();
   const [metric, setMetric] = useState<Metric>("population");
   const [data, setData] = useState<Data | null>(null);

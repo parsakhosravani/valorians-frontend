@@ -15,7 +15,6 @@ import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, buildingImage } from "
 import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
-import useBackButtonReset from "@/hooks/useBackButtonReset";
 import dynamic from "next/dynamic";
 
 // Opened from buttons, so they load separately from the page.
@@ -90,7 +89,6 @@ const TaskRow = ({ t }: { t: Task }) => {
 };
 
 export const Hall = () => {
-  useBackButtonReset();
   const { telegram } = useTelegramContext();
   const { state, rates, now, me, authHeader, claimStreak, upgradeBuilding } = useGame();
   const [news, setNews] = useState<ReportItem | null>(null);

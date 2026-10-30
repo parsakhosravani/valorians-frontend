@@ -6,7 +6,6 @@ import clsx from "clsx";
 
 import { RESOURCES, ReadyLive, useGameActions, useLive, useTelegramContext } from "@/context";
 import { Countdown } from "@/components/atoms/Countdown";
-import useBackButtonReset from "@/hooks/useBackButtonReset";
 import { compact, grouped } from "@/lib/format";
 import {
   FRENZY_METER_MAX,
@@ -112,7 +111,6 @@ const Upgrade = ({
 };
 
 export const Resources = () => {
-  useBackButtonReset();
   const { telegram } = useTelegramContext();
   const { state, rates, now, activeResource, combo } = useLive((l) => l, (a, b) => mineKey(a) === mineKey(b));
   const { setActiveResource, tap, upgradeSkill } = useGameActions();

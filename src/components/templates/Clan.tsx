@@ -17,7 +17,6 @@ import { Button } from "@/components/atoms/Button";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
 import { Coin } from "@/components/molecules/Coin";
 import { TextImage } from "@/components/molecules/TextImage";
-import useBackButton from "@/hooks/useBackButton";
 import { RESOURCES, useGame, useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
@@ -315,7 +314,6 @@ const ClanSkeleton = ({ inClan }: { inClan: boolean }) => (
 );
 
 export const Clan: FunctionComponent = () => {
-  useBackButton();
   const { authHeader, me, state, now, clan } = useGame();
   // Start from the last view of this screen (if it's still about the same clan) so it opens instantly.
   const [data, setData] = useState<ClanView | null>(() => cachedView(me.id, me.clan?.id ?? null));
