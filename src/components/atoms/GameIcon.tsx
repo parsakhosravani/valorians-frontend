@@ -22,6 +22,8 @@ const ICON_BY_EMOJI: Record<string, string> = {
   "⚓": "anchor",
   "🐪": "camel",
   "🔥": "fire",
+  // Stamina: the gold rune bolt (also one of the clan flag emblems).
+  "⚡": "emblems/lightning",
   "🗼": "watchtower",
   "🎁": "chest",
   "🏛️": "hall",

@@ -19,6 +19,7 @@ import {
 import { frenzyActive } from "@/lib/game/engine";
 import type { ResourceId } from "@/lib/game/config";
 import { Button } from "@/components/atoms/Button";
+import { GameIcon } from "@/components/atoms/GameIcon";
 
 type Float = { id: number; x: number; y: number; text: string; crit: boolean };
 
@@ -304,9 +305,7 @@ export const Resources = () => {
       {/* Stamina and mining upgrades */}
       <div className="card mx-3 mb-2 p-3 flex flex-col gap-3">
       <div className="flex items-center gap-3">
-        <svg aria-hidden="true" className="text-goldtext shrink-0" fill="none" height="22" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="22">
-          <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
-        </svg>
+        <GameIcon className="!w-[26px] !h-[26px] shrink-0 drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]" e="⚡" />
         <div className="flex-1 flex flex-col gap-1">
           <div className="flex justify-between text-sm font-extrabold">
             <span>
