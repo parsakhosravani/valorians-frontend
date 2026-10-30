@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 
 import { claimOutline, villagePlan } from "./villagePlan";
 
+import { islandTerrain } from "@/lib/game/island";
+
 import type { Terrain } from "@/lib/game/map";
 
 const IDS = [
@@ -70,4 +72,18 @@ test("the same land always gives the same village, with one track to each buildi
   expect(a.plots).toEqual(b.plots);
   expect(a.tracks.length).toBe(IDS.length - 1);
   expect(new Set(a.tracks.map(([, to]) => to)).size).toBe(IDS.length - 1);
+});
+
+test("a tribe settled at sea builds its whole village on its island, none of it on the water", () => {
+  const ground = islandTerrain(HOME, () => "sea");
+  const { plots } = villagePlan(HOME, IDS, ground);
+
+  expect(Object.keys(plots).sort()).toEqual([...IDS].sort());
+  for (const p of Object.values(plots)) expect(ground(Math.round(HOME.x + p.x), Math.round(HOME.y + p.y))).not.toBe("sea");
+});
+
+test("with no land at all, every building still gets a plot", () => {
+  const { plots } = villagePlan(HOME, IDS, () => "sea");
+
+  expect(Object.keys(plots).sort()).toEqual([...IDS].sort());
 });

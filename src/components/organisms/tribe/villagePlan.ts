@@ -9,7 +9,9 @@ import type { Point, Terrain } from "@/lib/game/map";
  * military quarter a little further out, and the workshops and fields go
  * where the land suits them: the Iron Mine up in the hills, the Sawmill by
  * the woods, the Harbor on the shore, the City Gate and the Watchtower on the
- * border. Nothing stands on mountains or water, or on a neighbour's village.
+ * border. Nothing stands on mountains or water, or on a neighbour's village,
+ * unless there is no land left at all: then it stands on stilts over the
+ * water rather than go missing.
  *
  * Everything is in tiles from the centre of your tile, and the same land
  * always gives the same village.
@@ -77,6 +79,8 @@ export function villagePlan(
   // Spots to build on: a fine triangular grid over the territory and a
   // little way past its border (workshops and fields may stand outside it).
   const spots: Spot[] = [];
+  // Mountains and water: only when the land has run out.
+  const wet: Spot[] = [];
   const step = 0.36;
 
   for (let j = -12; j <= 12; j++)
@@ -87,21 +91,21 @@ export function villagePlan(
       const edge = edgeAt(th);
       const terrain = ground(p);
 
-      if (d > edge + 1 || !BUILDABLE[terrain]) continue;
+      if (d > edge + 1) continue;
       if (neighbours.some((n) => Math.hypot(home.x + p.x - n.x, home.y + p.y - n.y) < 1.15)) continue;
-      spots.push({ ...p, d, th, edge, terrain });
+      (BUILDABLE[terrain] ? spots : wet).push({ ...p, d, th, edge, terrain });
     }
 
   const plots: Record<string, Plot> = { "town-hall": { x: 0, y: 0 } };
   const taken = (s: Spot, room: number) =>
     Object.entries(plots).some(([id, p]) => Math.hypot(p.x - s.x, p.y - s.y) < (id === "town-hall" ? Math.max(room, HALL_ROOM) : room));
   /** Places a building on the lowest-scoring free spot (`inside`: within the border). */
-  const place = (id: string, score: (s: Spot) => number, inside: boolean) => {
+  const place = (id: string, score: (s: Spot) => number, inside: boolean, pool: Spot[] = spots) => {
     for (const room of SPACING) {
       let best: Spot | null = null;
       let bestScore = Infinity;
 
-      for (const s of spots) {
+      for (const s of pool) {
         if ((inside && s.d > s.edge - 0.25) || taken(s, room)) continue;
         // A whisker of the spot's own place breaks ties the same way every time.
         const v = score(s) + (s.x * 0.0007 + s.y * 0.0003);
@@ -118,7 +122,9 @@ export function villagePlan(
       }
     }
     // Squeezed by water all round: anywhere still free, inside or out.
-    if (inside) place(id, score, false);
+    if (inside) place(id, score, false, pool);
+    // No land left at all: on stilts over the water, so no building ever goes missing.
+    else if (pool !== wet) place(id, score, false, wet);
   };
 
   const ring = (s: Spot, want: number) => Math.abs(s.d - want);

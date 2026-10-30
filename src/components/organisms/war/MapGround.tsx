@@ -3,7 +3,8 @@ import { memo, useEffect, useLayoutEffect, useRef } from "react";
 
 import { PieceJob, TILE, V3, paintBlob } from "./landPaint";
 
-import { Terrain, terrainAt } from "@/lib/game/map";
+import { islandTerrain } from "@/lib/game/island";
+import { Point, Terrain } from "@/lib/game/map";
 
 /**
  * The land under the war map in square pieces (see "Pieces" below), painted by
@@ -290,11 +291,14 @@ export const GroundOverview = memo(function GroundOverview({
   ox,
   oy,
   n,
+  home,
   onCanvas,
 }: {
   ox: number;
   oy: number;
   n: number;
+  /** Your tribe's tile: if it's at sea, its island shows here too. */
+  home?: Point;
   onCanvas: (c: HTMLCanvasElement | null) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -314,10 +318,11 @@ export const GroundOverview = memo(function GroundOverview({
 
     if (!g) return;
     const img = g.createImageData(n, n);
+    const ground = islandTerrain(home);
 
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) {
-        const [r, gr, b] = ROUGH[terrainAt(ox + i, oy + j)];
+        const [r, gr, b] = ROUGH[ground(ox + i, oy + j)];
         const p = (j * n + i) * 4;
 
         img.data[p] = r;
@@ -327,7 +332,7 @@ export const GroundOverview = memo(function GroundOverview({
       }
     g.putImageData(img, 0, 0);
     onCanvasRef.current(c);
-  }, [ox, oy, n]);
+  }, [ox, oy, n, home?.x, home?.y]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <canvas ref={ref} aria-hidden="true" className="hidden" />;
 });
