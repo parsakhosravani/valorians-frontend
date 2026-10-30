@@ -3,7 +3,7 @@ import { memo, useEffect, useLayoutEffect, useRef } from "react";
 
 import { PieceJob, TILE, V3, paintBlob } from "./landPaint";
 
-import { islandTerrain } from "@/lib/game/island";
+import { ClaimShape, PLAIN_CLAIM, islandTerrain } from "@/lib/game/island";
 import { Point, Terrain } from "@/lib/game/map";
 
 /**
@@ -188,7 +188,7 @@ export const GroundPiece = memo(function GroundPiece({
   n,
   occupied,
   home = "",
-  spread = 1,
+  claim = PLAIN_CLAIM,
   detail = false,
   res,
   prio = 0,
@@ -202,8 +202,8 @@ export const GroundPiece = memo(function GroundPiece({
   occupied: string;
   /** "x,y" of your tribe when its territory reaches this piece. */
   home?: string;
-  /** How much bigger your claim is drawn (the village view spreads it out). */
-  spread?: number;
+  /** How your claim is drawn (see ClaimShape). */
+  claim?: ClaimShape;
   /** A close-up piece, painted at full detail over the whole-view ones. */
   detail?: boolean;
   /** Picture px per map px (see baseRes and closeUpRes). */
@@ -211,7 +211,7 @@ export const GroundPiece = memo(function GroundPiece({
   /** Lower paints sooner. */
   prio?: number;
 }) {
-  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${spread}`;
+  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${claim.w}x${claim.h}`;
   const held = useRef<string | null>(null);
   const prioRef = useRef(prio);
   const onImageRef = useRef(onImage);
@@ -246,7 +246,7 @@ export const GroundPiece = memo(function GroundPiece({
     if (pieces.has(key)) show(key);
     else {
       job = enqueue(prioRef.current, (done) => {
-        paint({ x, y, n, occupied, home, detail, res, spread }).then((blob) => {
+        paint({ x, y, n, occupied, home, detail, res, claim }).then((blob) => {
           done();
           if (!blob) return;
           if (!pieces.has(key)) pieces.set(key, { url: URL.createObjectURL(blob), users: 0, used: Date.now() });
@@ -260,7 +260,7 @@ export const GroundPiece = memo(function GroundPiece({
       live = false;
       if (job) job.dead = true;
     };
-  }, [key, x, y, n, occupied, home, detail, res, spread]);
+  }, [key, x, y, n, occupied, home, detail, res, claim]);
 
   useEffect(
     () => () => {
@@ -295,7 +295,7 @@ export const GroundOverview = memo(function GroundOverview({
   oy,
   n,
   home,
-  spread = 1,
+  claim = PLAIN_CLAIM,
   onCanvas,
 }: {
   ox: number;
@@ -303,7 +303,8 @@ export const GroundOverview = memo(function GroundOverview({
   n: number;
   /** Your tribe's tile: if it's at sea, its island shows here too. */
   home?: Point;
-  spread?: number;
+  /** How your claim is drawn (see ClaimShape): an island takes its shape. */
+  claim?: ClaimShape;
   onCanvas: (c: HTMLCanvasElement | null) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -323,7 +324,7 @@ export const GroundOverview = memo(function GroundOverview({
 
     if (!g) return;
     const img = g.createImageData(n, n);
-    const ground = islandTerrain(home, undefined, spread);
+    const ground = islandTerrain(home, undefined, claim);
 
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) {
@@ -337,7 +338,7 @@ export const GroundOverview = memo(function GroundOverview({
       }
     g.putImageData(img, 0, 0);
     onCanvasRef.current(c);
-  }, [ox, oy, n, home?.x, home?.y, spread]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ox, oy, n, home?.x, home?.y, claim.w, claim.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <canvas ref={ref} aria-hidden="true" className="hidden" />;
 });
