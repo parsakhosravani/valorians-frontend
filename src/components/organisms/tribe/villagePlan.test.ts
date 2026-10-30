@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { claimOutline, villagePlan } from "./villagePlan";
 
 import { islandTerrain } from "@/lib/game/island";
+import { homeSlot, terrainAt } from "@/lib/game/map";
 
 import type { Terrain } from "@/lib/game/map";
 
@@ -88,26 +89,41 @@ test("with no land at all, every building still gets a plot", () => {
   expect(Object.keys(plots).sort()).toEqual([...IDS].sort());
 });
 
-test("spread out, the village keeps every building with more room between them, inside its bigger border", () => {
-  const nearest = (plots: Record<string, { x: number; y: number }>) => {
-    const all = Object.values(plots);
-
-    return all.reduce((sum, p) => sum + Math.min(...all.filter((q) => q !== p).map((q) => dist(p, q))), 0) / all.length;
-  };
-  const tight = villagePlan(HOME, IDS, plains);
-  const wide = villagePlan(HOME, IDS, plains, [], 1.3);
-  const wideBorder = claimOutline(64, 1.3);
+test("laid out roomier, the village keeps every building with more room between them, inside its taller border", () => {
+  const layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
+  const roomy = villagePlan(HOME, IDS, plains, [], layout);
+  const tall = claimOutline(64, layout.claim);
   const edge = (p: { x: number; y: number }) => {
     const th = Math.atan2(p.y, p.x);
-    let best = wideBorder[0];
+    let best = tall[0];
 
-    for (const b of wideBorder) if (Math.abs(Math.atan2(b.y, b.x) - th) < Math.abs(Math.atan2(best.y, best.x) - th)) best = b;
+    for (const b of tall) if (Math.abs(Math.atan2(b.y, b.x) - th) < Math.abs(Math.atan2(best.y, best.x) - th)) best = b;
 
     return Math.hypot(best.x, best.y);
   };
   const outside = ["city-gate", "watchtower", "harbor", "iron-mine", "sawmill", "brickyard", "windmill", "fertilizer-workshop"];
+  // Buildings side by side (in the same row) that would cover one another.
+  const crowded = (plots: Record<string, { x: number; y: number }>) => {
+    const all = Object.values(plots);
+    let n = 0;
 
-  expect(Object.keys(wide.plots).sort()).toEqual([...IDS].sort());
-  expect(nearest(wide.plots)).toBeGreaterThan(nearest(tight.plots) * 1.15);
-  for (const [id, p] of Object.entries(wide.plots)) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(edge(p) + (outside.includes(id) ? 1.05 : 0.05));
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (Math.abs(all[i].x - all[j].x) < 0.74 && Math.abs(all[i].y - all[j].y) < 0.48) n++;
+
+    return n;
+  };
+
+  expect(Object.keys(roomy.plots).sort()).toEqual([...IDS].sort());
+  expect(crowded(roomy.plots)).toBe(0);
+  // On real land, where water and mountains squeeze the town, far fewer buildings cover one another.
+  let before = 0;
+  let after = 0;
+
+  for (let n = 0; n < 30; n++) {
+    const home = homeSlot(n * 3);
+
+    before += crowded(villagePlan(home, IDS, terrainAt).plots);
+    after += crowded(villagePlan(home, IDS, terrainAt, [], layout).plots);
+  }
+  expect(after).toBeLessThan(before * 0.6);
+  for (const [id, p] of Object.entries(roomy.plots)) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(edge(p) + (outside.includes(id) ? 1.05 : 0.05));
 });

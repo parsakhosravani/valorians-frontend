@@ -1,4 +1,4 @@
-import { islandTerrain } from "@/lib/game/island";
+import { ClaimShape, PLAIN_CLAIM, islandTerrain } from "@/lib/game/island";
 import { Terrain } from "@/lib/game/map";
 
 /**
@@ -105,10 +105,10 @@ const fbm = (x: number, y: number, seed: number) =>
  * (about two and a half tiles out, a little squashed up and down). The map
  * paints it; the village lays its buildings out inside it.
  */
-export const claimEdge = (th: number, spread = 1) => {
-  const r = (2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9) * spread;
+export const claimEdge = (th: number, claim: ClaimShape = PLAIN_CLAIM) => {
+  const r = 2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9;
 
-  return { x: Math.cos(th) * r, y: Math.sin(th) * r * 0.92 };
+  return { x: Math.cos(th) * r * claim.w, y: Math.sin(th) * r * 0.92 * claim.h };
 };
 
 /**
@@ -162,17 +162,17 @@ type Scene = {
   n: number;
   occupied: Set<string>;
   home: Pt | null;
-  spread: number;
+  claim: ClaimShape;
 };
 
 /** Terrain and per-tile facts with a margin, for neighbours and blending. */
 const MARGIN = 4;
 
-const survey = ({ ox, oy, n, home, spread }: Scene) => {
+const survey = ({ ox, oy, n, home, claim }: Scene) => {
   const W = n + MARGIN * 2;
   const ter: Terrain[] = new Array(W * W);
   // Your land, with the island raised under it if you settled at sea.
-  const ground = islandTerrain(home, undefined, spread);
+  const ground = islandTerrain(home, undefined, claim);
 
   for (let j = 0; j < W; j++)
     for (let i = 0; i < W; i++) ter[j * W + i] = ground(ox + i - MARGIN, oy + j - MARGIN);
@@ -517,7 +517,7 @@ const paintFlat = (
 
     for (let a = 0; a <= 128; a++) {
       const th = (a / 128) * Math.PI * 2;
-      const e = claimEdge(th, s.spread);
+      const e = claimEdge(th, s.claim);
       const X = cx + e.x * T;
       const Y = cy + e.y * T;
 
@@ -671,16 +671,16 @@ export type PieceJob = {
   home: string;
   detail: boolean;
   res: number;
-  /** How much bigger your claim is drawn: the village view spreads it out (see claimEdge). */
-  spread?: number;
+  /** How your claim is drawn (see ClaimShape); as it is when left out. */
+  claim?: ClaimShape;
 };
 
 /**
  * Paints one piece of land and returns it as a small compressed picture. Runs
  * in the ground worker (ground.worker.ts) where the browser can, else here.
  */
-export const paintBlob = async ({ x, y, n, occupied, home, detail, res, spread = 1 }: PieceJob): Promise<Blob | null> => {
-  const scene: Scene = { ox: x, oy: y, n, occupied: new Set(occupied ? occupied.split(";") : []), home: parse(home)[0] ?? null, spread };
+export const paintBlob = async ({ x, y, n, occupied, home, detail, res, claim = PLAIN_CLAIM }: PieceJob): Promise<Blob | null> => {
+  const scene: Scene = { ox: x, oy: y, n, occupied: new Set(occupied ? occupied.split(";") : []), home: parse(home)[0] ?? null, claim };
   const size = n * TILE;
   const { c, g } = makeCanvas(Math.round(size * res), Math.round(size * res));
 

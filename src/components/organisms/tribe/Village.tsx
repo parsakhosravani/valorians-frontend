@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { CSSProperties, FunctionComponent, memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Plot, claimOutline, villagePlan } from "./villagePlan";
+import { Layout, Plot, claimOutline, villagePlan } from "./villagePlan";
 
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "@/components/organisms/war/MapGround";
 import { CanvasTribe, MapCanvas, MapPainter, VILLAGE_GROW, VILLAGE_MIN } from "@/components/organisms/war/MapCanvas";
@@ -31,10 +31,9 @@ import { formatDuration } from "@/lib/format";
  * plates keep one size on screen at any zoom, and only as many show as fit
  * without covering each other: zooming in names them all.
  *
- * So every building can be seen at once, the village is spread out here
- * (SPREAD: a bigger claim and more room between buildings than the war map
- * draws), it opens fitted to the whole wall, and zoomed out the level
- * medallions step aside (see COMPACT_ZOOM).
+ * So every building can be seen at once, the village is laid out roomier
+ * here than the war map draws it (LAYOUT), it opens fitted to the whole
+ * wall, and zoomed out the level medallions step aside (see COMPACT_ZOOM).
  */
 
 const T = TILE;
@@ -45,8 +44,16 @@ const SIDE = (2 * R + 1) * T;
 const SIZE = 40;
 const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
 const MIN_ZOOM = 0.6;
-/** How much bigger your land is drawn here than on the war map, with the room between buildings. */
-const SPREAD = 1.3;
+/**
+ * How roomy the village is laid out here (see Layout). Picked by laying out
+ * sixty real villages and fitting each to a phone's map: a taller claim
+ * suits the tall view and costs nothing in size, buildings get a fifth more
+ * room, and may stand a little closer one behind another than side by
+ * side. That opens with buildings about 44 px wide, a good size to tap, and
+ * hardly any of them covering another. (Spreading the claim wider instead
+ * makes the whole village, and so every building, smaller on screen.)
+ */
+const LAYOUT: Layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
 /**
  * Below this zoom the buildings are small on screen: only the Town Hall keeps
  * its medallion and name, and everything else just its gem or timer. Zooming
@@ -267,7 +274,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
 
   const ids = options.map((o) => o.building.id).sort().join(",");
   const plan = useMemo(
-    () => villagePlan(home, ids.split(","), islandTerrain(home, undefined, SPREAD), neighbours.map((t) => ({ x: t.x, y: t.y })), SPREAD),
+    () => villagePlan(home, ids.split(","), islandTerrain(home, undefined, LAYOUT.claim), neighbours.map((t) => ({ x: t.x, y: t.y })), LAYOUT),
     [home, ids, neighbours],
   );
 
@@ -284,7 +291,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
     },
   });
 
-  const border = useMemo(() => claimOutline(64, SPREAD).map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
+  const border = useMemo(() => claimOutline(64, LAYOUT.claim).map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
 
   /** The whole village in view: the wall, and every building standing on or past it, roofs and medallions included. */
   const fit = (instant: boolean) => {
@@ -492,7 +499,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
         <div ref={camera.layer} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: SIDE, height: SIDE }}>
           <GroundOverview
             home={home}
-            spread={SPREAD}
+            claim={LAYOUT.claim}
             n={2 * R + 1}
             ox={ox}
             oy={oy}
@@ -503,7 +510,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
               key={p.key}
               detail={p.detail}
               home={`${home.x},${home.y}`}
-              spread={SPREAD}
+              claim={LAYOUT.claim}
               n={p.n}
               occupied={p.occupied}
               prio={p.prio}
