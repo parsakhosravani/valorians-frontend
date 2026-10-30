@@ -21,8 +21,11 @@ export const ISLAND_REACH = 7;
 
 type TerrainAt = (x: number, y: number) => Terrain;
 
-/** The land round `home`, with its island raised when it sits at sea; just `base` when it doesn't. */
-export function islandTerrain(home: Point | null | undefined, base: TerrainAt = terrainAt): TerrainAt {
+/**
+ * The land round `home`, with its island raised when it sits at sea; just `base` when it doesn't.
+ * `spread`: how much bigger the claim is drawn (the village view spreads it out); the island grows with it.
+ */
+export function islandTerrain(home: Point | null | undefined, base: TerrainAt = terrainAt, spread = 1): TerrainAt {
   if (!home || base(home.x, home.y) !== "sea") return base;
   const { x: hx, y: hy } = home;
 
@@ -32,9 +35,9 @@ export function islandTerrain(home: Point | null | undefined, base: TerrainAt = 
     if (t !== "sea") return t;
     const d = Math.hypot(x - hx, (y - hy) / 0.92);
 
-    if (d > ISLAND_RADIUS) return t;
+    if (d > ISLAND_RADIUS * spread) return t;
 
     // Meadow in the middle; a few woods along the shore, the same ones every time.
-    return d > 1.5 && hash(x, y, 71) < 0.3 ? "forest" : "plains";
+    return d > 1.5 * spread && hash(x, y, 71) < 0.3 ? "forest" : "plains";
   };
 }
