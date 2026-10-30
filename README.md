@@ -51,7 +51,9 @@ Admins broadcast news from the bot chat. To become an admin, either put your Tel
 
 Sending runs at ~25 messages a second: a first batch right away, the rest from the cron (`/api/cron/battles`, every 5 minutes), picking up where it stopped. When it's done the bot messages you how many players got it. Each announcement carries a **Play now** button and a **Mute news** button; players can also toggle news with `/news`. Players who blocked the bot are skipped until they write to it again. Battle alerts are not affected by muting.
 
-**After each deploy** the bot notices the new version (Vercel's `VERCEL_GIT_COMMIT_SHA`) right after the deploy finishes and **announces it to every player automatically**, listing the pull requests merged since the last version (their titles are the bullet points, so write them for players). Admins get a note when it goes out and when it's delivered; the news channel gets it too when `TELEGRAM_CHANNEL_ID` is set. A deploy whose changes can't be read is skipped. Set `RELEASE_ANNOUNCE=draft` to approve each one from the bot instead (Send / Send to me only / Write my own / Cancel), or `off` to stop them.
+**After each deploy** the bot notices the new version (Vercel's `VERCEL_GIT_COMMIT_SHA`) right after the deploy finishes and **announces it to every player automatically**, listing the pull requests merged since the last version (their titles are the bullet points, so write them for players). Admins get a note when it goes out and when it's delivered; the news channel gets it too when `TELEGRAM_CHANNEL_ID` is set. A deploy whose changes can't be read is skipped. Admins choose how from the bot with **/releases**: 🚀 Automatic, ✋ Ask me first (a draft for each version: Send / Send to me only / Write my own / Cancel) or 🔕 Off (only /announce). The choice is kept in the database; until an admin picks one, `RELEASE_ANNOUNCE` (`auto`, `draft` or `off`) decides.
+
+**Admin commands** (in admins' own `/` menu, refreshed after each deploy and whenever an admin sends a command): /announce, /cancel, /stats (players, new and active players, reachable, Plus, Stars, clans) and /releases.
 
 ### Valorians Plus
 

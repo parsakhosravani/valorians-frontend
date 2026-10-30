@@ -31,6 +31,46 @@ export async function adminIds() {
 
 export const isAdmin = async (id: number) => (await adminIds()).includes(id);
 
+/** The command menu admins see when they type "/" (everyone else gets the players' menu). */
+export const ADMIN_COMMANDS = [
+  { command: "announce", description: "📢 Send an update announcement" },
+  { command: "cancel", description: "✖️ Cancel the announcement" },
+  { command: "stats", description: "📊 Player numbers" },
+  { command: "releases", description: "🚀 Update posts: auto, ask me, or off" },
+  { command: "start", description: "⚔️ Begin your legend" },
+  { command: "tribe", description: "🏰 Your tribe at a glance" },
+  { command: "top", description: "🏆 Top chiefs" },
+  { command: "clan", description: "🛡️ Your clan" },
+  { command: "news", description: "🔔 Update news on/off" },
+];
+/** Changes whenever the list does, so every admin's menu is brought up to date once. */
+const MENU_VERSION = ADMIN_COMMANDS.map((c) => c.command).join(",");
+
+/**
+ * Makes sure this admin's "/" menu lists every admin command. Telegram keeps
+ * a menu until it's set again, so an admin who got theirs before a command
+ * was added (or was made an admin through BOT_ADMIN_IDS) didn't see it. Sets
+ * it at most once per version of the list.
+ */
+export async function refreshAdminMenu(userId: number, force = false) {
+  const db = await getDb();
+  const key = `admin_menu:${userId}`;
+
+  if (!force) {
+    const rs = await db.execute({ sql: "SELECT value FROM meta WHERE key = ?", args: [key] });
+
+    if (String(rs.rows[0]?.value ?? "") === MENU_VERSION) return;
+  }
+  const r = await tg("setMyCommands", { scope: { type: "chat", chat_id: userId }, commands: ADMIN_COMMANDS });
+
+  if (r.ok) {
+    await db.execute({
+      sql: "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      args: [key, MENU_VERSION],
+    });
+  }
+}
+
 /**
  * The secret admin link: t.me/<bot>?start=admin_<code>, where the code is
  * BOT_ADMIN_CODE or, by default, derived from the bot token (so no extra
@@ -53,19 +93,7 @@ export async function claimAdmin(chatId: number, userId: number, payload: string
       args: [[...stored, userId].join(",")],
     });
   }
-  await tg("setMyCommands", {
-    scope: { type: "chat", chat_id: userId },
-    commands: [
-      { command: "announce", description: "📢 Send an update announcement" },
-      { command: "cancel", description: "✖️ Cancel the announcement" },
-      { command: "stats", description: "📊 Player numbers" },
-      { command: "start", description: "⚔️ Begin your legend" },
-      { command: "tribe", description: "🏰 Your tribe at a glance" },
-      { command: "top", description: "🏆 Top chiefs" },
-      { command: "clan", description: "🛡️ Your clan" },
-      { command: "news", description: "🔔 Update news on/off" },
-    ],
-  });
+  await refreshAdminMenu(userId, true);
   await say(
     chatId,
     `👑 <b>You're an admin of Valorians Legend.</b>\n\n` +
@@ -363,6 +391,10 @@ let lastReleaseCheck = 0;
 
 export async function maybeCheckRelease() {
   if (Date.now() - lastReleaseCheck < 60_000) return;
+  // Once per server start (so after each deploy): bring admins' "/" menus up to date.
+  if (!lastReleaseCheck) {
+    for (const id of await adminIds().catch(() => [] as number[])) await refreshAdminMenu(id).catch(() => {});
+  }
   lastReleaseCheck = Date.now();
   await checkRelease().catch((e) => {
     // eslint-disable-next-line no-console
@@ -370,15 +402,59 @@ export async function maybeCheckRelease() {
   });
 }
 
-/**
- * Release posts go straight to players by default. Set RELEASE_ANNOUNCE=draft
- * to have admins approve each one instead, or =off for none.
- */
-const releaseMode = () => {
-  const m = (process.env.RELEASE_ANNOUNCE || "auto").toLowerCase();
+type ReleaseMode = "auto" | "draft" | "off";
 
-  return m === "draft" || m === "off" ? m : "auto";
-};
+const asMode = (m: string): ReleaseMode | null => (m === "auto" || m === "draft" || m === "off" ? m : null);
+
+/**
+ * What happens when a new version goes live: posted to players straight away
+ * ("auto"), drafted for an admin to send or skip ("draft"), or nothing
+ * ("off"; /announce still works). Admins switch it with /releases; until
+ * anyone has, RELEASE_ANNOUNCE decides (auto by default).
+ */
+async function releaseMode(): Promise<ReleaseMode> {
+  const db = await getDb();
+  const rs = await db.execute("SELECT value FROM meta WHERE key = 'release_mode'");
+
+  return asMode(String(rs.rows[0]?.value ?? "")) ?? asMode((process.env.RELEASE_ANNOUNCE || "").toLowerCase()) ?? "auto";
+}
+
+const MODES: { mode: ReleaseMode; label: string; note: string }[] = [
+  { mode: "auto", label: "🚀 Automatic", note: "every new version is announced to players right away" },
+  { mode: "draft", label: "✋ Ask me first", note: "you get a draft for each new version: send it, rewrite it or skip it" },
+  { mode: "off", label: "🔕 Off", note: "no posts for new versions; /announce still works" },
+];
+
+/** /releases: how new versions are announced now, with a button for each choice. */
+export async function sendReleaseMode(chatId: number, userId: number) {
+  if (!(await isAdmin(userId))) return false;
+  const now = await releaseMode();
+  const current = MODES.find((m) => m.mode === now)!;
+
+  await say(
+    chatId,
+    `🚀 <b>Update posts</b>\n\nNow: <b>${current.label}</b>, ${current.note}.\n\nChoose how new versions are announced:`,
+    MODES.map((m) => [{ text: `${m.mode === now ? "✅ " : ""}${m.label}`, callback_data: `rel:${m.mode}` }])
+  );
+
+  return true;
+}
+
+/** The /releases buttons: rel:auto|draft|off. */
+export async function releaseButton(data: string, adminId: number, chatId: number) {
+  const mode = asMode(data.split(":")[1] ?? "");
+
+  if (!mode || !(await isAdmin(adminId))) return;
+  const db = await getDb();
+
+  await db.execute({
+    sql: "INSERT INTO meta (key, value) VALUES ('release_mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    args: [mode],
+  });
+  const m = MODES.find((x) => x.mode === mode)!;
+
+  await say(chatId, `✅ Update posts set to <b>${m.label}</b>: ${m.note}.`);
+}
 
 const releasePost = (changes: string[]) =>
   `🆕 <b>Valorians Legend has been updated!</b>\n\n` +
@@ -387,7 +463,7 @@ const releasePost = (changes: string[]) =>
 
 export async function checkRelease() {
   const sha = process.env.VERCEL_GIT_COMMIT_SHA;
-  const mode = releaseMode();
+  const mode = await releaseMode();
   const admins = await adminIds();
 
   if (!sha || mode === "off" || (mode === "draft" && !admins.length)) return null;
