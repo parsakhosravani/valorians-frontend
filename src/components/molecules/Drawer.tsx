@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 import { IconText } from "@/components/atoms/GameIcon";
+import { useBackHandler } from "@/hooks/useBackHandler";
 
 type DrawerPosition = "bottom" | "right" | "left";
 
@@ -28,6 +29,8 @@ export const Drawer: React.FC<DrawerProps> = ({ position, children, isOpen, titl
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
+  // Telegram's back button closes the sheet (the newest one, when several are open).
+  useBackHandler(isOpen, onClose);
 
   useEffect(() => {
     if (!isOpen) return;
