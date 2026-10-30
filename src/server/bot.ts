@@ -2,7 +2,22 @@ import "server-only";
 
 import crypto from "crypto";
 
-import { adminIds, announceButton, cancelAnnounce, claimAdmin, markReachable, newsIsOn, setNews, startAnnounce, takeAdminPost } from "./announce";
+import {
+  ADMIN_COMMANDS,
+  adminIds,
+  announceButton,
+  cancelAnnounce,
+  claimAdmin,
+  isAdmin,
+  markReachable,
+  newsIsOn,
+  refreshAdminMenu,
+  releaseButton,
+  sendReleaseMode,
+  setNews,
+  startAnnounce,
+  takeAdminPost,
+} from "./announce";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
@@ -286,6 +301,7 @@ export async function handleUpdate(u: Update) {
     }
     await tg("answerCallbackQuery", { callback_query_id: q.id });
     if (q.data?.startsWith("ann:")) return announceButton(q.data, q.from.id, chatId);
+    if (q.data?.startsWith("rel:")) return releaseButton(q.data, q.from.id, chatId);
     await route(q.data ?? "menu", chatId, q.from.id, q.from.first_name ?? "");
 
     return;
@@ -300,6 +316,9 @@ export async function handleUpdate(u: Update) {
   const [cmd] = m.text.trim().split(/\s+/);
   const name = cmd.replace(/^\//, "").replace(/@.*$/, "").toLowerCase();
 
+  // An admin typing a command: make sure their "/" menu lists every admin command.
+  if (cmd.startsWith("/") && (await isAdmin(m.from.id))) await refreshAdminMenu(m.from.id).catch(() => {});
+
   if (name === "start") {
     const payload = m.text.trim().split(/\s+/)[1] ?? "";
 
@@ -310,6 +329,7 @@ export async function handleUpdate(u: Update) {
   if (name === "announce" && (await startAnnounce(m.chat.id, m.from.id))) return;
   if (name === "cancel" && (await cancelAnnounce(m.chat.id, m.from.id))) return;
   if (name === "stats" && (await sendStats(m.chat.id, m.from.id))) return;
+  if (name === "releases" && (await sendReleaseMode(m.chat.id, m.from.id))) return;
   if (name === "news") return toggleNews(m.chat.id, m.from.id);
 
   return route(name, m.chat.id, m.from.id, m.from.first_name ?? "");
@@ -390,21 +410,9 @@ export async function setupBot() {
       { command: "news", description: "🔔 Update news on/off" },
     ],
   });
-  // Admins also see /announce in their own command menu.
+  // Admins also see the admin commands (/announce, /stats, /releases) in their own menu.
   for (const id of await adminIds()) {
-    await run("setMyCommands", {
-      scope: { type: "chat", chat_id: id },
-      commands: [
-        { command: "announce", description: "📢 Send an update announcement" },
-        { command: "cancel", description: "✖️ Cancel the announcement" },
-        { command: "stats", description: "📊 Player numbers" },
-        { command: "start", description: "⚔️ Begin your legend" },
-        { command: "tribe", description: "🏰 Your tribe at a glance" },
-        { command: "top", description: "🏆 Top chiefs" },
-        { command: "clan", description: "🛡️ Your clan" },
-        { command: "news", description: "🔔 Update news on/off" },
-      ],
-    });
+    await run("setMyCommands", { scope: { type: "chat", chat_id: id }, commands: ADMIN_COMMANDS });
   }
   await run("setChatMenuButton", { menu_button: { type: "web_app", text: "Play", web_app: { url: base } } });
   await run("setWebhook", {
