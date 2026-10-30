@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 
-import { BanditWarning, MapLair, UnitBadge, fmt } from "./shared";
+import { BanditWarning, MapLair, UnitBadge, fmt, selectAll } from "./shared";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -238,9 +238,12 @@ export const SendArmyDrawer = ({
                       <input
                         aria-label={`${u.name} to send`}
                         className="inset w-12 h-7 rounded-lg text-center text-sm font-extrabold tabular-nums outline-none focus:border-gold"
+                        enterKeyHint="done"
                         inputMode="numeric"
-                        value={n}
+                        placeholder="0"
+                        value={n || ""}
                         onChange={(e) => setOne(u.id, Number(e.target.value.replace(/\D/g, "")))}
+                        onFocus={(e) => selectAll(e.currentTarget)}
                       />
                       <button
                         aria-label={`more ${u.name}`}

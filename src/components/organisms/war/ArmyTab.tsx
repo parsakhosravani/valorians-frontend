@@ -97,7 +97,7 @@ const TrainPanel = ({ unit }: { unit: UnitDef }) => {
         <span className="text-muted"><GameIcon e="⏱" /> {formatDuration(seconds * 1000)}</span>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <Stepper max={Math.max(1, affordable)} value={count} onChange={(n) => setCount(Math.max(1, n))} />
+        <Stepper max={Math.max(1, affordable)} min={1} value={count} onChange={setCount} />
         <Button disabled={busy || affordable < count || count < 1} size="small" onClick={onTrain}>
           Train
         </Button>

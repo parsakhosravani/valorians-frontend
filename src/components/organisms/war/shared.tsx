@@ -1,5 +1,6 @@
 "use client";
 import clsx from "clsx";
+import { useState } from "react";
 
 import { BANDIT, UNITS, UnitId, UNIT_BY_ID, banditStrength } from "@/lib/game/config";
 import { Segmented } from "@/components/atoms/Ui";
@@ -76,16 +77,43 @@ export const ArmyLine = ({ army, className }: { army: Army; className?: string }
 /** War screen tabs: the shared v2 segmented control. */
 export const Tabs = Segmented;
 
+/** Selects a number box's text so the first digit typed replaces it (after focus, which iOS needs). */
+export const selectAll = (el: HTMLInputElement) => requestAnimationFrame(() => el.setSelectionRange(0, el.value.length));
+
+/**
+ * A number with − / + / Max. The box can be typed in freely: tapping it
+ * selects the number so the first digit replaces it, and it may be emptied
+ * on the way to a new number (it then counts as `min`, shown faintly, until
+ * a digit is typed). Before, clearing it snapped straight back to `min`, so
+ * "1" could never be deleted to type, say, "5": it became "15".
+ */
 export const Stepper = ({
   value,
   max,
+  min = 0,
   onChange,
 }: {
   value: number;
   max: number;
+  /** The least it can be (an empty box counts as this). */
+  min?: number;
   onChange: (n: number) => void;
 }) => {
-  const set = (n: number) => onChange(Math.max(0, Math.min(max, Math.floor(n || 0))));
+  // What's being typed, while the box is in use; null shows the value.
+  const [draft, setDraft] = useState<string | null>(null);
+  const clamp = (n: number) => Math.max(min, Math.min(max, Math.floor(n || 0)));
+  const set = (n: number) => {
+    setDraft(null);
+    onChange(clamp(n));
+  };
+  const type = (text: string) => {
+    const digits = text.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 7);
+    const n = digits === "" ? min : clamp(Number(digits));
+
+    // Over the most you can have: show the most, so the box never claims more.
+    setDraft(digits === "" ? "" : Number(digits) > max ? String(n) : digits);
+    onChange(n);
+  };
 
   return (
     <div className="flex items-center gap-1">
@@ -94,9 +122,14 @@ export const Stepper = ({
       </button>
       <input
         className="inset w-12 h-8 text-center text-sm font-extrabold tabular-nums outline-none focus:border-gold"
+        enterKeyHint="done"
         inputMode="numeric"
-        value={value}
-        onChange={(e) => set(Number(e.target.value.replace(/\D/g, "")))}
+        placeholder={String(min)}
+        value={draft ?? String(value)}
+        onBlur={() => setDraft(null)}
+        onChange={(e) => type(e.target.value)}
+        onFocus={(e) => selectAll(e.currentTarget)}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
       />
       <button aria-label="One more" className="btn btn-wood btn-sm w-8 px-0" type="button" onClick={() => set(value + 1)}>
         +
