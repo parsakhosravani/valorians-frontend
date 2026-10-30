@@ -188,6 +188,7 @@ export const GroundPiece = memo(function GroundPiece({
   n,
   occupied,
   home = "",
+  spread = 1,
   detail = false,
   res,
   prio = 0,
@@ -201,6 +202,8 @@ export const GroundPiece = memo(function GroundPiece({
   occupied: string;
   /** "x,y" of your tribe when its territory reaches this piece. */
   home?: string;
+  /** How much bigger your claim is drawn (the village view spreads it out). */
+  spread?: number;
   /** A close-up piece, painted at full detail over the whole-view ones. */
   detail?: boolean;
   /** Picture px per map px (see baseRes and closeUpRes). */
@@ -208,7 +211,7 @@ export const GroundPiece = memo(function GroundPiece({
   /** Lower paints sooner. */
   prio?: number;
 }) {
-  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}`;
+  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${spread}`;
   const held = useRef<string | null>(null);
   const prioRef = useRef(prio);
   const onImageRef = useRef(onImage);
@@ -243,7 +246,7 @@ export const GroundPiece = memo(function GroundPiece({
     if (pieces.has(key)) show(key);
     else {
       job = enqueue(prioRef.current, (done) => {
-        paint({ x, y, n, occupied, home, detail, res }).then((blob) => {
+        paint({ x, y, n, occupied, home, detail, res, spread }).then((blob) => {
           done();
           if (!blob) return;
           if (!pieces.has(key)) pieces.set(key, { url: URL.createObjectURL(blob), users: 0, used: Date.now() });
@@ -257,7 +260,7 @@ export const GroundPiece = memo(function GroundPiece({
       live = false;
       if (job) job.dead = true;
     };
-  }, [key, x, y, n, occupied, home, detail, res]);
+  }, [key, x, y, n, occupied, home, detail, res, spread]);
 
   useEffect(
     () => () => {
@@ -292,6 +295,7 @@ export const GroundOverview = memo(function GroundOverview({
   oy,
   n,
   home,
+  spread = 1,
   onCanvas,
 }: {
   ox: number;
@@ -299,6 +303,7 @@ export const GroundOverview = memo(function GroundOverview({
   n: number;
   /** Your tribe's tile: if it's at sea, its island shows here too. */
   home?: Point;
+  spread?: number;
   onCanvas: (c: HTMLCanvasElement | null) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -318,7 +323,7 @@ export const GroundOverview = memo(function GroundOverview({
 
     if (!g) return;
     const img = g.createImageData(n, n);
-    const ground = islandTerrain(home);
+    const ground = islandTerrain(home, undefined, spread);
 
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) {
@@ -332,7 +337,7 @@ export const GroundOverview = memo(function GroundOverview({
       }
     g.putImageData(img, 0, 0);
     onCanvasRef.current(c);
-  }, [ox, oy, n, home?.x, home?.y]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ox, oy, n, home?.x, home?.y, spread]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <canvas ref={ref} aria-hidden="true" className="hidden" />;
 });

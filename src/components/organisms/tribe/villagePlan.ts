@@ -54,16 +54,26 @@ type Spot = Plot & { d: number; th: number; edge: number; terrain: Terrain };
 /**
  * `terrainAt`: the world's terrain. `neighbours`: other tribes' tiles nearby.
  * `ids`: the buildings to place (any not known here go with the core).
+ * `spread`: how much bigger the claim is drawn, and the room between
+ * buildings with it (the village view spreads the town out so every building
+ * can be seen; see claimEdge).
  */
 export function villagePlan(
   home: Point,
   ids: string[],
   terrainAt: (x: number, y: number) => Terrain,
   neighbours: Point[] = [],
+  spread = 1,
 ): VillagePlan {
   const ground = (p: Plot) => terrainAt(Math.round(home.x + p.x), Math.round(home.y + p.y));
   // How far the border is in this direction (the claim is a little squashed up and down).
-  const edgeAt = (th: number) => Math.hypot(claimEdge(th).x, claimEdge(th).y);
+  const edgeAt = (th: number) => {
+    const e = claimEdge(th, spread);
+
+    return Math.hypot(e.x, e.y);
+  };
+  // Room between buildings grows with the spread; if the land runs out, back to the usual room.
+  const rooms = spread > 1 ? [...SPACING.map((r) => r * spread), ...SPACING] : SPACING;
   // Anything of a kind within `r` tiles of a spot.
   const near = (p: Plot, kinds: Terrain[], r: number) => {
     for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++)
@@ -83,8 +93,10 @@ export function villagePlan(
   const wet: Spot[] = [];
   const step = 0.36;
 
-  for (let j = -12; j <= 12; j++)
-    for (let i = -12; i <= 12; i++) {
+  const reach = Math.ceil(12 * Math.max(1, spread));
+
+  for (let j = -reach; j <= reach; j++)
+    for (let i = -reach; i <= reach; i++) {
       const p = { x: (i + (j % 2 ? 0.5 : 0)) * step, y: j * step * 0.87 };
       const d = Math.hypot(p.x, p.y);
       const th = Math.atan2(p.y, p.x);
@@ -98,15 +110,15 @@ export function villagePlan(
 
   const plots: Record<string, Plot> = { "town-hall": { x: 0, y: 0 } };
   const taken = (s: Spot, room: number) =>
-    Object.entries(plots).some(([id, p]) => Math.hypot(p.x - s.x, p.y - s.y) < (id === "town-hall" ? Math.max(room, HALL_ROOM) : room));
+    Object.entries(plots).some(([id, p]) => Math.hypot(p.x - s.x, p.y - s.y) < (id === "town-hall" ? HALL_ROOM * Math.max(1, room / SPACING[0]) : room));
   /** Places a building on the lowest-scoring free spot (`inside`: within the border). */
   const place = (id: string, score: (s: Spot) => number, inside: boolean, pool: Spot[] = spots) => {
-    for (const room of SPACING) {
+    for (const room of rooms) {
       let best: Spot | null = null;
       let bestScore = Infinity;
 
       for (const s of pool) {
-        if ((inside && s.d > s.edge - 0.25) || taken(s, room)) continue;
+        if ((inside && s.d > s.edge - 0.25 * spread) || taken(s, room)) continue;
         // A whisker of the spot's own place breaks ties the same way every time.
         const v = score(s) + (s.x * 0.0007 + s.y * 0.0003);
 
@@ -144,7 +156,7 @@ export function villagePlan(
     place("watchtower", (s) => Math.abs(s.d - s.edge) * 3 + (1 + Math.sin(s.th)) * 0.6 + (s.terrain === "hills" ? -0.6 : 0), false);
   }
   for (const id of CORE.filter((c) => wanted.has(c)).concat(unknown)) place(id, (s) => s.d, true);
-  for (const id of MILITARY.filter((c) => wanted.has(c))) place(id, (s) => ring(s, 1.8) + Math.max(0, Math.sin(s.th)) * -0.3, true);
+  for (const id of MILITARY.filter((c) => wanted.has(c))) place(id, (s) => ring(s, 1.8 * spread) + Math.max(0, Math.sin(s.th)) * -0.3, true);
 
   const works: Record<string, (s: Spot) => number> = {
     "iron-mine": (s) => (s.terrain === "hills" ? -1.4 : 0) + (near(s, ["mountains"], 1.3) ? -1 : 0),
@@ -187,5 +199,5 @@ export function villagePlan(
 }
 
 /** The border of your territory as points (tiles from your tile's centre), all the way round. */
-export const claimOutline = (steps = 64) =>
-  Array.from({ length: steps + 1 }, (_, a) => claimEdge((a / steps) * Math.PI * 2));
+export const claimOutline = (steps = 64, spread = 1) =>
+  Array.from({ length: steps + 1 }, (_, a) => claimEdge((a / steps) * Math.PI * 2, spread));

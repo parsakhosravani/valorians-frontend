@@ -30,6 +30,11 @@ import { formatDuration } from "@/lib/format";
  * page elements on the camera's layer, so they stay buttons. Their name
  * plates keep one size on screen at any zoom, and only as many show as fit
  * without covering each other: zooming in names them all.
+ *
+ * So every building can be seen at once, the village is spread out here
+ * (SPREAD: a bigger claim and more room between buildings than the war map
+ * draws), it opens fitted to the whole wall, and zoomed out the level
+ * medallions step aside (see COMPACT_ZOOM).
  */
 
 const T = TILE;
@@ -40,6 +45,16 @@ const SIDE = (2 * R + 1) * T;
 const SIZE = 40;
 const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
 const MIN_ZOOM = 0.6;
+/** How much bigger your land is drawn here than on the war map, with the room between buildings. */
+const SPREAD = 1.3;
+/**
+ * Below this zoom the buildings are small on screen: only the Town Hall keeps
+ * its medallion and name, and everything else just its gem or timer. Zooming
+ * in brings back every level.
+ */
+const COMPACT_ZOOM = 1.45;
+/** Room (px on screen) kept round the village when it's fitted to the view. */
+const FIT_PAD = 14;
 const MAX_ZOOM = 3.6;
 
 // ─── Your land ───────────────────────────────────────────────────────────────
@@ -132,11 +147,13 @@ type PlotProps = {
   freeBuilder: boolean;
   now: number;
   named: boolean;
+  /** Zoomed out: no level medallion unless it's named. */
+  compact: boolean;
   onOpen: (b: BuildingDef) => void;
 };
 
 /** A building on its plot: the art (zooms with the land), a level medallion and name at its foot, and what's going on over its roof. */
-const Building = memo(function Building({ o, at, freeBuilder, now, named, onOpen }: PlotProps) {
+const Building = memo(function Building({ o, at, freeBuilder, now, named, compact, onOpen }: PlotProps) {
   const size = SIZE * (BIG[o.building.id] ?? 1);
   const built = o.level > 0;
   const ready = !o.job && freeBuilder && canStart(o);
@@ -197,35 +214,37 @@ const Building = memo(function Building({ o, at, freeBuilder, now, named, onOpen
         </OnScreen>
       )}
 
-      {/* At its foot: the level, and the name when there's room for it */}
-      <OnScreen x={at.x} y={at.y + 1} z={10000 + depth}>
-        <button
-          aria-hidden="true"
-          className={clsx(
-            "absolute left-0 top-0 -translate-x-1/2 pointer-events-auto flex items-center gap-1 py-0.5 rounded-full border text-[11px] whitespace-nowrap",
-            "bg-[#1A120B]/85 shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
-            named ? "pl-0.5 pr-2" : "px-0.5",
-            ready ? "border-good/80" : o.job ? "border-gold/70" : built ? "border-frame" : "border-line/60 border-dashed",
-          )}
-          tabIndex={-1}
-          type="button"
-          onClick={() => onOpen(o.building)}
-        >
-          <span
+      {/* At its foot: the level, and the name when there's room for it (zoomed out, only when named) */}
+      {(named || !compact) && (
+        <OnScreen x={at.x} y={at.y + 1} z={10000 + depth}>
+          <button
+            aria-hidden="true"
             className={clsx(
-              "shrink-0 w-[18px] h-[18px] rounded-full border flex items-center justify-center font-display font-black leading-none text-[10px]",
-              built
-                ? "bg-gradient-to-b from-goldhi to-gold text-[#1A120B] border-[#FBE3A6]"
-                : ready
-                  ? "bg-good/25 text-good border-good/80"
-                  : "bg-panel2 text-muted border-line",
+              "absolute left-0 top-0 -translate-x-1/2 pointer-events-auto flex items-center gap-1 py-0.5 rounded-full border text-[11px] whitespace-nowrap",
+              "bg-[#1A120B]/85 shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
+              named ? "pl-0.5 pr-2" : "px-0.5",
+              ready ? "border-good/80" : o.job ? "border-gold/70" : built ? "border-frame" : "border-line/60 border-dashed",
             )}
+            tabIndex={-1}
+            type="button"
+            onClick={() => onOpen(o.building)}
           >
-            {o.maxed ? "★" : built ? o.level : "+"}
-          </span>
-          {named && <span className={clsx("font-bold leading-none", built || o.job ? "text-parch" : "text-muted")}>{o.building.name}</span>}
-        </button>
-      </OnScreen>
+            <span
+              className={clsx(
+                "shrink-0 w-[18px] h-[18px] rounded-full border flex items-center justify-center font-display font-black leading-none text-[10px]",
+                built
+                  ? "bg-gradient-to-b from-goldhi to-gold text-[#1A120B] border-[#FBE3A6]"
+                  : ready
+                    ? "bg-good/25 text-good border-good/80"
+                    : "bg-panel2 text-muted border-line",
+              )}
+            >
+              {o.maxed ? "★" : built ? o.level : "+"}
+            </span>
+            {named && <span className={clsx("font-bold leading-none", built || o.job ? "text-parch" : "text-muted")}>{o.building.name}</span>}
+          </button>
+        </OnScreen>
+      )}
     </>
   );
 });
@@ -248,7 +267,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
 
   const ids = options.map((o) => o.building.id).sort().join(",");
   const plan = useMemo(
-    () => villagePlan(home, ids.split(","), islandTerrain(home), neighbours.map((t) => ({ x: t.x, y: t.y }))),
+    () => villagePlan(home, ids.split(","), islandTerrain(home, undefined, SPREAD), neighbours.map((t) => ({ x: t.x, y: t.y })), SPREAD),
     [home, ids, neighbours],
   );
 
@@ -265,15 +284,41 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
     },
   });
 
-  // Start on the Town Hall, with your whole territory in view.
-  useLayoutEffect(() => {
+  const border = useMemo(() => claimOutline(64, SPREAD).map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
+
+  /** The whole village in view: the wall, and every building standing on or past it, roofs and medallions included. */
+  const fit = (instant: boolean) => {
     const v = camera.size();
 
     if (!v) return;
-    // Close enough that the buildings read well; the edges of your land are a short drag away.
-    const z = Math.min(2.2, Math.max(1.1, Math.min(v.w, v.h) / (5.4 * T)));
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    const grow = (x: number, y: number) => {
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    };
 
-    camera.centerOn(mid, mid, { z, instant: true });
+    for (const b of border) grow(b.x, b.y);
+    for (const [id, p] of Object.entries(plan.plots)) {
+      const at = toPx(p);
+      const half = (SIZE * (BIG[id] ?? 1)) / 2;
+
+      grow(at.x - half, at.y - half * 1.6);
+      grow(at.x + half, at.y + 6);
+    }
+    const z = Math.min((v.w - 2 * FIT_PAD) / (x1 - x0), (v.h - 2 * FIT_PAD - 22) / (y1 - y0));
+
+    camera.centerOn((x0 + x1) / 2, (y0 + y1) / 2 + 11 / z, { z, instant });
+  };
+
+  // Start with the whole village in view.
+  useLayoutEffect(() => {
+    if (!camera.size()) return;
+    fit(true);
     const c = camera.get();
 
     camera.layer.current?.style.setProperty("--vz", String(c.z));
@@ -362,10 +407,17 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
 
   // Which buildings are named: as many as fit on screen without covering one
   // another, the ones that matter most first.
+  const compact = !!rest && rest.z < COMPACT_ZOOM;
   const named = useMemo(() => {
     const out = new Set<string>();
 
     if (!rest) return out;
+    // Zoomed out, only the Town Hall is named: the rest are too small on screen for plates.
+    if (compact) {
+      if (plan.plots["town-hall"]) out.add("town-hall");
+
+      return out;
+    }
     const ready = (o: UpgradeOption) => !o.job && freeBuilder && canStart(o);
     // The Town Hall first, then work under way, upgrades ready, what stands, empty plots.
     const weight = (o: UpgradeOption) =>
@@ -413,9 +465,8 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
     }
 
     return out;
-  }, [rest, options, plan, freeBuilder]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rest, compact, options, plan, freeBuilder]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const border = useMemo(() => claimOutline().map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
   const borderPath = border.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ") + "Z";
   // Tracks: a gentle bend each, the same way every time.
   const tracks = plan.tracks.map(([a, b]) => {
@@ -441,6 +492,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
         <div ref={camera.layer} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: SIDE, height: SIDE }}>
           <GroundOverview
             home={home}
+            spread={SPREAD}
             n={2 * R + 1}
             ox={ox}
             oy={oy}
@@ -451,6 +503,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
               key={p.key}
               detail={p.detail}
               home={`${home.x},${home.y}`}
+              spread={SPREAD}
               n={p.n}
               occupied={p.occupied}
               prio={p.prio}
@@ -485,6 +538,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
                 key={o.building.id}
                 at={toPx(plan.plots[o.building.id])}
                 freeBuilder={freeBuilder}
+                compact={compact}
                 named={named.has(o.building.id)}
                 now={now}
                 o={o}
@@ -500,7 +554,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen }: { land: Land }
         {[
           { label: "Zoom in", text: "+", act: () => camera.zoomBy(1.6) },
           { label: "Zoom out", text: "−", act: () => camera.zoomBy(1 / 1.6) },
-          { label: "Back to the Town Hall", text: "⌂", act: () => camera.centerOn(mid, mid) },
+          { label: "Show the whole village", text: "⌂", act: () => fit(false) },
         ].map((b) => (
           <button
             key={b.label}

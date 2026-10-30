@@ -87,3 +87,27 @@ test("with no land at all, every building still gets a plot", () => {
 
   expect(Object.keys(plots).sort()).toEqual([...IDS].sort());
 });
+
+test("spread out, the village keeps every building with more room between them, inside its bigger border", () => {
+  const nearest = (plots: Record<string, { x: number; y: number }>) => {
+    const all = Object.values(plots);
+
+    return all.reduce((sum, p) => sum + Math.min(...all.filter((q) => q !== p).map((q) => dist(p, q))), 0) / all.length;
+  };
+  const tight = villagePlan(HOME, IDS, plains);
+  const wide = villagePlan(HOME, IDS, plains, [], 1.3);
+  const wideBorder = claimOutline(64, 1.3);
+  const edge = (p: { x: number; y: number }) => {
+    const th = Math.atan2(p.y, p.x);
+    let best = wideBorder[0];
+
+    for (const b of wideBorder) if (Math.abs(Math.atan2(b.y, b.x) - th) < Math.abs(Math.atan2(best.y, best.x) - th)) best = b;
+
+    return Math.hypot(best.x, best.y);
+  };
+  const outside = ["city-gate", "watchtower", "harbor", "iron-mine", "sawmill", "brickyard", "windmill", "fertilizer-workshop"];
+
+  expect(Object.keys(wide.plots).sort()).toEqual([...IDS].sort());
+  expect(nearest(wide.plots)).toBeGreaterThan(nearest(tight.plots) * 1.15);
+  for (const [id, p] of Object.entries(wide.plots)) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(edge(p) + (outside.includes(id) ? 1.05 : 0.05));
+});

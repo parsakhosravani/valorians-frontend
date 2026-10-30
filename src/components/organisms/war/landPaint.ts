@@ -105,8 +105,8 @@ const fbm = (x: number, y: number, seed: number) =>
  * (about two and a half tiles out, a little squashed up and down). The map
  * paints it; the village lays its buildings out inside it.
  */
-export const claimEdge = (th: number) => {
-  const r = 2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9;
+export const claimEdge = (th: number, spread = 1) => {
+  const r = (2.6 + (fbm(Math.cos(th) * 2 + 9, Math.sin(th) * 2 + 9, 3) - 0.5) * 0.9) * spread;
 
   return { x: Math.cos(th) * r, y: Math.sin(th) * r * 0.92 };
 };
@@ -162,16 +162,17 @@ type Scene = {
   n: number;
   occupied: Set<string>;
   home: Pt | null;
+  spread: number;
 };
 
 /** Terrain and per-tile facts with a margin, for neighbours and blending. */
 const MARGIN = 4;
 
-const survey = ({ ox, oy, n, home }: Scene) => {
+const survey = ({ ox, oy, n, home, spread }: Scene) => {
   const W = n + MARGIN * 2;
   const ter: Terrain[] = new Array(W * W);
   // Your land, with the island raised under it if you settled at sea.
-  const ground = islandTerrain(home);
+  const ground = islandTerrain(home, undefined, spread);
 
   for (let j = 0; j < W; j++)
     for (let i = 0; i < W; i++) ter[j * W + i] = ground(ox + i - MARGIN, oy + j - MARGIN);
@@ -516,7 +517,7 @@ const paintFlat = (
 
     for (let a = 0; a <= 128; a++) {
       const th = (a / 128) * Math.PI * 2;
-      const e = claimEdge(th);
+      const e = claimEdge(th, s.spread);
       const X = cx + e.x * T;
       const Y = cy + e.y * T;
 
@@ -662,14 +663,24 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, v: Survey, line: P
 };
 
 /** What a piece is painted from: plain values, so it can be sent to the worker. */
-export type PieceJob = { x: number; y: number; n: number; occupied: string; home: string; detail: boolean; res: number };
+export type PieceJob = {
+  x: number;
+  y: number;
+  n: number;
+  occupied: string;
+  home: string;
+  detail: boolean;
+  res: number;
+  /** How much bigger your claim is drawn: the village view spreads it out (see claimEdge). */
+  spread?: number;
+};
 
 /**
  * Paints one piece of land and returns it as a small compressed picture. Runs
  * in the ground worker (ground.worker.ts) where the browser can, else here.
  */
-export const paintBlob = async ({ x, y, n, occupied, home, detail, res }: PieceJob): Promise<Blob | null> => {
-  const scene: Scene = { ox: x, oy: y, n, occupied: new Set(occupied ? occupied.split(";") : []), home: parse(home)[0] ?? null };
+export const paintBlob = async ({ x, y, n, occupied, home, detail, res, spread = 1 }: PieceJob): Promise<Blob | null> => {
+  const scene: Scene = { ox: x, oy: y, n, occupied: new Set(occupied ? occupied.split(";") : []), home: parse(home)[0] ?? null, spread };
   const size = n * TILE;
   const { c, g } = makeCanvas(Math.round(size * res), Math.round(size * res));
 
