@@ -507,31 +507,157 @@ const paintFlat = (
     g.fill();
   }
 
-  // Your land: a soft gold claim with a dashed border.
+  // Your land: a soft gold claim behind a timber palisade.
   if (s.home) {
     const cx = px(s.home.x);
     const cy = py(s.home.y);
     const edge = new Path2D();
+    const line: Pt[] = [];
 
-    for (let a = 0; a <= 64; a++) {
-      const th = (a / 64) * Math.PI * 2;
+    for (let a = 0; a <= 128; a++) {
+      const th = (a / 128) * Math.PI * 2;
       const e = claimEdge(th);
       const X = cx + e.x * T;
       const Y = cy + e.y * T;
 
+      line.push({ x: X, y: Y });
       if (a) edge.lineTo(X, Y);
       else edge.moveTo(X, Y);
     }
     g.save();
-    g.fillStyle = "rgba(240,190,90,0.10)";
+    g.fillStyle = "rgba(240,190,90,0.07)";
     g.fill(edge);
-    g.setLineDash([7, 5]);
-    g.lineWidth = 2.2;
-    g.strokeStyle = "rgba(255,214,130,0.75)";
-    g.shadowColor = "rgba(0,0,0,0.5)";
-    g.shadowBlur = 3;
-    g.stroke(edge);
     g.restore();
+    paintPalisade(g, s, v, line);
+  }
+};
+
+/** Wall stakes this far apart along the border (px at zoom 1). */
+const STAKE_GAP = 4.6;
+
+/**
+ * How wet the painted ground is at a point of the piece (px), worked out
+ * exactly as paintSoil does it: over 0.5 is water, a little under is wet sand.
+ */
+const wetness = (s: Scene, v: Survey, X: number, Y: number) => {
+  const fx = X / TILE;
+  const fy = Y / TILE;
+  const x = fx - 0.5;
+  const y = fy - 0.5;
+  const i0 = Math.floor(x);
+  const j0 = Math.floor(y);
+  const tx = sstep(0, 1, x - i0);
+  const ty = sstep(0, 1, y - j0);
+  const W = v.WET;
+  const bil =
+    W[v.id(i0, j0)] * (1 - tx) * (1 - ty) + W[v.id(i0 + 1, j0)] * tx * (1 - ty) + W[v.id(i0, j0 + 1)] * (1 - tx) * ty + W[v.id(i0 + 1, j0 + 1)] * tx * ty;
+
+  return bil + (fbm((s.ox + fx) * 1.3, (s.oy + fy) * 1.3, 5) - 0.5) * 0.42;
+};
+
+/**
+ * The wall round your land: a palisade of sharpened logs standing along the
+ * border, a thicker post every so often, lit from the top-left like the land.
+ * It stops at the water's edge (no stakes in the sea or a lake) and ends
+ * there in a stout post. Buildings on the border (the City Gate, the
+ * Watchtower) stand in it.
+ */
+const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, v: Survey, line: Pt[]) => {
+  type Stake = { x: number; y: number; post: boolean; tone: number };
+  const stakes: Stake[] = [];
+  // Stakes evenly along the border, whatever its bends.
+  let carry = 0;
+  let k = 0;
+
+  for (let a = 1; a < line.length; a++) {
+    const p = line[a - 1];
+    const q = line[a];
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+
+    for (let d = carry; d < len; d += STAKE_GAP) {
+      const t = d / len;
+      const x = p.x + (q.x - p.x) * t;
+      const y = p.y + (q.y - p.y) * t;
+
+      stakes.push({ x, y, post: k % 9 === 0, tone: rnd(Math.round(x * 3), Math.round(y * 3), 131) });
+      k++;
+    }
+    carry = (carry - len) % STAKE_GAP;
+    if (carry < 0) carry += STAKE_GAP;
+  }
+
+  // Dry stakes only; where the wall meets water, the last one on land is a post.
+  const dry = stakes.map((st) => wetness(s, v, st.x, st.y) < 0.42);
+  const wall = stakes.filter((st, i) => {
+    if (!dry[i]) return false;
+    const n = stakes.length;
+
+    if (!dry[(i + 1) % n] || !dry[(i - 1 + n) % n]) st.post = true;
+
+    return true;
+  });
+
+  if (!wall.length) return;
+
+  // Its shadow on the ground, falling to the bottom-right.
+  const shade = new Path2D();
+
+  for (const st of wall) {
+    shade.moveTo(st.x + 5, st.y + 1.2);
+    shade.ellipse(st.x + 2, st.y + 1.2, 3.2, 1.7, 0, 0, Math.PI * 2);
+  }
+  g.fillStyle = "rgba(20,14,6,0.38)";
+  g.fill(shade);
+
+  // A rail tying the stakes together, behind them.
+  g.beginPath();
+  for (let i = 0; i < wall.length; i++) {
+    const st = wall[i];
+    const prev = wall[(i - 1 + wall.length) % wall.length];
+    const joined = i > 0 && Math.hypot(st.x - prev.x, st.y - prev.y) < STAKE_GAP * 1.6;
+
+    if (joined) g.lineTo(st.x, st.y - 4.5);
+    else g.moveTo(st.x, st.y - 4.5);
+  }
+  g.lineWidth = 1.6;
+  g.lineCap = "round";
+  g.strokeStyle = "#3E2A16";
+  g.stroke();
+
+  // The stakes, back to front so nearer ones overlap those behind.
+  for (const st of [...wall].sort((a, b) => a.y - b.y)) {
+    const w = st.post ? 2.8 : 2;
+    const h = st.post ? 10.5 : 8 + st.tone * 1.4;
+    const wood = mixV([0x6e, 0x4a, 0x28], [0x8f, 0x66, 0x3a], st.tone);
+    const top = st.y - h;
+
+    g.beginPath();
+    g.moveTo(st.x - w, st.y);
+    g.lineTo(st.x - w, top);
+    g.lineTo(st.x, top - (st.post ? 2 : 3));
+    g.lineTo(st.x + w, top);
+    g.lineTo(st.x + w, st.y);
+    g.closePath();
+    g.fillStyle = `rgb(${wood.map(Math.round).join(",")})`;
+    g.fill();
+    g.lineWidth = 0.7;
+    g.strokeStyle = "rgba(34,22,10,0.85)";
+    g.stroke();
+    // Light on the left face, and the fresh-cut point.
+    g.fillStyle = "rgba(255,228,170,0.22)";
+    g.fillRect(st.x - w + 0.4, top + 0.5, w * 0.6, h - 1);
+    g.beginPath();
+    g.moveTo(st.x - w, top);
+    g.lineTo(st.x, top - (st.post ? 2 : 3));
+    g.lineTo(st.x + w, top);
+    g.closePath();
+    g.fillStyle = "#C89E66";
+    g.fill();
+    if (st.post) {
+      // An iron band round the posts.
+      g.fillStyle = "rgba(40,36,32,0.85)";
+      g.fillRect(st.x - w, st.y - h * 0.62, w * 2, 1.2);
+    }
   }
 };
 
