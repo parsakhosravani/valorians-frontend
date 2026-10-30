@@ -22,10 +22,18 @@ export const ISLAND_REACH = 7;
 type TerrainAt = (x: number, y: number) => Terrain;
 
 /**
- * The land round `home`, with its island raised when it sits at sea; just `base` when it doesn't.
- * `spread`: how much bigger the claim is drawn (the village view spreads it out); the island grows with it.
+ * How your claim is drawn, as a stretch of its usual size: across (`w`) and
+ * up and down (`h`). The war map draws it as it is; the village view makes
+ * it taller, to give the buildings room on a phone's tall screen.
  */
-export function islandTerrain(home: Point | null | undefined, base: TerrainAt = terrainAt, spread = 1): TerrainAt {
+export type ClaimShape = { w: number; h: number };
+export const PLAIN_CLAIM: ClaimShape = { w: 1, h: 1 };
+
+/**
+ * The land round `home`, with its island raised when it sits at sea; just `base` when it doesn't.
+ * The island takes the claim's shape (see ClaimShape).
+ */
+export function islandTerrain(home: Point | null | undefined, base: TerrainAt = terrainAt, claim: ClaimShape = PLAIN_CLAIM): TerrainAt {
   if (!home || base(home.x, home.y) !== "sea") return base;
   const { x: hx, y: hy } = home;
 
@@ -33,11 +41,11 @@ export function islandTerrain(home: Point | null | undefined, base: TerrainAt = 
     const t = base(x, y);
 
     if (t !== "sea") return t;
-    const d = Math.hypot(x - hx, (y - hy) / 0.92);
+    const d = Math.hypot((x - hx) / claim.w, (y - hy) / (0.92 * claim.h));
 
-    if (d > ISLAND_RADIUS * spread) return t;
+    if (d > ISLAND_RADIUS) return t;
 
     // Meadow in the middle; a few woods along the shore, the same ones every time.
-    return d > 1.5 * spread && hash(x, y, 71) < 0.3 ? "forest" : "plains";
+    return d > 1.5 && hash(x, y, 71) < 0.3 ? "forest" : "plains";
   };
 }

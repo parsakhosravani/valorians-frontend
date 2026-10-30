@@ -1,4 +1,5 @@
-import { claimEdge } from "@/components/organisms/war/landPaint";
+import { DRY, claimEdge, wetnessAt } from "@/components/organisms/war/landPaint";
+import { ClaimShape, PLAIN_CLAIM } from "@/lib/game/island";
 import type { Point, Terrain } from "@/lib/game/map";
 
 /**
@@ -9,7 +10,8 @@ import type { Point, Terrain } from "@/lib/game/map";
  * military quarter a little further out, and the workshops and fields go
  * where the land suits them: the Iron Mine up in the hills, the Sawmill by
  * the woods, the Harbor on the shore, the City Gate and the Watchtower on the
- * border. Nothing stands on mountains or water, or on a neighbour's village,
+ * border. Nothing stands on mountains or water, or on a neighbour's village
+ * (nor so near the shore that the painted coast reaches under it),
  * unless there is no land left at all: then it stands on stilts over the
  * water rather than go missing.
  *
@@ -19,6 +21,16 @@ import type { Point, Terrain } from "@/lib/game/map";
 
 /** Where a building stands (its foot), in tiles from the centre of your tile. */
 export type Plot = { x: number; y: number };
+
+/**
+ * How roomy a village is laid out. `claim`: the shape the claim is drawn in
+ * (see ClaimShape). `room`: room between buildings, as a stretch of the
+ * usual. `rows`: how much closer buildings may stand one behind another
+ * than side by side (1 = the same), since a building drawn behind another
+ * hides only its foot, while one beside it hides it whole.
+ */
+export type Layout = { claim: ClaimShape; room: number; rows: number };
+export const PLAIN_LAYOUT: Layout = { claim: PLAIN_CLAIM, room: 1, rows: 1 };
 
 export type VillagePlan = {
   plots: Record<string, Plot>;
@@ -47,6 +59,9 @@ const SPACING = [0.82, 0.72, 0.62];
 /** The Town Hall is bigger: this much room round it. */
 const HALL_ROOM = 1.05;
 
+/** Points round a building's foot that must stand on dry land (tiles from the foot). */
+const FOOT: [number, number][] = [[0, 0], [-0.36, -0.05], [0.36, -0.05], [-0.2, 0.12], [0.2, 0.12], [0, -0.28]];
+
 const BUILDABLE: Record<Terrain, boolean> = { plains: true, forest: true, hills: true, mountains: false, lake: false, sea: false };
 
 type Spot = Plot & { d: number; th: number; edge: number; terrain: Terrain };
@@ -54,26 +69,26 @@ type Spot = Plot & { d: number; th: number; edge: number; terrain: Terrain };
 /**
  * `terrainAt`: the world's terrain. `neighbours`: other tribes' tiles nearby.
  * `ids`: the buildings to place (any not known here go with the core).
- * `spread`: how much bigger the claim is drawn, and the room between
- * buildings with it (the village view spreads the town out so every building
- * can be seen; see claimEdge).
+ * `layout`: how roomy (see Layout); the village view spreads the town out
+ * so every building can be seen.
  */
 export function villagePlan(
   home: Point,
   ids: string[],
   terrainAt: (x: number, y: number) => Terrain,
   neighbours: Point[] = [],
-  spread = 1,
+  layout: Layout = PLAIN_LAYOUT,
 ): VillagePlan {
+  const { claim, room: roomy, rows } = layout;
   const ground = (p: Plot) => terrainAt(Math.round(home.x + p.x), Math.round(home.y + p.y));
   // How far the border is in this direction (the claim is a little squashed up and down).
   const edgeAt = (th: number) => {
-    const e = claimEdge(th, spread);
+    const e = claimEdge(th, claim);
 
     return Math.hypot(e.x, e.y);
   };
-  // Room between buildings grows with the spread; if the land runs out, back to the usual room.
-  const rooms = spread > 1 ? [...SPACING.map((r) => r * spread), ...SPACING] : SPACING;
+  // Roomier when asked; if the land runs out, back to the usual room.
+  const rooms = roomy > 1 ? [...SPACING.map((r) => r * roomy), ...SPACING] : SPACING;
   // Anything of a kind within `r` tiles of a spot.
   const near = (p: Plot, kinds: Terrain[], r: number) => {
     for (let dy = -Math.ceil(r); dy <= Math.ceil(r); dy++)
@@ -88,12 +103,16 @@ export function villagePlan(
 
   // Spots to build on: a fine triangular grid over the territory and a
   // little way past its border (workshops and fields may stand outside it).
+  // A building's foot (its base, a little wider than the art's middle and a
+  // little deep) on painted land: the coast is drawn ragged, so a spot on a
+  // land tile can still have beach or water under part of the building.
+  const onDryLand = (p: Plot) => FOOT.every(([dx, dy]) => wetnessAt(terrainAt, home.x + p.x + dx, home.y + p.y + dy) < DRY);
   const spots: Spot[] = [];
   // Mountains and water: only when the land has run out.
   const wet: Spot[] = [];
   const step = 0.36;
 
-  const reach = Math.ceil(12 * Math.max(1, spread));
+  const reach = Math.ceil(12 * Math.max(1, claim.w, claim.h));
 
   for (let j = -reach; j <= reach; j++)
     for (let i = -reach; i <= reach; i++) {
@@ -105,12 +124,12 @@ export function villagePlan(
 
       if (d > edge + 1) continue;
       if (neighbours.some((n) => Math.hypot(home.x + p.x - n.x, home.y + p.y - n.y) < 1.15)) continue;
-      (BUILDABLE[terrain] ? spots : wet).push({ ...p, d, th, edge, terrain });
+      (BUILDABLE[terrain] && onDryLand(p) ? spots : wet).push({ ...p, d, th, edge, terrain });
     }
 
   const plots: Record<string, Plot> = { "town-hall": { x: 0, y: 0 } };
   const taken = (s: Spot, room: number) =>
-    Object.entries(plots).some(([id, p]) => Math.hypot(p.x - s.x, p.y - s.y) < (id === "town-hall" ? HALL_ROOM * Math.max(1, room / SPACING[0]) : room));
+    Object.entries(plots).some(([id, p]) => Math.hypot(p.x - s.x, (p.y - s.y) * rows) < (id === "town-hall" ? HALL_ROOM * Math.max(1, room / SPACING[0]) : room));
   /** Places a building on the lowest-scoring free spot (`inside`: within the border). */
   const place = (id: string, score: (s: Spot) => number, inside: boolean, pool: Spot[] = spots) => {
     for (const room of rooms) {
@@ -118,7 +137,7 @@ export function villagePlan(
       let bestScore = Infinity;
 
       for (const s of pool) {
-        if ((inside && s.d > s.edge - 0.25 * spread) || taken(s, room)) continue;
+        if ((inside && s.d > s.edge - 0.25) || taken(s, room)) continue;
         // A whisker of the spot's own place breaks ties the same way every time.
         const v = score(s) + (s.x * 0.0007 + s.y * 0.0003);
 
@@ -156,7 +175,7 @@ export function villagePlan(
     place("watchtower", (s) => Math.abs(s.d - s.edge) * 3 + (1 + Math.sin(s.th)) * 0.6 + (s.terrain === "hills" ? -0.6 : 0), false);
   }
   for (const id of CORE.filter((c) => wanted.has(c)).concat(unknown)) place(id, (s) => s.d, true);
-  for (const id of MILITARY.filter((c) => wanted.has(c))) place(id, (s) => ring(s, 1.8 * spread) + Math.max(0, Math.sin(s.th)) * -0.3, true);
+  for (const id of MILITARY.filter((c) => wanted.has(c))) place(id, (s) => ring(s, 1.8) + Math.max(0, Math.sin(s.th)) * -0.3, true);
 
   const works: Record<string, (s: Spot) => number> = {
     "iron-mine": (s) => (s.terrain === "hills" ? -1.4 : 0) + (near(s, ["mountains"], 1.3) ? -1 : 0),
@@ -199,5 +218,5 @@ export function villagePlan(
 }
 
 /** The border of your territory as points (tiles from your tile's centre), all the way round. */
-export const claimOutline = (steps = 64, spread = 1) =>
-  Array.from({ length: steps + 1 }, (_, a) => claimEdge((a / steps) * Math.PI * 2, spread));
+export const claimOutline = (steps = 64, claim: ClaimShape = PLAIN_CLAIM) =>
+  Array.from({ length: steps + 1 }, (_, a) => claimEdge((a / steps) * Math.PI * 2, claim));
