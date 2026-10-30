@@ -529,31 +529,31 @@ const paintFlat = (
     g.fillStyle = "rgba(240,190,90,0.07)";
     g.fill(edge);
     g.restore();
-    paintPalisade(g, s, v, line);
+    paintPalisade(g, s, line);
   }
 };
 
 /** Wall stakes this far apart along the border (px at zoom 1). */
 const STAKE_GAP = 4.6;
 
+/** Painted ground wetter than this is wet sand or water: no wall stakes or buildings stand there. */
+export const DRY = 0.42;
+
 /**
- * How wet the painted ground is at a point of the piece (px), worked out
- * exactly as paintSoil does it: over 0.5 is water, a little under is wet sand.
+ * How wet the ground is painted at world point (x, y), in tiles with each
+ * tile's centre on whole numbers, worked out exactly as paintSoil does it:
+ * over 0.5 is water, a little under is wet sand. `ground` is the terrain the
+ * land is painted from (the world's, with your island if you have one).
  */
-const wetness = (s: Scene, v: Survey, X: number, Y: number) => {
-  const fx = X / TILE;
-  const fy = Y / TILE;
-  const x = fx - 0.5;
-  const y = fy - 0.5;
+export const wetnessAt = (ground: (x: number, y: number) => Terrain, x: number, y: number) => {
   const i0 = Math.floor(x);
   const j0 = Math.floor(y);
   const tx = sstep(0, 1, x - i0);
   const ty = sstep(0, 1, y - j0);
-  const W = v.WET;
-  const bil =
-    W[v.id(i0, j0)] * (1 - tx) * (1 - ty) + W[v.id(i0 + 1, j0)] * tx * (1 - ty) + W[v.id(i0, j0 + 1)] * (1 - tx) * ty + W[v.id(i0 + 1, j0 + 1)] * tx * ty;
+  const w = (i: number, j: number) => (wet(ground(i, j)) ? 1 : 0);
+  const bil = w(i0, j0) * (1 - tx) * (1 - ty) + w(i0 + 1, j0) * tx * (1 - ty) + w(i0, j0 + 1) * (1 - tx) * ty + w(i0 + 1, j0 + 1) * tx * ty;
 
-  return bil + (fbm((s.ox + fx) * 1.3, (s.oy + fy) * 1.3, 5) - 0.5) * 0.42;
+  return bil + (fbm((x + 0.5) * 1.3, (y + 0.5) * 1.3, 5) - 0.5) * 0.42;
 };
 
 /**
@@ -563,7 +563,7 @@ const wetness = (s: Scene, v: Survey, X: number, Y: number) => {
  * there in a stout post. Buildings on the border (the City Gate, the
  * Watchtower) stand in it.
  */
-const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, v: Survey, line: Pt[]) => {
+const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
   type Stake = { x: number; y: number; post: boolean; tone: number };
   const stakes: Stake[] = [];
   // Stakes evenly along the border, whatever its bends.
@@ -588,7 +588,8 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, v: Survey, line: P
   }
 
   // Dry stakes only; where the wall meets water, the last one on land is a post.
-  const dry = stakes.map((st) => wetness(s, v, st.x, st.y) < 0.42);
+  const ground = islandTerrain(s.home, undefined, s.claim);
+  const dry = stakes.map((st) => wetnessAt(ground, s.ox + st.x / TILE - 0.5, s.oy + st.y / TILE - 0.5) < DRY);
   const wall = stakes.filter((st, i) => {
     if (!dry[i]) return false;
     const n = stakes.length;

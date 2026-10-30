@@ -1,4 +1,4 @@
-import { claimEdge } from "@/components/organisms/war/landPaint";
+import { DRY, claimEdge, wetnessAt } from "@/components/organisms/war/landPaint";
 import { ClaimShape, PLAIN_CLAIM } from "@/lib/game/island";
 import type { Point, Terrain } from "@/lib/game/map";
 
@@ -10,7 +10,8 @@ import type { Point, Terrain } from "@/lib/game/map";
  * military quarter a little further out, and the workshops and fields go
  * where the land suits them: the Iron Mine up in the hills, the Sawmill by
  * the woods, the Harbor on the shore, the City Gate and the Watchtower on the
- * border. Nothing stands on mountains or water, or on a neighbour's village,
+ * border. Nothing stands on mountains or water, or on a neighbour's village
+ * (nor so near the shore that the painted coast reaches under it),
  * unless there is no land left at all: then it stands on stilts over the
  * water rather than go missing.
  *
@@ -58,6 +59,9 @@ const SPACING = [0.82, 0.72, 0.62];
 /** The Town Hall is bigger: this much room round it. */
 const HALL_ROOM = 1.05;
 
+/** Points round a building's foot that must stand on dry land (tiles from the foot). */
+const FOOT: [number, number][] = [[0, 0], [-0.36, -0.05], [0.36, -0.05], [-0.2, 0.12], [0.2, 0.12], [0, -0.28]];
+
 const BUILDABLE: Record<Terrain, boolean> = { plains: true, forest: true, hills: true, mountains: false, lake: false, sea: false };
 
 type Spot = Plot & { d: number; th: number; edge: number; terrain: Terrain };
@@ -99,6 +103,10 @@ export function villagePlan(
 
   // Spots to build on: a fine triangular grid over the territory and a
   // little way past its border (workshops and fields may stand outside it).
+  // A building's foot (its base, a little wider than the art's middle and a
+  // little deep) on painted land: the coast is drawn ragged, so a spot on a
+  // land tile can still have beach or water under part of the building.
+  const onDryLand = (p: Plot) => FOOT.every(([dx, dy]) => wetnessAt(terrainAt, home.x + p.x + dx, home.y + p.y + dy) < DRY);
   const spots: Spot[] = [];
   // Mountains and water: only when the land has run out.
   const wet: Spot[] = [];
@@ -116,7 +124,7 @@ export function villagePlan(
 
       if (d > edge + 1) continue;
       if (neighbours.some((n) => Math.hypot(home.x + p.x - n.x, home.y + p.y - n.y) < 1.15)) continue;
-      (BUILDABLE[terrain] ? spots : wet).push({ ...p, d, th, edge, terrain });
+      (BUILDABLE[terrain] && onDryLand(p) ? spots : wet).push({ ...p, d, th, edge, terrain });
     }
 
   const plots: Record<string, Plot> = { "town-hall": { x: 0, y: 0 } };

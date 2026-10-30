@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import { claimOutline, villagePlan } from "./villagePlan";
 
+import { DRY, wetnessAt } from "@/components/organisms/war/landPaint";
 import { islandTerrain } from "@/lib/game/island";
 import { homeSlot, terrainAt } from "@/lib/game/map";
 
@@ -126,4 +127,22 @@ test("laid out roomier, the village keeps every building with more room between 
   }
   expect(after).toBeLessThan(before * 0.6);
   for (const [id, p] of Object.entries(roomy.plots)) expect(Math.hypot(p.x, p.y)).toBeLessThanOrEqual(edge(p) + (outside.includes(id) ? 1.05 : 0.05));
+});
+
+test("no building stands with its foot on the painted beach or in the water", () => {
+  const layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
+  let wet = 0;
+  let all = 0;
+
+  for (let n = 0; n < 40; n++) {
+    const home = homeSlot(n * 2);
+    const ground = islandTerrain(home, undefined, layout.claim);
+
+    for (const p of Object.values(villagePlan(home, IDS, ground, [], layout).plots)) {
+      all++;
+      if ([-0.36, 0, 0.36].some((dx) => wetnessAt(ground, home.x + p.x + dx, home.y + p.y) >= DRY)) wet++;
+    }
+  }
+  // Only a village with no dry land left at all may put one over the water (see the safety net).
+  expect(wet / all).toBeLessThan(0.01);
 });
