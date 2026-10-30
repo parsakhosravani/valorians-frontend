@@ -6,6 +6,7 @@ import { adminIds, announceButton, cancelAnnounce, claimAdmin, markReachable, ne
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
+import { sendStats } from "./stats";
 import { displayName } from "./war";
 
 import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from "@/lib/game/clan";
@@ -308,6 +309,7 @@ export async function handleUpdate(u: Update) {
   }
   if (name === "announce" && (await startAnnounce(m.chat.id, m.from.id))) return;
   if (name === "cancel" && (await cancelAnnounce(m.chat.id, m.from.id))) return;
+  if (name === "stats" && (await sendStats(m.chat.id, m.from.id))) return;
   if (name === "news") return toggleNews(m.chat.id, m.from.id);
 
   return route(name, m.chat.id, m.from.id, m.from.first_name ?? "");
@@ -395,6 +397,7 @@ export async function setupBot() {
       commands: [
         { command: "announce", description: "📢 Send an update announcement" },
         { command: "cancel", description: "✖️ Cancel the announcement" },
+        { command: "stats", description: "📊 Player numbers" },
         { command: "start", description: "⚔️ Begin your legend" },
         { command: "tribe", description: "🏰 Your tribe at a glance" },
         { command: "top", description: "🏆 Top chiefs" },
