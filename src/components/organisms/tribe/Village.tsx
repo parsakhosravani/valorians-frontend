@@ -488,6 +488,9 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
     ];
 
     for (const o of [...placed].sort((a, b) => weight(a) - weight(b))) {
+      // Zoomed out, only what needs you gets a name: the Town Hall, work under
+      // way and upgrades ready. The rest is just the village; zoom in to read it.
+      if (compact && weight(o) >= 300) continue;
       const b = box(o, true);
 
       if (!inView(b) || taken.some((t) => hit(t, b))) continue;
@@ -593,14 +596,18 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       {/* Zoom, and back to the Town Hall */}
       <div className="absolute right-2 bottom-2 z-10 flex flex-col rounded-xl overflow-hidden border border-line bg-[#1A120B]/85 shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
         {[
-          { label: "Zoom in", text: "+", act: () => camera.zoomBy(1.6) },
-          { label: "Zoom out", text: "−", act: () => camera.zoomBy(1 / 1.6) },
-          { label: "Show the whole village", text: "⌂", act: () => fit(false) },
+          // On a touch screen you pinch to zoom, so only the way back home shows.
+          { label: "Zoom in", text: "+", act: () => camera.zoomBy(1.6), touch: false },
+          { label: "Zoom out", text: "−", act: () => camera.zoomBy(1 / 1.6), touch: false },
+          { label: "Show the whole village", text: "⌂", act: () => fit(false), touch: true },
         ].map((b) => (
           <button
             key={b.label}
             aria-label={b.label}
-            className="w-9 h-9 flex items-center justify-center text-lg font-bold text-parch hover:bg-white/10 border-b border-line last:border-b-0"
+            className={clsx(
+              "w-9 h-9 flex items-center justify-center text-lg font-bold text-parch hover:bg-white/10 border-b border-line last:border-b-0",
+              !b.touch && "[@media(pointer:coarse)]:hidden",
+            )}
             type="button"
             onClick={b.act}
           >
