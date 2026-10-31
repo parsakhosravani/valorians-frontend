@@ -3,8 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
-import { createFire } from "./fire";
-
 import bg from "~/images/background/intro.webp";
 import hallBg from "~/images/background/tribe.webp";
 import coin from "~/images/resources/coin.webp";
@@ -35,62 +33,6 @@ const TIPS = [
 const MIN_SHOW_MS = 1200;
 const SLOW_MS = 12000;
 
-/**
- * Fire along the bottom of the screen and sparks flying off it (see
- * createFire), on a canvas behind the loading bar. Stops when the app is
- * hidden; not drawn at all for players who ask for less motion.
- */
-const Fire = () => {
-  const ref = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    const g = canvas?.getContext("2d");
-
-    if (!canvas || !g || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    let dpr = 1;
-    const make = (w: number, h: number) => {
-      const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
-
-      return { canvas: c, g: c.getContext("2d")! };
-    };
-    const size = () => {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
-      canvas.width = Math.round(canvas.clientWidth * dpr);
-      canvas.height = Math.round(canvas.clientHeight * dpr);
-      fire.resize(canvas.clientWidth, canvas.clientHeight);
-    };
-    const fire = createFire(canvas.clientWidth, canvas.clientHeight, make);
-    let last = performance.now();
-    let raf = 0;
-    const frame = (now: number) => {
-      fire.step(Math.min(0.05, (now - last) / 1000), now / 1000);
-      last = now;
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-      fire.draw(g);
-      raf = requestAnimationFrame(frame);
-    };
-    const start = () => {
-      cancelAnimationFrame(raf);
-      last = performance.now();
-      if (!document.hidden) raf = requestAnimationFrame(frame);
-    };
-
-    size();
-    start();
-    window.addEventListener("resize", size);
-    document.addEventListener("visibilitychange", start);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", size);
-      document.removeEventListener("visibilitychange", start);
-    };
-  }, []);
-
-  return <canvas ref={ref} aria-hidden="true" className="absolute inset-0 w-full h-full pointer-events-none" />;
-};
 
 /**
  * The first thing players see. Progress follows real work: art downloading,
@@ -188,9 +130,6 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
       {/* Lightning flicker in the storm. */}
       <div className="absolute inset-0 bg-[#BFE8FF] mix-blend-overlay pointer-events-none motion-safe:animate-[lightning_7s_ease-in-out_infinite] opacity-0" />
 
-      {/* Firelight from below, breathing gently, and the fire itself. */}
-      <div className="absolute inset-x-0 bottom-0 h-[30%] pointer-events-none bg-[radial-gradient(ellipse_at_50%_115%,rgba(232,97,44,0.38),transparent_65%)] motion-safe:animate-[firelight_3.2s_ease-in-out_infinite]" />
-      <Fire />
 
       <div className="relative h-full flex flex-col items-center px-8 pt-[7svh] pb-8">
         <h1 className="font-display font-black text-[46px] leading-none tracking-[0.06em] text-transparent bg-clip-text bg-gradient-to-b from-[#FBE3A6] via-goldtext to-gold drop-shadow-[0_3px_6px_rgba(0,0,0,0.9)]">

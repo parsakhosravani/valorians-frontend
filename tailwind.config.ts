@@ -24,10 +24,6 @@ const config: Config = {
           "0%": { transform: "scale(1.05) translateY(0)" },
           "100%": { transform: "scale(1.15) translateY(-2%)" },
         },
-        firelight: {
-          "0%, 100%": { opacity: "0.75" },
-          "50%": { opacity: "1" },
-        },
         glint: {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(400%)" },
