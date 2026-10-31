@@ -182,6 +182,33 @@ const keepInWorld = (p: { x: number; y: number }, r: number) => ({
 /** When the screen comes this close (tiles) to the edge of what's loaded, the next area loads. */
 const EDGE = 8;
 
+/** Villages and camps remembered from areas loaded before, nearest first: enough for a long wander. */
+const REMEMBER = 4000;
+
+/**
+ * A freshly loaded area, with what was seen in areas loaded before kept
+ * round it: pan away and back, and the villages and camps there are already
+ * on the map (and the ground under them already painted) while the area
+ * reloads. Inside the new area the server's word replaces what was there,
+ * so a camp that's gone, or a tribe that moved, doesn't linger.
+ */
+const keepSeen = (d: MapData, before: MapData | null): MapData => {
+  if (!before) return d;
+  const inside = (p: { x: number; y: number }) => Math.abs(p.x - d.center.x) <= d.radius && Math.abs(p.y - d.center.y) <= d.radius;
+  const near = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.hypot(a.x - d.center.x, a.y - d.center.y) - Math.hypot(b.x - d.center.x, b.y - d.center.y);
+  const ids = new Set(d.tribes.map((t) => t.id));
+  const spots = new Set(d.camps.map((c) => `${c.x},${c.y}`));
+  const tribes = before.tribes.filter((t) => !t.isMe && !ids.has(t.id) && !inside(t)).sort(near);
+  const camps = before.camps.filter((c) => !spots.has(`${c.x},${c.y}`) && !inside(c)).sort(near);
+
+  return {
+    ...d,
+    tribes: [...d.tribes, ...tribes.slice(0, Math.max(0, REMEMBER - d.tribes.length))],
+    camps: [...d.camps, ...camps.slice(0, Math.max(0, REMEMBER - d.camps.length))],
+  };
+};
+
 /**
  * Map radius (tiles) that fills this box even fully zoomed out, with room to
  * drag a good way before the next area has to load.
@@ -532,7 +559,7 @@ export const WarMap = ({
       const delivered = Array.from(goods.current).some((id) => !coming.has(id));
 
       goods.current = coming;
-      setData(d);
+      setData((before) => keepSeen(d, before));
       if (delivered && !finished.length) refresh();
       setError(null);
       if (finished.length) {

@@ -97,20 +97,24 @@ const enqueue = (prio: number, run: (done: () => void) => void): Job => {
 
 // Finished pieces, kept (as small compressed files) so panning back is instant.
 // A picture still on screen is never freed: a phone may drop a decoded image
-// and fetch it again, and a freed one comes back blank.
-type Entry = { url: string; users: number; used: number };
+// and fetch it again, and a freed one comes back blank. Only the pictures on
+// screen are decoded, so the rest is just their files: up to KEEP_BYTES of
+// them, a long wander's worth of ground, before the least recently seen go.
+type Entry = { url: string; users: number; used: number; bytes: number };
 const pieces = new Map<string, Entry>();
-const KEEP = 64;
+const KEEP_BYTES = 48 * 1024 * 1024;
+let keptBytes = 0;
 
 const trim = () => {
-  if (pieces.size <= KEEP) return;
+  if (keptBytes <= KEEP_BYTES) return;
   const idle = Array.from(pieces.entries())
     .filter(([, e]) => !e.users)
     .sort((a, b) => a[1].used - b[1].used);
 
   for (const [k, e] of idle) {
-    if (pieces.size <= KEEP) break;
+    if (keptBytes <= KEEP_BYTES) break;
     URL.revokeObjectURL(e.url);
+    keptBytes -= e.bytes;
     pieces.delete(k);
   }
 };
@@ -249,7 +253,10 @@ export const GroundPiece = memo(function GroundPiece({
         paint({ x, y, n, occupied, home, detail, res, claim }).then((blob) => {
           done();
           if (!blob) return;
-          if (!pieces.has(key)) pieces.set(key, { url: URL.createObjectURL(blob), users: 0, used: Date.now() });
+          if (!pieces.has(key)) {
+            pieces.set(key, { url: URL.createObjectURL(blob), users: 0, used: Date.now(), bytes: blob.size });
+            keptBytes += blob.size;
+          }
           if (live) show(key);
           else trim();
         });
