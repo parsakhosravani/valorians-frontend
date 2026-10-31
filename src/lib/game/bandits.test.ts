@@ -4,6 +4,7 @@ import * as B from "./bandits";
 import * as E from "./engine";
 import * as W from "./war";
 import { BANDIT, banditStrength, banditTheft, lairBounty } from "./config";
+import * as C from "./config";
 import { MarchRoute, Point, TERRAIN, terrainAt } from "./map";
 
 const T0 = Date.UTC(2026, 9, 28, 10);
@@ -175,4 +176,58 @@ test("clearing a lair brings home its hoard; camps are untouched and your shield
   expect(report.coins).toBe(lairBounty(2).coins);
   expect(state.camps.cleared).toBe(s0.camps.cleared);
   expect(state.marches[0].target).toBe("Bandit lair");
+});
+
+// ─── Raids on villages ───────────────────────────────────────────────────────
+
+test("bandit raids gather only from a manned lair near an unshielded village, at most once a day", () => {
+  const s = E.createInitialState(T0);
+  s.shieldUntil = 0;
+  s.army.spearman = 200;
+  const home = { x: 50, y: 50 };
+  const lair = { x: 54, y: 52, level: 2 };
+  const always = () => 0;
+
+  expect(B.raidersNear(home, [{ ...lair, active: true }, { x: 70, y: 70, level: 1, active: true }])).toEqual([{ ...lair, active: true }]);
+  expect(B.raidersNear(home, [{ ...lair, active: false }])).toEqual([]);
+
+  const g = B.gatherBanditRaid(s, [lair], T0, always);
+  expect(g.banditRaid).toMatchObject({ x: 54, y: 52, level: 2, arrivesAt: T0 + C.BANDIT_RAID.warnMs });
+  // About as strong as the village's defense, never weaker than the lair itself.
+  expect(g.banditRaid!.strength).toBeGreaterThanOrEqual(C.banditStrength(2));
+  // Nothing new while one is under way, or before the day is out.
+  expect(B.gatherBanditRaid(g, [lair], T0 + 1000, always)).toBe(g);
+  expect(g.banditNextAt).toBe(g.banditRaid!.arrivesAt + C.BANDIT_RAID.everyMs);
+  // Shielded: left alone.
+  expect(B.gatherBanditRaid({ ...s, shieldUntil: T0 + 1 }, [lair], T0, always).banditRaid).toBeUndefined();
+  // No lair near, or the dice say no: look again later.
+  expect(B.gatherBanditRaid(s, [], T0, always).banditNextAt).toBe(T0 + C.BANDIT_RAID.retryMs);
+  expect(B.gatherBanditRaid(s, [lair], T0, () => 0.99).banditRaid).toBeUndefined();
+});
+
+test("a bandit raid: beaten off pays the bounty; lost costs some stores and troops, never the gate; foiled costs nothing", () => {
+  const s = E.createInitialState(T0);
+  s.shieldUntil = 0;
+  s.buildings["city-gate"] = 5;
+  s.army.spearman = 100;
+  for (const r of C.RESOURCE_IDS) s.resources[r] = 10000;
+  const raid = (strength: number) => ({ ...s, banditRaid: { x: 54, y: 52, level: 2, strength, warnedAt: T0, arrivesAt: T0 } });
+
+  const won = B.resolveBanditRaid(raid(10), true, () => 0.5);
+  expect(won.cleared).toBe(true);
+  expect(won.state.banditReport?.outcome).toBe("won");
+  expect(won.state.coins).toBe(s.coins + C.lairBounty(2).coins);
+  expect(won.state.banditRaid).toBeUndefined();
+
+  const lost = B.resolveBanditRaid(raid(1e7), true, () => 0.5);
+  expect(lost.cleared).toBe(false);
+  expect(lost.state.banditReport?.outcome).toBe("lost");
+  expect(lost.state.resources.iron).toBeLessThan(10000);
+  expect(lost.state.army.spearman).toBe(80); // a fifth lost, not the whole army
+  expect(lost.state.buildings["city-gate"]).toBe(5);
+
+  const foiled = B.resolveBanditRaid(raid(1e7), false, () => 0.5);
+  expect(foiled.state.banditReport?.outcome).toBe("foiled");
+  expect(foiled.state.resources.iron).toBe(10000);
+  expect(foiled.state.army.spearman).toBe(100);
 });
