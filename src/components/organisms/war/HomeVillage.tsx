@@ -3,7 +3,7 @@ import { useMemo } from "react";
 
 import { TILE } from "./MapGround";
 
-import { COMPACT_ZOOM, VillageBuilding, plateSize } from "@/components/organisms/tribe/Village";
+import { COMPACT_ZOOM, VillageBuilding, plateSize } from "@/components/organisms/tribe/VillageBuilding";
 import { villagePlan } from "@/components/organisms/tribe/villagePlan";
 import { useLive } from "@/context";
 import { UpgradeOption, canStart, upgradeOptions } from "@/lib/game/advice";
