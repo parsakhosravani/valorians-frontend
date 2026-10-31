@@ -465,6 +465,9 @@ export const WarMap = ({
   const getLive = useLiveGetter();
   const returning = useLive((l) => l.state.marches, sameJson);
   const myHarbor = useLive((l) => l.state.buildings["harbor"] ?? 0);
+  // Your wall is built up as your City Gate goes up (see wallLook).
+  const myGate = useLive((l) => l.state.buildings["city-gate"] ?? 0);
+  const myClaim = useMemo(() => ({ w: 1, h: 1, wall: myGate }), [myGate]);
   const myShips = useLive((l) => l.state.army.longship);
   const canScout = useLive((l) => l.rates.canScout);
   const { telegram } = useTelegramContext();
@@ -1132,6 +1135,7 @@ export const WarMap = ({
                   key={p.key}
                   detail={p.detail}
                   home={p.home}
+                  claim={p.home ? myClaim : undefined}
                   res={p.res}
                   n={p.n}
                   occupied={p.occupied}

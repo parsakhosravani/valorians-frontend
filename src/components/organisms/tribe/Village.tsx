@@ -319,6 +319,10 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
     },
   });
 
+  // The wall is built up as the City Gate goes up (see wallLook).
+  const gate = options.find((o) => o.building.id === "city-gate")?.level ?? 0;
+  const claim = useMemo(() => ({ ...LAYOUT.claim, wall: gate }), [gate]);
+
   const border = useMemo(() => claimOutline(64, LAYOUT.claim).map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
 
   /**
@@ -533,7 +537,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
         <div ref={camera.layer} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: SIDE, height: SIDE }}>
           <GroundOverview
             home={home}
-            claim={LAYOUT.claim}
+            claim={claim}
             n={2 * R + 1}
             ox={ox}
             oy={oy}
@@ -544,7 +548,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
               key={p.key}
               detail={p.detail}
               home={`${home.x},${home.y}`}
-              claim={LAYOUT.claim}
+              claim={claim}
               n={p.n}
               occupied={p.occupied}
               prio={p.prio}

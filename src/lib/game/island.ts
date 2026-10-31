@@ -26,7 +26,12 @@ type TerrainAt = (x: number, y: number) => Terrain;
  * up and down (`h`). The war map draws it as it is; the village view makes
  * it taller, to give the buildings room on a phone's tall screen.
  */
-export type ClaimShape = { w: number; h: number };
+export type ClaimShape = {
+  w: number;
+  h: number;
+  /** Your City Gate's level, which the wall round the claim is built to (see wallLook). */
+  wall?: number;
+};
 export const PLAIN_CLAIM: ClaimShape = { w: 1, h: 1 };
 
 /**

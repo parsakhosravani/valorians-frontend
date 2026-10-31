@@ -211,7 +211,7 @@ export const GroundPiece = memo(function GroundPiece({
   /** Lower paints sooner. */
   prio?: number;
 }) {
-  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${claim.w}x${claim.h}`;
+  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${claim.w}x${claim.h}|w${claim.wall ?? 0}`;
   const held = useRef<string | null>(null);
   const prioRef = useRef(prio);
   const onImageRef = useRef(onImage);
