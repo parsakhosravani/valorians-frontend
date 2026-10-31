@@ -641,7 +641,7 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
   if (!wall.length) return;
 
   if (look.stone) {
-    paintStoneWall(g, look, wall);
+    paintStoneWall(g, look, wall, { x: (s.home!.x - s.ox) * TILE + TILE / 2, y: (s.home!.y - s.oy) * TILE + TILE / 2 });
 
     return;
   }
@@ -685,14 +685,22 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
     g.lineTo(st.x + w, top);
     g.lineTo(st.x + w, st.y);
     g.closePath();
-    g.fillStyle = `rgb(${wood.map(Math.round).join(",")})`;
+    // A round log: lit on the left, falling into shade on the right.
+    const log = g.createLinearGradient(st.x - w, 0, st.x + w, 0);
+
+    log.addColorStop(0, rgb(wood, 1.25));
+    log.addColorStop(0.4, rgb(wood, 1.02));
+    log.addColorStop(1, rgb(wood, 0.55));
+    g.fillStyle = log;
     g.fill();
+    // Bark: a few dark streaks down the log.
+    g.fillStyle = "rgba(40,26,12,0.35)";
+    g.fillRect(st.x - w * 0.2, top + 1.5, 0.5, h * 0.45);
+    g.fillRect(st.x + w * 0.35, top + h * 0.4, 0.5, h * 0.5);
     g.lineWidth = 0.7;
     g.strokeStyle = "rgba(34,22,10,0.85)";
     g.stroke();
-    // Light on the left face, and the fresh-cut point.
-    g.fillStyle = "rgba(255,228,170,0.22)";
-    g.fillRect(st.x - w + 0.4, top + 0.5, w * 0.6, h - 1);
+    // The fresh-cut point.
     g.beginPath();
     g.moveTo(st.x - w, top);
     g.lineTo(st.x, top - (st.post ? 2 : 3));
@@ -708,96 +716,263 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
   }
 };
 
-/** A stone wall: dressed blocks with battlements, and towers where the look has them. */
-const paintStoneWall = (g: CanvasRenderingContext2D, look: WallLook, wall: { x: number; y: number; post: boolean; tone: number; k: number }[]) => {
-  const half = STAKE_GAP / 2 + 0.45;
-  const colour = (tone: number, shade = 0) =>
-    `rgb(${mixV(look.rock[0], look.rock[1], tone)
-      .map((c) => Math.round(c * (1 - shade)))
-      .join(",")})`;
+type WallStone = { x: number; y: number; post: boolean; tone: number; k: number };
+
+const rgb = (c: V3, f = 1) => `rgb(${c.map((v) => Math.round(Math.max(0, Math.min(255, v * f)))).join(",")})`;
+
+/**
+ * A stone wall built like a real one: a run of masonry with thickness,
+ * standing `look.height` tall. Each stretch between two stones is a little
+ * block: its face toward the viewer (lit by how it turns to the light from
+ * the top-left), the wall-walk on top, coursed stonework with staggered
+ * joints, and merlons along the outer edge. Towers stand in it as round
+ * drums. Everything is drawn back to front so nearer masonry covers what's
+ * behind it. `centre` is your tile's centre, to know which side is outside.
+ */
+const paintStoneWall = (g: CanvasRenderingContext2D, look: WallLook, wall: WallStone[], centre: Pt) => {
+  const H = look.height;
+  const THICK = 5.5;
+  const half = THICK / 2;
+  const n = wall.length;
+  // Light comes from the top-left (on the ground plane: towards -x, -y).
+  const lit = (nx: number, ny: number) => 0.62 + 0.38 * Math.max(-0.4, Math.min(1, -nx * 0.75 + ny * 0.25));
+
+  type Item = { y: number; draw: () => void };
+  const items: Item[] = [];
+  const shadow = new Path2D();
+
+  for (let i = 0; i < n; i++) {
+    const p = wall[i];
+    const q = wall[(i + 1) % n];
+    const len = Math.hypot(q.x - p.x, q.y - p.y);
+
+    // Only stones that stand side by side are joined (the wall breaks at water).
+    if (i === n - 1 && n < 3) break;
+    if (len < 0.01 || len > STAKE_GAP * 1.7) continue;
+    const dx = (q.x - p.x) / len;
+    const dy = (q.y - p.y) / len;
+    // Across the wall, pointing out of your land.
+    let ox = -dy;
+    let oy = dx;
+    const mx = (p.x + q.x) / 2;
+    const my = (p.y + q.y) / 2;
+
+    if (ox * (mx - centre.x) + oy * (my - centre.y) < 0) [ox, oy] = [-ox, -oy];
+    // A hair longer than the gap so neighbouring blocks meet without seams.
+    const ext = 0.35;
+    const a = { x: p.x - dx * ext, y: p.y - dy * ext };
+    const b = { x: q.x + dx * ext, y: q.y + dy * ext };
+    const outA = { x: a.x + ox * half, y: a.y + oy * half };
+    const outB = { x: b.x + ox * half, y: b.y + oy * half };
+    const inA = { x: a.x - ox * half, y: a.y - oy * half };
+    const inB = { x: b.x - ox * half, y: b.y - oy * half };
+    // The face you see is the side nearer the bottom of the screen.
+    const outerNear = oy >= 0;
+    const [fa, fb] = outerNear ? [outA, outB] : [inA, inB];
+    const fnx = outerNear ? ox : -ox;
+    const fny = outerNear ? oy : -oy;
+    const tone = (p.tone + q.tone) / 2;
+    const stone = mixV(look.rock[0], look.rock[1], tone * 0.6 + 0.2);
+
+    // The wall's own footprint, and the ground behind it to the bottom-right.
+    shadow.moveTo(inA.x, inA.y);
+    shadow.lineTo(inB.x, inB.y);
+    shadow.lineTo(outB.x, outB.y);
+    shadow.lineTo(outA.x, outA.y);
+    shadow.closePath();
+    shadow.moveTo(a.x, a.y);
+    shadow.lineTo(b.x, b.y);
+    shadow.lineTo(b.x + H * 0.45, b.y + H * 0.22);
+    shadow.lineTo(a.x + H * 0.45, a.y + H * 0.22);
+    shadow.closePath();
+
+    items.push({
+      y: Math.max(fa.y, fb.y),
+      draw: () => {
+        // The face: ground to the top of the wall.
+        g.beginPath();
+        g.moveTo(fa.x, fa.y);
+        g.lineTo(fb.x, fb.y);
+        g.lineTo(fb.x, fb.y - H);
+        g.lineTo(fa.x, fa.y - H);
+        g.closePath();
+        const face = g.createLinearGradient(0, Math.min(fa.y, fb.y) - H, 0, Math.max(fa.y, fb.y));
+
+        face.addColorStop(0, rgb(stone, lit(fnx, fny) * 1.04));
+        face.addColorStop(1, rgb(stone, lit(fnx, fny) * 0.78));
+        g.fillStyle = face;
+        g.fill();
+        // Coursed stonework: a bed joint every course, head joints staggered course by course.
+        g.strokeStyle = "rgba(25,20,16,0.38)";
+        g.lineWidth = 0.55;
+        g.beginPath();
+        const courses = Math.max(3, Math.round(H / 3));
+
+        for (let c = 1; c < courses; c++) {
+          const h = (H * c) / courses;
+
+          g.moveTo(fa.x, fa.y - h);
+          g.lineTo(fb.x, fb.y - h);
+        }
+        for (let c = 0; c < courses; c++) {
+          const t = (p.k + c) % 2 ? 0.25 : 0.75;
+          const x = fa.x + (fb.x - fa.x) * t;
+          const y = fa.y + (fb.y - fa.y) * t;
+
+          g.moveTo(x, y - (H * c) / courses);
+          g.lineTo(x, y - (H * (c + 1)) / courses);
+        }
+        g.stroke();
+        // A little dirt and moss at the foot.
+        g.fillStyle = "rgba(60,70,30,0.28)";
+        g.beginPath();
+        g.moveTo(fa.x, fa.y);
+        g.lineTo(fb.x, fb.y);
+        g.lineTo(fb.x, fb.y - 1.6);
+        g.lineTo(fa.x, fa.y - 1.6);
+        g.fill();
+
+        // The wall-walk on top.
+        g.beginPath();
+        g.moveTo(outA.x, outA.y - H);
+        g.lineTo(outB.x, outB.y - H);
+        g.lineTo(inB.x, inB.y - H);
+        g.lineTo(inA.x, inA.y - H);
+        g.closePath();
+        g.fillStyle = rgb(stone, 1.12);
+        g.fill();
+
+        // Merlons on the outer edge, every other stone: little blocks of their own.
+        if (p.k % 2 === 0) {
+          const mh = 2.8;
+          const w = 0.62;
+          const c0 = { x: outA.x + (outB.x - outA.x) * (0.5 - w / 2), y: outA.y + (outB.y - outA.y) * (0.5 - w / 2) };
+          const c1 = { x: outA.x + (outB.x - outA.x) * (0.5 + w / 2), y: outA.y + (outB.y - outA.y) * (0.5 + w / 2) };
+          const d0 = { x: c0.x - ox * 1.7, y: c0.y - oy * 1.7 };
+          const d1 = { x: c1.x - ox * 1.7, y: c1.y - oy * 1.7 };
+          const [ma, mb] = outerNear ? [c0, c1] : [d0, d1];
+
+          g.beginPath();
+          g.moveTo(ma.x, ma.y - H);
+          g.lineTo(mb.x, mb.y - H);
+          g.lineTo(mb.x, mb.y - H - mh);
+          g.lineTo(ma.x, ma.y - H - mh);
+          g.closePath();
+          g.fillStyle = rgb(stone, lit(fnx, fny) * 0.98);
+          g.fill();
+          g.beginPath();
+          g.moveTo(c0.x, c0.y - H - mh);
+          g.lineTo(c1.x, c1.y - H - mh);
+          g.lineTo(d1.x, d1.y - H - mh);
+          g.lineTo(d0.x, d0.y - H - mh);
+          g.closePath();
+          g.fillStyle = rgb(stone, 1.18);
+          g.fill();
+          g.lineWidth = 0.45;
+          g.strokeStyle = "rgba(25,20,16,0.45)";
+          g.stroke();
+        }
+
+        // A fine dark line where the face meets the top, to read the edge.
+        g.beginPath();
+        g.moveTo(fa.x, fa.y - H);
+        g.lineTo(fb.x, fb.y - H);
+        g.strokeStyle = "rgba(20,16,12,0.35)";
+        g.lineWidth = 0.5;
+        g.stroke();
+      },
+    });
+  }
+
+  // A tower stands out in front of the wall it's built into.
+  for (const st of wall) if (st.post) items.push({ y: st.y + THICK + 4, draw: () => paintTower(g, look, st) });
 
   // Its shadow on the ground, falling to the bottom-right.
-  g.fillStyle = "rgba(20,14,6,0.4)";
-  g.beginPath();
+  g.fillStyle = "rgba(20,14,6,0.3)";
+  g.fill(shadow, "nonzero");
   for (const st of wall) {
-    g.moveTo(st.x + 6.5, st.y + 1.5);
-    g.ellipse(st.x + 2.5, st.y + 1.5, st.post ? 6 : 4, 2, 0, 0, Math.PI * 2);
+    if (!st.post) continue;
+    g.beginPath();
+    g.ellipse(st.x + 4, st.y + 2.2, 6.5, 2.6, 0, 0, Math.PI * 2);
+    g.fill();
   }
-  g.fill();
 
-  // Back to front so nearer stones overlap those behind.
-  for (const st of [...wall].sort((a, b) => a.y - b.y)) {
-    if (st.post) {
-      paintTower(g, look, st, colour);
-      continue;
-    }
-    const h = look.height + st.tone * 0.8;
-    const top = st.y - h;
-
-    g.fillStyle = colour(st.tone);
-    g.fillRect(st.x - half, top, half * 2, h);
-    // Mortar: a course line, and a joint that steps every other stone.
-    g.fillStyle = "rgba(30,26,22,0.35)";
-    g.fillRect(st.x - half, top + h * 0.5, half * 2, 0.6);
-    g.fillRect(st.x + (st.k % 2 ? -half * 0.3 : half * 0.4), top + (st.k % 2 ? 0 : h * 0.5), 0.6, h * 0.5);
-    // Light on the top.
-    g.fillStyle = "rgba(255,240,210,0.25)";
-    g.fillRect(st.x - half, top, half * 2, 1.1);
-    // Battlements: every other stone stands up a merlon.
-    if (st.k % 2 === 0) {
-      g.fillStyle = colour(st.tone, 0.05);
-      g.fillRect(st.x - half * 0.75, top - 2.6, half * 1.5, 2.8);
-      g.fillStyle = "rgba(255,240,210,0.25)";
-      g.fillRect(st.x - half * 0.75, top - 2.6, half * 1.5, 0.8);
-    }
-    g.fillStyle = "rgba(20,16,12,0.25)";
-    g.fillRect(st.x + half - 0.8, top, 0.8, h);
-  }
+  for (const it of items.sort((a, b) => a.y - b.y)) it.draw();
 };
 
-/** A round tower in the wall: a stone drum, a cone roof, and a banner on the grandest walls. */
-const paintTower = (
-  g: CanvasRenderingContext2D,
-  look: WallLook,
-  st: { x: number; y: number; tone: number; k: number },
-  colour: (tone: number, shade?: number) => string,
-) => {
-  const r = 3.9;
-  const h = look.height + 5;
+/** A round tower in the wall: a stone drum shaded like a cylinder, a crenellated or roofed top, and a banner on the grandest walls. */
+const paintTower = (g: CanvasRenderingContext2D, look: WallLook, st: WallStone) => {
+  const r = 5.2;
+  const ry = 2;
+  const h = look.height + 8;
   const top = st.y - h;
+  const stone = mixV(look.rock[0], look.rock[1], st.tone * 0.5 + 0.25);
 
-  g.fillStyle = colour(st.tone, 0.08);
-  g.fillRect(st.x - r, top, r * 2, h);
+  // The drum: light on the left, falling off round to the right.
+  const drum = g.createLinearGradient(st.x - r, 0, st.x + r, 0);
+
+  drum.addColorStop(0, rgb(stone, 1.08));
+  drum.addColorStop(0.35, rgb(stone, 1.0));
+  drum.addColorStop(1, rgb(stone, 0.58));
   g.beginPath();
-  g.ellipse(st.x, st.y, r, 1.4, 0, 0, Math.PI);
+  g.moveTo(st.x - r, top);
+  g.lineTo(st.x - r, st.y);
+  g.ellipse(st.x, st.y, r, ry, 0, Math.PI, 0, true);
+  g.lineTo(st.x + r, top);
+  g.closePath();
+  g.fillStyle = drum;
   g.fill();
-  // Lit on the left, in shade on the right, a slit window.
-  g.fillStyle = "rgba(255,240,210,0.22)";
-  g.fillRect(st.x - r, top, r * 0.7, h);
-  g.fillStyle = "rgba(20,16,12,0.3)";
-  g.fillRect(st.x + r * 0.45, top, r * 0.55, h);
-  g.fillStyle = "rgba(15,12,10,0.8)";
-  g.fillRect(st.x - 0.5, top + h * 0.35, 1, 2.4);
+  // Courses round the drum.
+  g.strokeStyle = "rgba(25,20,16,0.3)";
+  g.lineWidth = 0.5;
+  for (let c = 1; c < 5; c++) {
+    g.beginPath();
+    g.ellipse(st.x, top + (h * c) / 5, r, ry, 0, 0, Math.PI);
+    g.stroke();
+  }
+  // A slit window.
+  g.fillStyle = "rgba(12,10,8,0.85)";
+  g.fillRect(st.x - 1.3, top + h * 0.3, 0.9, 2.8);
+
+  // The top: a ring of merlons round the platform.
+  g.beginPath();
+  g.ellipse(st.x, top, r, ry, 0, 0, Math.PI * 2);
+  g.fillStyle = rgb(stone, 1.15);
+  g.fill();
+  g.fillStyle = rgb(stone, 0.95);
+  for (let m = 0; m < 6; m++) {
+    const th = (m / 6) * Math.PI * 2 + 0.3;
+    const mx = st.x + Math.cos(th) * (r - 0.6);
+    const my = top + Math.sin(th) * (ry - 0.2);
+
+    g.fillRect(mx - 0.8, my - 2.2, 1.6, 2.2);
+  }
 
   if (!look.roof) return;
-  const peak = top - 6.5;
+  // A cone roof on the platform, shaded round like the drum.
+  const peak = top - 9;
+  const roof = g.createLinearGradient(st.x - r, 0, st.x + r, 0);
 
+  roof.addColorStop(0, look.roof);
+  roof.addColorStop(1, "rgba(15,10,6,0.9)");
   g.beginPath();
-  g.moveTo(st.x - r - 1, top + 0.5);
+  g.moveTo(st.x - r - 1.2, top);
+  g.ellipse(st.x, top, r + 1.2, ry + 0.6, 0, Math.PI, 0, true);
   g.lineTo(st.x, peak);
-  g.lineTo(st.x + r + 1, top + 0.5);
   g.closePath();
   g.fillStyle = look.roof;
   g.fill();
-  g.lineWidth = 0.6;
-  g.strokeStyle = "rgba(20,14,8,0.7)";
-  g.stroke();
-  g.fillStyle = "rgba(255,240,210,0.25)";
+  g.fillStyle = roof;
+  g.globalAlpha = 0.55;
+  g.fill();
+  g.globalAlpha = 1;
+  // Light down the left of the cone.
   g.beginPath();
-  g.moveTo(st.x - r - 1, top + 0.5);
+  g.moveTo(st.x - r - 1.2, top);
   g.lineTo(st.x, peak);
-  g.lineTo(st.x - 0.6, top + 0.5);
+  g.lineTo(st.x - 1.4, top + ry);
   g.closePath();
+  g.fillStyle = "rgba(255,240,210,0.22)";
   g.fill();
 
   if (!look.banner) return;
@@ -805,13 +980,15 @@ const paintTower = (
   g.lineWidth = 0.6;
   g.beginPath();
   g.moveTo(st.x, peak);
-  g.lineTo(st.x, peak - 5);
+  g.lineTo(st.x, peak - 6);
   g.stroke();
+  // The banner, with a little wave in it.
   g.fillStyle = st.k % 2 ? "#A4302A" : "#C9A040";
   g.beginPath();
-  g.moveTo(st.x, peak - 5);
-  g.lineTo(st.x + 4, peak - 4);
-  g.lineTo(st.x, peak - 3);
+  g.moveTo(st.x, peak - 6);
+  g.quadraticCurveTo(st.x + 2.5, peak - 6.8, st.x + 5, peak - 5.6);
+  g.lineTo(st.x + 4.2, peak - 4.6);
+  g.quadraticCurveTo(st.x + 2, peak - 4.6, st.x, peak - 3.8);
   g.closePath();
   g.fill();
 };
