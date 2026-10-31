@@ -6,7 +6,7 @@ import { CSSProperties, FunctionComponent, ReactNode, memo, useEffect, useId, us
 import { Layout, Plot, claimOutline, villagePlan } from "./villagePlan";
 
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "@/components/organisms/war/MapGround";
-import { CanvasTribe, MapCanvas, MapPainter, VILLAGE_GROW, VILLAGE_MIN } from "@/components/organisms/war/MapCanvas";
+import { MapCanvas, MapPainter } from "@/components/organisms/war/MapCanvas";
 import { useMapCamera } from "@/components/organisms/war/useMapCamera";
 import type { MapData } from "@/components/organisms/war/WarMap";
 import { Button } from "@/components/atoms/Button";
@@ -69,7 +69,7 @@ const LAYOUT: Layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
  */
 const COMPACT_ZOOM = 1.45;
 /** Room (px on screen) kept round the village when it's fitted to the view. */
-const FIT_PAD = 14;
+const FIT_PAD = 6;
 /** Extra room (px on screen) left and right of the outermost buildings, for their name plates. */
 const NAME_ROOM = 26;
 /** A small village isn't blown up past this when fitted (a wide window, few buildings). */
@@ -285,13 +285,12 @@ const plateSize = (name: string, named: boolean, compact: boolean) =>
 type Cam = { x: number; y: number; z: number };
 
 const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottomLeft }: { land: Land } & VillageProps) => {
-  const { home, neighbours, myPower } = land;
+  const { home, neighbours } = land;
   // The box shown: your tile in the middle, R tiles either side. All positions are px in it at zoom 1.
   const ox = home.x - R;
   const oy = home.y - R;
   const mid = R * T + T / 2;
   const toPx = (p: Plot): Point => ({ x: mid + p.x * T, y: mid + p.y * T });
-  const tilePx = (x: number, y: number): Point => ({ x: (x - ox) * T + T / 2, y: (y - oy) * T + T / 2 });
 
   const ids = options.map((o) => o.building.id).sort().join(",");
   const plan = useMemo(
@@ -381,11 +380,10 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
   const occupied = useMemo(() => {
     const keys = new Set<string>();
 
-    for (const t of neighbours) keys.add(`${t.x},${t.y}`);
     for (const p of Object.values(plan.plots)) keys.add(`${Math.round(home.x + p.x)},${Math.round(home.y + p.y)}`);
 
     return Array.from(keys).map((k) => k.split(",").map(Number) as [number, number]);
-  }, [neighbours, plan, home]);
+  }, [plan, home]);
 
   // The land in pieces lined up on the world grid, as on the war map: the
   // whole box at the whole-view sharpness, and on screen again as sharp as
@@ -431,30 +429,10 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
     return out;
   }, [occupied, rest, ox, oy, home]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Your neighbours at the edge of view, drawn as on the war map.
+  // Only your own village here: other tribes are for the war map.
   useEffect(() => {
-    const ring = (p: number) => {
-      const r = p / Math.max(1, myPower);
-
-      return r < 0.75 ? "weaker" : r > 1.33 ? "stronger" : "even";
-    };
-    const tribes: CanvasTribe[] = neighbours.map((t) => ({
-      id: t.id,
-      ...tilePx(t.x, t.y),
-      size: Math.round(VILLAGE_MIN + Math.min(VILLAGE_GROW, t.townHall * 0.6)),
-      ring: t.ally ? "ally" : ring(t.power),
-      island: t.terrain === "sea",
-      picked: false,
-      loud: false,
-      shielded: false,
-      isMe: false,
-      townHall: t.townHall,
-      flag: t.clan?.flag ?? null,
-      name: t.name,
-    }));
-
-    painter.current?.setMarkers(tribes, []);
-  }, [neighbours, myPower]); // eslint-disable-line react-hooks/exhaustive-deps
+    painter.current?.setMarkers([], []);
+  }, []);
 
   // Which buildings are named: as many as fit on screen without covering one
   // another, the ones that matter most first.
@@ -634,7 +612,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       {topRight && <div className="absolute right-2 top-2 z-10">{topRight}</div>}
       {bottomLeft && <div className="absolute left-2 bottom-2 z-20 max-w-[calc(100%-4.5rem)]">{bottomLeft}</div>}
       {/* A soft vignette ties the edges into the frame */}
-      <span className="pointer-events-none absolute inset-0 z-[5] rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,0.5)]" />
+      <span className="pointer-events-none absolute inset-0 z-[5] md:rounded-2xl shadow-[inset_0_0_40px_rgba(0,0,0,0.5)]" />
     </div>
   );
 };
@@ -659,7 +637,7 @@ export const Village: FunctionComponent<VillageProps> = (props) => {
   return (
     <div
       ref={box}
-      className="relative rounded-2xl overflow-hidden border border-frame/80 bg-[#1C3F54] shadow-card h-[max(360px,calc(100svh-230px))]"
+      className="relative overflow-hidden border-y border-frame/80 md:rounded-2xl md:border bg-[#1C3F54] shadow-card h-[max(360px,calc(100svh-230px))]"
       style={fill ? { height: fill } : undefined}
     >
       {land ? (
