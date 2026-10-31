@@ -107,7 +107,7 @@ export type BuildingEffect =
   | { kind: "military"; stat: MilitaryStat; perLevel: number };
 
 /** What a military building improves, per level. */
-export type MilitaryStat =
+type MilitaryStat =
   | "unlock" // unlocks unit types (see UNITS[].requires)
   | "trainSpeed" // % faster training
   | "attack" // % more attack
@@ -150,7 +150,7 @@ const def = (
 });
 
 /** Each building level costs this much more than the last (producers: PRODUCER_COST_GROWTH). */
-export const BUILDING_COST_GROWTH = 1.45;
+const BUILDING_COST_GROWTH = 1.45;
 /**
  * Mines, the Sawmill, Brickyard and Windmill get dearer more slowly, and each
  * of their levels yields PRODUCTION_GROWTH more than the last (see
@@ -158,10 +158,10 @@ export const BUILDING_COST_GROWTH = 1.45;
  * about five days by level 20, instead of never: the old +60 a level against
  * ×1.45 the cost took 17 days to pay back at level 10 and 110 at level 15.
  */
-export const PRODUCER_COST_GROWTH = 1.3;
-export const PRODUCTION_GROWTH = 1.15;
+const PRODUCER_COST_GROWTH = 1.3;
+const PRODUCTION_GROWTH = 1.15;
 /** Each level takes this much longer to build than the last (was 1.55: level 30 took 12 days at best). */
-export const BUILD_TIME_GROWTH = 1.4;
+const BUILD_TIME_GROWTH = 1.4;
 
 /** Cost of each resource to go from `level` to `level + 1`. */
 export const buildingUpgradeCost = (b: BuildingDef, level: number) =>
@@ -533,8 +533,8 @@ export const CAMP_DEFENSE_PER_TROOP = 20;
 /** The last camp on the steep curve. Camps past it follow the gentle one. */
 export const CAMP_STEEP_UNTIL = 30;
 /** Past CAMP_STEEP_UNTIL: defense and first-win resources grow by these per level. */
-export const CAMP_LATE_DEFENSE_GROWTH = 1.12;
-export const CAMP_LATE_REWARD_GROWTH = 1.1;
+const CAMP_LATE_DEFENSE_GROWTH = 1.12;
+const CAMP_LATE_REWARD_GROWTH = 1.1;
 /** Is there a camp at this level? (Every whole level from 1 up.) */
 export const isCampLevel = (level: number) => Number.isInteger(level) && level >= 1;
 const steepDefense = (level: number) => 80 * Math.pow(1.35, level - 1);
@@ -641,7 +641,7 @@ export const unitSlots = (u: UnitDef) => (u.transport ? 0 : u.wallBreak || u.tow
 // stronger. Only the troop types that fought in a battle gain XP, shared by
 // how much each contributed. Heavy losses cost XP, because veterans die too.
 
-export type RankDef = { name: string; xp: number };
+type RankDef = { name: string; xp: number };
 
 export const RANKS: RankDef[] = [
   { name: "Recruit", xp: 0 },

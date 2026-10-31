@@ -80,7 +80,7 @@ const LootLine = ({ loot, coins }: { loot: Partial<Loot> | null | undefined; coi
 };
 
 /** The War Orders card: how many new orders an expedition can take, and the next level. */
-export const OrdersCard = () => {
+const OrdersCard = () => {
   const { state, buyOrdersCard } = useGame();
   const [busy, setBusy] = useState(false);
 

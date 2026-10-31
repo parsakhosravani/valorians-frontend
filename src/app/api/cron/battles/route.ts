@@ -38,29 +38,24 @@ export async function GET(req: NextRequest) {
   await resolveDueTrades(started);
   // New tribes get their tile on the map here (it used to slow every map request).
   await settleAll().catch((e) =>
-    // eslint-disable-next-line no-console
     console.error("settling new tribes failed", e)
   );
   // Map copies of tribes that went stale (or predate them): a few seconds at most.
   await refreshTribeColumns(started, 8_000).catch((e) =>
-    // eslint-disable-next-line no-console
     console.error("refreshing tribe columns failed", e)
   );
   await maybeRefreshRanks(started).catch((e) =>
-    // eslint-disable-next-line no-console
     console.error("refreshing ranks failed", e)
   );
   const bot = await ensureBotSetup().catch(() => null);
   // A new version went live: draft an announcement for the admins to approve.
   const release = await checkRelease().catch((e) => {
-    // eslint-disable-next-line no-console
     console.error("release check failed", e);
 
     return null;
   });
   // Announcements still going out: keep sending for the rest of this run.
   await deliverAnnouncements(Math.max(0, 45_000 - (Date.now() - started))).catch((e) =>
-    // eslint-disable-next-line no-console
     console.error("announcements failed", e)
   );
 

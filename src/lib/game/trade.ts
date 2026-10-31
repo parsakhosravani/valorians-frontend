@@ -20,8 +20,8 @@ export const MIN_TRADE_AMOUNT = 50;
 export const MIN_TRADE_RATIO = 0.5;
 export const MAX_TRADE_RATIO = 2;
 /** Merchants walk this many seconds per tile, and every trip takes at least MIN_TRADE_SECONDS. */
-export const MERCHANT_SECONDS_PER_TILE = 15;
-export const MIN_TRADE_SECONDS = 30;
+const MERCHANT_SECONDS_PER_TILE = 15;
+const MIN_TRADE_SECONDS = 30;
 
 export type Offer = {
   give: ResourceId;
@@ -30,7 +30,7 @@ export type Offer = {
   wantAmount: number;
 };
 
-export const tradingPostLevel = (s: GameState) =>
+const tradingPostLevel = (s: GameState) =>
   s.buildings[TRADING_POST] ?? 0;
 
 /** What this player's Trading Post allows. */

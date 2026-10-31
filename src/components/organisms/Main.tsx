@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
-import { useGameStatus, useTelegramContext } from "@/context";
+import { useGameStatus } from "@/context";
 import { Header } from "@/components/organisms/Header";
 import { LoadingScreen } from "@/components/templates/LoadingScreen";
 import { Navbar } from "@/components/organisms/Navbar";
@@ -33,11 +33,10 @@ export const Main = ({
 }: Readonly<{
   children: React.ReactNode;
 }>) => {
-  const { isMobile } = useTelegramContext();
-  const { status, error, retry } = useGameStatus();
+  const { status } = useGameStatus();
   const pathname = usePathname();
 
-  if (!isMobile || status === "no-auth") {
+  if (status === "no-auth") {
     return <QrCode />;
   }
 

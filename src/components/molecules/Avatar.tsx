@@ -21,7 +21,6 @@ export const Avatar = ({ src, size, className }: { src?: string | null; size: nu
   if (usable(src) && !failed) {
     return (
       // Telegram avatars are remote; a plain img avoids next/image domain config.
-      // eslint-disable-next-line @next/next/no-img-element
       <img alt="" className={cls} height={size} referrerPolicy="no-referrer" src={src!} style={{ width: size, height: size }} width={size} onError={() => setFailed(true)} />
     );
   }

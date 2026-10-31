@@ -44,7 +44,7 @@ async function clearings(lairs: Point[]): Promise<Map<string, { at: number; by: 
   return out;
 }
 
-export type LairInfo = Lair & {
+type LairInfo = Lair & {
   /** Bandits are there at `now`. */
   active: boolean;
   /** Cleared: when the bandits come back. */

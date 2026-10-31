@@ -14,7 +14,7 @@ import { getDb } from "./db";
  * at most once a minute for the whole game, and writes only the ranks that
  * moved. Ties go to the older id, as the leaderboard lists them.
  */
-export const RANKS_EVERY_MS = 60_000;
+const RANKS_EVERY_MS = 60_000;
 
 const PLAYER_RANKS = `
   UPDATE users SET pop_rank = r.p, power_rank = r.w, wins_rank = r.v
@@ -63,9 +63,3 @@ export async function maybeRefreshRanks(now = Date.now()) {
   return true;
 }
 
-/** Ranks right now, whatever their age (tests, and the first pass after deploying). */
-export async function refreshRanks() {
-  const db = await getDb();
-
-  await db.batch([PLAYER_RANKS, CLAN_RANKS], "write");
-}

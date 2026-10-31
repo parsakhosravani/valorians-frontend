@@ -27,7 +27,7 @@ const DEV_ID_KEY = "valorians:dev-user-id";
  * Telegram.WebApp.initData, but Telegram Desktop can hand it over only in the
  * URL hash (#tgWebAppData=…) or, after a reload/navigation, in sessionStorage.
  */
-export function telegramInitData(): string | null {
+function telegramInitData(): string | null {
   if (typeof window === "undefined") return null;
   const fromSdk: string | undefined = (window as any).Telegram?.WebApp?.initData;
   if (fromSdk) return fromSdk;

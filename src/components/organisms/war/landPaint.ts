@@ -566,7 +566,7 @@ export const wetnessAt = (ground: (x: number, y: number) => Terrain, x: number, 
  * dressed stone with gilded roofs that keeps going: every five levels more,
  * the wall stands a little taller and its towers a little closer, without end.
  */
-export type WallLook = {
+type WallLook = {
   stone: boolean;
   /** A tower every this many stones (0: none). */
   towers: number;
@@ -578,7 +578,7 @@ export type WallLook = {
   rock: [V3, V3];
 };
 
-export const wallLook = (gate = 0): WallLook => {
+const wallLook = (gate = 0): WallLook => {
   const tier = Math.floor(Math.max(0, gate) / 5);
   const past = Math.max(0, tier - 4);
 
@@ -1007,13 +1007,13 @@ const paintTower = (g: CanvasRenderingContext2D, look: WallLook, st: WallStone) 
  * wall that repeats along the border and the tower or post that stands in
  * it. Past the fifth, the royal pieces stand taller, towers closer.
  */
-export type WallArt = { wall: ImageBitmap; tower: ImageBitmap };
+type WallArt = { wall: ImageBitmap; tower: ImageBitmap };
 
 const WALL_LOOKS = 5;
 const artLoads = new Map<number, Promise<WallArt | null>>();
 
 /** The pieces for a City Gate level, loaded once (null where images can't be had: the wall is drawn by hand). */
-export const wallArt = (gate = 0): Promise<WallArt | null> => {
+const wallArt = (gate = 0): Promise<WallArt | null> => {
   const i = Math.min(WALL_LOOKS - 1, Math.floor(Math.max(0, gate) / 5));
   const where = (globalThis as { location?: { href: string } }).location?.href;
 

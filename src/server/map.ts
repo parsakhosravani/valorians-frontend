@@ -128,7 +128,7 @@ export async function campSpots(playerId: number, home: Point, upTo: number): Pr
   return campPositions(playerId, home, upTo, tribes);
 }
 
-export const VIEW_RADIUS = 14;
+const VIEW_RADIUS = 14;
 
 type Movement = {
   id: number;

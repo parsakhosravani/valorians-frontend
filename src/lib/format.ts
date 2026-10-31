@@ -26,3 +26,6 @@ export function compact(n: number) {
 export function grouped(n: number) {
   return GROUPED.format(n);
 }
+
+/** Whole and grouped: 15300.7 → "15,300". How counts and amounts are shown everywhere. */
+export const whole = (n: number) => GROUPED.format(Math.floor(n));

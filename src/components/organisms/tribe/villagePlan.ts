@@ -20,7 +20,7 @@ import type { Point, Terrain } from "@/lib/game/map";
  */
 
 /** Where a building stands (its foot), in tiles from the centre of your tile. */
-export type Plot = { x: number; y: number };
+type Plot = { x: number; y: number };
 
 /**
  * How roomy a village is laid out. `claim`: the shape the claim is drawn in
@@ -29,10 +29,10 @@ export type Plot = { x: number; y: number };
  * than side by side (1 = the same), since a building drawn behind another
  * hides only its foot, while one beside it hides it whole.
  */
-export type Layout = { claim: ClaimShape; room: number; rows: number };
-export const PLAIN_LAYOUT: Layout = { claim: PLAIN_CLAIM, room: 1, rows: 1 };
+type Layout = { claim: ClaimShape; room: number; rows: number };
+const PLAIN_LAYOUT: Layout = { claim: PLAIN_CLAIM, room: 1, rows: 1 };
 
-export type VillagePlan = {
+type VillagePlan = {
   plots: Record<string, Plot>;
   /** Tracks between buildings, as pairs of building ids (each building reached once, from the Town Hall). */
   tracks: [string, string][];

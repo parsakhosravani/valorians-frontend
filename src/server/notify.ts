@@ -4,6 +4,7 @@ import { RANKS, RESOURCE_IDS, UNITS, unitPlural } from "@/lib/game/config";
 import type { Army } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
+import { whole } from "@/lib/format";
 
 /**
  * Battle news sent as Telegram messages from the bot, so players hear about
@@ -18,7 +19,7 @@ const token = () => process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TE
 const appUrl = () => (process.env.APP_URL || "https://valorians-legend.vercel.app").replace(/\/$/, "");
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
+const fmt = whole;
 
 const armyText = (a: Army | null | undefined) => {
   if (!a) return "an army";

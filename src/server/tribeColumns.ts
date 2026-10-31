@@ -38,7 +38,7 @@ export const TRIBE_SELECT = TRIBE_COLUMNS.map((c) => `u.${c}`).join(", ");
 /** SQL true when the row's copy is still good at `?` (now). */
 export const TRIBE_FRESH = "(u.def_until IS NULL OR u.def_until > ?)";
 
-export type TribeLook = { townHall: number; harbor: number; defense: number };
+type TribeLook = { townHall: number; harbor: number; defense: number };
 
 /** A village as others see it at `now`, from its columns, or from its state when they're stale. */
 export function tribeLook(row: Row, now: number): TribeLook {

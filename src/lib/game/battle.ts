@@ -103,7 +103,7 @@ const scale = (army: Army, f: number) => {
 };
 
 /** Share of each side's strength lost by the end, from the decided battle. */
-export function lossShares(outcome: Pick<BattleOutcome, "attackerWon" | "attack" | "defense">) {
+function lossShares(outcome: Pick<BattleOutcome, "attackerWon" | "attack" | "defense">) {
   const a = Math.max(1, outcome.attack);
   const d = Math.max(1, outcome.defense);
 

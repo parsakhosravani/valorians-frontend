@@ -54,7 +54,7 @@ import {
   getRates,
 } from "@/lib/game/engine";
 
-export type TResource = {
+type TResource = {
   id: ResourceId;
   name: string;
   img: StaticImageData;
@@ -70,7 +70,7 @@ export const RESOURCES: TResource[] = [
   { id: "crop", name: RESOURCE_NAMES.crop, img: crop, bg: cropBg, rock: cropRock },
 ];
 
-export type GameStatus = "loading" | "ready" | "error" | "no-auth";
+type GameStatus = "loading" | "ready" | "error" | "no-auth";
 
 interface GameContextType {
   status: GameStatus;
@@ -185,9 +185,9 @@ export type ScoutReport = {
  */
 type StatusKeys = "status" | "error" | "retry" | "me" | "authHeader";
 type LiveKeys = "state" | "rates" | "now" | "activeResource" | "combo";
-export type GameStatusValue = Pick<GameContextType, StatusKeys>;
+type GameStatusValue = Pick<GameContextType, StatusKeys>;
 export type GameLiveValue = Pick<GameContextType, LiveKeys>;
-export type GameActions = Omit<GameContextType, StatusKeys | LiveKeys>;
+type GameActions = Omit<GameContextType, StatusKeys | LiveKeys>;
 
 const StatusContext = createContext<GameStatusValue | undefined>(undefined);
 const ActionsContext = createContext<GameActions | undefined>(undefined);
@@ -631,7 +631,7 @@ export const useGameStatus = () => need(useContext(StatusContext));
 export const useGameActions = () => need(useContext(ActionsContext));
 
 /** Everything at once: status, actions and live state (re-renders every second). */
-export const useResourceContext = (): GameContextType => {
+const useResourceContext = (): GameContextType => {
   const status = useGameStatus();
   const actions = useGameActions();
   const live = need(useContext(LiveContext));

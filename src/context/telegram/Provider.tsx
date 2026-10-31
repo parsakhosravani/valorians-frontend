@@ -3,9 +3,7 @@ import { TelegramContextType } from "./types";
 import TelegramContext from "./Context";
 import useDisableZoom from "@/hooks/useDisableZoom";
 import useDisableScroll from "@/hooks/useDisableScroll";
-import useMobilePlatform from "@/hooks/useMobilePlatform";
 import { Telegram } from "@twa-dev/types";
-import { useRouter } from "next/navigation";
 import { useTelegramBackButton } from "@/hooks/useBackHandler";
 
 interface TelegramProviderProps {
@@ -17,7 +15,6 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
 }) => {
   const [telegram, setTelegram] = useState<Telegram>();
   const [user, setUser] = useState(null);
-  const [progressBarStart, setProgressBarStart] = useState(0);
 
   // Start app
   useEffect(() => {
@@ -57,23 +54,14 @@ export const TelegramProvider: React.FC<TelegramProviderProps> = ({
 
   useDisableZoom();
   useDisableScroll(true);
-  const isMobile = useMobilePlatform(telegram);
 
   // Telegram's back button, for every page and drawer (see useBackHandler).
   useTelegramBackButton(telegram);
 
-  const router = useRouter();
-  const navigateTo = (address: string) => {
-    router.push(address as any);
-  };
 
   const value: TelegramContextType = {
     telegram,
     user,
-    isMobile: process.env.NEXT_PUBLIC_IGNORE_QR_CODE ? true : isMobile,
-    progressBarStart,
-    setProgressBarStart,
-    navigateTo,
   };
 
   return (

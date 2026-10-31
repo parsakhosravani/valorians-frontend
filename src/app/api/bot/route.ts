@@ -17,7 +17,6 @@ export async function POST(req: NextRequest) {
     await maybeCheckRelease();
   } catch (e) {
     // Always answer 200 so Telegram doesn't retry a broken update forever.
-    // eslint-disable-next-line no-console
     console.error("bot update failed", e);
   }
 

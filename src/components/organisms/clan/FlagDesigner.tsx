@@ -102,7 +102,7 @@ export const FlagDesigner = ({ value, onChange, seed = 1 }: { value: Flag; onCha
               type="button"
               onClick={() => set({ emblem: i })}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img alt={e} className="w-full h-full object-contain" draggable={false} src={emblemImage(i) ?? ""} />
             </button>
           ))}

@@ -20,9 +20,9 @@ type Point = { x: number; y: number };
  * Kept a little under the plot spacing so, with the whole village in view,
  * there's room between buildings for their names.
  */
-export const SIZE = 33;
+const SIZE = 33;
 
-export const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
+const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
 
 /**
  * Below this zoom the buildings are small on screen: their name plates shrink
@@ -37,7 +37,7 @@ export const COMPACT_ZOOM = 1.45;
  * The "upgrade now" mark: a green gem with a gold rim and a raised double
  * chevron, gently bobbing so ready buildings catch the eye.
  */
-export const UpgradeMark = ({ className, style }: { className?: string; style?: CSSProperties }) => {
+const UpgradeMark = ({ className, style }: { className?: string; style?: CSSProperties }) => {
   const id = useId().replace(/:/g, "");
 
   return (

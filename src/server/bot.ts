@@ -28,6 +28,7 @@ import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from
 import { CLAN, PLUS, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
 import { advance, plusActive } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
+import { whole } from "@/lib/format";
 
 /**
  * The @valorians_bot chat: welcome, commands and buttons around the game.
@@ -86,7 +87,7 @@ const menuRows = (): Button[][] => [
 ];
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
+const fmt = whole;
 const compact = (n: number) =>
   n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${Math.round(n / 1e3)}K` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : fmt(n);
 

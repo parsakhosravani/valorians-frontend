@@ -15,10 +15,10 @@
 type Pt = { x: number; y: number };
 
 /** The drawn road: its points (px) and, for each, where along the tile path it is (0..tiles-1). */
-export type RoadShape = { points: Pt[]; u: number[] };
+type RoadShape = { points: Pt[]; u: number[] };
 
 /** Whether the road may pass through `p` (px) at `u` along its tiles. */
-export type Open = (p: Pt, u: number) => boolean;
+type Open = (p: Pt, u: number) => boolean;
 
 /** Rounds the corners off: each pass cuts every corner a quarter of the way in (Chaikin). */
 function chaikin(points: Pt[], u: number[], passes: number) {

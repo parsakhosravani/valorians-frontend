@@ -48,7 +48,7 @@ const rand = () => crypto.randomInt(0, 1_000_000) / 1_000_000;
 const json = <T,>(v: unknown): T | null => (v == null ? null : (JSON.parse(String(v)) as T));
 
 /** What bandits actually took from a load (nothing until they've struck, or if they were cleared out first). */
-export const stolenFrom = (r: Robbery | null) => (r?.done && !r.foiled ? r.stolen : 0);
+const stolenFrom = (r: Robbery | null) => (r?.done && !r.foiled ? r.stolen : 0);
 
 /** A robbery as players may see it: only once it has happened. */
 const shown = (r: Robbery | null) => (r?.done && !r.foiled ? r : null);
@@ -241,7 +241,6 @@ export async function resolveDueTrades(now: number, playerId?: number) {
       });
     } catch (e) {
       // Put it back so the next request retries the delivery.
-      // eslint-disable-next-line no-console
       console.error("trade delivery failed", t.id, e);
       await db.execute({
         sql: "UPDATE trades SET status = 'accepted' WHERE id = ?",

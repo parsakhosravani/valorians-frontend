@@ -16,11 +16,11 @@ import { terrainAt } from "@/lib/game/map";
 
 type Pt = { x: number; y: number };
 
-export const shownCoord = (v: number) => v - MAP_CENTER;
+const shownCoord = (v: number) => v - MAP_CENTER;
 const fromShown = (v: number) => v + MAP_CENTER;
 
 /** Parses "12|-40", "12, -40" or "12 -40" into world tiles. */
-export const parseCoords = (s: string): Pt | null => {
+const parseCoords = (s: string): Pt | null => {
   const m = s.trim().match(/^(-?\d{1,4})\s*[|,;/\s]\s*(-?\d{1,4})$/);
 
   if (!m) return null;

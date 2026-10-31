@@ -10,8 +10,4 @@ export type TelegramUser = {
 export interface TelegramContextType {
     telegram: any;
     user: TelegramUser;
-    isMobile: boolean,
-    progressBarStart: number,
-    setProgressBarStart: any,
-    navigateTo: (address: string) => void,
 }

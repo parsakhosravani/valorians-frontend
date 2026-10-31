@@ -25,9 +25,9 @@ import { formatDuration } from "@/lib/format";
 // Shared with WarMap: a village's box, and the tile's centre inside it.
 export const VILLAGE_MIN = 34;
 export const VILLAGE_GROW = 12;
-export const VX = 36;
-export const VY = 34;
-export const SAND = "#C8B27A";
+const VX = 36;
+const VY = 34;
+const SAND = "#C8B27A";
 
 /** How strong a village is next to you: the colour of its ground ring. */
 export type Ring = "me" | "ally" | "weaker" | "stronger" | "even";
@@ -63,10 +63,10 @@ export type CanvasCamp = {
   label: boolean;
 };
 
-export type CanvasPiece = { img: HTMLImageElement; left: number; top: number; size: number; detail: boolean };
-export type CanvasBackdrop = { canvas: HTMLCanvasElement; left: number; top: number; size: number };
+type CanvasPiece = { img: HTMLImageElement; left: number; top: number; size: number; detail: boolean };
+type CanvasBackdrop = { canvas: HTMLCanvasElement; left: number; top: number; size: number };
 
-export type Hit = { kind: "tribe"; id: number } | { kind: "camp"; level: number } | null;
+type Hit = { kind: "tribe"; id: number } | { kind: "camp"; level: number } | null;
 
 type Cam = { x: number; y: number; z: number };
 

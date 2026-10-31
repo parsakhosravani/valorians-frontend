@@ -9,9 +9,14 @@ const config = [
   },
   {
     rules: {
-      "no-console": "warn",
+      // Server errors go to the log on purpose; anything else is a leftover.
+      "no-console": ["warn", { allow: ["warn", "error"] }],
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      // `_name` marks something left out on purpose (e.g. `const { old: _old, ...rest } = x`).
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
       // The game draws its own art with plain <img>; next/image adds nothing for small sprites.
       "@next/next/no-img-element": "off",
       // Game copy uses plain apostrophes in JSX text.
