@@ -168,7 +168,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home."),
   def("Trapmaker", 200, { kind: "military", stat: "defense", perLevel: 4 }, "+4% defense per level."),
   def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
-  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Saves 4% of troops lost in battle per level (max 50%)."),
+  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Treats the wounded after a battle: saves 4% of them per level (max 50%). The killed can't be saved."),
   def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
   def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
   def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),

@@ -322,3 +322,33 @@ test("a won raid knocks the City Gate down: a level for an empty tribe, more wit
   expect(held.report.gate).toBeUndefined();
   expect(held.state.buildings["city-gate"]).toBe(11);
 });
+
+test("the Hospital saves only the wounded, never the killed", () => {
+  const attacker = withBarracks();
+  attacker.buildings["hospital"] = 20; // the most it heals: half of the wounded
+  attacker.army.cavalry = 1000;
+  const defender = withBarracks();
+  defender.shieldUntil = 0;
+  defender.army.spearman = 300;
+  const { report } = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 1000 }, T0, 0.5);
+  const fallen = report.attackerLosses.cavalry + report.attackerHealed.cavalry;
+
+  expect(report.attackerWon).toBe(true);
+  expect(fallen).toBeGreaterThan(0);
+  // Of the fallen, at most the wounded share can be treated, and half of those at best.
+  expect(report.attackerHealed.cavalry).toBeLessThanOrEqual(Math.floor(Math.round(fallen * W.WOUNDED_SHARE.won) * 0.5));
+  expect(report.attackerHealed.cavalry).toBeGreaterThan(0);
+});
+
+test("a won raid that takes nothing says why", () => {
+  const attacker = withBarracks();
+  attacker.army.cavalry = 100;
+  const defender = withBarracks();
+  defender.shieldUntil = 0;
+  defender.buildings["hideout"] = 40;
+  const { report } = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 100 }, T0, 0.5);
+
+  expect(report.attackerWon).toBe(true);
+  expect(Object.values(report.loot).every((v) => v === 0)).toBe(true);
+  expect(report.noLoot).toBe("hidden");
+});
