@@ -187,7 +187,55 @@ export function villagePlan(
 
   for (const id of WORKS.filter((c) => wanted.has(c))) place(id, (s) => works[id](s) + outer(s) * 0.7, false);
 
-  // Tracks: each building joined to the nearest one already reached, out from the Town Hall.
+  return { plots, tracks: trackTree(plots) };
+}
+
+/** The border of your territory as points (tiles from your tile's centre), all the way round. */
+export const claimOutline = (steps = 64, claim: ClaimShape = PLAIN_CLAIM) =>
+  Array.from({ length: steps + 1 }, (_, a) => claimEdge((a / steps) * Math.PI * 2, claim));
+
+/**
+ * The same village stood in tidy rows, so every building has a cell of its
+ * own with room under it for its name: spots `w` tiles apart side by side,
+ * `h` tiles row to row, every other row shifted half a spot, as many as there
+ * are buildings in an oval `aspect` times as tall as wide (the shape of the
+ * view). Each building takes the free spot nearest where it stood in the
+ * village, inner ones first, so the offices still crowd the Town Hall in the
+ * middle and the mine still keeps its side of town. Tracks run between
+ * neighbours as before.
+ */
+export function tidyRows(plan: VillagePlan, w: number, h: number, aspect: number): VillagePlan {
+  const ids = Object.keys(plan.plots);
+  const reach = Math.ceil(Math.sqrt(ids.length)) + 2;
+  const cells: Plot[] = [];
+
+  for (let j = -reach; j <= reach; j++)
+    for (let i = -reach; i <= reach; i++) cells.push({ x: (i + (Math.abs(j) % 2 ? 0.5 : 0)) * w, y: j * h });
+  // How far out in a rounded-off rectangle (a squarer oval, so the rows come out even);
+  // a whisker of the spot's own place breaks ties the same way every time.
+  const far = (c: Plot) => (c.x ** 4 + (c.y / aspect) ** 4) ** 0.25 + c.x * 0.001 + c.y * 0.0003;
+  const pool = cells.sort((a, b) => far(a) - far(b)).slice(0, ids.length);
+  // The village scaled to the block's size, so "where it stood" is comparable.
+  const size = (pts: Plot[]) => Math.max(...pts.map((p) => Math.hypot(p.x, p.y / aspect)), 0.001);
+  const k = size(pool) / size(Object.values(plan.plots));
+  const plots: Record<string, Plot> = {};
+  const order = ids.sort((a, b) => Math.hypot(plan.plots[a].x, plan.plots[a].y) - Math.hypot(plan.plots[b].x, plan.plots[b].y));
+
+  for (const id of order) {
+    const want = { x: plan.plots[id].x * k, y: plan.plots[id].y * k };
+    let best = 0;
+
+    pool.forEach((c, n) => {
+      if (Math.hypot(c.x - want.x, c.y - want.y) < Math.hypot(pool[best].x - want.x, pool[best].y - want.y)) best = n;
+    });
+    plots[id] = pool.splice(best, 1)[0];
+  }
+
+  return { plots, tracks: trackTree(plots) };
+}
+
+/** Tracks: each building joined to the nearest one already reached, out from the Town Hall. */
+export function trackTree(plots: Record<string, Plot>): [string, string][] {
   const tracks: [string, string][] = [];
   const reached = ["town-hall"];
   const left = Object.keys(plots).filter((id) => id !== "town-hall");
@@ -214,9 +262,5 @@ export function villagePlan(
     reached.push(id);
   }
 
-  return { plots, tracks };
+  return tracks;
 }
-
-/** The border of your territory as points (tiles from your tile's centre), all the way round. */
-export const claimOutline = (steps = 64, claim: ClaimShape = PLAIN_CLAIM) =>
-  Array.from({ length: steps + 1 }, (_, a) => claimEdge((a / steps) * Math.PI * 2, claim));

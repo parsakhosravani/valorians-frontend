@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { CSSProperties, FunctionComponent, ReactNode, memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { Layout, Plot, claimOutline, villagePlan } from "./villagePlan";
+import { Layout, Plot, claimOutline, tidyRows, villagePlan } from "./villagePlan";
 
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "@/components/organisms/war/MapGround";
 import { MapCanvas, MapPainter } from "@/components/organisms/war/MapCanvas";
@@ -22,27 +22,27 @@ import { useFillHeight } from "@/hooks/useFillHeight";
 /**
  * Your village, up close on your own land: the war map's ground round your
  * tribe, the gold border of your territory, and every building standing on
- * it where the land suits it (see villagePlan). A tribe that settled at sea
+ * it where the land suits it (see villagePlan, tidyRows). A tribe that settled at sea
  * stands on an island of its own (see islandTerrain). Pinch, drag and double-tap
  * like the war map; tap a building to open it.
  *
  * The ground is painted and drawn exactly as on the war map (land pieces from
  * the ground worker onto MapCanvas, moved by useMapCamera); the buildings are
  * page elements on the camera's layer, so they stay buttons. Their name
- * plates keep one size on screen at any zoom, and only as many show as fit
- * without covering each other: zooming in names them all.
+ * plates keep one size on screen at any zoom.
  *
- * So every building can be seen at once, the village fills the screen down
- * to the bottom bar (like the war map), is laid out roomier here than the war
- * map draws it (LAYOUT), opens fitted to the whole wall, and zoomed out the
- * buildings wear small name plates (see COMPACT_ZOOM). The builders and the
+ * So every building, its level and its name can be read at once, the
+ * village fills the screen down to the bottom bar (like the war map), the
+ * buildings stand in tidy rows with a cell each (see TIDY), the land inside
+ * the wall is cleared for them, and it opens fitted to the whole village with
+ * small name plates (see COMPACT_ZOOM) that carry what's going on too. The builders and the
  * Village / List switch float over the map (see VillageProps), in corners
  * the fit and the name plates keep clear of (see OVERLAY).
  */
 
 const T = TILE;
-/** Tiles shown either side of your tile: your land and a little of your neighbours'. */
-const R = 6;
+/** Tiles shown either side of your tile: your land, its wall and a little past it. */
+const R = 7;
 const SIDE = (2 * R + 1) * T;
 /**
  * A building's width on the ground (px at zoom 1); a few landmarks are bigger.
@@ -50,18 +50,35 @@ const SIDE = (2 * R + 1) * T;
  * there's room between buildings for their names.
  */
 const SIZE = 33;
-const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
+// The Town Hall stands out, but not so tall that it reaches the names in the row above.
+const BIG: Record<string, number> = { "town-hall": 1.3, "city-gate": 1.15, watchtower: 1.1 };
 const MIN_ZOOM = 0.6;
 /**
- * How roomy the village is laid out here (see Layout). Picked by laying out
- * sixty real villages and fitting each to a phone's map: a taller claim
- * suits the tall view and costs nothing in size, buildings get a fifth more
- * room, and may stand a little closer one behind another than side by
- * side. That opens with buildings about 44 px wide, a good size to tap, and
- * hardly any of them covering another. (Spreading the claim wider instead
- * makes the whole village, and so every building, smaller on screen.)
+ * Your land as the village draws it (see Layout): the claim stretched to
+ * wall in the rows below and cleared inside for building on. The rest only
+ * shapes the usual village that the rows are taken from, so each building
+ * keeps its side of town.
  */
-const LAYOUT: Layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
+const LAYOUT: Layout = { claim: { w: 1.9, h: 2.2, cleared: true }, room: 1.2, rows: 1.4 };
+/**
+ * The rows the village stands in (see tidyRows): spots 1.7 tiles apart, rows
+ * a tile apart, in a block 1.4 times as tall as wide. Picked by laying out
+ * forty villages of every building on a 360 × 478 phone map: rows of four and
+ * three, buildings about 36 px wide, and not one name plate covering another
+ * (taller views get bigger buildings). The claim above is drawn big enough
+ * for its wall to go round every one of them, a little clear of it.
+ */
+const TIDY = { w: 1.7, h: 1, aspect: 1.4 };
+/** Shorter names for the plates where the full one is too long for a cell; the full name is on the building. */
+const SHORT: Record<string, string> = {
+  "resource-warehouse": "Warehouse",
+  "fertilizer-workshop": "Fertilizer",
+  "exploration-center": "Explorers",
+  "military-command": "Command",
+  "siege-workshop": "Siege Works",
+  "trading-post": "Trade Post",
+};
+const label = (b: BuildingDef) => SHORT[b.id] ?? b.name;
 /**
  * Below this zoom the buildings are small on screen: their name plates shrink
  * to fit (see plateSize), and any that would still cover another wait for
@@ -71,7 +88,7 @@ const COMPACT_ZOOM = 1.45;
 /** Room (px on screen) kept round the village when it's fitted to the view. */
 const FIT_PAD = 6;
 /** Extra room (px on screen) left and right of the outermost buildings, for their name plates. */
-const NAME_ROOM = 26;
+const NAME_ROOM = 36;
 /** A small village isn't blown up past this when fitted (a wide window, few buildings). */
 const MAX_FIT_ZOOM = 2.6;
 /**
@@ -79,7 +96,9 @@ const MAX_FIT_ZOOM = 2.6;
  * top right, the builders bottom left, zoom bottom right. Fitting leaves a
  * strip clear above and below for them, and names never go under them.
  */
-const OVERLAY = { top: 44, bottom: 56, topRightW: 150, bottomLeftW: 180, zoomW: 50, zoomH: 128 };
+const OVERLAY = { top: 44, bottom: 56, topRightW: 150, bottomLeftW: 180, zoomW: 50, zoomH: 128, zoomTouchH: 52 };
+/** A touch screen: you pinch to zoom there, so the + and − buttons stay hidden and only ⌂ shows. */
+const touch = () => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
 const MAX_ZOOM = 3.6;
 
 // ─── Your land ───────────────────────────────────────────────────────────────
@@ -219,8 +238,8 @@ const Building = memo(function Building({ o, at, freeBuilder, now, named, compac
         />
       </button>
 
-      {/* Over the roof: ready to upgrade, or the work under way */}
-      {(gem || o.job) && (
+      {/* Over the roof: ready to upgrade, or the work under way (zoomed out, the name plate shows it) */}
+      {!compact && (gem || o.job) && (
         <OnScreen x={at.x} y={at.y - size * 0.72} z={20000 + depth}>
           <div className="absolute left-0 bottom-0 -translate-x-1/2 flex flex-col items-center gap-0.5">
             {o.job ? (
@@ -245,7 +264,7 @@ const Building = memo(function Building({ o, at, freeBuilder, now, named, compac
           <button
             aria-hidden="true"
             className={clsx(
-              "absolute left-0 top-0 -translate-x-1/2 pointer-events-auto flex items-center gap-1 py-0.5 rounded-full border whitespace-nowrap",
+              "absolute left-0 top-0 -translate-x-1/2 pointer-events-auto flex items-center gap-1 py-0.5 rounded-full border whitespace-nowrap overflow-hidden",
               compact ? "text-[9.5px]" : "text-[11px]",
               "bg-[#1A120B]/85 shadow-[0_1px_4px_rgba(0,0,0,0.7)] transition-colors hover:border-gold",
               named ? "pl-0.5 pr-2" : "px-0.5",
@@ -268,7 +287,15 @@ const Building = memo(function Building({ o, at, freeBuilder, now, named, compac
             >
               {o.maxed ? "★" : built ? o.level : "+"}
             </span>
-            {named && <span className={clsx("font-bold leading-none", built || o.job ? "text-parch" : "text-muted")}>{o.building.name}</span>}
+            {/* ...and an upgrade ready, as the gem over the roof does zoomed in */}
+            {compact && gem && <UpgradeMark className="w-[11px] h-[11px] -ml-0.5 shrink-0" />}
+            {named && <span className={clsx("font-bold leading-none", built || o.job ? "text-parch" : "text-muted")}>{label(o.building)}</span>}
+            {/* Zoomed out the roof stays clear, so the plate says what's going on: the work's progress along its foot */}
+            {compact && o.job && (
+              <span className="absolute left-2 right-2 bottom-0 h-[2px] rounded-full bg-black/50 overflow-hidden">
+                <span className="block h-full bg-gradient-to-r from-gold to-ember" style={{ width: `${progress * 100}%` }} />
+              </span>
+            )}
           </button>
         </OnScreen>
       )}
@@ -294,7 +321,13 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
 
   const ids = options.map((o) => o.building.id).sort().join(",");
   const plan = useMemo(
-    () => villagePlan(home, ids.split(","), islandTerrain(home, undefined, LAYOUT.claim), neighbours.map((t) => ({ x: t.x, y: t.y })), LAYOUT),
+    () =>
+      tidyRows(
+        villagePlan(home, ids.split(","), islandTerrain(home, undefined, LAYOUT.claim), neighbours.map((t) => ({ x: t.x, y: t.y })), LAYOUT),
+        TIDY.w,
+        TIDY.h,
+        TIDY.aspect,
+      ),
     [home, ids, neighbours],
   );
 
@@ -456,7 +489,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
     };
     const box = (o: UpgradeOption, withName: boolean) => {
       const s = screen(o);
-      const { w, h } = plateSize(o.building.name, withName, compact);
+      const { w, h } = plateSize(label(o.building) + (compact && ready(o) && o.level > 0 ? "··" : ""), withName, compact);
 
       return { x0: s.x - w / 2 - 2, y0: s.y - 1, x1: s.x + w / 2 + 2, y1: s.y + h + 1 };
     };
@@ -471,13 +504,13 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       // The floating controls: zoom bottom right, the switch top right, the builders bottom left.
       ...(v
         ? [
-            { x0: v.w - OVERLAY.zoomW, y0: v.h - OVERLAY.zoomH, x1: v.w, y1: v.h },
+            { x0: v.w - OVERLAY.zoomW, y0: v.h - (touch() ? OVERLAY.zoomTouchH : OVERLAY.zoomH), x1: v.w, y1: v.h },
             ...(hasTopRight ? [{ x0: v.w - OVERLAY.topRightW, y0: 0, x1: v.w, y1: OVERLAY.top }] : []),
             ...(hasBottomLeft ? [{ x0: 0, y0: v.h - OVERLAY.bottom, x1: OVERLAY.bottomLeftW, y1: v.h }] : []),
           ]
         : []),
       ...placed
-        .filter((o) => o.job || (ready(o) && o.level > 0))
+        .filter((o) => !compact && (o.job || (ready(o) && o.level > 0)))
       .map((o) => {
         const p = toPx(plan.plots[o.building.id]);
         const s = { x: rest.x + p.x * rest.z, y: rest.y + (p.y - SIZE * (BIG[o.building.id] ?? 1) * 0.72) * rest.z };
@@ -593,14 +626,17 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       {/* Zoom, and back to the Town Hall */}
       <div className="absolute right-2 bottom-2 z-10 flex flex-col rounded-xl overflow-hidden border border-line bg-[#1A120B]/85 shadow-[0_2px_6px_rgba(0,0,0,0.6)]">
         {[
-          { label: "Zoom in", text: "+", act: () => camera.zoomBy(1.6) },
-          { label: "Zoom out", text: "−", act: () => camera.zoomBy(1 / 1.6) },
-          { label: "Show the whole village", text: "⌂", act: () => fit(false) },
+          { label: "Zoom in", text: "+", act: () => camera.zoomBy(1.6), pinch: true },
+          { label: "Zoom out", text: "−", act: () => camera.zoomBy(1 / 1.6), pinch: true },
+          { label: "Show the whole village", text: "⌂", act: () => fit(false), pinch: false },
         ].map((b) => (
           <button
             key={b.label}
             aria-label={b.label}
-            className="w-9 h-9 flex items-center justify-center text-lg font-bold text-parch hover:bg-white/10 border-b border-line last:border-b-0"
+            className={clsx(
+              "w-9 h-9 flex items-center justify-center text-lg font-bold text-parch hover:bg-white/10 border-b border-line last:border-b-0",
+              b.pinch && "[@media(pointer:coarse)]:hidden",
+            )}
             type="button"
             onClick={b.act}
           >
