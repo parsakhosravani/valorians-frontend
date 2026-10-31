@@ -70,6 +70,10 @@ const LAYOUT: Layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
 const COMPACT_ZOOM = 1.45;
 /** Room (px on screen) kept round the village when it's fitted to the view. */
 const FIT_PAD = 14;
+/** Extra room (px on screen) left and right of the outermost buildings, for their name plates. */
+const NAME_ROOM = 26;
+/** A small village isn't blown up past this when fitted (a wide window, few buildings). */
+const MAX_FIT_ZOOM = 2.6;
 /**
  * Where the floating controls sit (px on screen): the Village / List switch
  * top right, the builders bottom left, zoom bottom right. Fitting leaves a
@@ -299,6 +303,8 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
   const [rest, setRest] = useState<Cam | null>(null);
   // Until you move the map yourself, it stays fitted to the whole village as the view settles on its height.
   const touched = useRef(false);
+  /** The zoom that shows the whole village: at (or near) it, every building wears a small name plate. */
+  const [fitZ, setFitZ] = useState(0);
   const refitRef = useRef<() => void>(() => {});
   const camera = useMapCamera({
     onResize: () => {
@@ -316,7 +322,11 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
 
   const border = useMemo(() => claimOutline(64, LAYOUT.claim).map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
 
-  /** The whole village in view: the wall, and every building standing on or past it, roofs and medallions included. */
+  /**
+   * Every building in view, roofs and name plates included, as close as that
+   * allows: just a little land past the outermost buildings, not the whole
+   * claim, so they're as big on screen (and as roomy for names) as they can be.
+   */
   const fit = (instant: boolean) => {
     const v = camera.size();
 
@@ -332,7 +342,6 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       y1 = Math.max(y1, y);
     };
 
-    for (const b of border) grow(b.x, b.y);
     for (const [id, p] of Object.entries(plan.plots)) {
       const at = toPx(p);
       const half = (SIZE * (BIG[id] ?? 1)) / 2;
@@ -340,8 +349,15 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       grow(at.x - half, at.y - half * 1.6);
       grow(at.x + half, at.y + 6);
     }
-    // Clear of the floating controls: a strip above for the switch, below for the builders and zoom.
-    const z = Math.min((v.w - 2 * FIT_PAD) / (x1 - x0), (v.h - 2 * FIT_PAD - 22 - OVERLAY.top - OVERLAY.bottom) / (y1 - y0));
+    // Clear of the floating controls (a strip above for the switch, below for the builders and zoom),
+    // with room either side for the names of the outermost buildings.
+    const z = Math.min(
+      MAX_FIT_ZOOM,
+      (v.w - 2 * (FIT_PAD + NAME_ROOM)) / (x1 - x0),
+      (v.h - 2 * FIT_PAD - 22 - OVERLAY.top - OVERLAY.bottom) / (y1 - y0),
+    );
+
+    setFitZ(z);
 
     camera.centerOn((x0 + x1) / 2, (y0 + y1) / 2 + (11 + (OVERLAY.bottom - OVERLAY.top) / 2) / z, { z, instant });
   };
@@ -442,7 +458,8 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
 
   // Which buildings are named: as many as fit on screen without covering one
   // another, the ones that matter most first.
-  const compact = !!rest && rest.z < COMPACT_ZOOM;
+  // Small plates while the whole village is in view (the fit can be closer than COMPACT_ZOOM now), full ones zoomed in past it.
+  const compact = !!rest && rest.z < Math.max(COMPACT_ZOOM, fitZ * 1.25);
   const hasTopRight = !!topRight;
   const hasBottomLeft = !!bottomLeft;
   const named = useMemo(() => {
@@ -496,7 +513,8 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       const b = box(o, true);
 
       if (!inView(b) || taken.some((t) => hit(t, b))) continue;
-      if (Array.from(bare.entries()).some(([id, m]) => id !== o.building.id && !out.has(id) && hit(m, b))) continue;
+      // Zoomed out, an unnamed building shows no medallion, so there's nothing of it for a name to cover.
+      if (!compact && Array.from(bare.entries()).some(([id, m]) => id !== o.building.id && !out.has(id) && hit(m, b))) continue;
       out.add(o.building.id);
       taken.push(b);
     }
