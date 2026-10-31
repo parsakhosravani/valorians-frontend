@@ -24,10 +24,13 @@ const config: Config = {
           "0%": { transform: "scale(1.05) translateY(0)" },
           "100%": { transform: "scale(1.15) translateY(-2%)" },
         },
-        ember: {
-          "0%": { transform: "translateY(0) translateX(0)", opacity: "0" },
-          "10%": { opacity: "0.9" },
-          "100%": { transform: "translateY(-95vh) translateX(20px)", opacity: "0" },
+        glint: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(400%)" },
+        },
+        tipIn: {
+          "0%": { opacity: "0", transform: "translateY(4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
         moveUpAndFade: {
           "0%": { transform: "translateY(0)", opacity: "1" },
@@ -67,7 +70,6 @@ const config: Config = {
         float: "float 2.2s ease-in-out infinite",
         flame: "flame 0.9s ease-in-out infinite alternate",
         kenburns: "kenburns 24s ease-in-out infinite alternate",
-        ember: "ember 8s linear infinite",
         "touch-animation": "scale .2s linear infinite",
         "mine-animation": "moveUpAndFade 0.6s forwards ease-out",
       },
