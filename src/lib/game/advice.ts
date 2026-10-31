@@ -70,7 +70,6 @@ export type UpgradeOption = {
   toLevel: number;
   cost: number;
   seconds: number;
-  maxed: boolean;
   /** Being upgraded right now. */
   job?: { toLevel: number; startedAt: number; endsAt: number };
   /** How much of each resource is still missing. */
@@ -105,7 +104,6 @@ export function upgradeOptions(state: GameState): UpgradeOption[] {
       toLevel: info.from + 1,
       cost: info.cost,
       seconds: info.seconds,
-      maxed: info.maxed,
       job: state.queue.find((q) => q.building === b.id),
       missing,
       affordable: Object.keys(missing).length === 0,
@@ -114,7 +112,7 @@ export function upgradeOptions(state: GameState): UpgradeOption[] {
   });
 }
 
-export const canStart = (o: UpgradeOption) => o.affordable && !o.maxed && !o.job;
+export const canStart = (o: UpgradeOption) => o.affordable && !o.job;
 
 export type Advice = { id: string; reason: string };
 

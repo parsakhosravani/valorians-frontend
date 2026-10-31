@@ -13,7 +13,6 @@ import {
   BuildingId,
   CROP_UPKEEP_PER_BUILDING_LEVEL,
   GROWTH_PER_BUILDING_LEVEL,
-  MAX_BUILDING_LEVEL,
   MAX_SKILL_LEVEL,
   MAX_TAPS_PER_SECOND,
   QUEST_BY_ID,
@@ -701,14 +700,12 @@ export function buildingUpgradeInfo(s: GameState, id: BuildingId) {
     from,
     cost: buildingUpgradeCost(b, from),
     seconds: Math.max(1, Math.round(buildingUpgradeBaseSeconds(b, from) * r.buildSpeedMultiplier)),
-    maxed: from >= MAX_BUILDING_LEVEL,
   };
 }
 
 export function upgradeBuilding(s0: GameState, id: BuildingId, now: number): GameState {
   const s = structuredCloneState(s0);
   const info = buildingUpgradeInfo(s, id);
-  if (info.maxed) throw new GameError("Already at max level", "max_level");
   if (s.queue.some((q) => q.building === id)) throw new GameError("This building is already being upgraded", "busy");
   if (s.queue.length >= getRates(s).builders) throw new GameError("All builders are busy", "no_builder");
   for (const res of RESOURCE_IDS) {

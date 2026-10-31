@@ -93,7 +93,8 @@ export const TAP_BURST = 40;
 
 // ─── Buildings ───────────────────────────────────────────────────────────────
 
-export const MAX_BUILDING_LEVEL = 20;
+// Buildings have no top level: each upgrade costs more and takes longer
+// than the last (see buildingUpgradeCost, buildingUpgradeBaseSeconds).
 
 export type BuildingEffect =
   | { kind: "production"; resource: ResourceId; perLevel: number }
