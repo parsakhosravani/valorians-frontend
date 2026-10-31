@@ -162,10 +162,16 @@ export function useMapCamera({
     onSettleRef.current?.({ ...cam.current });
     if (Math.abs(cam.current.z / sharpAt.current - 1) < 0.1) return;
     sharpAt.current = cam.current.z;
+    // A frame has to actually paint without will-change for the browser to
+    // drop the old bitmap and rasterize again at this zoom. One rAF isn't
+    // enough: it runs before that frame's style pass, so "auto" was undone
+    // unseen and the layer kept the blurry picture from the first zoom.
     l.style.willChange = "auto";
-    requestAnimationFrame(() => {
-      if (layer.current) layer.current.style.willChange = "";
-    });
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        if (layer.current) layer.current.style.willChange = "";
+      }),
+    );
   }, []);
 
   const busy = useCallback(() => {
