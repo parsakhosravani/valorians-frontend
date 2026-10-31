@@ -85,32 +85,6 @@ export const Bar = ({ value, max, className }: { value: number; max: number; cla
   </div>
 );
 
-/** Icon + number, e.g. "⚔️ 1,200". `e` is an emoji that has a painted icon. */
-export const Stat = ({
-  e,
-  children,
-  tone,
-  className,
-}: {
-  e?: string;
-  children: React.ReactNode;
-  tone?: "good" | "bad" | "gold";
-  className?: string;
-}) => (
-  <span
-    className={clsx(
-      "stat",
-      tone === "good" && "text-good",
-      tone === "bad" && "text-bad",
-      tone === "gold" && "text-goldtext",
-      className,
-    )}
-  >
-    {e && <GameIcon e={e} />}
-    {children}
-  </span>
-);
-
 /** Friendly "nothing here yet" block. */
 export const EmptyState = ({
   e,

@@ -116,7 +116,7 @@ export function upgradeOptions(state: GameState): UpgradeOption[] {
 
 export const canStart = (o: UpgradeOption) => o.affordable && !o.job;
 
-export type Advice = { id: string; reason: string };
+type Advice = { id: string; reason: string };
 
 /** The single most useful upgrade to start now, or null if none can start. */
 export function recommendUpgrade(state: GameState, options = upgradeOptions(state)): Advice | null {

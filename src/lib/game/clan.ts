@@ -159,7 +159,7 @@ export const TECH_IDS = ["hall", "fields", "banners", "shieldwall"] as const;
 export type TechId = (typeof TECH_IDS)[number];
 export type Techs = Record<TechId, number>;
 
-export type TechDef = {
+type TechDef = {
   id: TechId;
   name: string;
   icon: string;
@@ -203,7 +203,6 @@ export const CLAN_TECHS: TechDef[] = [
 
 export const TECH_BY_ID = Object.fromEntries(CLAN_TECHS.map((t) => [t.id, t])) as Record<TechId, TechDef>;
 
-export const emptyTechs = (): Techs => ({ hall: 0, fields: 0, banners: 0, shieldwall: 0 });
 
 /** Treasury cost to raise a tech from `level` to `level + 1`. */
 export function techCost(level: number): Treasury {

@@ -9,9 +9,9 @@ import type { Army, GameState } from "@/lib/game/engine";
 import { Lair, ambushLosses, lairsOnRoute } from "@/lib/game/bandits";
 import { Point, marchRoute } from "@/lib/game/map";
 import { attackPower, fighterCount } from "@/lib/game/war";
-import { grouped } from "@/lib/format";
+import { whole } from "@/lib/format";
 
-export const fmt = (n: number) => grouped(Math.floor(n));
+export const fmt = whole;
 
 export const Card = ({ children, className }: { children: React.ReactNode; className?: string }) => (
   <div className={clsx("card p-3", className)}>
@@ -20,11 +20,10 @@ export const Card = ({ children, className }: { children: React.ReactNode; class
 );
 
 /** Painted troop portrait (public/images/troops/<id>.webp). */
-export const unitImage = (unit: UnitId) => `/images/troops/${unit}.webp`;
+const unitImage = (unit: UnitId) => `/images/troops/${unit}.webp`;
 
 /** A troop's icon sized to the surrounding text. */
 export const UnitEmoji = ({ unit }: { unit: UnitId }) => (
-  // eslint-disable-next-line @next/next/no-img-element
   <img
     alt={UNIT_BY_ID[unit].name}
     className="inline-block align-[-0.3em] w-[1.45em] h-[1.45em] object-contain"
@@ -38,7 +37,7 @@ export const UnitBadge = ({ unit, size = 36, rank = 0 }: { unit: UnitId; size?: 
     className="relative rounded-full bg-panel border-2 border-gold shrink-0"
     style={{ width: size, height: size }}
   >
-    {/* eslint-disable-next-line @next/next/no-img-element */}
+    { }
     <img
       alt={UNIT_BY_ID[unit].name}
       className="w-full h-full rounded-full object-contain p-[8%]"

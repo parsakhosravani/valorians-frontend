@@ -151,7 +151,7 @@ type Caravan = {
   arrivesAt: number;
 };
 
-export type MapData = {
+type MapData = {
   home: { x: number; y: number };
   center: { x: number; y: number };
   radius: number;

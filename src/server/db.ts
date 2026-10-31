@@ -29,7 +29,6 @@ function makeClient(): Client {
     // Vercel only allows writing to /tmp, which is wiped whenever the server
     // restarts. The game runs, but progress can reset until Turso is set up.
     file = "/tmp/valorians.db";
-    // eslint-disable-next-line no-console
     console.warn("TURSO_DATABASE_URL is not set: using temporary storage, progress may reset.");
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });

@@ -9,7 +9,6 @@ import { useTelegramContext } from "@/context";
 
 /** Painted menu icon (public/images/nav/<name>.webp). Parents size and dim it via [&_img]. */
 const NavImg = ({ name }: { name: string }) => (
-  // eslint-disable-next-line @next/next/no-img-element
   <img alt="" aria-hidden="true" className="w-7 h-7 object-contain transition" draggable={false} src={`/images/nav/${name}.webp`} />
 );
 

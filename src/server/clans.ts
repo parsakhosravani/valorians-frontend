@@ -134,8 +134,6 @@ const summary = (r: ClanRow) => {
   };
 };
 
-export type ClanSummary = ReturnType<typeof summary>;
-
 /** A clan's own row (no totals), or null if it's gone. */
 async function clanRow(clanId: number) {
   const db = await getDb();
@@ -194,7 +192,6 @@ async function log(clanId: number, now: number, kind: LogKind, actorId: number |
   const db = await getDb();
 
   await db.execute(logStmt(clanId, now, kind, actorId, targetId, data)).catch((e) => {
-    // eslint-disable-next-line no-console
     console.error("clan log", e);
   });
 }
@@ -237,7 +234,6 @@ export async function clanView(player: Player, search?: string) {
   const q = clean(search).slice(0, CLAN.nameMax);
 
   // Someone is looking: rank now if the last pass is over a minute old.
-  // eslint-disable-next-line no-console
   await maybeRefreshRanks().catch((e) => console.error("maybeRefreshRanks", e));
   const [list, reqs] = await db.batch(
     [
@@ -900,16 +896,5 @@ export async function sendAid(player: Player, body: any, now: number) {
     throw e;
   }
   await log(clanId, now, "aid", player.id, target, { key, amount });
-}
-
-/** True if both players are in the same clan (no attacking your own). */
-export async function sameClan(a: number, b: number) {
-  const db = await getDb();
-  const rs = await db.execute({
-    sql: "SELECT COUNT(DISTINCT clan_id) AS n, COUNT(clan_id) AS m FROM users WHERE id IN (?, ?)",
-    args: [a, b],
-  });
-
-  return Number(rs.rows[0].m) === 2 && Number(rs.rows[0].n) === 1;
 }
 

@@ -28,7 +28,6 @@ import {
   splitSpoils,
   Promotion,
   RaidReport,
-  armySize,
   battleNumbers,
   campBattle,
   campOutcome,
@@ -49,13 +48,13 @@ import {
 import type { Army } from "@/lib/game/engine";
 
 /** Where an army can be sent: a tribe, one of your barbarian camps, or a bandit lair (its tile). */
-export type MarchTarget = { target?: number; camp?: number; lair?: Point };
+type MarchTarget = { target?: number; camp?: number; lair?: Point };
 
 /** Most armies one tribe can have out at once. */
 const MAX_MARCHES = 5;
 
 /** Attacks still under way: on the road, or fighting at the target. */
-export const ACTIVE_ATTACK = "('marching','resolving','fighting')";
+const ACTIVE_ATTACK = "('marching','resolving','fighting')";
 
 const rand = () => crypto.randomInt(0, 1_000_000) / 1_000_000;
 
@@ -502,7 +501,6 @@ async function finishBattle(a: AttackRow, now: number) {
 
 /** Something went wrong: everyone goes home with nothing, so no troops are lost to a bug. */
 async function abandon(a: AttackRow, now: number, e: unknown) {
-  // eslint-disable-next-line no-console
   console.error("battle failed, sending the armies home", a.id, e);
   await mutatePlayer(a.attackerId, now, (s) =>
     returnHome(s, a.units, "a failed march", now + 60_000, now, rand(), undefined, now, carriedOf(a))
@@ -946,7 +944,6 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   const db = await getDb();
 
   // Someone is looking: rank now if the last pass is over a minute old.
-  // eslint-disable-next-line no-console
   await maybeRefreshRanks().catch((e) => console.error("maybeRefreshRanks", e));
   const [top, mine] = await db.batch(
     [
@@ -996,4 +993,3 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
   };
 }
 
-export { armySize };

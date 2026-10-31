@@ -67,7 +67,6 @@ export const GameIcon = ({ e, className }: { e: string; className?: string }) =>
   if (!src) return <>{e}</>;
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
     <img
       alt=""
       aria-hidden="true"

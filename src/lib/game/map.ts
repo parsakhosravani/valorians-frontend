@@ -13,7 +13,6 @@ import {
   TRIBE_SPACING,
   UNITS,
   UNIT_BY_ID,
-  UNIT_IDS,
   SCOUT_COST_PER_TILE,
   SCOUT_MIN_COST,
   unitSlots,
@@ -251,13 +250,13 @@ export function armySpeed(units: Army) {
 const SHIP = UNITS.find((u) => u.transport)!;
 
 /** Room the troops take on ships (ships themselves take none). */
-export const troopSlots = (units: Army) => UNITS.reduce((n, u) => n + unitSlots(u) * (units[u.id] ?? 0), 0);
+const troopSlots = (units: Army) => UNITS.reduce((n, u) => n + unitSlots(u) * (units[u.id] ?? 0), 0);
 
 /** Longships it takes to carry this army across the sea. */
 export const shipsNeeded = (units: Army) => Math.ceil(troopSlots(units) / SHIP.transport!);
 
 /** Seconds per tile at sea. */
-export const SAIL_SECONDS_PER_TILE = UNIT_BY_ID[SHIP.id].speed;
+const SAIL_SECONDS_PER_TILE = UNIT_BY_ID[SHIP.id].speed;
 
 /**
  * One-way time in ms from `from` to `to` along the army's road: the land part
@@ -281,7 +280,6 @@ export function marchMs(units: Army, dist: number, marchMultiplier = 1) {
 
 export const scoutCost = (dist: number) => Math.max(SCOUT_MIN_COST, Math.round(dist * SCOUT_COST_PER_TILE));
 
-export const anyUnits = (units: Army) => UNIT_IDS.some((u) => (units[u] ?? 0) > 0);
 
 /** Name of the ship unit, for messages. */
 export const SHIP_ID = SHIP.id;

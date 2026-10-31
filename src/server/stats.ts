@@ -3,6 +3,7 @@ import "server-only";
 import { isAdmin } from "./announce";
 import { tg } from "./bot";
 import { getDb } from "./db";
+import { whole } from "@/lib/format";
 
 /**
  * /stats in the bot chat (admins only): how many players the game has, how
@@ -11,9 +12,9 @@ import { getDb } from "./db";
  */
 
 const DAY = 24 * 60 * 60 * 1000;
-const fmt = (n: unknown) => Math.floor(Number(n ?? 0)).toLocaleString("en-US");
+const fmt = (n: unknown) => whole(Number(n ?? 0));
 
-export async function gameStats(now = Date.now()) {
+async function gameStats(now = Date.now()) {
   const db = await getDb();
   const [users, clans, stars] = await db.batch(
     [

@@ -155,7 +155,7 @@ export function attackPower(s: GameState, units: Army) {
 }
 
 /** How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking army breaks, 0–1. */
-export function siegeBreak(sent: Army) {
+function siegeBreak(sent: Army) {
   let wall = 0;
   let tower = 0;
   for (const u of UNITS) {
@@ -219,7 +219,7 @@ export function battleNumbers(
 }
 
 /** How much harder a tribe is to take from the sea: the beach, plus its Harbor. */
-export const landingFactor = (defender: GameState) => 1 + LANDING_DEFENSE + getRates(defender).seaDefenseBonus;
+const landingFactor = (defender: GameState) => 1 + LANDING_DEFENSE + getRates(defender).seaDefenseBonus;
 
 /** The same, from the Harbor level alone (it's visible on the map). */
 export const landingFactorFor = (harborLevel: number) => {
@@ -278,7 +278,7 @@ export function battleXp(s: GameState, fought: Army, enemyStrength: number, won:
  * died), then the earned XP is added. `regiment` is each type's size before
  * the battle. Returns the types that went up a rank.
  */
-export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
+function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
   const promoted: Promotion[] = [];
   for (const u of UNIT_IDS) {
     const t = s.troops[u];
@@ -492,7 +492,7 @@ export const gateDamage = (gate: number, sent: Army) =>
  * Step 2: the battle, applied to the defender. Returns the defender's new
  * state and the report the attacker needs.
  */
-export type MapOpts = {
+type MapOpts = {
   terrain?: Terrain;
   /** One-way march time; the army gets home this long after the battle. */
   travelMs?: number;

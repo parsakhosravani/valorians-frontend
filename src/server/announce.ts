@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "./db";
 import { appUrl, botToken, derive, tg } from "./bot";
+import { whole } from "@/lib/format";
 
 /**
  * Update announcements broadcast from the bot chat.
@@ -116,7 +117,7 @@ const channelId = () => process.env.TELEGRAM_CHANNEL_ID || "";
 
 /** ~25 messages a second stays under Telegram's ~30/s broadcast limit. */
 const BATCH = 25;
-const fmt = (n: number) => Math.floor(n).toLocaleString("en-US");
+const fmt = whole;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type TgResult = { ok: boolean; description?: string; error_code?: number; parameters?: { retry_after?: number } };
@@ -397,7 +398,6 @@ export async function maybeCheckRelease() {
   }
   lastReleaseCheck = Date.now();
   await checkRelease().catch((e) => {
-    // eslint-disable-next-line no-console
     console.error("release check failed", e);
   });
 }
@@ -523,7 +523,6 @@ async function notesFor(sha: string, last = "") {
   try {
     return await changesBetween(last || (await parentOf(sha)), sha);
   } catch (e) {
-    // eslint-disable-next-line no-console
     console.error("release notes failed", e);
 
     return [];

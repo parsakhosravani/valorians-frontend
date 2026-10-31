@@ -49,7 +49,6 @@ export async function createPlusInvoice(userId: number): Promise<string> {
   });
 
   if (!r.ok || typeof r.result !== "string") {
-    // eslint-disable-next-line no-console
     console.error("createInvoiceLink failed", r.description);
     throw new GameError("Payments are unavailable right now, try again later", "payments_unavailable");
   }

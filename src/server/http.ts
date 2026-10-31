@@ -11,7 +11,7 @@ import { GameError, GameState } from "@/lib/game/engine";
 import { maybeCheckRelease } from "./announce";
 import { maybeRefreshRanks } from "./ranks";
 
-export type ApiError = { error: string; code: string };
+type ApiError = { error: string; code: string };
 
 const fail = (status: number, error: string, code: string) =>
   NextResponse.json<ApiError>({ error, code }, { status });
@@ -73,7 +73,6 @@ export function handler(
       if (e instanceof AuthError) return fail(401, e.message, "unauthorized");
       if (e instanceof GameError) return fail(400, e.message, e.code);
       if (e instanceof SyntaxError) return fail(400, "Bad request", "bad_request");
-      // eslint-disable-next-line no-console
       console.error(e);
       return fail(500, "Something went wrong", "server_error");
     }

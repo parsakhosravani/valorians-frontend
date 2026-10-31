@@ -88,7 +88,7 @@ export type March = {
 /** A regiment's battle experience; it sets the regiment's rank. */
 export type TroopRecord = { xp: number };
 
-export const emptyTroops = (): Record<UnitId, TroopRecord> =>
+const emptyTroops = (): Record<UnitId, TroopRecord> =>
   Object.fromEntries(UNIT_IDS.map((u) => [u, { xp: 0 }])) as Record<UnitId, TroopRecord>;
 
 /** Rank index (0 = Recruit) for an amount of XP. */
@@ -213,7 +213,7 @@ export class GameError extends Error {
 
 export const HOUR = 3600 * 1000;
 
-export const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 export function createInitialState(now: number): GameState {
   return {
@@ -628,7 +628,7 @@ export const cloneState = structuredCloneState;
 
 // ─── Actions (state must already be advanced to `now`) ───────────────────────
 
-export type TapResult = { state: GameState; accepted: number; gained: number };
+type TapResult = { state: GameState; accepted: number; gained: number };
 
 /** What the client reports for a burst of taps on one resource. */
 export type TapBatch = {
@@ -745,7 +745,7 @@ export function upgradeSkill(s0: GameState, skill: SkillId): GameState {
 }
 
 /** The level a building will have once everything queued for it finishes. */
-export const targetLevel = (s: GameState, id: BuildingId) =>
+const targetLevel = (s: GameState, id: BuildingId) =>
   Math.max(level(s, id), ...s.queue.filter((q) => q.building === id).map((q) => q.toLevel));
 
 export function buildingUpgradeInfo(s: GameState, id: BuildingId) {

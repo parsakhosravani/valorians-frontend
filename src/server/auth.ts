@@ -56,7 +56,7 @@ export function verifyInitData(initData: string, botToken: string, now = Date.no
   return { user, startParam: params.get("start_param") ?? undefined };
 }
 
-export const devLoginEnabled = () => process.env.NEXT_PUBLIC_DEV_LOGIN === "true";
+const devLoginEnabled = () => process.env.NEXT_PUBLIC_DEV_LOGIN === "true";
 
 /**
  * Reads the Authorization header:
