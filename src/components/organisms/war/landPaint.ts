@@ -163,6 +163,8 @@ type Scene = {
   occupied: Set<string>;
   home: Pt | null;
   claim: ClaimShape;
+  /** Painted wall pieces for the City Gate's level, once loaded (see wallArt); drawn by hand without them. */
+  art?: WallArt | null;
 };
 
 /** Terrain and per-tile facts with a margin, for neighbours and blending. */
@@ -587,7 +589,7 @@ export const wallLook = (gate = 0): WallLook => {
 
   return {
     stone: true,
-    towers: Math.max(6, 11 - past),
+    towers: Math.max(8, 11 - past),
     roof: "#B8862E",
     banner: true,
     height: 12 + 2 * Math.log2(1 + past),
@@ -639,6 +641,12 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
   });
 
   if (!wall.length) return;
+
+  if (s.art) {
+    paintWallArt(g, look, wall, s.art);
+
+    return;
+  }
 
   if (look.stone) {
     paintStoneWall(g, look, wall, { x: (s.home!.x - s.ox) * TILE + TILE / 2, y: (s.home!.y - s.oy) * TILE + TILE / 2 });
@@ -993,6 +1001,105 @@ const paintTower = (g: CanvasRenderingContext2D, look: WallLook, st: WallStone) 
   g.fill();
 };
 
+/**
+ * The painted wall pieces (public/images/walls): for each of the five looks
+ * (timber, fieldstone, cut stone, granite, royal; see wallLook) a stretch of
+ * wall that repeats along the border and the tower or post that stands in
+ * it. Past the fifth, the royal pieces stand taller, towers closer.
+ */
+export type WallArt = { wall: ImageBitmap; tower: ImageBitmap };
+
+const WALL_LOOKS = 5;
+const artLoads = new Map<number, Promise<WallArt | null>>();
+
+/** The pieces for a City Gate level, loaded once (null where images can't be had: the wall is drawn by hand). */
+export const wallArt = (gate = 0): Promise<WallArt | null> => {
+  const i = Math.min(WALL_LOOKS - 1, Math.floor(Math.max(0, gate) / 5));
+  const where = (globalThis as { location?: { href: string } }).location?.href;
+
+  if (!where || typeof fetch === "undefined" || typeof createImageBitmap === "undefined") return Promise.resolve(null);
+  let load = artLoads.get(i);
+
+  if (!load) {
+    const get = (name: string) =>
+      fetch(new URL(`/images/walls/${name}-${i}.webp`, where))
+        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+        .then((b) => createImageBitmap(b));
+
+    load = Promise.all([get("wall"), get("tower")])
+      .then(([wall, tower]) => ({ wall, tower }))
+      .catch(() => {
+        artLoads.delete(i);
+
+        return null;
+      });
+    artLoads.set(i, load);
+  }
+
+  return load;
+};
+
+/**
+ * The wall from its painted pieces: along the border, each stone's stretch is
+ * a strip of the wall picture (taken further along it as the wall goes on, so
+ * the pattern runs on unbroken), standing on the ground with its foot on the
+ * border; a tower or post stands every so often and wherever the wall meets
+ * water. Back to front, so nearer pieces cover those behind.
+ */
+const paintWallArt = (g: CanvasRenderingContext2D, look: WallLook, wall: WallStone[], art: WallArt) => {
+  // Wall height (px at zoom 1): the painted pieces get a little more than the drawn wall did.
+  const H = look.height + 4;
+  const scale = H / art.wall.height;
+  const strip = STAKE_GAP + 0.7;
+  const srcW = strip / scale;
+  const towerH = H * (look.stone ? 2.1 : 1.45);
+  const towerW = (art.tower.width / art.tower.height) * towerH;
+  const every = look.towers || (look.stone ? 14 : 9);
+
+  // A soft shadow along the foot, falling to the bottom-right.
+  g.fillStyle = "rgba(20,14,6,0.28)";
+  g.beginPath();
+  for (const st of wall) {
+    g.moveTo(st.x + 5.5, st.y + 1.6);
+    g.ellipse(st.x + 2, st.y + 1.6, strip * 0.75, 2, 0, 0, Math.PI * 2);
+  }
+  g.fill();
+
+  // Which way the wall runs at each stone, from its neighbours along the border.
+  const along = (i: number) => {
+    const near = (j: number) => {
+      const o = wall[(j + wall.length) % wall.length];
+
+      return Math.hypot(o.x - wall[i].x, o.y - wall[i].y) < STAKE_GAP * 2.2 ? o : wall[i];
+    };
+    const a = near(i - 1);
+    const b = near(i + 1);
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+
+    return { cos: Math.abs(b.x - a.x) / len, slope: Math.abs(b.x - a.x) < 1e-3 ? 0 : (b.y - a.y) / (b.x - a.x) };
+  };
+  const items = wall.map((st, i) => ({ st, i, tower: st.post || st.k % every === 0 }));
+
+  for (const { st, i, tower } of items.sort((a, b) => a.st.y + (a.tower ? 3 : 0) - (b.st.y + (b.tower ? 3 : 0)))) {
+    if (tower) {
+      g.drawImage(art.tower, st.x - towerW / 2, st.y + 2 - towerH, towerW, towerH);
+      continue;
+    }
+    // The strip leans with the wall, so its top and foot follow the slope
+    // rather than stepping, and is as wide as the wall runs across.
+    const { cos, slope } = along(i);
+    const w = Math.max(3, strip * cos + 0.7);
+    const sw = w / scale;
+    const sx = (st.k * srcW) % Math.max(1, art.wall.width - sw);
+
+    g.save();
+    g.translate(st.x, st.y + 1.5);
+    g.transform(1, Math.max(-1.6, Math.min(1.6, slope)), 0, 1, 0, 0);
+    g.drawImage(art.wall, sx, 0, sw, art.wall.height, -w / 2, -H, w, H);
+    g.restore();
+  }
+};
+
 /** What a piece is painted from: plain values, so it can be sent to the worker. */
 export type PieceJob = {
   x: number;
@@ -1012,6 +1119,9 @@ export type PieceJob = {
  */
 export const paintBlob = async ({ x, y, n, occupied, home, detail, res, claim = PLAIN_CLAIM }: PieceJob): Promise<Blob | null> => {
   const scene: Scene = { ox: x, oy: y, n, occupied: new Set(occupied ? occupied.split(";") : []), home: parse(home)[0] ?? null, claim };
+
+  // Your wall's painted pieces, if this piece has your wall on it.
+  if (scene.home) scene.art = await wallArt(claim.wall);
   const size = n * TILE;
   const { c, g } = makeCanvas(Math.round(size * res), Math.round(size * res));
 
