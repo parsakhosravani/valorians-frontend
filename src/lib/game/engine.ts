@@ -114,6 +114,24 @@ export type WarStats = {
   raidedAt?: number[];
 };
 
+/** Bandits gathering at a lair to raid the village. */
+export type BanditRaid = { x: number; y: number; level: number; strength: number; warnedAt: number; arrivesAt: number };
+
+export type BanditRaidReport = {
+  at: number;
+  x: number;
+  y: number;
+  level: number;
+  /** won: the village beat them off · lost: they got in · foiled: their lair was cleared first. */
+  outcome: "won" | "lost" | "foiled";
+  strength: number;
+  defense: number;
+  defenderLosses: Army;
+  stolen: Record<ResourceId, number>;
+  bounty?: { resources: number; coins: number };
+  xp?: Army;
+};
+
 export type QueueItem = {
   building: BuildingId;
   toLevel: number;
@@ -157,6 +175,12 @@ export type GameState = {
   starving?: number;
   /** The last time hungry troops deserted, and how many. */
   deserted?: { at: number; count: number };
+  /** Bandits gathering to raid the village (see BANDIT_RAID). */
+  banditRaid?: BanditRaid;
+  /** No new bandit raid gathers before this. */
+  banditNextAt?: number;
+  /** How the last bandit raid went. */
+  banditReport?: BanditRaidReport;
   /** Battle experience (rank) of each troop type. */
   troops: Record<UnitId, TroopRecord>;
   /** Bonuses from the player's clan techs (percent). Set by the server when the clan changes. */
@@ -616,6 +640,7 @@ function structuredCloneState(s: GameState): GameState {
     camps: { ...s.camps, lastRaid: { ...s.camps.lastRaid } },
     war: { ...s.war, ...(s.war.raidedAt ? { raidedAt: [...s.war.raidedAt] } : {}) },
     ...(s.deserted ? { deserted: { ...s.deserted } } : {}),
+    ...(s.banditRaid ? { banditRaid: { ...s.banditRaid } } : {}),
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
     troops: Object.fromEntries(

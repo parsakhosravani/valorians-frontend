@@ -278,7 +278,7 @@ export function battleXp(s: GameState, fought: Army, enemyStrength: number, won:
  * died), then the earned XP is added. `regiment` is each type's size before
  * the battle. Returns the types that went up a rank.
  */
-function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
+export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
   const promoted: Promotion[] = [];
   for (const u of UNIT_IDS) {
     const t = s.troops[u];

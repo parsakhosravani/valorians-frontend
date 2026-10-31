@@ -85,6 +85,7 @@ import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
+import { formatDuration } from "@/lib/format";
 import { Countdown, Since } from "@/components/atoms/Countdown";
 
 // ─── Data from /api/war/map ──────────────────────────────────────────────────
@@ -497,6 +498,8 @@ export const WarMap = ({
   const myHarbor = useLive((l) => l.state.buildings["harbor"] ?? 0);
   // Your wall is built up as your City Gate goes up (see wallLook).
   const myGate = useLive((l) => l.state.buildings["city-gate"] ?? 0);
+  // Bandits gathering to raid you: marked on their lair until they strike.
+  const banditRaid = useLive((l) => l.state.banditRaid);
   const myClaim = useMemo(() => ({ w: 1, h: 1, wall: myGate }), [myGate]);
   const myShips = useLive((l) => l.state.army.longship);
   const canScout = useLive((l) => l.rates.canScout);
@@ -1187,6 +1190,20 @@ export const WarMap = ({
 
               {/* Roads armies and merchants are on */}
               <TravelPaths paths={paths} size={MAP_SIZE * T} />
+
+              {/* Bandits gathering at their lair to raid you, with the time left */}
+              {banditRaid && banditRaid.arrivesAt > now && (
+                <div
+                  className="absolute pointer-events-none flex flex-col items-center"
+                  style={{ left: px(banditRaid.x), top: py(banditRaid.y), transform: "translate(-50%, -50%)", zIndex: 5 }}
+                >
+                  <span className="absolute w-16 h-16 rounded-full border-2 border-bad/80 motion-safe:animate-ping" />
+                  <span className="w-12 h-12 rounded-full border-2 border-bad bg-bad/15 shadow-[0_0_14px_rgba(220,80,60,0.7)]" />
+                  <span className="mt-1 rounded-full bg-ink/90 border border-bad px-2 py-0.5 text-[11px] font-extrabold text-bad whitespace-nowrap">
+                    <GameIcon e="💀" /> Raid in {formatDuration(banditRaid.arrivesAt - now)}
+                  </span>
+                </div>
+              )}
 
               {/* Zoomed in: your own village, building by building */}
               {villageShown && (

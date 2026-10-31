@@ -1,7 +1,7 @@
 import "server-only";
 
 import { RANKS, RESOURCE_IDS, UNITS, unitPlural } from "@/lib/game/config";
-import type { Army } from "@/lib/game/engine";
+import type { Army, BanditRaid, BanditRaidReport } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
 import { whole } from "@/lib/format";
@@ -205,6 +205,36 @@ export const notify = {
       "🗺️ Open the map",
       "/battle?tab=map"
     );
+  },
+
+  /** Bandits are gathering to raid the village. */
+  banditsGathering(userId: number, raid: BanditRaid, defense: number) {
+    const hours = Math.round((raid.arrivesAt - raid.warnedAt) / 3600e3);
+
+    return sendToPlayer(
+      userId,
+      `🗡️ <b>Bandits are gathering to raid your village!</b>\n\n` +
+        `A band about <b>${fmt(raid.strength)}</b> strong is massing at their lair (${raid.x}, ${raid.y}). ` +
+        `Your defense is ${fmt(defense)}. They strike in about ${hours} hours.\n\n` +
+        `Train defenders, or clear their lair first to call the raid off.`,
+      "🗺️ Open the map",
+      "/battle?tab=map"
+    );
+  },
+
+  /** How a bandit raid on the village went. */
+  banditRaidResult(userId: number, r: BanditRaidReport) {
+    const taken = RESOURCE_IDS.reduce((n, k) => n + r.stolen[k], 0);
+    const fallen = UNITS.some((u) => (r.defenderLosses[u.id] ?? 0) > 0) ? `\nFallen: ${armyText(r.defenderLosses)}` : "";
+    const text =
+      r.outcome === "foiled"
+        ? "🏚️ <b>The bandit raid is off:</b> their lair was cleared before they could strike."
+        : r.outcome === "won"
+          ? `🛡️ <b>Your village beat off the bandits!</b>\n\nTheir ${fmt(r.strength)} against your ${fmt(r.defense)}.${fallen}\n` +
+            `Their lair is cleared, and you took its bounty: ${fmt(r.bounty?.resources ?? 0)} of each resource and ${fmt(r.bounty?.coins ?? 0)} coins.`
+          : `🗡️ <b>Bandits raided your village</b> and carried off ${fmt(taken)} resources.\n\nTheir ${fmt(r.strength)} against your ${fmt(r.defense)}.${fallen}`;
+
+    return sendToPlayer(userId, text, "🏰 Open the Hall", "/hall");
   },
 
   /** Bandits robbed the merchants bringing you goods. */

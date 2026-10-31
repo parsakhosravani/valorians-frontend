@@ -591,6 +591,33 @@ export const BANDIT = {
 
 /** How hard a lair fights. Level 1 ≈ 5 Swordsmen, level 5 ≈ 50. */
 export const banditStrength = (level: number) => Math.round(150 * Math.pow(1.8, level - 1));
+
+/**
+ * Bandit raids on villages. A manned lair within `reach` tiles of a village
+ * can gather to raid it: the player gets `warnMs` of warning (on the map, in
+ * the Hall and on Telegram) to train defenders or clear the lair first, which
+ * calls the raid off. The bandits come about as strong as the village's
+ * defense when they gather (×`strengthMin`–`strengthMax`), so it's a real
+ * fight that a little preparation wins. Only players who come back to the game
+ * get raided (it's checked when they open it), never under a shield, and at
+ * most one raid every `everyMs`.
+ *
+ * Losing costs `steal` of what isn't hidden in the Hideout and `defenderLoss`
+ * of the troops at home: never the City Gate, never the whole army. Winning
+ * kills a few defenders, clears the lair, and pays its bounty and battle XP.
+ */
+export const BANDIT_RAID = {
+  reach: 7,
+  warnMs: 3 * 3600 * 1000,
+  everyMs: 20 * 3600 * 1000,
+  /** Chance a raid gathers when one could; if not, look again this much later. */
+  chance: 0.5,
+  retryMs: 6 * 3600 * 1000,
+  strengthMin: 0.65,
+  strengthMax: 1.15,
+  steal: 0.15,
+  defenderLoss: 0.2,
+} as const;
 /** Share of a merchant's load a lair's bandits steal. */
 export const banditTheft = (level: number) => 0.25 + 0.05 * level;
 /** What clearing a lair brings home (each resource + coins). */

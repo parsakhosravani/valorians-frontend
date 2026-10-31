@@ -6,10 +6,10 @@
  * on client and server), minus the ones too close to a village. Whether a lair
  * is occupied right now, and every roll of the dice, is the server's business.
  */
-import { BANDIT, RESOURCE_IDS, UNIT_BY_ID, UNIT_IDS, banditStrength, banditTheft } from "./config";
-import { Army, GameState, emptyArmy } from "./engine";
+import { BANDIT, BANDIT_RAID, RESOURCE_IDS, UNIT_BY_ID, UNIT_IDS, banditStrength, banditTheft, lairBounty } from "./config";
+import { Army, BanditRaidReport, GameState, cloneState, emptyArmy, getRates, totalArmy } from "./engine";
 import { MarchRoute, Point, TERRAIN, distance, hash, inMap, routeTimeline, terrainAt } from "./map";
-import { Loot, attackPower, luckFrom } from "./war";
+import { Loot, applyBattleXp, attackPower, battleXp, defensePower, luckFrom } from "./war";
 
 export type Lair = Point & { level: number };
 
@@ -251,3 +251,92 @@ export function spoilsTaken(a: Ambush, loot: Partial<Loot> | null, coins: number
 /** Whether a lair has bandits at `t`, given when it was last cleared. */
 export const lairActive = (clearedAt: number | null | undefined, t: number) =>
   clearedAt == null || t < clearedAt || t >= clearedAt + BANDIT.respawnMs;
+
+// ─── Raids on villages ───────────────────────────────────────────────────────
+
+/** The manned lairs close enough to raid a village, nearest first. */
+export const raidersNear = (home: Point, lairs: (Lair & { active?: boolean })[]) =>
+  lairs
+    .filter((l) => l.active !== false && distance(l, home) <= BANDIT_RAID.reach)
+    .sort((a, b) => distance(a, home) - distance(b, home));
+
+/**
+ * Bandits may gather to raid the village: if it's time to look again, it
+ * isn't shielded, and a manned lair is near. With `chance` they do, from the
+ * nearest lair, as strong as the village's defense is now give or take
+ * (BANDIT_RAID); otherwise it looks again later. Returns the state unchanged
+ * when nothing is due.
+ */
+export function gatherBanditRaid(s0: GameState, lairs: Lair[], now: number, rand: () => number): GameState {
+  if (s0.banditRaid || now < (s0.banditNextAt ?? 0) || s0.shieldUntil > now) return s0;
+  const s = cloneState(s0);
+  const lair = lairs[0];
+
+  if (!lair || rand() >= BANDIT_RAID.chance) {
+    s.banditNextAt = now + BANDIT_RAID.retryMs;
+
+    return s;
+  }
+  const f = BANDIT_RAID.strengthMin + rand() * (BANDIT_RAID.strengthMax - BANDIT_RAID.strengthMin);
+  const strength = Math.round(Math.max(banditStrength(lair.level), defensePower(s) * f));
+
+  s.banditRaid = { x: lair.x, y: lair.y, level: lair.level, strength, warnedAt: now, arrivesAt: now + BANDIT_RAID.warnMs };
+  s.banditNextAt = s.banditRaid.arrivesAt + BANDIT_RAID.everyMs;
+
+  return s;
+}
+
+/**
+ * The raid arrives (the state brought up to its time). `manned`: whether the
+ * lair still had bandits then; cleared in the meantime, the raid is off.
+ * Beaten off, the village loses a few defenders, earns the lair's bounty and
+ * battle XP, and the lair is cleared (`cleared` in the result, for the
+ * server). Otherwise the bandits carry off a share of what isn't hidden and
+ * kill some of the troops at home.
+ */
+export function resolveBanditRaid(s0: GameState, manned: boolean, rand: () => number): { state: GameState; cleared: boolean } {
+  const raid = s0.banditRaid;
+
+  if (!raid) return { state: s0, cleared: false };
+  const s = cloneState(s0);
+  const stolen = Object.fromEntries(RESOURCE_IDS.map((r) => [r, 0])) as BanditRaidReport["stolen"];
+  const base = { at: raid.arrivesAt, x: raid.x, y: raid.y, level: raid.level, strength: raid.strength, stolen };
+
+  delete s.banditRaid;
+  if (!manned) {
+    s.banditReport = { ...base, outcome: "foiled", defense: 0, defenderLosses: emptyArmy() };
+
+    return { state: s, cleared: false };
+  }
+  const defense = Math.round(defensePower(s));
+  const attack = raid.strength * luckFrom(rand());
+  const won = defense >= attack;
+  const defenders = { ...s.army };
+  const share = won ? 0.3 * Math.pow(attack / Math.max(1, defense), 1.5) : BANDIT_RAID.defenderLoss;
+  const lost = emptyArmy();
+
+  for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport) lost[u] = Math.floor((s.army[u] ?? 0) * share);
+  const xp = battleXp(s, defenders, attack, won, "defense");
+
+  applyBattleXp(s, totalArmy(s), lost, xp);
+  for (const u of UNIT_IDS) s.army[u] -= lost[u];
+
+  if (won) {
+    const bounty = lairBounty(raid.level);
+    const cap = getRates(s).capacity;
+
+    for (const r of RESOURCE_IDS) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + bounty.resources));
+    s.coins += bounty.coins;
+    s.banditReport = { ...base, outcome: "won", defense, defenderLosses: lost, bounty, xp };
+  } else {
+    const hidden = getRates(s).hidden;
+
+    for (const r of RESOURCE_IDS) {
+      stolen[r] = Math.floor(Math.max(0, s.resources[r] - hidden) * BANDIT_RAID.steal);
+      s.resources[r] -= stolen[r];
+    }
+    s.banditReport = { ...base, outcome: "lost", defense, defenderLosses: lost, xp };
+  }
+
+  return { state: s, cleared: won };
+}

@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
 import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, buildingImage } from "@/lib/game/config";
 import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
-import { campReward, campStatus, powerScore } from "@/lib/game/war";
+import { campReward, campStatus, defensePower, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
 import dynamic from "next/dynamic";
 
@@ -95,6 +95,22 @@ export const Hall = () => {
   const [busy, setBusy] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [shieldOpen, setShieldOpen] = useState(false);
+  // The bandit raid report you've already read (by its time), so it stops showing.
+  const [seenBandits, setSeenBandits] = useState<number | null>(() => {
+    try {
+      return Number(localStorage.getItem("bandits-seen")) || null;
+    } catch {
+      return null;
+    }
+  });
+  const seeBandits = (at: number) => {
+    setSeenBandits(at);
+    try {
+      localStorage.setItem("bandits-seen", String(at));
+    } catch {
+      /* storage blocked: it shows again next time */
+    }
+  };
 
   // The bot's /plus button opens the game on /hall?plus=1 (and /hall?shield=1 for shields).
   useEffect(() => {
@@ -155,7 +171,47 @@ export const Hall = () => {
     });
   }
 
-  // 3. Build
+  // 3. Bandits: gathering to raid you, or how their last raid went.
+  const raid = state.banditRaid;
+  const bandits = state.banditReport;
+
+  if (raid && raid.arrivesAt > now) {
+    const defense = Math.round(defensePower(state));
+
+    tasks.push({
+      key: "bandits",
+      img: "/images/icons/skull.webp",
+      title: `Bandits strike in ${formatDuration(raid.arrivesAt - now)}`,
+      sub: `About ${compact(raid.strength)} strong vs your defense ${compact(defense)}. Train defenders, or clear their lair first.`,
+      state: "todo",
+      tone: "danger",
+      action: { label: "Map", href: "/battle?tab=map" },
+    });
+  } else if (bandits && now - bandits.at < 24 * 3600e3 && seenBandits !== bandits.at) {
+    const taken = Object.values(bandits.stolen).reduce((a, b) => a + b, 0);
+
+    tasks.push({
+      key: "bandits",
+      img: "/images/icons/skull.webp",
+      title:
+        bandits.outcome === "won"
+          ? "You beat off the bandits!"
+          : bandits.outcome === "lost"
+            ? "Bandits raided your village"
+            : "The bandit raid is off",
+      sub:
+        bandits.outcome === "won"
+          ? `Their lair is cleared: +${compact(bandits.bounty?.resources ?? 0)} of each resource, +${compact(bandits.bounty?.coins ?? 0)} coins`
+          : bandits.outcome === "lost"
+            ? `They carried off ${compact(taken)} resources. Build up your defense before they come back.`
+            : "Their lair was cleared before they could strike.",
+      state: "todo",
+      tone: bandits.outcome === "lost" ? "danger" : "gold",
+      action: { label: "OK", onClick: () => seeBandits(bandits.at) },
+    });
+  }
+
+  // 4. Build
   const advice = recommendUpgrade(state, options);
   const freeBuilders = rates.builders - state.queue.length;
 
@@ -199,7 +255,7 @@ export const Hall = () => {
     }
   }
 
-  // 4. Daily Mine
+  // 5. Daily Mine
   const strikes = Math.floor(state.energy / STAMINA_PER_TAP);
 
   tasks.push(
@@ -215,7 +271,7 @@ export const Hall = () => {
       : { key: "mine", img: RESOURCES[0].img, title: "Mined today", sub: "Stamina refills at dawn (UTC)", state: "done" }
   );
 
-  // 5. Army
+  // 6. Army
   const barracks = state.buildings["barracks"] ?? 0;
   const armyHome = Object.values(state.army).reduce((a, b) => a + b, 0);
 
@@ -265,7 +321,7 @@ export const Hall = () => {
     });
   }
 
-  // 6. Barbarian camp
+  // 7. Barbarian camp
   const nextCamp = state.camps.cleared + 1;
 
   if (armyHome > 0 && campStatus(state, nextCamp, now).state === "new") {
@@ -281,7 +337,7 @@ export const Hall = () => {
     });
   }
 
-  // 7. Social tasks
+  // 8. Social tasks
   const openQuests = ACTIVE_QUESTS.filter((q) => questStatus(state, q.id, now).state !== "claimed");
 
   if (openQuests.length) {

@@ -1,5 +1,6 @@
 import { handler } from "@/server/http";
 import { mutatePlayer, playerView } from "@/server/players";
+import { banditWatch } from "@/server/banditRaids";
 import { advance } from "@/lib/game/engine";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +16,20 @@ const RESAVE_MS = 10 * 60_000;
 
 /** Signs the player in (creating them on first launch) and returns their state. */
 export const GET = handler(
-  async ({ player, now }) =>
-    playerView(
+  async ({ player: loaded, now }) => {
+    // Bandits: a raid that has arrived is fought, and a new one may gather (see banditRaids).
+    const player = await banditWatch(loaded, now).catch((e) => {
+      console.error("banditWatch", e);
+
+      return loaded;
+    });
+
+    return playerView(
       now - player.state.updatedAt > RESAVE_MS
         ? await mutatePlayer(player.id, now, (s) => s, player)
         : { ...player, state: advance(player.state, now) },
       now,
-    ),
+    );
+  },
   { resolveBattles: true },
 );
