@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import crypto from "crypto";
 import * as E from "./engine";
+import * as C from "./config";
 import { verifyInitData } from "../../server/auth";
 
 const T0 = Date.UTC(2026, 9, 23, 10);
@@ -97,4 +98,41 @@ test("initData verification", () => {
   const r = verifyInitData(p.toString(), token);
   expect(r.user.id).toBe(42); expect(r.startParam).toBe("abc");
   expect(() => verifyInitData(p.toString(), "123:XYZ")).toThrow("Invalid signature");
+});
+
+
+// ─── Balance pass ────────────────────────────────────────────────────────────
+
+test("producers yield 15% more each level, and their upgrades pay back in days", () => {
+  const s = E.createInitialState(0);
+  const mine = E.getRates(s).productionPerHour.iron;
+  s.buildings["iron-mine"] = 1;
+  expect(E.getRates(s).productionPerHour.iron - mine).toBeCloseTo(60);
+  s.buildings["iron-mine"] = 2;
+  expect(E.getRates(s).productionPerHour.iron - mine).toBeCloseTo(60 + 69);
+
+  const b = C.BUILDING_BY_ID["iron-mine"];
+  for (const lvl of [5, 10, 15, 20]) {
+    const cost = C.buildingUpgradeCost(b, lvl) * 4;
+    const gain = C.productionAt(60, lvl + 1) - C.productionAt(60, lvl);
+    expect(cost / gain / 24).toBeLessThan(6); // days to pay back
+  }
+});
+
+test("starving troops desert, the hungriest first, until the rest can be fed", () => {
+  const s = E.createInitialState(0);
+  s.resources.crop = 0;
+  s.army.knight = 100; // 4 crop each: far more than is grown
+  s.army.spearman = 100;
+  const t = 10 * 3600e3;
+  const after = E.advance(s, t);
+
+  expect(after.army.knight).toBeLessThan(100);
+  expect(after.army.spearman).toBe(100);
+  expect(after.deserted?.count).toBeGreaterThan(0);
+
+  // Fed again: nobody leaves.
+  const fed = E.createInitialState(0);
+  fed.army.spearman = 10;
+  expect(E.advance(fed, t).army.spearman).toBe(10);
 });

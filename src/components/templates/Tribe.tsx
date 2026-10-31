@@ -96,7 +96,7 @@ const UpgradeRow = ({
               {o.level} → {o.toLevel}
             </span>
           </span>
-          <span className="text-xs font-bold text-good truncate">{nextLevelGain(o.building)}</span>
+          <span className="text-xs font-bold text-good truncate">{nextLevelGain(o.building, o.level)}</span>
           {!o.job && <CostLine o={o} />}
         </span>
       </button>
@@ -231,7 +231,7 @@ export const Tribe: FunctionComponent = () => {
                   <span className="font-display font-black text-[19px] leading-tight">
                     {best.building.name} <span className="text-muted text-sm font-sans">→ {best.toLevel}</span>
                   </span>
-                  <span className="text-sm font-bold text-good">{nextLevelGain(best.building)}</span>
+                  <span className="text-sm font-bold text-good">{nextLevelGain(best.building, best.level)}</span>
                   <CostLine o={best} />
                 </span>
               </button>

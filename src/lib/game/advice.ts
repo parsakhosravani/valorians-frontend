@@ -2,7 +2,7 @@
  * Advice for the Build and Hall screens: what can be upgraded now, what is
  * missing, and which upgrade is the best next step. Pure functions.
  */
-import { BUILDINGS, BuildingDef, RESOURCE_IDS, ResourceId, RESOURCE_NAMES } from "./config";
+import { BUILDINGS, BuildingDef, RESOURCE_IDS, ResourceId, RESOURCE_NAMES, productionAt } from "./config";
 import { GameState, buildingUpgradeInfo, getRates } from "./engine";
 
 export type BuildingGroup = "economy" | "military" | "defense";
@@ -19,12 +19,12 @@ export const buildingGroup = (b: BuildingDef): BuildingGroup => {
 };
 
 /** One short line on what the next level gives. */
-export const nextLevelGain = (b: BuildingDef): string => {
+export const nextLevelGain = (b: BuildingDef, level = 0): string => {
   const e = b.effect;
 
   switch (e.kind) {
     case "production":
-      return `+${e.perLevel} ${RESOURCE_NAMES[e.resource].toLowerCase()}/h`;
+      return `+${Math.round(productionAt(e.perLevel, level + 1) - productionAt(e.perLevel, level))} ${RESOURCE_NAMES[e.resource].toLowerCase()}/h`;
     case "cropBoost":
       return `+${e.percentPerLevel}% crop`;
     case "warehouse":
@@ -49,12 +49,14 @@ export const nextLevelGain = (b: BuildingDef): string => {
           return `+${e.perLevel}% wall defense`;
         case "flatDefense":
           return `+${e.perLevel} defense`;
+        case "traps":
+          return `Traps catch ${e.perLevel}% more attackers`;
         case "protect":
           return "Hides more resources";
         case "march":
           return `${e.perLevel}% faster return`;
         case "heal":
-          return `Saves ${e.perLevel}% more troops`;
+          return `Saves ${e.perLevel}% more wounded`;
         case "seaDefense":
           return `+${e.perLevel}% vs sea landings`;
         default:

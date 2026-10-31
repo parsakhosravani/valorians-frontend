@@ -1450,7 +1450,8 @@ export const WarMap = ({
                 </span>
                 <span>
                   You can recall an army before it arrives. Raided tribes get a
-                  2h shield.
+                  shield: 2h, growing to 6h and 12h if raided again within a day.
+                  Raiding a tribe under half your power takes only half the loot.
                 </span>
                 <span>
                   <GameIcon e="🧭" /> Tap one of your armies on the road to give it new orders: on its way out or

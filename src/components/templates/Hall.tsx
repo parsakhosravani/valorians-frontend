@@ -419,6 +419,14 @@ export const Hall = () => {
                     {full ? " · full" : hoursToFull !== null && hoursToFull < 24 ? ` · full in ${formatDuration(hoursToFull * 3600e3)}` : ""}
                   </span>
                 </span>
+                {/* Crop running out with more eaten than grown: hungry troops start to desert. */}
+                {r.id === "crop" && perHour < 0 && (
+                  <span className="text-micro font-bold text-bad leading-tight">
+                    {have <= 0
+                      ? "Starving: troops desert each hour. Build Windmills or a Fertilizer Workshop."
+                      : `Runs out in ${formatDuration((have / -perHour) * 3600e3)}, then troops start to desert.`}
+                  </span>
+                )}
               </div>
             );
           })}
