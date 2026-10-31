@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
+import { createFire } from "./fire";
+
 import bg from "~/images/background/intro.webp";
 import hallBg from "~/images/background/tribe.webp";
 import coin from "~/images/resources/coin.webp";
@@ -34,14 +36,11 @@ const MIN_SHOW_MS = 1200;
 const SLOW_MS = 12000;
 
 /**
- * Embers drifting up from the fires below, drawn on a canvas: each rises at
- * its own pace with a lazy sway, flickers, glows, and burns out on the way
- * up. A few near ones are bigger, softer and faster (depth); now and then a
- * quick spark shoots up. They're born all over the bottom of the screen at
- * once, so there's never a row of them waiting at the edge. Stops when the
- * tab is hidden; not drawn at all for players who ask for less motion.
+ * Fire along the bottom of the screen and sparks flying off it (see
+ * createFire), on a canvas behind the loading bar. Stops when the app is
+ * hidden; not drawn at all for players who ask for less motion.
  */
-const Embers = () => {
+const Fire = () => {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -49,72 +48,27 @@ const Embers = () => {
     const g = canvas?.getContext("2d");
 
     if (!canvas || !g || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    type Ember = { x: number; y: number; vy: number; sway: number; phase: number; r: number; life: number; age: number; hue: number; near: boolean };
-    let w = 0;
-    let h = 0;
     let dpr = 1;
+    const make = (w: number, h: number) => {
+      const c = Object.assign(document.createElement("canvas"), { width: w, height: h });
+
+      return { canvas: c, g: c.getContext("2d")! };
+    };
     const size = () => {
       dpr = Math.min(2, window.devicePixelRatio || 1);
-      w = canvas.clientWidth;
-      h = canvas.clientHeight;
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
+      canvas.width = Math.round(canvas.clientWidth * dpr);
+      canvas.height = Math.round(canvas.clientHeight * dpr);
+      fire.resize(canvas.clientWidth, canvas.clientHeight);
     };
-    const spawn = (anywhere: boolean): Ember => {
-      const near = Math.random() < 0.15;
-      const spark = !near && Math.random() < 0.12;
-      const life = (spark ? 2 : 5 + Math.random() * 5) * (near ? 0.8 : 1);
-
-      return {
-        x: Math.random() * w,
-        // At the start, some are already on their way up so there's no wait.
-        y: anywhere ? h * (0.35 + Math.random() * 0.75) : h + 10,
-        vy: (spark ? 220 : near ? 95 : 40 + Math.random() * 50) * (0.8 + Math.random() * 0.4),
-        sway: 8 + Math.random() * 22,
-        phase: Math.random() * Math.PI * 2,
-        r: near ? 2.6 + Math.random() * 2 : spark ? 1.1 : 0.9 + Math.random() * 1.6,
-        life,
-        age: anywhere ? Math.random() * life * 0.7 : 0,
-        hue: 18 + Math.random() * 22,
-        near,
-      };
-    };
-
-    size();
-    const embers = Array.from({ length: 60 }, () => spawn(true));
+    const fire = createFire(canvas.clientWidth, canvas.clientHeight, make);
     let last = performance.now();
     let raf = 0;
-    const frame = (t: number) => {
-      const dt = Math.min(0.05, (t - last) / 1000);
-
-      last = t;
+    const frame = (now: number) => {
+      fire.step(Math.min(0.05, (now - last) / 1000), now / 1000);
+      last = now;
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g.clearRect(0, 0, w, h);
-      g.globalCompositeOperation = "lighter";
-      for (let i = 0; i < embers.length; i++) {
-        const e = embers[i];
-
-        e.age += dt;
-        e.y -= e.vy * dt;
-        if (e.age >= e.life || e.y < -10) {
-          embers[i] = spawn(false);
-          continue;
-        }
-        const k = e.age / e.life;
-        // Fade in fast, burn out slowly, flicker all along.
-        const glow = Math.min(1, k * 8) * (1 - k) ** 1.1 * (0.7 + 0.3 * Math.sin(t / 90 + e.phase * 7));
-        const x = e.x + Math.sin(t / 1400 + e.phase) * e.sway * k;
-        const r = e.r * (1 - k * 0.5);
-        const halo = g.createRadialGradient(x, e.y, 0, x, e.y, r * (e.near ? 5 : 4));
-
-        halo.addColorStop(0, `hsla(${e.hue + 15}, 100%, 75%, ${glow})`);
-        halo.addColorStop(0.25, `hsla(${e.hue}, 100%, 55%, ${glow * 0.55})`);
-        halo.addColorStop(1, `hsla(${e.hue - 8}, 100%, 40%, 0)`);
-        g.fillStyle = halo;
-        g.beginPath();
-        g.arc(x, e.y, r * (e.near ? 5 : 4), 0, Math.PI * 2);
-        g.fill();
-      }
+      g.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+      fire.draw(g);
       raf = requestAnimationFrame(frame);
     };
     const start = () => {
@@ -123,6 +77,7 @@ const Embers = () => {
       if (!document.hidden) raf = requestAnimationFrame(frame);
     };
 
+    size();
     start();
     window.addEventListener("resize", size);
     document.addEventListener("visibilitychange", start);
@@ -233,9 +188,9 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
       {/* Lightning flicker in the storm. */}
       <div className="absolute inset-0 bg-[#BFE8FF] mix-blend-overlay pointer-events-none motion-safe:animate-[lightning_7s_ease-in-out_infinite] opacity-0" />
 
-      {/* Firelight from below, breathing gently, and the embers it throws up. */}
+      {/* Firelight from below, breathing gently, and the fire itself. */}
       <div className="absolute inset-x-0 bottom-0 h-[30%] pointer-events-none bg-[radial-gradient(ellipse_at_50%_115%,rgba(232,97,44,0.38),transparent_65%)] motion-safe:animate-[firelight_3.2s_ease-in-out_infinite]" />
-      <Embers />
+      <Fire />
 
       <div className="relative h-full flex flex-col items-center px-8 pt-[7svh] pb-8">
         <h1 className="font-display font-black text-[46px] leading-none tracking-[0.06em] text-transparent bg-clip-text bg-gradient-to-b from-[#FBE3A6] via-goldtext to-gold drop-shadow-[0_3px_6px_rgba(0,0,0,0.9)]">
