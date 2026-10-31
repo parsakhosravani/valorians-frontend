@@ -40,6 +40,9 @@ import { roadShape, timeAt } from "./roadShape";
 import { useFillHeight } from "@/hooks/useFillHeight";
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
+import { Building } from "@/components/organisms/tribe/Building";
+import { HomeVillage, VILLAGE_ZOOM } from "./HomeVillage";
+import type { BuildingDef } from "@/lib/game/config";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import {
   BattleReport,
@@ -474,6 +477,8 @@ export const WarMap = ({
   const [data, setData] = useState<MapData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selected>(null);
+  // A building of yours opened from your village, zoomed in on the map.
+  const [building, setBuilding] = useState<BuildingDef | null>(null);
   const [scouts, setScouts] = useState<Record<number, ScoutReport>>({});
   const [busy, setBusy] = useState(false);
   const [watching, setWatching] = useState<number | null>(null);
@@ -979,6 +984,8 @@ export const WarMap = ({
 
   // Zoomed out, labels stay quiet: everyone's names only from LABELS_ZOOM up.
   const labelsAll = restZoom >= LABELS_ZOOM;
+  // Zoomed in, your tribe is your village: its buildings instead of its marker.
+  const villageShown = restZoom >= VILLAGE_ZOOM;
   // Villages you're dealing with right now (armies or your merchants on the way) keep their names.
   const atWar = new Set<string>(
     data
@@ -996,7 +1003,7 @@ export const WarMap = ({
   // ─── The villages and camps the canvas draws ───
   const canvasTribes: CanvasTribe[] =
     data
-      ? data.tribes.map((t) => {
+      ? data.tribes.filter((t) => !(t.isMe && villageShown)).map((t) => {
           const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
 
           return {
@@ -1077,7 +1084,7 @@ export const WarMap = ({
       ]
     : [];
   // A sheet is open over the map.
-  const covered = !!selected || watching != null || !!ordersFor || !!redirecting || worldOpen;
+  const covered = !!selected || watching != null || !!ordersFor || !!redirecting || worldOpen || !!building;
 
   return (
     <div className="flex flex-col gap-2">
@@ -1153,6 +1160,17 @@ export const WarMap = ({
 
               {/* Roads armies and merchants are on */}
               <TravelPaths paths={paths} size={MAP_SIZE * T} />
+
+              {/* Zoomed in: your own village, building by building */}
+              {villageShown && (
+                <HomeVillage
+                  at={{ x: px(data.home.x), y: py(data.home.y) }}
+                  home={data.home}
+                  neighbours={data.tribes.filter((t) => !t.isMe)}
+                  zoom={restZoom}
+                  onOpen={setBuilding}
+                />
+              )}
 
               {/* Caravans and armies on the road (in world px, so a new area
                   loading never moves them). They move every second on their
@@ -1432,6 +1450,15 @@ export const WarMap = ({
       {data && (
         <WorldMap home={data.home} open={worldOpen} view={view} onClose={() => setWorldOpen(false)} onGo={goTo} />
       )}
+
+      {/* One of your buildings, tapped in your village */}
+      <Drawer isOpen={!!building} position="bottom" onClose={() => setBuilding(null)}>
+        {building && (
+          <div className="pt-1">
+            <Building building={building} />
+          </div>
+        )}
+      </Drawer>
 
       {/* What's on the tile you tapped */}
       <Drawer
