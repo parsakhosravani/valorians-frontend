@@ -363,7 +363,7 @@ export const Tribe: FunctionComponent = () => {
     return (
       <div
         data-tribe-view={view}
-        className="w-full mx-auto px-3 pt-1 pb-4 max-w-md md:max-w-[calc(var(--village-w)+1.5rem)]"
+        className="w-full mx-auto px-0 md:px-3 pt-1 pb-4 md:max-w-[calc(var(--village-w)+1.5rem)]"
       >
         <Village
           bottomLeft={
