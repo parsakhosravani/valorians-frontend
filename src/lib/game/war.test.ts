@@ -165,7 +165,7 @@ test("knights are mounted: weaker in forests and countered by spearmen", () => {
   const atk = withBarracks();
   const def = withBarracks();
   def.army.spearman = 100;
-  const knights = { ...E.emptyArmy(), knight: 60 };
+  const knights = { ...E.emptyArmy(), knight: 45 };
   const axes = { ...E.emptyArmy(), axeman: 100 }; // same attack as the knights
   const vsKnights = W.battleNumbers(atk, knights, def, "plains");
   const vsAxes = W.battleNumbers(atk, axes, def, "plains");
@@ -346,9 +346,73 @@ test("a won raid that takes nothing says why", () => {
   const defender = withBarracks();
   defender.shieldUntil = 0;
   defender.buildings["hideout"] = 40;
+  // Under the Hideout's cap (40% of the warehouse), so all of it is hidden.
+  for (const r of ["iron", "wood", "clay", "crop"] as const) defender.resources[r] = 3000;
   const { report } = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 100 }, T0, 0.5);
 
   expect(report.attackerWon).toBe(true);
   expect(Object.values(report.loot).every((v) => v === 0)).toBe(true);
   expect(report.noLoot).toBe("hidden");
+});
+
+
+// ─── Balance pass ────────────────────────────────────────────────────────────
+
+test("the Trapmaker's traps catch attackers before the battle, up to a quarter", () => {
+  const attacker = withBarracks();
+  attacker.army.cavalry = 1000;
+  const defender = withBarracks();
+  defender.shieldUntil = 0;
+  defender.buildings["trapmaker"] = 10; // 5%
+  const { outcome } = W.raidOutcome(defender, attacker, { ...E.emptyArmy(), cavalry: 1000 }, 0.5);
+
+  expect(outcome.attackerTrapped?.cavalry).toBe(50);
+  expect(outcome.attackerLosses.cavalry).toBeGreaterThanOrEqual(50);
+  defender.buildings["trapmaker"] = 200;
+  expect(E.getRates(defender).trapShare).toBe(0.25);
+});
+
+test("raided again within a day, the shield grows: 2 h, 6 h, 12 h", () => {
+  const attacker = withBarracks();
+  attacker.army.cavalry = 300;
+  let defender = withBarracks();
+  const shields: number[] = [];
+
+  for (let i = 0; i < 4; i++) {
+    defender.shieldUntil = 0;
+    const r = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 100 }, T0 + i * 3600e3, 0.5);
+
+    expect(r.report.attackerWon).toBe(true);
+    shields.push(r.report.shieldMs! / 3600e3);
+    defender = r.state;
+  }
+  expect(shields).toEqual([2, 6, 12, 12]);
+});
+
+test("raiding a tribe under half your power takes half the loot", () => {
+  const strong = withBarracks();
+  strong.army.cavalry = 2000;
+  const target = () => {
+    const d = withBarracks();
+    d.shieldUntil = 0;
+    for (const r of ["iron", "wood", "clay", "crop"] as const) d.resources[r] = 10000;
+    return d;
+  };
+  const weak = W.defendRaid(target(), strong, { ...E.emptyArmy(), cavalry: 1000 }, T0, 0.5).report;
+  // A tribe built up to about the raider's power (buildings count towards it), but with no army home.
+  const built = target();
+  built.buildings["treasury"] = 10000;
+  const even = W.defendRaid(built, strong, { ...E.emptyArmy(), cavalry: 1000 }, T0, 0.5).report;
+  const total = (l: Record<string, number>) => Object.values(l).reduce((a, b) => a + b, 0);
+
+  expect(weak.weakTarget).toBe(true);
+  expect(even.weakTarget).toBeUndefined();
+  expect(total(weak.loot)).toBeLessThan(total(even.loot));
+});
+
+test("the Hideout never hides more than 40% of the warehouse", () => {
+  const s = withBarracks();
+  s.buildings["hideout"] = 60;
+  const r = E.getRates(s);
+  expect(r.hidden).toBe(Math.round(r.capacity * 0.4));
 });

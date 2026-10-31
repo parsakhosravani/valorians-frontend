@@ -132,7 +132,7 @@ export const notify = {
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
         `You lost: ${armyText(r.defenderLosses)}\n` +
         (r.gate ? `🚪 Your City Gate was knocked down from level ${r.gate.from} to ${r.gate.to}.\n` : "") +
-        `You're shielded for 2 hours. Time for revenge?` +
+        `You're shielded for ${Math.round((r.shieldMs ?? 2 * 3600e3) / 3600e3)} hours. Time for revenge?` +
         promotionText(r.defenderPromoted),
       "⚔️ Take revenge",
       attackerId ? `/battle?revenge=${attackerId}` : "/battle?tab=reports"

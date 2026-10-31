@@ -118,6 +118,7 @@ export type MilitaryStat =
   | "march" // % faster army return
   | "scout" // reveals exact enemy defense
   | "heal" // % of lost troops recovered
+  | "traps" // % of attackers caught before the battle (see TRAP_MAX)
   | "seaDefense"; // % more defense against armies landing from the sea
 
 export type BuildingDef = {
@@ -127,6 +128,8 @@ export type BuildingDef = {
   baseCost: number;
   /** Seconds for level 0 → 1. */
   baseTime: number;
+  /** How much dearer each level is than the last (BUILDING_COST_GROWTH unless set). */
+  costGrowth?: number;
   effect: BuildingEffect;
   description: string;
 };
@@ -146,13 +149,59 @@ const def = (
   description,
 });
 
+/** Each building level costs this much more than the last (producers: PRODUCER_COST_GROWTH). */
+export const BUILDING_COST_GROWTH = 1.45;
+/**
+ * Mines, the Sawmill, Brickyard and Windmill get dearer more slowly, and each
+ * of their levels yields PRODUCTION_GROWTH more than the last (see
+ * productionAt), so an upgrade pays itself back in a day or two early on and
+ * about five days by level 20, instead of never: the old +60 a level against
+ * ×1.45 the cost took 17 days to pay back at level 10 and 110 at level 15.
+ */
+export const PRODUCER_COST_GROWTH = 1.3;
+export const PRODUCTION_GROWTH = 1.15;
+/** Each level takes this much longer to build than the last (was 1.55: level 30 took 12 days at best). */
+export const BUILD_TIME_GROWTH = 1.4;
+
+/** Cost of each resource to go from `level` to `level + 1`. */
+export const buildingUpgradeCost = (b: BuildingDef, level: number) =>
+  Math.round(b.baseCost * Math.pow(b.costGrowth ?? BUILDING_COST_GROWTH, level));
+
+/** Raw seconds to go from `level` to `level + 1`, before Town Hall speedup. */
+export const buildingUpgradeBaseSeconds = (b: BuildingDef, level: number) =>
+  Math.round(b.baseTime * Math.pow(BUILD_TIME_GROWTH, level));
+
+/** What a producer yields per hour at a level: `perLevel` at level 1, and each level PRODUCTION_GROWTH× the last. */
+export const productionAt = (perLevel: number, level: number) =>
+  level > 0 ? (perLevel * (Math.pow(PRODUCTION_GROWTH, level) - 1)) / (PRODUCTION_GROWTH - 1) : 0;
+
+/** Most of a raid's attackers the Trapmaker's traps can catch. */
+export const TRAP_MAX = 0.25;
+/** Most of the warehouse a Hideout can keep hidden, however high it's built. */
+export const HIDEOUT_MAX_SHARE = 0.4;
+
+/** Shields after being raided, by how many times you were raided in the day before (2 h, then 6 h, then 12 h). */
+export const RAIDED_SHIELDS_MS = [2, 6, 12].map((h) => h * 3600 * 1000);
+/** Raiding a tribe under this share of your power takes only LOOT_WEAK_SHARE of the usual loot. */
+export const WEAK_TARGET_RATIO = 0.5;
+export const LOOT_WEAK_SHARE = 0.5;
+
+/**
+ * Starvation: when crop runs out and more is eaten than grown, troops at
+ * home desert, the hungriest first: up to this share of them each hour,
+ * until what's left can be fed.
+ */
+export const DESERT_PER_HOUR = 0.02;
+
+const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH });
+
 export const BUILDINGS: BuildingDef[] = [
-  def("Town Hall", 300, { kind: "townHall" }, "Builds 4% faster per level. Extra builder at levels 5, 10 and 15."),
+  def("Town Hall", 300, { kind: "townHall" }, "Builds 4% faster per level (up to 80%). An extra builder every 5 levels."),
   def("Resource Warehouse", 200, { kind: "warehouse", multiplierPerLevel: 1.3 }, "+30% storage for every resource per level."),
-  def("Iron Mine", 150, { kind: "production", resource: "iron", perLevel: 60 }, "+60 iron per hour per level."),
-  def("Sawmill", 150, { kind: "production", resource: "wood", perLevel: 60 }, "+60 wood per hour per level."),
-  def("Brickyard", 150, { kind: "production", resource: "clay", perLevel: 60 }, "+60 clay per hour per level."),
-  def("Windmill", 150, { kind: "production", resource: "crop", perLevel: 60 }, "+60 crop per hour per level."),
+  producer(def("Iron Mine", 150, { kind: "production", resource: "iron", perLevel: 60 }, "+60 iron per hour at level 1, and each level adds 15% more than the last.")),
+  producer(def("Sawmill", 150, { kind: "production", resource: "wood", perLevel: 60 }, "+60 wood per hour at level 1, and each level adds 15% more than the last.")),
+  producer(def("Brickyard", 150, { kind: "production", resource: "clay", perLevel: 60 }, "+60 clay per hour at level 1, and each level adds 15% more than the last.")),
+  producer(def("Windmill", 150, { kind: "production", resource: "crop", perLevel: 60 }, "+60 crop per hour at level 1, and each level adds 15% more than the last.")),
   def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 10 }, "+10% crop production per level."),
   def("Treasury", 300, { kind: "coins", perLevel: 40 }, "+40 coins per hour per level."),
   def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
@@ -166,7 +215,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Armory", 250, { kind: "military", stat: "defense", perLevel: 5 }, "+5% defense for all troops per level."),
   def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 6 }, "+6% defense per level. Enemy rams can break it."),
   def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home."),
-  def("Trapmaker", 200, { kind: "military", stat: "defense", perLevel: 4 }, "+4% defense per level."),
+  def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 0.5 }, "Traps catch 0.5% of attackers per level before the battle starts (up to 25%)."),
   def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
   def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Treats the wounded after a battle: saves 4% of them per level (max 50%). The killed can't be saved."),
   def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
@@ -188,13 +237,7 @@ export const GROWTH_PER_BUILDING_LEVEL = 2;
 /** …and eats this much crop per hour. */
 export const CROP_UPKEEP_PER_BUILDING_LEVEL = 1;
 
-/** Cost of each resource to go from `level` to `level + 1`. */
-export const buildingUpgradeCost = (b: BuildingDef, level: number) =>
-  Math.round(b.baseCost * Math.pow(1.45, level));
 
-/** Raw seconds to go from `level` to `level + 1`, before Town Hall speedup. */
-export const buildingUpgradeBaseSeconds = (b: BuildingDef, level: number) =>
-  Math.round(b.baseTime * Math.pow(1.55, level));
 
 export const TOWN_HALL_SPEEDUP_PER_LEVEL = 0.04;
 
@@ -374,14 +417,14 @@ export const UNITS: UnitDef[] = [
     mounted: true,
   },
   {
-    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 55, carry: 60,
+    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 75, carry: 60,
     cost: { iron: 140, wood: 100, clay: 100, crop: 70 }, time: 60, upkeep: 2, speed: 15,
     requires: { building: "stable", level: 3 },
     description: "Defensive horseman. The best defender, and rides fast to help.",
     mounted: true,
   },
   {
-    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 75, defense: 40, carry: 80,
+    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 100, defense: 40, carry: 80,
     cost: { iron: 220, wood: 160, clay: 150, crop: 90 }, time: 90, upkeep: 4, speed: 14,
     requires: { building: "stable", level: 10 },
     description: "Heavy armored knight. The strongest attacker in the game.",
@@ -467,8 +510,6 @@ export const FOREST_CAVALRY_PENALTY = 0.25;
 
 /** New players can't be attacked for this long. */
 export const NEW_PLAYER_SHIELD_MS = 72 * 3600 * 1000;
-/** After being raided, a tribe can't be raided again for this long. */
-export const RAIDED_SHIELD_MS = 2 * 3600 * 1000;
 
 /** Luck swings each battle by up to ±10%. */
 export const LUCK = 0.1;

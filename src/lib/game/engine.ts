@@ -47,6 +47,10 @@ import {
   MAX_TRAIN_BATCHES,
   PLUS,
   SHIELDS,
+  DESERT_PER_HOUR,
+  HIDEOUT_MAX_SHARE,
+  TRAP_MAX,
+  productionAt,
 } from "./config";
 import { ClanPerks, NO_PERKS } from "./clan";
 
@@ -106,6 +110,8 @@ export type WarStats = {
   defensesWon: number;
   defensesLost: number;
   resourcesLooted: number;
+  /** When this tribe was raided in the last day (for the growing shield, see RAIDED_SHIELDS_MS). */
+  raidedAt?: number[];
 };
 
 export type QueueItem = {
@@ -147,6 +153,10 @@ export type GameState = {
   /** Highest barbarian camp cleared, and when each was last raided. */
   camps: { cleared: number; lastRaid: Record<string, number> };
   war: WarStats;
+  /** Hours spent starving not yet acted on (see DESERT_PER_HOUR). */
+  starving?: number;
+  /** The last time hungry troops deserted, and how many. */
+  deserted?: { at: number; count: number };
   /** Battle experience (rank) of each troop type. */
   troops: Record<UnitId, TroopRecord>;
   /** Bonuses from the player's clan techs (percent). Set by the server when the clan changes. */
@@ -183,6 +193,8 @@ export type Rates = {
   wallBonus: number;
   flatDefense: number;
   hidden: number;
+  /** Share of a raid's attackers caught by traps before the battle (Trapmaker). */
+  trapShare: number;
   marchMultiplier: number;
   canScout: boolean;
   healShare: number;
@@ -371,7 +383,7 @@ export function getRates(s: GameState): Rates {
   let growth = BASE_POPULATION_GROWTH + s.bonusGrowth;
   let tapBoost = 0;
   let totalLevels = 0;
-  const mil = { trainSpeed: 0, attack: 0, defense: 0, wall: 0, flatDefense: 0, march: 0, heal: 0, seaDefense: 0 };
+  const mil = { trainSpeed: 0, attack: 0, defense: 0, wall: 0, flatDefense: 0, march: 0, heal: 0, seaDefense: 0, traps: 0 };
   const production: Record<ResourceId, number> = {
     iron: BASE_PRODUCTION_PER_HOUR,
     wood: BASE_PRODUCTION_PER_HOUR,
@@ -386,7 +398,7 @@ export function getRates(s: GameState): Rates {
     const e = b.effect;
     switch (e.kind) {
       case "production":
-        production[e.resource] += e.perLevel * l;
+        production[e.resource] += productionAt(e.perLevel, l);
         break;
       case "cropBoost":
         cropBoost += (e.percentPerLevel * l) / 100;
@@ -424,10 +436,11 @@ export function getRates(s: GameState): Rates {
   growth += GROWTH_PER_BUILDING_LEVEL * totalLevels;
 
   const energyCapacity = energyCapacityForLevel(s.skills.energy);
+  const capacity = Math.round(BASE_WAREHOUSE_CAPACITY * warehouseMult);
 
   return {
     productionPerHour: production,
-    capacity: Math.round(BASE_WAREHOUSE_CAPACITY * warehouseMult),
+    capacity,
     energyCapacity,
     energyPerSecond: 0, // stamina refills once a day, see advance()
     tapPower: Math.round(tapPowerForLevel(s.skills.tap) * (1 + tapBoost)),
@@ -441,12 +454,52 @@ export function getRates(s: GameState): Rates {
     defenseBonus: (mil.defense + perks.defense) / 100,
     wallBonus: mil.wall / 100,
     flatDefense: mil.flatDefense,
-    hidden: hiddenResources(level(s, "hideout")),
+    // However high the Hideout, raiders can always reach some of a full warehouse.
+    hidden: Math.min(hiddenResources(level(s, "hideout")), Math.round(capacity * HIDEOUT_MAX_SHARE)),
+    trapShare: Math.min(TRAP_MAX, mil.traps / 100),
     marchMultiplier: Math.max(0.3, 1 - mil.march / 100),
     canScout: level(s, "exploration-center") >= 1,
     healShare: Math.min(0.5, mil.heal / 100),
     seaDefenseBonus: mil.seaDefense / 100,
   };
+}
+
+/**
+ * Hunger: once the crop runs out while more is eaten than grown, troops at
+ * home desert, the hungriest (highest upkeep) first, up to DESERT_PER_HOUR of
+ * them for every hour spent starving, and no more than it takes to feed the
+ * rest. Starving time is counted across short steps and acted on by the hour.
+ */
+function starve(s: GameState, cropPerHour: number, cropBefore: number, hours: number, at: number) {
+  if (cropPerHour >= 0 || s.resources.crop > 0) {
+    if (s.starving) s.starving = 0;
+
+    return;
+  }
+  // The hours of this step after the crop ran out.
+  const empty = Math.min(hours, cropBefore / -cropPerHour);
+
+  s.starving = (s.starving ?? 0) + (hours - empty);
+  let deficit = -cropPerHour;
+  let gone = 0;
+
+  while (s.starving >= 1 && deficit > 0) {
+    s.starving -= 1;
+    const home = UNITS.filter((u) => s.army[u.id] > 0 && u.upkeep > 0).sort((a, b) => b.upkeep - a.upkeep);
+    let budget = Math.max(1, Math.ceil(home.reduce((n, u) => n + s.army[u.id], 0) * DESERT_PER_HOUR));
+
+    for (const u of home) {
+      if (budget <= 0 || deficit <= 0) break;
+      const n = Math.min(s.army[u.id], budget, Math.ceil(deficit / u.upkeep));
+
+      s.army[u.id] -= n;
+      budget -= n;
+      gone += n;
+      deficit -= n * u.upkeep;
+    }
+    if (!home.length) break;
+  }
+  if (gone > 0) s.deserted = { at, count: (s.deserted && at - s.deserted.at < 3600e3 ? s.deserted.count : 0) + gone };
 }
 
 /** Lets time pass with constant rates (no building finishes in between). */
@@ -455,6 +508,8 @@ function flow(s: GameState, to: number) {
   if (dtMs <= 0) return;
   const r = getRates(s);
   const hours = dtMs / HOUR;
+
+  const cropBefore = s.resources.crop;
 
   for (const id of RESOURCE_IDS) {
     const cur = s.resources[id];
@@ -467,6 +522,7 @@ function flow(s: GameState, to: number) {
       s.resources[id] = Math.max(0, cur + delta);
     }
   }
+  starve(s, r.productionPerHour.crop, cropBefore, hours, to);
   s.coins += r.coinsPerHour * hours;
   s.population += r.growthPerHour * hours;
   s.energy = Math.min(r.energyCapacity, s.energy + (r.energyPerSecond * dtMs) / 1000);
@@ -558,7 +614,8 @@ function structuredCloneState(s: GameState): GameState {
     training: s.training.map((t) => ({ ...t })),
     marches: s.marches.map((m) => ({ ...m, units: { ...m.units }, loot: { ...m.loot }, ...(m.from ? { from: { ...m.from } } : {}) })),
     camps: { ...s.camps, lastRaid: { ...s.camps.lastRaid } },
-    war: { ...s.war },
+    war: { ...s.war, ...(s.war.raidedAt ? { raidedAt: [...s.war.raidedAt] } : {}) },
+    ...(s.deserted ? { deserted: { ...s.deserted } } : {}),
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
     troops: Object.fromEntries(

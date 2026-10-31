@@ -63,6 +63,12 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
             <ArmyLine army={report.attackerHealed} />
           </div>
         )}
+        {report.attackerTrapped && armySize(report.attackerTrapped) > 0 && (
+          <div>
+            <span className="text-muted">{asDefender ? "Caught in your traps" : "Caught in traps"} (of those lost): </span>
+            <ArmyLine army={report.attackerTrapped} />
+          </div>
+        )}
         {armySize(report.defenders) > 0 && (
           <div>
             <span className="text-muted">Defenders lost: </span>
@@ -88,7 +94,10 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
       )}
       {lootTotal > 0 || report.coins > 0 ? (
         <div className="inset p-2.5">
-          <div className="label !text-micro mb-1">{asDefender ? "Stolen from you" : "Loot"}</div>
+          <div className="label !text-micro mb-1">
+            {asDefender ? "Stolen from you" : "Loot"}
+            {report.weakTarget && <span className="normal-case tracking-normal text-muted"> · halved: under half the raider&apos;s power</span>}
+          </div>
           <div className="flex flex-wrap gap-x-3 text-sm">
             {RESOURCES.map((r) => (
               <span key={r.id} className="flex items-center gap-1">

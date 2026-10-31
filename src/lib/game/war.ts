@@ -13,7 +13,9 @@ import {
   MAX_BATCH,
   isCampLevel,
   MAX_LOOT_SHARE,
-  RAIDED_SHIELD_MS,
+  RAIDED_SHIELDS_MS,
+  WEAK_TARGET_RATIO,
+  LOOT_WEAK_SHARE,
   RAID_TRAVEL_SECONDS,
   RESOURCE_IDS,
   ResourceId,
@@ -246,6 +248,8 @@ export type BattleOutcome = {
   /** XP each troop type earned (missing in reports from before ranks existed). */
   attackerXp?: Army;
   defenderXp?: Army;
+  /** Attackers caught in the defender's traps before the battle (counted in attackerLosses). */
+  attackerTrapped?: Army;
   /** Troop types that reached a new rank in this battle. */
   attackerPromoted?: Promotion[];
   defenderPromoted?: Promotion[];
@@ -469,6 +473,10 @@ export type RaidReport = BattleOutcome & {
    * (or protected), there was nothing in them, or the survivors had no room left.
    */
   noLoot?: "hidden" | "empty" | "full";
+  /** Loot was cut (see LOOT_WEAK_SHARE): the target had under WEAK_TARGET_RATIO of the attacker's power. */
+  weakTarget?: boolean;
+  /** How long the defender is shielded after this raid (grows when raided again within a day). */
+  shieldMs?: number;
 };
 
 /**
@@ -525,16 +533,32 @@ export function raidOutcome(
   opts: Pick<MapOpts, "terrain" | "landing"> = {}
 ) {
   const defenders = fightersOf(defender.army);
-  const nums = battleNumbers(attacker, sent, defender, opts.terrain, 0, opts.landing);
+  // The Trapmaker's traps catch some attackers before the battle starts:
+  // they're lost, and the rest fight.
+  const trapShare = getRates(defender).trapShare;
+  const trapped = emptyArmy();
+  const fighting = { ...sent };
+
+  if (trapShare > 0)
+    for (const u of FIGHTERS) {
+      trapped[u] = Math.floor((sent[u] ?? 0) * trapShare);
+      fighting[u] = (sent[u] ?? 0) - trapped[u];
+    }
+  const nums = battleNumbers(attacker, fighting, defender, opts.terrain, 0, opts.landing);
   const outcome = resolve(
     nums.attack,
     nums.defense,
     luckFrom(rand),
-    sent,
+    fighting,
     defenders,
     getRates(attacker).healShare,
     getRates(defender).healShare
   );
+
+  if (armySize(trapped) > 0) {
+    for (const u of FIGHTERS) outcome.attackerLosses[u] += trapped[u];
+    outcome.attackerTrapped = trapped;
+  }
   return { outcome, defenders };
 }
 
@@ -595,11 +619,15 @@ export function defendRaid(
   const loot = emptyLoot();
   let gate: RaidReport["gate"];
   let noLoot: RaidReport["noLoot"];
+  let weakTarget = false;
   if (outcome.attackerWon) {
     const survivors = survivorsOf(sent, outcome.attackerLosses);
     // Spoils already on their backs take up room: only the rest fills with new loot.
     const carry = Math.max(0, carryOf(survivors) - lootTotal(keptSpoils(opts.carried, carryOf(survivors))));
-    const available = RESOURCE_IDS.map((r) => Math.max(0, d.resources[r] - dr.hidden) * MAX_LOOT_SHARE);
+    // Picking on a much weaker tribe pays less.
+    weakTarget = powerScore(d) < powerScore(attacker) * WEAK_TARGET_RATIO;
+    const share = MAX_LOOT_SHARE * (weakTarget ? LOOT_WEAK_SHARE : 1);
+    const available = RESOURCE_IDS.map((r) => Math.max(0, d.resources[r] - dr.hidden) * share);
     const total = available.reduce((a, b) => a + b, 0);
     if (total > 0 && carry > 0) {
       const take = Math.min(1, carry / total);
@@ -623,7 +651,12 @@ export function defendRaid(
   } else {
     d.war.defensesWon += 1;
   }
-  d.shieldUntil = now + RAIDED_SHIELD_MS;
+  // The shield grows when the same tribe keeps losing: 2 h, then 6 h, then 12 h within a day.
+  const recent = (d.war.raidedAt ?? []).filter((t) => now - t < 24 * 3600e3);
+  const shieldMs = RAIDED_SHIELDS_MS[Math.min(RAIDED_SHIELDS_MS.length - 1, outcome.attackerWon ? recent.length : 0)];
+
+  if (outcome.attackerWon) d.war.raidedAt = [...recent, now].slice(-RAIDED_SHIELDS_MS.length);
+  d.shieldUntil = now + shieldMs;
 
   return {
     state: d,
@@ -638,6 +671,8 @@ export function defendRaid(
       coins: 0,
       ...(gate ? { gate } : {}),
       ...(noLoot ? { noLoot } : {}),
+      ...(weakTarget ? { weakTarget } : {}),
+      shieldMs,
       returnsAt: now + (opts.travelMs ?? Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier)),
       ...(lootTotal(opts.carried) > 0 || (opts.carriedCoins ?? 0) > 0
         ? { carried: { ...emptyLoot(), ...opts.carried }, carriedCoins: opts.carriedCoins ?? 0 }
