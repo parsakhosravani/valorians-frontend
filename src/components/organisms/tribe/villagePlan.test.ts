@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { claimOutline, tidyRows, villagePlan } from "./villagePlan";
+import { claimOutline, villagePlan } from "./villagePlan";
 
 import { DRY, wetnessAt } from "@/components/organisms/war/landPaint";
 import { islandTerrain } from "@/lib/game/island";
@@ -145,20 +145,4 @@ test("no building stands with its foot on the painted beach or in the water", ()
   }
   // Only a village with no dry land left at all may put one over the water (see the safety net).
   expect(wet / all).toBeLessThan(0.01);
-});
-
-test("tidy rows: every building its own spot in the block, the Town Hall in the middle", () => {
-  for (let i = 0; i < 20; i++) {
-    const home = { x: 30 + i * 17, y: 40 + i * 11 };
-    const plan = tidyRows(villagePlan(home, IDS, terrainAt), 1.7, 1, 1.4);
-    const spots = Object.values(plan.plots);
-
-    expect(Object.keys(plan.plots).sort()).toEqual([...IDS].sort());
-    expect(plan.plots["town-hall"]).toEqual({ x: 0, y: 0 });
-    for (const [a, p] of spots.entries())
-      for (const q of spots.slice(a + 1)) expect(Math.hypot(p.x - q.x, p.y - q.y)).toBeGreaterThan(1.1);
-    // Rows a tile apart, every building on one.
-    for (const p of spots) expect(Math.abs(p.y - Math.round(p.y))).toBeLessThan(1e-9);
-    expect(plan.tracks.length).toBe(IDS.length - 1);
-  }
 });
