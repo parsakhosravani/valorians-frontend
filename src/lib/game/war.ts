@@ -312,6 +312,14 @@ const regimentWith = (s: GameState, fighting: Army) => {
   return r;
 };
 
+/**
+ * Of the troops who fall in a battle, the share who are only wounded rather
+ * than killed. The winners hold the field and carry their wounded off; the
+ * losers' wounded are mostly left behind. Only the wounded can be saved by a
+ * Hospital: the dead are gone.
+ */
+export const WOUNDED_SHARE = { won: 0.6, lost: 0.3 };
+
 /** Losses for each side. The loser is wiped out; the winner loses (loser/winner)^1.5. */
 function resolve(
   attack: number,
@@ -332,9 +340,11 @@ function resolve(
     const healed = emptyArmy();
     // Ships never fight: they wait off the beach and are never lost.
     for (const u of FIGHTERS) {
-      const dead = Math.min(army[u], Math.round(army[u] * share));
-      healed[u] = Math.floor(dead * heal);
-      losses[u] = dead - healed[u];
+      const fallen = Math.min(army[u], Math.round(army[u] * share));
+      // The Hospital treats the wounded only: never the killed.
+      const wounded = Math.round(fallen * (won ? WOUNDED_SHARE.won : WOUNDED_SHARE.lost));
+      healed[u] = Math.floor(wounded * heal);
+      losses[u] = fallen - healed[u];
     }
     // A narrow win can round every unit to dead. The winner always keeps at
     // least one unit (the best carrier), or nobody would march the loot home.
@@ -454,6 +464,11 @@ export type RaidReport = BattleOutcome & {
   carriedCoins?: number;
   /** The defender's City Gate, knocked down a level or more by the winners (see gateDamage). */
   gate?: { from: number; to: number };
+  /**
+   * Why a won raid took nothing: their stores were all hidden in the Hideout
+   * (or protected), there was nothing in them, or the survivors had no room left.
+   */
+  noLoot?: "hidden" | "empty" | "full";
 };
 
 /**
@@ -579,6 +594,7 @@ export function defendRaid(
 
   const loot = emptyLoot();
   let gate: RaidReport["gate"];
+  let noLoot: RaidReport["noLoot"];
   if (outcome.attackerWon) {
     const survivors = survivorsOf(sent, outcome.attackerLosses);
     // Spoils already on their backs take up room: only the rest fills with new loot.
@@ -592,6 +608,8 @@ export function defendRaid(
         d.resources[r] -= loot[r];
       });
     }
+    if (lootTotal(loot) <= 0)
+      noLoot = carry <= 0 ? "full" : RESOURCE_IDS.some((r) => d.resources[r] >= 1) ? "hidden" : "empty";
     d.war.defensesLost += 1;
     const from = d.buildings["city-gate"] ?? 0;
     const lost = gateDamage(from, sent);
@@ -619,6 +637,7 @@ export function defendRaid(
       loot,
       coins: 0,
       ...(gate ? { gate } : {}),
+      ...(noLoot ? { noLoot } : {}),
       returnsAt: now + (opts.travelMs ?? Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier)),
       ...(lootTotal(opts.carried) > 0 || (opts.carriedCoins ?? 0) > 0
         ? { carried: { ...emptyLoot(), ...opts.carried }, carriedCoins: opts.carriedCoins ?? 0 }

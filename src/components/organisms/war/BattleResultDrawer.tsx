@@ -59,7 +59,7 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
         </div>
         {armySize(report.attackerHealed) > 0 && (
           <div>
-            <span className="text-muted">Saved by hospital: </span>
+            <span className="text-muted">Wounded, saved by hospital: </span>
             <ArmyLine army={report.attackerHealed} />
           </div>
         )}
@@ -98,6 +98,24 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
             ))}
             {report.coins > 0 && <span><GameIcon e="🪙" /> {fmt(report.coins)}</span>}
           </div>
+        </div>
+      ) : report.attackerWon ? (
+        // A won raid with nothing taken: say why, rather than leave it out.
+        <div className="inset p-2.5 text-sm text-center">
+          <div className="label !text-micro mb-1">{asDefender ? "Stolen from you" : "Loot"}</div>
+          {report.noLoot === "full"
+            ? asDefender
+              ? "Nothing: they had no room left to carry more."
+              : "Nothing: your troops had no room left to carry more."
+            : report.noLoot === "empty"
+              ? asDefender
+                ? "Nothing: your stores were empty."
+                : "Nothing: their stores were empty."
+              : report.noLoot === "hidden"
+                ? asDefender
+                  ? "Nothing: your Hideout kept your stores safe."
+                  : "Nothing: their stores were hidden in their Hideout."
+                : "Nothing was taken."}
         </div>
       ) : null}
       {!asDefender && report.carried && (RESOURCES.some((r) => (report.carried?.[r.id] ?? 0) > 0) || !!report.carriedCoins) && (
