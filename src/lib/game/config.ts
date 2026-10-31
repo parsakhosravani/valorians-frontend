@@ -483,11 +483,33 @@ export const BATTLE_MAX_ROUNDS = 10;
 export const CAMP_DEFENSE_PER_TROOP = 20;
 
 // Barbarian camps (PvE)
-export const MAX_CAMP_LEVEL = 30;
-export const campDefense = (level: number) => Math.round(80 * Math.pow(1.35, level - 1));
+//
+// Camps never run out. Up to CAMP_STEEP_UNTIL each one is a big step up from
+// the last (as they always were); past it they grow gently, so the next camp
+// stays a goal rather than a wall: camp 40 needs about 3× camp 30's army,
+// where the old curve would have needed 20×.
+/** The last camp on the steep curve. Camps past it follow the gentle one. */
+export const CAMP_STEEP_UNTIL = 30;
+/** Past CAMP_STEEP_UNTIL: defense and first-win resources grow by these per level. */
+export const CAMP_LATE_DEFENSE_GROWTH = 1.12;
+export const CAMP_LATE_REWARD_GROWTH = 1.1;
+/** Is there a camp at this level? (Every whole level from 1 up.) */
+export const isCampLevel = (level: number) => Number.isInteger(level) && level >= 1;
+const steepDefense = (level: number) => 80 * Math.pow(1.35, level - 1);
+const steepResources = (level: number) => 400 * Math.pow(1.3, level - 1);
+export const campDefense = (level: number) =>
+  Math.round(
+    level <= CAMP_STEEP_UNTIL
+      ? steepDefense(level)
+      : steepDefense(CAMP_STEEP_UNTIL) * Math.pow(CAMP_LATE_DEFENSE_GROWTH, level - CAMP_STEEP_UNTIL),
+  );
 /** Reward for clearing a camp level the first time (each resource + coins). */
 export const campFirstReward = (level: number) => ({
-  resources: Math.round(400 * Math.pow(1.3, level - 1)),
+  resources: Math.round(
+    level <= CAMP_STEEP_UNTIL
+      ? steepResources(level)
+      : steepResources(CAMP_STEEP_UNTIL) * Math.pow(CAMP_LATE_REWARD_GROWTH, level - CAMP_STEEP_UNTIL),
+  ),
   coins: 100 * level,
 });
 /** Cleared camps can be raided again for a smaller haul after this cooldown. */

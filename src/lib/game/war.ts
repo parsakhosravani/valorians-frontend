@@ -11,7 +11,7 @@ import {
   FOREST_CAVALRY_PENALTY,
   LUCK,
   MAX_BATCH,
-  MAX_CAMP_LEVEL,
+  isCampLevel,
   MAX_LOOT_SHARE,
   RAIDED_SHIELD_MS,
   RAID_TRAVEL_SECONDS,
@@ -663,7 +663,7 @@ export function campReward(s: GameState, level: number) {
 /** Troops leave for a barbarian camp. Checks the camp can be attacked now. */
 export function dispatchCamp(s0: GameState, level: number, units: Army, now: number) {
   level = Math.floor(level);
-  if (!(level >= 1 && level <= MAX_CAMP_LEVEL)) throw new GameError("Unknown camp");
+  if (!isCampLevel(level)) throw new GameError("Unknown camp");
   const st = campStatus(s0, level, now);
   if (st.state === "locked") throw new GameError("Clear the previous camp first", "locked");
   if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");
@@ -957,7 +957,7 @@ export function checkOrdersLeft(s: GameState, hops: number) {
 
 /** Throws if a camp can't be attacked right now (without changing anything). */
 export function checkCamp(s: GameState, level: number, now: number) {
-  if (!(level >= 1 && level <= MAX_CAMP_LEVEL)) throw new GameError("Unknown camp");
+  if (!isCampLevel(level)) throw new GameError("Unknown camp");
   const st = campStatus(s, level, now);
   if (st.state === "locked") throw new GameError("Clear the previous camp first", "locked");
   if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");

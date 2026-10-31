@@ -4,6 +4,7 @@
  * server, so both agree on terrain and travel times.
  */
 import {
+  CAMP_STEEP_UNTIL,
   MAP_CENTER,
   MAP_MAX,
   MAP_MIN,
@@ -161,9 +162,16 @@ export const settledShare = (p: Point) => {
 
 const key = (p: Point) => `${p.x},${p.y}`;
 
+/** How many steps out from home a camp sits: its level, then a band of the last six steep camps' distances. */
+const LATE_BAND = 6;
+const campRing = (level: number) =>
+  level <= CAMP_STEEP_UNTIL ? level : CAMP_STEEP_UNTIL - LATE_BAND + 1 + ((level - CAMP_STEEP_UNTIL - 1) % LATE_BAND);
+
 /**
  * Where a player's level-`level` barbarian camp sits, scattered further out
- * the higher the level. Camps never sit on mountains and always have a road
+ * the higher the level up to CAMP_STEEP_UNTIL. Camps past that don't keep
+ * marching off (camp 50 would be hours away): they cycle through the band
+ * of the last few steep camps' distances, so they're about as far as camp 30. Camps never sit on mountains and always have a road
  * to them. They prefer land you can walk to; only when there
  * is none around (an island) do they sit across the water. A camp never sits
  * on the player's own tribe or on any tile in `taken` (other tribes, lower
@@ -171,7 +179,7 @@ const key = (p: Point) => `${p.x},${p.y}`;
  */
 export function campPosition(playerId: number, level: number, home: Point, taken: ReadonlySet<string> = new Set()): Point {
   const angle = hash(playerId, level, 5) * Math.PI * 2;
-  const base = 2 + level * 0.9;
+  const base = 2 + campRing(level) * 0.9;
   const free = (p: Point) =>
     inMap(p) && !unsettled(terrainAt(p.x, p.y)) && !(p.x === home.x && p.y === home.y) && !taken.has(key(p));
   let overSea: Point | null = null;

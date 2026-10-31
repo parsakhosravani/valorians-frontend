@@ -6,7 +6,7 @@ import { Player, avatarUrl } from "./players";
 import { TRIBE_FRESH, TRIBE_SELECT, tribeLook } from "./tribeColumns";
 
 import { storedFlag } from "@/lib/game/clan";
-import { banditStrength, campDefense, lairBounty, MAX_CAMP_LEVEL } from "@/lib/game/config";
+import { banditStrength, campDefense, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoastal, settledShare, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
@@ -117,7 +117,8 @@ export async function settleAll() {
  */
 export async function campSpots(playerId: number, home: Point, upTo: number): Promise<Point[]> {
   const db = await getDb();
-  const r = CAMP_REACH(MAX_CAMP_LEVEL);
+  // Camps past the steep curve stay this close too (see campPosition).
+  const r = CAMP_REACH(CAMP_STEEP_UNTIL);
   const rs = await db.execute({
     sql: "SELECT map_x, map_y FROM users WHERE map_x BETWEEN ? AND ? AND map_y BETWEEN ? AND ?",
     args: [home.x - r, home.x + r, home.y - r, home.y + r],
@@ -188,7 +189,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const c = center ?? home;
   const db = await getDb();
   const r = Math.max(8, Math.min(30, Math.round(radius) || VIEW_RADIUS));
-  const shown = Math.min(MAX_CAMP_LEVEL, me.state.camps.cleared + 3);
+  // Camps never run out: beaten ones, the next one, and two beyond.
+  const shown = me.state.camps.cleared + 3;
 
   // Everything below only needs the view: ask for it all at once instead of
   // one query after another (each a round trip to the database).
