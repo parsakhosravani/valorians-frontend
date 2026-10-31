@@ -30,14 +30,3 @@ test("only the water is raised: lakes, hills and mountains nearby stay what they
   expect(ground(HOME.x + 1, HOME.y)).toBe("mountains");
   expect(ground(HOME.x - 1, HOME.y)).not.toBe("sea");
 });
-
-test("a cleared claim has no water or mountains inside the border, and leaves the land past it alone", () => {
-  const lake = (): Terrain => "lake";
-  const t = islandTerrain(HOME, lake, { w: 1.35, h: 1.75, cleared: true });
-
-  expect(t(HOME.x, HOME.y)).toBe("plains");
-  expect(t(HOME.x + 2, HOME.y + 3)).toBe("plains");
-  expect(t(HOME.x + 7, HOME.y)).toBe("lake");
-  expect(islandTerrain(HOME, () => "mountains", { w: 1, h: 1, cleared: true })(HOME.x + 1, HOME.y)).toBe("hills");
-  expect(islandTerrain(HOME, lake, { w: 1, h: 1 })(HOME.x, HOME.y)).toBe("lake");
-});

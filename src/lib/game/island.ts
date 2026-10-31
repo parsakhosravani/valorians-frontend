@@ -26,12 +26,7 @@ type TerrainAt = (x: number, y: number) => Terrain;
  * up and down (`h`). The war map draws it as it is; the village view makes
  * it taller, to give the buildings room on a phone's tall screen.
  */
-export type ClaimShape = {
-  w: number;
-  h: number;
-  /** The land inside the border cleared for building: no water or mountains (the village view, where every spot is used). */
-  cleared?: boolean;
-};
+export type ClaimShape = { w: number; h: number };
 export const PLAIN_CLAIM: ClaimShape = { w: 1, h: 1 };
 
 /**
@@ -39,25 +34,6 @@ export const PLAIN_CLAIM: ClaimShape = { w: 1, h: 1 };
  * The island takes the claim's shape (see ClaimShape).
  */
 export function islandTerrain(home: Point | null | undefined, base: TerrainAt = terrainAt, claim: ClaimShape = PLAIN_CLAIM): TerrainAt {
-  const land = raised(home, base, claim);
-
-  if (!home || !claim.cleared) return land;
-
-  return (x, y) => {
-    const t = land(x, y);
-
-    if (t !== "lake" && t !== "sea" && t !== "mountains") return t;
-    // Inside the border (its usual size, stretched as drawn), with a tile to spare.
-    const d = Math.hypot((x - home.x) / claim.w, (y - home.y) / (0.92 * claim.h));
-
-    return d <= CLEARED_RADIUS ? (t === "mountains" ? "hills" : "plains") : t;
-  };
-}
-
-/** How far the cleared land reaches, in claim-stretched tiles: just past the border's furthest bulge. */
-const CLEARED_RADIUS = 3.2;
-
-function raised(home: Point | null | undefined, base: TerrainAt, claim: ClaimShape): TerrainAt {
   if (!home || base(home.x, home.y) !== "sea") return base;
   const { x: hx, y: hy } = home;
 

@@ -211,7 +211,7 @@ export const GroundPiece = memo(function GroundPiece({
   /** Lower paints sooner. */
   prio?: number;
 }) {
-  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${claim.w}x${claim.h}${claim.cleared ? "c" : ""}`;
+  const key = `${detail ? "d" : "b"}${res}|${x},${y},${n}|${occupied}|${home}|${claim.w}x${claim.h}`;
   const held = useRef<string | null>(null);
   const prioRef = useRef(prio);
   const onImageRef = useRef(onImage);
@@ -338,7 +338,7 @@ export const GroundOverview = memo(function GroundOverview({
       }
     g.putImageData(img, 0, 0);
     onCanvasRef.current(c);
-  }, [ox, oy, n, home?.x, home?.y, claim.w, claim.h, claim.cleared]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ox, oy, n, home?.x, home?.y, claim.w, claim.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <canvas ref={ref} aria-hidden="true" className="hidden" />;
 });
