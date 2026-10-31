@@ -291,3 +291,34 @@ test("cancelling a queued batch leaves the running one alone", () => {
   expect(s.training.map((t) => t.startsAt)).toEqual([T0, T0 + 30_000]);
   expect(() => W.cancelTraining(s, 123, T0)).toThrow("already finished");
 });
+
+test("a won raid knocks the City Gate down: a level for an empty tribe, more with rams", () => {
+  expect(W.gateDamage(0, E.emptyArmy())).toBe(0);
+  expect(W.gateDamage(11, E.emptyArmy())).toBe(1);
+  expect(W.gateDamage(11, { ...E.emptyArmy(), ram: 25 })).toBe(3);
+  expect(W.gateDamage(11, { ...E.emptyArmy(), ram: 500 })).toBe(6);
+  expect(W.gateDamage(1, { ...E.emptyArmy(), ram: 500 })).toBe(1);
+
+  const attacker = withBarracks();
+  attacker.army.cavalry = 100;
+  const defender = withBarracks();
+  defender.shieldUntil = 0;
+  defender.buildings["city-gate"] = 11;
+  defender.queue = [{ building: "city-gate", toLevel: 12, startedAt: T0, endsAt: T0 + 1000 }];
+  const { state, report } = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 100 }, T0, 0.5);
+
+  expect(report.attackerWon).toBe(true);
+  expect(report.gate).toEqual({ from: 11, to: 10 });
+  expect(state.buildings["city-gate"]).toBe(10);
+  expect(state.queue[0].toLevel).toBe(11);
+
+  // Held: the gate stands.
+  const strong = withBarracks();
+  strong.shieldUntil = 0;
+  strong.army.spearman = 500;
+  strong.buildings["city-gate"] = 11;
+  const held = W.defendRaid(strong, attacker, { ...E.emptyArmy(), cavalry: 1 }, T0, 0.5);
+  expect(held.report.attackerWon).toBe(false);
+  expect(held.report.gate).toBeUndefined();
+  expect(held.state.buildings["city-gate"]).toBe(11);
+});

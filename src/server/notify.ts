@@ -130,7 +130,9 @@ export const notify = {
         ? `💀 <b>${esc(attacker)} raided your tribe</b> and took ${fmt(taken)} resources.\n\n`
         : `💀 <b>${esc(attacker)} beat your defenders</b>, but your stores were safe: they carried nothing off.\n\n`) +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
-        `You lost: ${armyText(r.defenderLosses)}\nYou're shielded for 2 hours. Time for revenge?` +
+        `You lost: ${armyText(r.defenderLosses)}\n` +
+        (r.gate ? `🚪 Your City Gate was knocked down from level ${r.gate.from} to ${r.gate.to}.\n` : "") +
+        `You're shielded for 2 hours. Time for revenge?` +
         promotionText(r.defenderPromoted),
       "⚔️ Take revenge",
       attackerId ? `/battle?revenge=${attackerId}` : "/battle?tab=reports"

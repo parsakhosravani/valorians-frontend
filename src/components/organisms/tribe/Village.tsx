@@ -49,8 +49,8 @@ const SIDE = (2 * R + 1) * T;
  * Kept a little under the plot spacing so, with the whole village in view,
  * there's room between buildings for their names.
  */
-const SIZE = 33;
-const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
+export const SIZE = 33;
+export const BIG: Record<string, number> = { "town-hall": 1.5, "city-gate": 1.15, watchtower: 1.1 };
 const MIN_ZOOM = 0.6;
 /**
  * How roomy the village is laid out here (see Layout). Picked by laying out
@@ -67,7 +67,7 @@ const LAYOUT: Layout = { claim: { w: 1, h: 1.3 }, room: 1.2, rows: 1.4 };
  * to fit (see plateSize), and any that would still cover another wait for
  * you to zoom in.
  */
-const COMPACT_ZOOM = 1.45;
+export const COMPACT_ZOOM = 1.45;
 /** Room (px on screen) kept round the village when it's fitted to the view. */
 const FIT_PAD = 6;
 /** Extra room (px on screen) left and right of the outermost buildings, for their name plates. */
@@ -178,7 +178,7 @@ type PlotProps = {
 };
 
 /** A building on its plot: the art (zooms with the land), a level medallion and name at its foot, and what's going on over its roof. */
-const Building = memo(function Building({ o, at, freeBuilder, now, named, compact, onOpen }: PlotProps) {
+export const VillageBuilding = memo(function Building({ o, at, freeBuilder, now, named, compact, onOpen }: PlotProps) {
   const size = SIZE * (BIG[o.building.id] ?? 1);
   const built = o.level > 0;
   const ready = !o.job && freeBuilder && canStart(o);
@@ -277,7 +277,7 @@ const Building = memo(function Building({ o, at, freeBuilder, now, named, compac
 });
 
 /** Rough size of a name plate on screen (px), for deciding which fit; zoomed out they're smaller. */
-const plateSize = (name: string, named: boolean, compact: boolean) =>
+export const plateSize = (name: string, named: boolean, compact: boolean) =>
   compact ? { w: named ? 24 + name.length * 5.3 : 18, h: 18 } : { w: named ? 30 + name.length * 6.2 : 22, h: 22 };
 
 // ─── The village ─────────────────────────────────────────────────────────────
@@ -318,6 +318,10 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
       setRest((r) => (r && r.x === c.x && r.y === c.y && r.z === c.z ? r : { ...c }));
     },
   });
+
+  // The wall is built up as the City Gate goes up (see wallLook).
+  const gate = options.find((o) => o.building.id === "city-gate")?.level ?? 0;
+  const claim = useMemo(() => ({ ...LAYOUT.claim, wall: gate }), [gate]);
 
   const border = useMemo(() => claimOutline(64, LAYOUT.claim).map((e) => ({ x: mid + e.x * T, y: mid + e.y * T })), [mid]);
 
@@ -533,7 +537,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
         <div ref={camera.layer} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: SIDE, height: SIDE }}>
           <GroundOverview
             home={home}
-            claim={LAYOUT.claim}
+            claim={claim}
             n={2 * R + 1}
             ox={ox}
             oy={oy}
@@ -544,7 +548,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
               key={p.key}
               detail={p.detail}
               home={`${home.x},${home.y}`}
-              claim={LAYOUT.claim}
+              claim={claim}
               n={p.n}
               occupied={p.occupied}
               prio={p.prio}
@@ -575,7 +579,7 @@ const VillageLand = ({ land, options, freeBuilder, now, onOpen, topRight, bottom
 
           {options.map((o) =>
             plan.plots[o.building.id] ? (
-              <Building
+              <VillageBuilding
                 key={o.building.id}
                 at={toPx(plan.plots[o.building.id])}
                 freeBuilder={freeBuilder}

@@ -452,7 +452,18 @@ export type RaidReport = BattleOutcome & {
    */
   carried?: Loot;
   carriedCoins?: number;
+  /** The defender's City Gate, knocked down a level or more by the winners (see gateDamage). */
+  gate?: { from: number; to: number };
 };
+
+/**
+ * Levels a City Gate loses when the attackers win: one for being stormed at
+ * all, even with no rams (an empty tribe still loses some of its gate), and
+ * more the more of it their rams broke: half its levels again at full break.
+ * One at Gate 11 with no rams; three with rams breaking half of it.
+ */
+export const gateDamage = (gate: number, sent: Army) =>
+  gate > 0 ? Math.min(gate, 1 + Math.floor(siegeBreak(sent).wall * gate * 0.5)) : 0;
 
 /**
  * Step 2: the battle, applied to the defender. Returns the defender's new
@@ -567,6 +578,7 @@ export function defendRaid(
   }
 
   const loot = emptyLoot();
+  let gate: RaidReport["gate"];
   if (outcome.attackerWon) {
     const survivors = survivorsOf(sent, outcome.attackerLosses);
     // Spoils already on their backs take up room: only the rest fills with new loot.
@@ -581,6 +593,15 @@ export function defendRaid(
       });
     }
     d.war.defensesLost += 1;
+    const from = d.buildings["city-gate"] ?? 0;
+    const lost = gateDamage(from, sent);
+
+    if (lost > 0) {
+      gate = { from, to: from - lost };
+      d.buildings["city-gate"] = gate.to;
+      // A rebuild under way carries on from what's left standing.
+      for (const q of d.queue) if (q.building === "city-gate") q.toLevel = gate.to + 1;
+    }
   } else {
     d.war.defensesWon += 1;
   }
@@ -597,6 +618,7 @@ export function defendRaid(
       defenders,
       loot,
       coins: 0,
+      ...(gate ? { gate } : {}),
       returnsAt: now + (opts.travelMs ?? Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier)),
       ...(lootTotal(opts.carried) > 0 || (opts.carriedCoins ?? 0) > 0
         ? { carried: { ...emptyLoot(), ...opts.carried }, carriedCoins: opts.carriedCoins ?? 0 }

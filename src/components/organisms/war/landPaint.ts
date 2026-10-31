@@ -557,14 +557,53 @@ export const wetnessAt = (ground: (x: number, y: number) => Terrain, x: number, 
 };
 
 /**
- * The wall round your land: a palisade of sharpened logs standing along the
- * border, a thicker post every so often, lit from the top-left like the land.
- * It stops at the water's edge (no stakes in the sea or a lake) and ends
- * there in a stout post. Buildings on the border (the City Gate, the
- * Watchtower) stand in it.
+ * What the wall round your land is built of, from your City Gate's level:
+ * every five levels it's built up. A timber palisade to begin with (0–4),
+ * then a stone wall with battlements (5–9), stone with towers (10–14), dark
+ * granite with slate-roofed towers flying banners (15–19), and from 20 pale
+ * dressed stone with gilded roofs that keeps going: every five levels more,
+ * the wall stands a little taller and its towers a little closer, without end.
+ */
+export type WallLook = {
+  stone: boolean;
+  /** A tower every this many stones (0: none). */
+  towers: number;
+  roof: string | null;
+  banner: boolean;
+  /** Height of the wall (px at zoom 1). */
+  height: number;
+  /** Stone colour, dark to light. */
+  rock: [V3, V3];
+};
+
+export const wallLook = (gate = 0): WallLook => {
+  const tier = Math.floor(Math.max(0, gate) / 5);
+  const past = Math.max(0, tier - 4);
+
+  if (tier === 0) return { stone: false, towers: 0, roof: null, banner: false, height: 8, rock: [[0x6e, 0x4a, 0x28], [0x8f, 0x66, 0x3a]] };
+  if (tier === 1) return { stone: true, towers: 0, roof: null, banner: false, height: 9, rock: [[0x7a, 0x75, 0x6c], [0x9e, 0x98, 0x8c]] };
+  if (tier === 2) return { stone: true, towers: 14, roof: "#6B3F22", banner: false, height: 10, rock: [[0x7a, 0x75, 0x6c], [0x9e, 0x98, 0x8c]] };
+  if (tier === 3) return { stone: true, towers: 12, roof: "#3D4F6B", banner: true, height: 11, rock: [[0x52, 0x59, 0x63], [0x6f, 0x77, 0x82]] };
+
+  return {
+    stone: true,
+    towers: Math.max(6, 11 - past),
+    roof: "#B8862E",
+    banner: true,
+    height: 12 + 2 * Math.log2(1 + past),
+    rock: [[0xb0, 0xa5, 0x8f], [0xd4, 0xca, 0xb2]],
+  };
+};
+
+/**
+ * The wall round your land along the border (see wallLook), lit from the
+ * top-left like the land. It stops at the water's edge (no stakes in the sea
+ * or a lake) and ends there in a stout post or a tower. Buildings on the
+ * border (the City Gate, the Watchtower) stand in it.
  */
 const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
-  type Stake = { x: number; y: number; post: boolean; tone: number };
+  const look = wallLook(s.claim.wall);
+  type Stake = { x: number; y: number; post: boolean; tone: number; k: number };
   const stakes: Stake[] = [];
   // Stakes evenly along the border, whatever its bends.
   let carry = 0;
@@ -580,7 +619,7 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
       const x = p.x + (q.x - p.x) * t;
       const y = p.y + (q.y - p.y) * t;
 
-      stakes.push({ x, y, post: k % 9 === 0, tone: rnd(Math.round(x * 3), Math.round(y * 3), 131) });
+      stakes.push({ x, y, post: look.stone ? look.towers > 0 && k % look.towers === 0 : k % 9 === 0, tone: rnd(Math.round(x * 3), Math.round(y * 3), 131), k });
       k++;
     }
     carry = (carry - len) % STAKE_GAP;
@@ -600,6 +639,12 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
   });
 
   if (!wall.length) return;
+
+  if (look.stone) {
+    paintStoneWall(g, look, wall);
+
+    return;
+  }
 
   // Its shadow on the ground, falling to the bottom-right.
   const shade = new Path2D();
@@ -661,6 +706,114 @@ const paintPalisade = (g: CanvasRenderingContext2D, s: Scene, line: Pt[]) => {
       g.fillRect(st.x - w, st.y - h * 0.62, w * 2, 1.2);
     }
   }
+};
+
+/** A stone wall: dressed blocks with battlements, and towers where the look has them. */
+const paintStoneWall = (g: CanvasRenderingContext2D, look: WallLook, wall: { x: number; y: number; post: boolean; tone: number; k: number }[]) => {
+  const half = STAKE_GAP / 2 + 0.45;
+  const colour = (tone: number, shade = 0) =>
+    `rgb(${mixV(look.rock[0], look.rock[1], tone)
+      .map((c) => Math.round(c * (1 - shade)))
+      .join(",")})`;
+
+  // Its shadow on the ground, falling to the bottom-right.
+  g.fillStyle = "rgba(20,14,6,0.4)";
+  g.beginPath();
+  for (const st of wall) {
+    g.moveTo(st.x + 6.5, st.y + 1.5);
+    g.ellipse(st.x + 2.5, st.y + 1.5, st.post ? 6 : 4, 2, 0, 0, Math.PI * 2);
+  }
+  g.fill();
+
+  // Back to front so nearer stones overlap those behind.
+  for (const st of [...wall].sort((a, b) => a.y - b.y)) {
+    if (st.post) {
+      paintTower(g, look, st, colour);
+      continue;
+    }
+    const h = look.height + st.tone * 0.8;
+    const top = st.y - h;
+
+    g.fillStyle = colour(st.tone);
+    g.fillRect(st.x - half, top, half * 2, h);
+    // Mortar: a course line, and a joint that steps every other stone.
+    g.fillStyle = "rgba(30,26,22,0.35)";
+    g.fillRect(st.x - half, top + h * 0.5, half * 2, 0.6);
+    g.fillRect(st.x + (st.k % 2 ? -half * 0.3 : half * 0.4), top + (st.k % 2 ? 0 : h * 0.5), 0.6, h * 0.5);
+    // Light on the top.
+    g.fillStyle = "rgba(255,240,210,0.25)";
+    g.fillRect(st.x - half, top, half * 2, 1.1);
+    // Battlements: every other stone stands up a merlon.
+    if (st.k % 2 === 0) {
+      g.fillStyle = colour(st.tone, 0.05);
+      g.fillRect(st.x - half * 0.75, top - 2.6, half * 1.5, 2.8);
+      g.fillStyle = "rgba(255,240,210,0.25)";
+      g.fillRect(st.x - half * 0.75, top - 2.6, half * 1.5, 0.8);
+    }
+    g.fillStyle = "rgba(20,16,12,0.25)";
+    g.fillRect(st.x + half - 0.8, top, 0.8, h);
+  }
+};
+
+/** A round tower in the wall: a stone drum, a cone roof, and a banner on the grandest walls. */
+const paintTower = (
+  g: CanvasRenderingContext2D,
+  look: WallLook,
+  st: { x: number; y: number; tone: number; k: number },
+  colour: (tone: number, shade?: number) => string,
+) => {
+  const r = 3.9;
+  const h = look.height + 5;
+  const top = st.y - h;
+
+  g.fillStyle = colour(st.tone, 0.08);
+  g.fillRect(st.x - r, top, r * 2, h);
+  g.beginPath();
+  g.ellipse(st.x, st.y, r, 1.4, 0, 0, Math.PI);
+  g.fill();
+  // Lit on the left, in shade on the right, a slit window.
+  g.fillStyle = "rgba(255,240,210,0.22)";
+  g.fillRect(st.x - r, top, r * 0.7, h);
+  g.fillStyle = "rgba(20,16,12,0.3)";
+  g.fillRect(st.x + r * 0.45, top, r * 0.55, h);
+  g.fillStyle = "rgba(15,12,10,0.8)";
+  g.fillRect(st.x - 0.5, top + h * 0.35, 1, 2.4);
+
+  if (!look.roof) return;
+  const peak = top - 6.5;
+
+  g.beginPath();
+  g.moveTo(st.x - r - 1, top + 0.5);
+  g.lineTo(st.x, peak);
+  g.lineTo(st.x + r + 1, top + 0.5);
+  g.closePath();
+  g.fillStyle = look.roof;
+  g.fill();
+  g.lineWidth = 0.6;
+  g.strokeStyle = "rgba(20,14,8,0.7)";
+  g.stroke();
+  g.fillStyle = "rgba(255,240,210,0.25)";
+  g.beginPath();
+  g.moveTo(st.x - r - 1, top + 0.5);
+  g.lineTo(st.x, peak);
+  g.lineTo(st.x - 0.6, top + 0.5);
+  g.closePath();
+  g.fill();
+
+  if (!look.banner) return;
+  g.strokeStyle = "#2A1E12";
+  g.lineWidth = 0.6;
+  g.beginPath();
+  g.moveTo(st.x, peak);
+  g.lineTo(st.x, peak - 5);
+  g.stroke();
+  g.fillStyle = st.k % 2 ? "#A4302A" : "#C9A040";
+  g.beginPath();
+  g.moveTo(st.x, peak - 5);
+  g.lineTo(st.x + 4, peak - 4);
+  g.lineTo(st.x, peak - 3);
+  g.closePath();
+  g.fill();
 };
 
 /** What a piece is painted from: plain values, so it can be sent to the worker. */

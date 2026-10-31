@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import clsx from "clsx";
 
 import { ArmyLine, fmt } from "./shared";
 
@@ -80,6 +81,11 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
           <GameIcon e="🎖️" /> {unitPlural(p.unit)} promoted to {RANKS[p.rank].name}!
         </div>
       ))}
+      {report.gate && (
+        <div className={clsx("text-sm text-center font-bold", asDefender ? "text-bad" : "text-good")}>
+          <GameIcon e="🚪" /> {asDefender ? "Your" : "Their"} City Gate knocked down: level {report.gate.from} → {report.gate.to}
+        </div>
+      )}
       {lootTotal > 0 || report.coins > 0 ? (
         <div className="inset p-2.5">
           <div className="label !text-micro mb-1">{asDefender ? "Stolen from you" : "Loot"}</div>
