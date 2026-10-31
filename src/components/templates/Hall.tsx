@@ -5,13 +5,13 @@ import Link from "next/link";
 import clsx from "clsx";
 
 import coinImg from "~/images/resources/coin.webp";
-import timeImg from "~/images/resources/time.webp";
+import hallBg from "~/images/background/tribe.webp";
 
 import { ACTIVE_QUESTS, QUEST_ICONS } from "@/components/organisms/quest/QuestDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, buildingImage } from "@/lib/game/config";
+import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, buildingImage, unitPlural } from "@/lib/game/config";
 import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, defensePower, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
@@ -45,48 +45,88 @@ type Task = {
   action?: { label: string; href?: string; onClick?: () => void; busy?: boolean };
 };
 
+/** A task's button: a link, or an action done right here. */
+const TaskAction = ({ t }: { t: Task }) => {
+  if (!t.action || t.state === "done") return null;
+  const look = clsx("btn btn-sm shrink-0", t.tone === "danger" ? "btn-ember" : t.tone === "gold" ? "btn-gold" : "btn-wood text-goldtext");
+
+  return t.action.href ? (
+    <Link className={look} href={t.action.href as any}>
+      {t.action.label}
+    </Link>
+  ) : (
+    <button className={look} disabled={t.action.busy} onClick={t.action.onClick}>
+      {t.action.label}
+    </button>
+  );
+};
+
+/** Something that needs you now: an attack coming, hungry troops, a raid to answer. */
+const AlertCard = ({ t }: { t: Task }) => (
+  <div
+    className={clsx(
+      "rounded-xl border p-2.5 flex items-center gap-3",
+      t.tone === "danger"
+        ? "border-bad/70 bg-[linear-gradient(180deg,rgba(84,30,18,0.95),rgba(40,20,14,0.95))] shadow-[0_0_14px_rgba(200,70,50,0.25)]"
+        : "border-gold/60 bg-[linear-gradient(180deg,rgba(70,52,24,0.95),rgba(34,26,16,0.95))]"
+    )}
+    role={t.tone === "danger" ? "alert" : undefined}
+  >
+    <Image alt="" className="w-10 h-10 object-contain shrink-0" height={80} src={t.img} width={80} />
+    <span className="flex-1 min-w-0 flex flex-col">
+      <span className="font-bold leading-tight">{t.title}</span>
+      {t.sub && <span className={clsx("text-xs font-bold", t.tone === "danger" ? "text-[#FFB27A]" : "text-sub")}>{t.sub}</span>}
+    </span>
+    <TaskAction t={t} />
+  </div>
+);
+
+/** One thing to do: its picture, what it is, and the button that does it. */
 const TaskRow = ({ t }: { t: Task }) => {
   const done = t.state === "done";
 
   return (
     <li className={clsx("flex items-center gap-3 py-2.5", done && "opacity-55")}>
-      <span
-        className={clsx(
-          "w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-2",
-          done ? "bg-good border-good text-[#1A120B]" : t.state === "wait" ? "border-muted/70 border-dashed" : "border-gold shadow-[0_0_8px_rgba(227,169,72,0.35)]"
-        )}
-      >
+      <span className="relative shrink-0">
+        <Image alt="" className="w-10 h-10 object-contain rounded-lg" height={80} src={t.img} width={80} />
         {done && (
-          <svg aria-hidden="true" fill="none" height="14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5" viewBox="0 0 24 24" width="14">
-            <path d="m5 12.5 4.5 4.5L19 7" />
-          </svg>
+          <span className="absolute -right-1 -bottom-1 w-[18px] h-[18px] rounded-full bg-good text-[#1A120B] flex items-center justify-center border-2 border-panel">
+            <svg aria-hidden="true" fill="none" height="10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" viewBox="0 0 24 24" width="10">
+              <path d="m5 12.5 4.5 4.5L19 7" />
+            </svg>
+          </span>
         )}
       </span>
-      <Image alt="" className="w-10 h-10 object-contain shrink-0 rounded-lg" height={80} src={t.img} width={80} />
       <span className="flex-1 min-w-0 flex flex-col">
         <span className={clsx("font-bold leading-tight", done && "line-through decoration-muted")}>{t.title}</span>
-        {t.sub && <span className={clsx("text-xs font-bold", t.tone === "danger" ? "text-[#FFB27A]" : "text-muted")}>{t.sub}</span>}
+        {t.sub && <span className="text-xs font-bold text-muted">{t.sub}</span>}
       </span>
-      {t.action &&
-        !done &&
-        (t.action.href ? (
-          <Link
-            className={clsx(
-              "btn btn-sm shrink-0",
-              t.tone === "danger" ? "btn-ember" : t.tone === "gold" ? "btn-gold" : "btn-wood text-goldtext"
-            )}
-            href={t.action.href as any}
-          >
-            {t.action.label}
-          </Link>
-        ) : (
-          <button className="btn btn-sm btn-gold shrink-0" disabled={t.action.busy} onClick={t.action.onClick}>
-            {t.action.label}
-          </button>
-        ))}
+      <TaskAction t={t} />
     </li>
   );
 };
+
+/** Work under way: a picture, what it is, how far along, and the time left. */
+const WorkRow = ({ img, title, from, to, now }: { img: string; title: string; from: number; to: number; now: number }) => (
+  <li className="flex items-center gap-2.5">
+    <Image alt="" className="w-8 h-8 object-contain shrink-0" height={64} src={img} width={64} />
+    <span className="flex-1 min-w-0 flex flex-col gap-1">
+      <span className="flex items-baseline gap-2">
+        <span className="flex-1 min-w-0 truncate text-sm font-bold">{title}</span>
+        <span className="shrink-0 text-xs font-extrabold text-goldtext tabular-nums">{formatDuration(to - now)}</span>
+      </span>
+      <Bar className="h-1.5" max={Math.max(1, to - from)} value={Math.max(0, Math.min(to - from, now - from))} />
+    </span>
+  </li>
+);
+
+/** Where to go from here: the places a chief visits most. */
+const PLACES = [
+  { href: "/resources", label: "Mine", img: "/images/resources/rock-iron.webp" },
+  { href: "/battle?tab=army", label: "Army", img: "/images/buildings/Barracks.webp" },
+  { href: "/battle?tab=map", label: "Map", img: "/images/icons/compass.webp" },
+  { href: "/market", label: "Market", img: "/images/buildings/Trading%20Post.webp" },
+] as const;
 
 export const Hall = () => {
   const { telegram } = useTelegramContext();
@@ -95,6 +135,7 @@ export const Hall = () => {
   const [busy, setBusy] = useState<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [shieldOpen, setShieldOpen] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   // The bandit raid report you've already read (by its time), so it stops showing.
   const [seenBandits, setSeenBandits] = useState<number | null>(() => {
     try {
@@ -136,6 +177,8 @@ export const Hall = () => {
   };
 
   const options = useMemo(() => upgradeOptions(state), [state]);
+  // What needs you now (shown at the top, only when there's something), and the day's to-dos.
+  const alerts: Task[] = [];
   const tasks: Task[] = [];
 
   // 1. Daily reward
@@ -160,11 +203,11 @@ export const Hall = () => {
   if (news?.opponentId) {
     const lost = Object.values(news.report.loot ?? {}).reduce((a, b) => a + b, 0);
 
-    tasks.push({
+    alerts.push({
       key: "revenge",
       img: buildingImage(BUILDING_BY_ID["war-hall"]),
       title: `Take revenge on ${news.opponent}`,
-      sub: `Raided you ${formatDuration(now - news.at)} ago · took ${compact(lost)}`,
+      sub: `They raided you ${formatDuration(now - news.at)} ago and took ${compact(lost)}`,
       state: "todo",
       tone: "danger",
       action: { label: "Revenge", href: `/battle?revenge=${news.opponentId}` },
@@ -178,7 +221,7 @@ export const Hall = () => {
   if (raid && raid.arrivesAt > now) {
     const defense = Math.round(defensePower(state));
 
-    tasks.push({
+    alerts.unshift({
       key: "bandits",
       img: "/images/icons/skull.webp",
       title: `Bandits strike in ${formatDuration(raid.arrivesAt - now)}`,
@@ -190,7 +233,7 @@ export const Hall = () => {
   } else if (bandits && now - bandits.at < 24 * 3600e3 && seenBandits !== bandits.at) {
     const taken = Object.values(bandits.stolen).reduce((a, b) => a + b, 0);
 
-    tasks.push({
+    alerts.push({
       key: "bandits",
       img: "/images/icons/skull.webp",
       title:
@@ -211,6 +254,27 @@ export const Hall = () => {
     });
   }
 
+  // Hungry troops: the crop is running out (or gone) while more is eaten than grown.
+  const cropRate = rates.productionPerHour.crop;
+
+  if (cropRate < 0) {
+    const left = state.resources.crop / -cropRate;
+
+    if (left < 12)
+      alerts.push({
+        key: "crop",
+        img: RESOURCES.find((r) => r.id === "crop")!.img,
+        title: state.resources.crop <= 0 ? "Your troops are starving" : `Crop runs out in ${formatDuration(left * 3600e3)}`,
+        sub:
+          state.resources.crop <= 0
+            ? "Some desert every hour. Build Windmills or a Fertilizer Workshop."
+            : `You eat ${compact(-cropRate)} more than you grow each hour. Then troops start to desert.`,
+        state: "todo",
+        tone: "danger",
+        action: { label: "Build", href: "/tribe" },
+      });
+  }
+
   // 4. Build
   const advice = recommendUpgrade(state, options);
   const freeBuilders = rates.builders - state.queue.length;
@@ -222,23 +286,12 @@ export const Hall = () => {
       key: "build",
       img: buildingImage(o.building),
       title: `${o.level === 0 ? "Build" : "Upgrade"} ${o.building.name} to ${o.toLevel}`,
-      sub: `${advice.reason} · ${compact(o.cost)} each`,
+      sub: `${advice.reason}, ${compact(o.cost)} of each`,
       state: "todo",
       tone: "gold",
       action: { label: o.level === 0 ? "Build" : "Upgrade", onClick: () => run("build", () => upgradeBuilding(o.building.id)), busy: busy === "build" },
     });
-  } else if (freeBuilders <= 0) {
-    const next = [...state.queue].sort((a, b) => a.endsAt - b.endsAt)[0];
-
-    tasks.push({
-      key: "build",
-      img: buildingImage(BUILDING_BY_ID[next.building]),
-      title: `${BUILDING_BY_ID[next.building].name} → ${next.toLevel} under way`,
-      sub: `Builders busy · next done in ${formatDuration(next.endsAt - now)}`,
-      state: "wait",
-      action: { label: "View", href: "/tribe" },
-    });
-  } else {
+  } else if (freeBuilders > 0) {
     const soonest = options
       .filter((o) => !o.job && o.hoursToAfford !== null)
       .sort((a, b) => (a.hoursToAfford ?? 0) - (b.hoursToAfford ?? 0))[0];
@@ -248,7 +301,7 @@ export const Hall = () => {
         key: "build",
         img: buildingImage(soonest.building),
         title: `Save up for ${soonest.building.name} ${soonest.toLevel}`,
-        sub: `Affordable in ~${formatDuration((soonest.hoursToAfford ?? 0) * 3600e3)} · or mine to speed it up`,
+        sub: `Affordable in about ${formatDuration((soonest.hoursToAfford ?? 0) * 3600e3)}, sooner if you mine`,
         state: "wait",
         action: { label: "View", href: "/tribe" },
       });
@@ -284,17 +337,7 @@ export const Hall = () => {
       state: "todo",
       action: { label: "Go", href: "/tribe" },
     });
-  } else if (state.training.length) {
-    const end = Math.max(...state.training.map(trainingEndsAt));
-
-    tasks.push({
-      key: "army",
-      img: buildingImage(BUILDING_BY_ID["barracks"]),
-      title: "Troops in training",
-      sub: `All done in ${formatDuration(end - now)}`,
-      state: "wait",
-    });
-  } else {
+  } else if (!state.training.length) {
     tasks.push({
       key: "army",
       img: buildingImage(BUILDING_BY_ID["barracks"]),
@@ -315,7 +358,7 @@ export const Hall = () => {
       key: "trade",
       img: buildingImage(BUILDING_BY_ID["trading-post"]),
       title: `Trade your extra ${fullest.r.name.toLowerCase()}`,
-      sub: `Storage is ${Math.round(fullest.share * 100)}% full. Swap it on the Market`,
+      sub: `Storage is ${Math.round(fullest.share * 100)}% full. Swap it on the Market.`,
       state: "todo",
       action: { label: "Trade", href: "/market" },
     });
@@ -353,91 +396,150 @@ export const Hall = () => {
     });
   }
 
-  // To-dos first, then in progress, then done.
+  // To-dos first, then in progress, then done. The first three are the next steps; the rest fold away.
   const order = { todo: 0, wait: 1, done: 2 };
 
   tasks.sort((a, b) => order[a.state] - order[b.state]);
   const doneCount = tasks.filter((t) => t.state === "done").length;
+  const next = tasks.slice(0, 3);
+  const later = tasks.slice(3);
   const shielded = state.shieldUntil > now;
   const plusOn = plusActive(state);
+  const working = state.queue.length + state.training.length;
 
   return (
     <div className="flex flex-col gap-3 px-3 pt-2 pb-4">
-      {/* Your tribe */}
-      <section className="card-hero p-3 pr-2 flex items-center gap-3 overflow-hidden">
-        <span aria-hidden className="absolute -left-6 -top-6 w-36 h-36 rounded-full bg-gold/10 blur-2xl" />
+      {/* Your tribe, in its village: the one picture on the page. */}
+      <section className="relative overflow-hidden rounded-2xl border border-frame/80 shadow-card min-h-[188px] flex flex-col justify-end">
         <Image
-          alt=""
-          className="relative w-[84px] h-[84px] object-contain shrink-0 drop-shadow-[0_6px_8px_rgba(0,0,0,0.6)]"
-          height={168}
+          fill
           priority
-          src={buildingImage(BUILDING_BY_ID["town-hall"])}
-          width={168}
+          alt=""
+          className="object-cover object-[50%_42%]"
+          placeholder="blur"
+          sizes="(max-width: 448px) 100vw, 448px"
+          src={hallBg}
         />
-        <div className="relative flex-1 min-w-0 flex flex-col gap-1.5">
-          <h1 className="title-screen truncate">{me.firstName || "Your tribe"}</h1>
-          <div className="flex flex-wrap gap-1">
-            <span className="pill">Hall {state.buildings["town-hall"] ?? 0}</span>
-            <span className="pill"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
-            <span className="pill"><GameIcon e="👥" /> {compact(state.population)}</span>
-          </div>
-        </div>
+        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-ground via-ground/70 to-ground/10" />
         <Link
           aria-label={`Rank ${me.rank}, open the leaderboard`}
-          className="relative shrink-0 w-[62px] h-[62px] rounded-full flex flex-col items-center justify-center border-2 border-gold bg-ink/70 shadow-[inset_0_0_12px_rgba(227,169,72,0.25)] active:scale-95 transition-transform"
+          className="absolute right-2.5 top-2.5 w-[58px] h-[58px] rounded-full flex flex-col items-center justify-center border-2 border-gold bg-ink/80 shadow-[inset_0_0_12px_rgba(227,169,72,0.25)] active:scale-95 transition-transform"
           href="/leaderboard"
         >
-          <span className="text-micro font-extrabold tracking-[0.14em] text-muted">RANK</span>
+          <span className="text-micro font-extrabold text-muted">Rank</span>
           <span className="font-display font-black text-lg leading-none text-goldtext">#{compact(me.rank)}</span>
         </Link>
+        <div className="relative flex items-end gap-2.5 px-3 pt-10 pb-3">
+          <Image
+            alt=""
+            className="w-[92px] h-[92px] -mb-1 -ml-1 object-contain shrink-0 drop-shadow-[0_6px_8px_rgba(0,0,0,0.7)]"
+            height={184}
+            priority
+            src={buildingImage(BUILDING_BY_ID["town-hall"])}
+            width={184}
+          />
+          <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+            <h1 className="title-screen truncate drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">{me.firstName || "Your tribe"}</h1>
+            <div className="flex flex-wrap gap-1">
+              <span className="pill">Hall {state.buildings["town-hall"] ?? 0}</span>
+              <span className="pill"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
+              <span className="pill"><GameIcon e="👥" /> {compact(state.population)}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                className={clsx(
+                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-extrabold active:scale-95 transition-transform",
+                  shielded ? "border-good/60 bg-ink/80 text-good" : "border-bad/70 bg-[rgba(84,30,18,0.9)] text-bad"
+                )}
+                onClick={() => setShieldOpen(true)}
+              >
+                <GameIcon e="🛡️" /> {shielded ? formatDuration(state.shieldUntil - now) : "Unprotected"}
+              </button>
+              <button
+                className={clsx(
+                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-extrabold active:scale-95 transition-transform",
+                  plusOn ? "border-good/60 bg-ink/80 text-good" : "border-gold/70 bg-ink/80 text-goldtext"
+                )}
+                onClick={() => setPlusOpen(true)}
+              >
+                <GameIcon e="👑" /> {plusOn ? `Plus, ${formatDuration(state.plus.until - now)} left` : state.plus.trialUsed ? "Get Plus" : "Try Plus free"}
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
-
-      {/* Protection and Plus at a glance */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          className={clsx(
-            "card p-2.5 flex items-center gap-2 text-left active:scale-[0.98] transition-transform",
-            !shielded && "!border-bad/60 bg-[linear-gradient(180deg,rgba(80,28,16,0.9),rgba(30,22,16,0.94))]"
-          )}
-          onClick={() => setShieldOpen(true)}
-        >
-          <span aria-hidden className="text-[28px] leading-none shrink-0"><GameIcon e="🛡️" /></span>
-          <span className="flex flex-col min-w-0">
-            <span className="font-display font-black text-[15px] leading-tight">Shield</span>
-            <span className={clsx("flex items-center gap-1 text-caption font-bold truncate", shielded ? "text-good" : "text-bad")}>
-              {shielded && <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={timeImg} />}
-              {shielded ? formatDuration(state.shieldUntil - now) : "Not protected"}
-            </span>
-          </span>
-        </button>
-        <button
-          className={clsx("p-2.5 flex items-center gap-2 text-left active:scale-[0.98] transition-transform", plusOn ? "card" : "card-hero")}
-          onClick={() => setPlusOpen(true)}
-        >
-          <span aria-hidden className="text-[28px] leading-none shrink-0"><GameIcon e="👑" /></span>
-          <span className="flex flex-col min-w-0">
-            <span className="font-display font-black text-[15px] leading-tight">Plus</span>
-            <span className={clsx("text-caption font-bold truncate", plusOn ? "text-good" : "text-goldtext")}>
-              {plusOn ? `${formatDuration(state.plus.until - now)} left` : state.plus.trialUsed ? "+1 builder & more" : "Try it free"}
-            </span>
-          </span>
-        </button>
-      </div>
       <PlusDrawer isOpen={plusOpen} onClose={() => setPlusOpen(false)} />
       <ShieldDrawer isOpen={shieldOpen} onClose={() => setShieldOpen(false)} onOpenPlus={() => setPlusOpen(true)} />
 
-      {/* Today */}
+      {/* What needs you now: only when something does. */}
+      {alerts.length > 0 && (
+        <section aria-label="Needs you now" className="flex flex-col gap-2">
+          {alerts.map((t) => (
+            <AlertCard key={t.key} t={t} />
+          ))}
+        </section>
+      )}
+
+      {/* Next steps: the three most useful things to do, the rest folded away. */}
       <section className="card px-3 pt-3 pb-1">
-        <SectionTitle right={`${doneCount} of ${tasks.length} done`}>Today</SectionTitle>
-        <Bar className="mt-2.5 h-1.5" max={tasks.length} value={doneCount} />
+        <SectionTitle right={`${doneCount} of ${tasks.length} done today`}>Next steps</SectionTitle>
         <ul className="divide-y divide-line/50 mt-1">
-          {tasks.map((t) => (
+          {next.map((t) => (
             <TaskRow key={t.key} t={t} />
           ))}
         </ul>
+        {later.length > 0 && (
+          <>
+            {showMore && (
+              <ul className="divide-y divide-line/50 border-t border-line/50">
+                {later.map((t) => (
+                  <TaskRow key={t.key} t={t} />
+                ))}
+              </ul>
+            )}
+            <button
+              aria-expanded={showMore}
+              className="w-full border-t border-line/50 py-2 text-sm font-extrabold text-goldtext"
+              onClick={() => setShowMore((v) => !v)}
+            >
+              {showMore ? "Show less" : `${later.length} more`}
+            </button>
+          </>
+        )}
       </section>
 
-      {/* Production at a glance */}
+      {/* Work under way: builders and training, with the time left. */}
+      {working > 0 && (
+        <section className="card p-3 flex flex-col gap-2.5">
+          <SectionTitle right={`${state.queue.length} of ${rates.builders} builders busy`}>Under way</SectionTitle>
+          <ul className="flex flex-col gap-2.5">
+            {[...state.queue]
+              .sort((a, b) => a.endsAt - b.endsAt)
+              .map((q) => (
+                <WorkRow
+                  key={`b-${q.building}`}
+                  from={q.startedAt}
+                  img={buildingImage(BUILDING_BY_ID[q.building])}
+                  now={now}
+                  title={`${BUILDING_BY_ID[q.building].name} to level ${q.toLevel}`}
+                  to={q.endsAt}
+                />
+              ))}
+            {state.training.map((t, i) => (
+              <WorkRow
+                key={`t-${i}`}
+                from={t.startsAt}
+                img={`/images/troops/${t.unit}.webp`}
+                now={now}
+                title={`${t.count - t.done} ${t.count - t.done === 1 ? UNIT_BY_ID[t.unit].name : unitPlural(t.unit)}`}
+                to={trainingEndsAt(t)}
+              />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Stores: how full, and how fast they fill. */}
       <section className="card p-3 flex flex-col gap-2.5">
         <SectionTitle
           right={
@@ -446,48 +548,45 @@ export const Hall = () => {
             </span>
           }
         >
-          Production
+          Stores
         </SectionTitle>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-4 gap-1.5">
           {RESOURCES.map((r) => {
             const have = state.resources[r.id];
             const perHour = rates.productionPerHour[r.id];
             const full = have >= rates.capacity;
-            const hoursToFull = perHour > 0 && !full ? (rates.capacity - have) / perHour : null;
 
             return (
-              <div key={r.id} className="inset p-2 flex flex-col gap-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Image alt={r.name} className="w-6 h-6 shrink-0 object-contain" src={r.img} />
-                  <span className={clsx("font-extrabold text-sm tabular-nums", full && "text-bad")}>{compact(have)}</span>
-                  <span className="text-micro font-bold text-muted">/ {compact(rates.capacity)}</span>
+              <div key={r.id} className="inset px-1.5 py-2 flex flex-col items-center gap-1">
+                <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
+                <span className={clsx("font-extrabold text-sm tabular-nums leading-none", full && "text-bad")}>{compact(have)}</span>
+                <div className="bar h-1 w-full">
+                  <span className={clsx("bar-fill", full && "!bg-none bg-bad")} style={{ width: `${Math.min(100, (have / rates.capacity) * 100)}%` }} />
                 </div>
-                <div className="bar h-1.5">
-                  <span
-                    className={clsx("bar-fill", full && "!bg-none bg-bad")}
-                    style={{ width: `${Math.min(100, (have / rates.capacity) * 100)}%` }}
-                  />
-                </div>
-                <span className={clsx("text-micro font-extrabold", perHour < 0 ? "text-bad" : "text-good")}>
+                <span className={clsx("text-micro font-extrabold tabular-nums", perHour < 0 ? "text-bad" : "text-good")}>
                   {perHour >= 0 ? "+" : ""}
                   {compact(perHour)}/h
-                  <span className="text-muted font-bold">
-                    {full ? " · full" : hoursToFull !== null && hoursToFull < 24 ? ` · full in ${formatDuration(hoursToFull * 3600e3)}` : ""}
-                  </span>
                 </span>
-                {/* Crop running out with more eaten than grown: hungry troops start to desert. */}
-                {r.id === "crop" && perHour < 0 && (
-                  <span className="text-micro font-bold text-bad leading-tight">
-                    {have <= 0
-                      ? "Starving: troops desert each hour. Build Windmills or a Fertilizer Workshop."
-                      : `Runs out in ${formatDuration((have / -perHour) * 3600e3)}, then troops start to desert.`}
-                  </span>
-                )}
               </div>
             );
           })}
         </div>
+        <span className="text-micro font-bold text-muted text-center">Each store holds up to {compact(rates.capacity)}</span>
       </section>
+
+      {/* Where to go from here */}
+      <nav aria-label="Places" className="grid grid-cols-4 gap-2">
+        {PLACES.map((p) => (
+          <Link
+            key={p.href}
+            className="card py-2 flex flex-col items-center gap-1 active:scale-95 transition-transform"
+            href={p.href as any}
+          >
+            <Image alt="" className="w-9 h-9 object-contain" height={72} src={p.img} width={72} />
+            <span className="text-xs font-extrabold">{p.label}</span>
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 };
