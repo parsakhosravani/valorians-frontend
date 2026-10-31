@@ -92,15 +92,13 @@ const UpgradeRow = ({
         <span className="flex flex-col gap-0.5 min-w-0">
           <span className="font-bold leading-tight truncate">
             {o.building.name}
-            {!o.maxed && (
-              <span className="text-muted font-bold text-xs">
-                {"  "}
-                {o.level} → {o.toLevel}
-              </span>
-            )}
+            <span className="text-muted font-bold text-xs">
+              {"  "}
+              {o.level} → {o.toLevel}
+            </span>
           </span>
-          <span className="text-xs font-bold text-good truncate">{o.maxed ? "Max level" : nextLevelGain(o.building)}</span>
-          {!o.maxed && !o.job && <CostLine o={o} />}
+          <span className="text-xs font-bold text-good truncate">{nextLevelGain(o.building)}</span>
+          {!o.job && <CostLine o={o} />}
         </span>
       </button>
       {startable ? (
@@ -316,8 +314,8 @@ export const Tribe: FunctionComponent = () => {
   const jobs = [...state.queue].sort((a, b) => a.endsAt - b.endsAt);
 
   const ready = options.filter((o) => canStart(o) && o.building.id !== advice?.id).sort((a, b) => a.cost - b.cost);
-  // Everything not being built: ready ones first (cheapest), then closest to affordable, maxed last.
-  const rank = (o: UpgradeOption) => (o.maxed ? 2 : canStart(o) ? 0 : 1);
+  // Everything not being built: ready ones first (cheapest), then closest to affordable.
+  const rank = (o: UpgradeOption) => (canStart(o) ? 0 : 1);
   const rest = options
     .filter((o) => !o.job)
     .filter((o) => filter === "all" || buildingGroup(o.building) === filter)

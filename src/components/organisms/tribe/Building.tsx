@@ -42,8 +42,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
   let label = "Upgrade";
   let disabled = busy;
 
-  if (info.maxed) [label, disabled] = ["Max level", true];
-  else if (!freeBuilder) [label, disabled] = ["No free builder", true];
+  if (!freeBuilder) [label, disabled] = ["No free builder", true];
   else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name).join(", ")}`, true];
 
   const progress = inQueue ? Math.min(1, (now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) : 0;
@@ -76,33 +75,31 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
           <div className="bar"><span className="bar-fill" style={{ width: `${progress * 100}%` }} /></div>
         </div>
       ) : (
-        !info.maxed && (
-          <div className="flex flex-col gap-2">
-            <SectionTitle right={<span className="flex items-center gap-1"><Image alt="" className="w-3.5 h-3.5 rounded-sm" src={time} />{formatDuration(info.seconds * 1000)}</span>}>
-              Level {info.from} → {info.from + 1}
-            </SectionTitle>
-            <div className="inset grid grid-cols-4 divide-x divide-line/50 py-2">
-              {RESOURCES.map((r) => {
-                const short = state.resources[r.id] < info.cost;
+        <div className="flex flex-col gap-2">
+          <SectionTitle right={<span className="flex items-center gap-1"><Image alt="" className="w-3.5 h-3.5 rounded-sm" src={time} />{formatDuration(info.seconds * 1000)}</span>}>
+            Level {info.from} → {info.from + 1}
+          </SectionTitle>
+          <div className="inset grid grid-cols-4 divide-x divide-line/50 py-2">
+            {RESOURCES.map((r) => {
+              const short = state.resources[r.id] < info.cost;
 
-                return (
-                  <span key={r.id} className="flex flex-col items-center gap-0.5">
-                    <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
-                    <span className={clsx("text-xs font-extrabold tabular-nums", short ? "text-bad" : "text-parch")}>{compact(info.cost)}</span>
-                  </span>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="pill pill-good">
-                <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={population} />+{GROWTH_PER_BUILDING_LEVEL}/h people
-              </span>
-              <span className="pill pill-bad">
-                <Image alt="" className="w-3.5 h-3.5" src={RESOURCES[3].img} />−{CROP_UPKEEP_PER_BUILDING_LEVEL}/h crop
-              </span>
-            </div>
+              return (
+                <span key={r.id} className="flex flex-col items-center gap-0.5">
+                  <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
+                  <span className={clsx("text-xs font-extrabold tabular-nums", short ? "text-bad" : "text-parch")}>{compact(info.cost)}</span>
+                </span>
+              );
+            })}
           </div>
-        )
+          <div className="flex flex-wrap gap-1.5">
+            <span className="pill pill-good">
+              <Image alt="" className="w-3.5 h-3.5 rounded-sm" src={population} />+{GROWTH_PER_BUILDING_LEVEL}/h people
+            </span>
+            <span className="pill pill-bad">
+              <Image alt="" className="w-3.5 h-3.5" src={RESOURCES[3].img} />−{CROP_UPKEEP_PER_BUILDING_LEVEL}/h crop
+            </span>
+          </div>
+        </div>
       )}
 
       {!inQueue && (

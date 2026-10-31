@@ -184,7 +184,7 @@ export const Hall = () => {
     });
   } else {
     const soonest = options
-      .filter((o) => !o.maxed && !o.job && o.hoursToAfford !== null)
+      .filter((o) => !o.job && o.hoursToAfford !== null)
       .sort((a, b) => (a.hoursToAfford ?? 0) - (b.hoursToAfford ?? 0))[0];
 
     if (soonest) {

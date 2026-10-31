@@ -285,7 +285,7 @@ const Building = memo(function Building({ o, at, freeBuilder, now, named, compac
                     : "bg-panel2 text-muted border-line",
               )}
             >
-              {o.maxed ? "★" : built ? o.level : "+"}
+              {built ? o.level : "+"}
             </span>
             {/* ...and an upgrade ready, as the gem over the roof does zoomed in */}
             {compact && gem && <UpgradeMark className="w-[11px] h-[11px] -ml-0.5 shrink-0" />}
