@@ -299,8 +299,8 @@ export function battleXp(s: GameState, fought: Army, enemyStrength: number, won:
 }
 
 /**
- * Applies a battle to the regiments: losses cost XP (a share of the veterans
- * died), then the earned XP is added. `regiment` is each type's size before
+ * Applies a battle to the regiments: the dead take their share of the XP with
+ * them, then the survivors add what they earned. A wiped-out regiment ends at 0. `regiment` is each type's size before
  * the battle. Returns the types that went up a rank.
  */
 export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
@@ -308,8 +308,14 @@ export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: 
   for (const u of UNIT_IDS) {
     const t = s.troops[u];
     const before = rankForXp(t.xp);
+    const wiped = regiment[u] > 0 && dead[u] >= regiment[u];
+    if (wiped) {
+      // No one survived to carry the experience home.
+      t.xp = 0;
+      continue;
+    }
     if (regiment[u] > 0 && dead[u] > 0) {
-      t.xp *= 1 - XP_LOSS_SHARE * Math.min(1, dead[u] / regiment[u]);
+      t.xp *= 1 - XP_LOSS_SHARE * (dead[u] / regiment[u]);
     }
     t.xp = Math.round(t.xp + (earned[u] ?? 0));
     const after = rankForXp(t.xp);
