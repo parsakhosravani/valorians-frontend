@@ -174,8 +174,8 @@ export const notify = {
       sellerId,
       `🤝 <b>${esc(buyer)}</b> took your offer: ${fmt(t.giveAmount)} ${t.give} for ${fmt(t.wantAmount)} ${t.want}.\n\n` +
         `Merchants arrive with your ${t.want} in <b>${inMinutes(travelMs)}</b>.`,
-      "🤝 Open my trades",
-      "/market?tab=mine"
+      "🤝 Open the Market",
+      "/market?tab=buy"
     );
   },
 
@@ -243,8 +243,8 @@ export const notify = {
       receiverId,
       `🗡️ <b>Bandits robbed your merchants</b> on the road from ${esc(from)}: <b>${fmt(stolen)} ${resource}</b> is gone. ` +
         `The other ${fmt(delivered)} is still on its way.\n\nHire guards for your next trade, or clear the lair on that road.`,
-      "🤝 Open my trades",
-      "/market?tab=mine"
+      "🤝 Open the Market",
+      "/market?tab=buy"
     );
   },
 
