@@ -49,6 +49,8 @@ export const nextLevelGain = (b: BuildingDef, level = 0): string => {
           return `+${e.perLevel}% wall defense`;
         case "flatDefense":
           return `+${e.perLevel} defense`;
+        case "dragon":
+          return level === 0 ? "Hatches your dragon" : `Dragon ${e.perLevel}% stronger`;
         case "traps":
           return `Traps catch ${e.perLevel}% more attackers`;
         case "protect":

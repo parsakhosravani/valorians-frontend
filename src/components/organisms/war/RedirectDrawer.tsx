@@ -10,7 +10,7 @@ import { Drawer } from "@/components/molecules/Drawer";
 import { useGame, useTelegramContext } from "@/context";
 import { RESOURCE_IDS, RESOURCE_NAMES, REDIRECT, UNITS } from "@/lib/game/config";
 import { Army, GameError, emptyArmy } from "@/lib/game/engine";
-import { Point, TERRAIN, marchRoute, pointAlong, routeMs, routeTimeline, seaRoute, terrainAt } from "@/lib/game/map";
+import { Point, TERRAIN, pointAlong, routeFor, routeMs, routeTimeline, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   Loot,
   battleNumbers,
@@ -48,7 +48,7 @@ export type ArmyOnRoad = {
 
 /** Where the army is right now, on a whole tile, and whether it's out at sea. */
 export function armySpot(a: ArmyOnRoad, now: number) {
-  const road = marchRoute(a.from, a.to);
+  const road = routeFor(a.units, a.from, a.to);
   const f = Math.min(1, Math.max(0, (now - a.startedAt) / Math.max(1, a.endsAt - a.startedAt)));
   const p = pointAlong(road, routeTimeline(road, a.units), f);
   const tile = { x: Math.round(p.x), y: Math.round(p.y) };
@@ -256,7 +256,7 @@ export const RedirectDrawer = ({
 
   if (army && target && where) {
     try {
-      const naval = seaRoute(where, target.at).naval;
+      const naval = seaRoute(where, target.at, army.units).naval;
       const { go, back } = splitForRedirect(army.units, keep, {
         go: naval || seaRoute(target.at, home).naval,
         back: seaRoute(where, home).naval,

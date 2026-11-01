@@ -4,7 +4,7 @@ import { getDb } from "./db";
 
 import { BANDIT } from "@/lib/game/config";
 import { Exposure, Lair, lairActive, lairOfCell, lairsIn, lairsOnRoute, routeBox } from "@/lib/game/bandits";
-import { Point, marchRoute } from "@/lib/game/map";
+import { Point, routeFor } from "@/lib/game/map";
 import type { Army } from "@/lib/game/engine";
 
 const key = (p: Point) => `${p.x},${p.y}`;
@@ -93,7 +93,7 @@ export async function clearLair(p: Point, by: number, at: number) {
 
 /** The manned lairs a trip from `from` to `to` passes within reach of. */
 export async function exposureOn(from: Point, to: Point, units: Army | null, now: number): Promise<Exposure[]> {
-  const road = marchRoute(from, to);
+  const road = routeFor(units, from, to);
   const box = routeBox(road);
   const lairs = (await lairsAround(box.min, box.max, now)).filter((l) => l.active);
 
@@ -114,7 +114,7 @@ export async function roadWatch(now: number) {
   const cleared = new Map(cs.rows.map((r) => [`${Number(r.x)},${Number(r.y)}`, Number(r.cleared_at)]));
 
   return (from: Point, to: Point, units: Army | null): Exposure[] => {
-    const road = marchRoute(from, to);
+    const road = routeFor(units, from, to);
     const box = routeBox(road);
     const d = BANDIT.tribeDistance;
     const near = villages.filter((v) => v.x >= box.min.x - d && v.x <= box.max.x + d && v.y >= box.min.y - d && v.y <= box.max.y + d);

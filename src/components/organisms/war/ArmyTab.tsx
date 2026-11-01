@@ -12,6 +12,7 @@ import { TrainItem, maxTrainBatches, trainingEndsAt } from "@/lib/game/engine";
 import {
   attackPower,
   defensePower,
+  ownedOf,
   trainingRefund,
   troopInfo,
   unitAttack,
@@ -68,10 +69,24 @@ const RankBar = ({ unit }: { unit: UnitDef }) => {
 };
 
 const TrainPanel = ({ unit }: { unit: UnitDef }) => {
-  const { state, rates, train } = useGame();
+  const { state, rates, now, train } = useGame();
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
-  const affordable = Math.min(MAX_BATCH, ...RESOURCE_IDS.map((r) => Math.floor(state.resources[r] / unit.cost[r])));
+  // One-of-a-kind units (the dragon): only as many as are still allowed.
+  const room = unit.maxOwned != null ? unit.maxOwned - ownedOf(state, unit.id) : MAX_BATCH;
+  const affordable = Math.min(MAX_BATCH, room, ...RESOURCE_IDS.map((r) => Math.floor(state.resources[r] / unit.cost[r])));
+
+  if (unit.maxOwned != null && room <= 0) {
+    const resting = unit.id === "dragon" && (state.dragonRestUntil ?? 0) > now;
+
+    return (
+      <div className="inset p-2.5 text-sm text-center text-sub">
+        {resting
+          ? `Your ${unit.name.toLowerCase()} is wounded and resting: it can fly again in ${formatDuration(state.dragonRestUntil! - now)}.`
+          : `Your tribe has its ${unit.name.toLowerCase()}. A tribe can have only ${unit.maxOwned}.`}
+      </div>
+    );
+  }
   const seconds = unit.time * rates.trainSpeedMultiplier * count;
 
   const onTrain = async () => {

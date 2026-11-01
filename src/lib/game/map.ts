@@ -103,7 +103,13 @@ export function isCoastal(p: Point) {
  * rough the ground is) and tiles of sea sailed, along the road the army
  * actually takes (see `marchRoute`). Any sea at all means ships.
  */
-export function seaRoute(a: Point, b: Point) {
+export function seaRoute(a: Point, b: Point, units?: Army | null) {
+  // Flying, there's no sea to cross.
+  if (units && isFlight(units)) {
+    const d = distance(a, b);
+
+    return { naval: false, sea: 0, land: d, distance: d };
+  }
   const r = marchRoute(a, b);
 
   return { naval: r.naval, sea: r.sea, land: r.land, distance: r.distance };
@@ -264,7 +270,7 @@ const SAIL_SECONDS_PER_TILE = UNIT_BY_ID[SHIP.id].speed;
  * sailing speed.
  */
 export function routeMs(units: Army, from: Point, to: Point, marchMultiplier = 1) {
-  const r = seaRoute(from, to);
+  const r = seaRoute(from, to, units);
   const walk = armySpeed(units) || UNITS[0].speed;
   const seconds = r.land * walk + r.sea * SAIL_SECONDS_PER_TILE;
 
@@ -568,6 +574,45 @@ const reverse = (r: MarchRoute): MarchRoute => ({
   wet: [...r.wet].reverse(),
   steps: [...r.steps].reverse(),
 });
+
+/** Only flyers (the dragon) and their ships: they fly straight, whatever's below. */
+export const isFlight = (units: Army) => {
+  let flyers = 0;
+
+  for (const u of UNITS) {
+    const n = units[u.id] ?? 0;
+
+    if (!n || u.transport) continue;
+    if (!u.flying) return false;
+    flyers += n;
+  }
+
+  return flyers > 0;
+};
+
+/** A flight: a straight line from `a` to `b`, a point a tile, never at sea, nothing in the way. */
+export function flightRoute(a: Point, b: Point): MarchRoute {
+  const d = distance(a, b);
+  const n = Math.max(1, Math.ceil(d));
+  const path = Array.from({ length: n + 1 }, (_, k) => ({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n }));
+
+  return {
+    path,
+    wet: path.map(() => false),
+    steps: Array.from({ length: n }, () => [d / n, 0] as [number, number]),
+    land: d,
+    sea: 0,
+    naval: false,
+    length: n,
+    distance: d,
+    detour: false,
+    climbed: false,
+  };
+}
+
+/** The way this army goes from `a` to `b`: flying straight if it's all flyers, else by road. */
+export const routeFor = (units: Army | null | undefined, a: Point, b: Point) =>
+  units && isFlight(units) ? flightRoute(a, b) : marchRoute(a, b);
 
 /**
  * The road an army takes from `a` to `b`. The same road both ways, so the

@@ -50,6 +50,7 @@ import {
   DESERT_PER_HOUR,
   HIDEOUT_MAX_SHARE,
   TRAP_MAX,
+  DRAGON,
   productionAt,
 } from "./config";
 import { ClanPerks, NO_PERKS } from "./clan";
@@ -102,7 +103,9 @@ export const unitRank = (s: GameState, u: UnitId) => rankForXp(s.troops?.[u]?.xp
 
 /** Attack and defense multiplier a troop type gets from its rank. */
 export const unitMultiplier = (s: GameState, u: UnitId) =>
-  1 + unitRank(s, u) * RANK_BONUS;
+  (1 + unitRank(s, u) * RANK_BONUS) *
+  // The dragon grows with its Roost, without end.
+  (u === "dragon" ? 1 + DRAGON.perRoostLevel * Math.max(0, (s.buildings["dragon-roost"] ?? 0) - 1) : 1);
 
 export type WarStats = {
   attacksWon: number;
@@ -175,6 +178,14 @@ export type GameState = {
   starving?: number;
   /** The last time hungry troops deserted, and how many. */
   deserted?: { at: number; count: number };
+  /** The dragon, beaten, rests at home until then (see DRAGON). */
+  dragonRestUntil?: number;
+  /**
+   * Units a tribe may have only so many of (the dragon), counted from the
+   * moment they're ordered: they're never lost, and while one is out on the
+   * march it isn't in the army or the marches home.
+   */
+  owned?: Partial<Record<UnitId, number>>;
   /** Bandits gathering to raid the village (see BANDIT_RAID). */
   banditRaid?: BanditRaid;
   /** No new bandit raid gathers before this. */
@@ -509,7 +520,8 @@ function starve(s: GameState, cropPerHour: number, cropBefore: number, hours: nu
 
   while (s.starving >= 1 && deficit > 0) {
     s.starving -= 1;
-    const home = UNITS.filter((u) => s.army[u.id] > 0 && u.upkeep > 0).sort((a, b) => b.upkeep - a.upkeep);
+    // The dragon never leaves its Roost, hungry or not.
+    const home = UNITS.filter((u) => s.army[u.id] > 0 && u.upkeep > 0 && !u.maxOwned).sort((a, b) => b.upkeep - a.upkeep);
     let budget = Math.max(1, Math.ceil(home.reduce((n, u) => n + s.army[u.id], 0) * DESERT_PER_HOUR));
 
     for (const u of home) {
@@ -641,6 +653,7 @@ function structuredCloneState(s: GameState): GameState {
     war: { ...s.war, ...(s.war.raidedAt ? { raidedAt: [...s.war.raidedAt] } : {}) },
     ...(s.deserted ? { deserted: { ...s.deserted } } : {}),
     ...(s.banditRaid ? { banditRaid: { ...s.banditRaid } } : {}),
+    ...(s.owned ? { owned: { ...s.owned } } : {}),
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
     troops: Object.fromEntries(

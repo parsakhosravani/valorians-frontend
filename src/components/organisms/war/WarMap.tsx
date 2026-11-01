@@ -71,7 +71,7 @@ import {
   MarchRoute,
   TERRAIN,
   Terrain,
-  marchRoute,
+  routeFor,
   pointAlong,
   routeMs,
   routeTimeline,
@@ -264,7 +264,7 @@ const tripFor = (
   const hit = TRIPS.get(key);
 
   if (hit) return hit;
-  const r = marchRoute(from, to);
+  const r = routeFor(units, from, to);
   const stops = routeTimeline(r, units);
   const at = (q: Pt) => ({ x: px(q.x), y: py(q.y) });
   const last = r.path.length - 1;

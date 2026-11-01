@@ -9,7 +9,7 @@ import { Drawer } from "@/components/molecules/Drawer";
 import { useGameActions, useLiveWhile, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy } from "@/lib/game/engine";
-import { Point, TERRAIN, Terrain, armySpeed, marchRoute, routeMs, shipsNeeded } from "@/lib/game/map";
+import { Point, TERRAIN, Terrain, armySpeed, routeFor, routeMs, shipsNeeded } from "@/lib/game/map";
 import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
@@ -82,7 +82,7 @@ export const SendArmyDrawer = ({
   const [picked, setPicked] = useState<number | null>(null);
 
   const terrain = target?.terrain ?? "plains";
-  const route = target ? marchRoute(target.from, target.at) : null;
+  const route = target ? routeFor(units, target.from, target.at) : null;
   const naval = !!route?.naval;
   // Landing on a tribe's beach favours them; barbarian camps have no harbor to defend.
   const landing = naval && target?.to.target ? landingFactorFor(target.harbor ?? 0) : 1;

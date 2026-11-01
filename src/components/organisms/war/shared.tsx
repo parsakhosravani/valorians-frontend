@@ -7,7 +7,7 @@ import { Segmented } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
 import type { Army, GameState } from "@/lib/game/engine";
 import { Lair, ambushLosses, lairsOnRoute } from "@/lib/game/bandits";
-import { Point, marchRoute } from "@/lib/game/map";
+import { Point, routeFor } from "@/lib/game/map";
 import { attackPower, fighterCount } from "@/lib/game/war";
 import { whole } from "@/lib/format";
 
@@ -171,7 +171,7 @@ export const BanditWarning = ({
   const manned = (lairs ?? []).filter((l) => l.active);
 
   if (!manned.length || fighterCount(units) === 0) return null;
-  const exposed = lairsOnRoute(marchRoute(from, to), manned, units);
+  const exposed = lairsOnRoute(routeFor(units, from, to), manned, units);
 
   if (!exposed.length) return null;
   const power = attackPower(s, units);
