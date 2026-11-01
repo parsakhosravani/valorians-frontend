@@ -180,7 +180,7 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
       const def = await findById(defenderId);
       const watch = (def?.state.buildings["watchtower"] ?? 0) >= 1;
 
-      await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel);
+      await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel, home);
     }
     // Anyone with a spy in this village hears the army has gone.
     await spiesSeeMarch(after, sent, travel, now).catch((e) => console.error("spies", e));
@@ -913,10 +913,28 @@ export async function listReports(me: Player) {
           ORDER BY created_at DESC LIMIT 30`,
     args: [me.id, me.id],
   });
+  // Where each opponent's village is, so a report can show it and jump there on the map.
+  const others = [
+    ...new Set(rs.rows.flatMap((r) => [r.attacker_id, r.defender_id]).filter((id) => id != null && Number(id) !== me.id).map(Number)),
+  ];
+  const homes = new Map<number, { x: number; y: number }>();
+
+  if (others.length) {
+    const hs = await db.execute({
+      sql: `SELECT id, map_x, map_y FROM users WHERE map_x IS NOT NULL AND id IN (${others.map(() => "?").join(",")})`,
+      args: others,
+    });
+
+    for (const h of hs.rows) homes.set(Number(h.id), { x: Number(h.map_x), y: Number(h.map_y) });
+  }
+
   return rs.rows.map((r) => {
     const report = JSON.parse(String(r.report)) as StoredReport;
     const asAttacker = Number(r.attacker_id) === me.id;
+    const oppId = asAttacker ? (r.defender_id == null ? null : Number(r.defender_id)) : Number(r.attacker_id);
     return {
+      /** The opponent's village on the map (null for camps and bandits). */
+      opponentAt: oppId != null ? (homes.get(oppId) ?? null) : null,
       id: Number(r.id),
       at: Number(r.created_at),
       role: asAttacker ? ("attacker" as const) : ("defender" as const),

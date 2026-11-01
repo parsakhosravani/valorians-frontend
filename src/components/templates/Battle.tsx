@@ -98,7 +98,14 @@ export const Battle = () => {
             />
           )}
           {tab === "army" && <ArmyTab />}
-          {tab === "reports" && <ReportsTab />}
+          {tab === "reports" && (
+            <ReportsTab
+              onShowOnMap={(id) => {
+                setRevenge(id);
+                setTab("map");
+              }}
+            />
+          )}
         </div>
       </div>
 

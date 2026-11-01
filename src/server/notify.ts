@@ -88,10 +88,10 @@ export const notify = {
     return sendToPlayer(userId, `🎉 You were accepted into <b>${esc(clan)}</b>! Your clan's perks now apply.`, "🛡️ Open clan", "/clan");
   },
 
-  incoming(defenderId: number, attacker: string, units: Army | null, travelMs: number) {
+  incoming(defenderId: number, attacker: string, units: Army | null, travelMs: number, from?: { x: number; y: number }) {
     return sendToPlayer(
       defenderId,
-      `🔥 <b>${esc(attacker)}</b> is marching on your tribe!\n\n` +
+      `🔥 <b>${esc(attacker)}</b>${from ? ` (village at 📍 ${from.x}, ${from.y})` : ""} is marching on your tribe!\n\n` +
         `Army: ${armyText(units)}${units ? "" : " (build a Watchtower to see which troops)"}\n` +
         `Arrives in <b>${inMinutes(travelMs)}</b>. Train defenders or upgrade your walls now.`,
       "🛡️ Prepare defenses",
