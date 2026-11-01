@@ -39,10 +39,13 @@ export default function RootLayout({
   return (
     <html suppressHydrationWarning lang="en">
       <body className="bg-ground text-parch mx-auto flex justify-center">
-        {/* Toasts styled like the game's panels: dark wood, gold trim, ember for errors. */}
+        {/* Toasts styled like the game's panels: dark wood, gold trim, ember for errors.
+            Just above the bottom bar, not at the top: there a toast sat right on the
+            header for a few seconds after almost every action, and taps on your
+            profile and the Trade button went to the toast instead. */}
         <Toaster
-          containerStyle={{ top: "calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px) + 10px)" }}
-          position="top-center"
+          containerStyle={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 88px)" }}
+          position="bottom-center"
           toastOptions={{
             duration: 2500,
             style: {
