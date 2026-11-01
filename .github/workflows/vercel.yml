@@ -1,0 +1,77 @@
+name: Vercel
+
+# Run by hand (Actions → Vercel → Run workflow), or by Claude through the
+# GitHub API, when a Vercel deploy is stuck or a redeploy is needed:
+#
+#   unstick-and-deploy  cancels every deployment stuck building or queued,
+#                       then deploys main to production from here.
+#   unstick             only cancels the stuck ones.
+#   deploy              only deploys main to production.
+#
+# Needs one repository secret: VERCEL_TOKEN (vercel.com → Account Settings →
+# Tokens, scoped to the team that owns the project). The team and project
+# are looked up by name below.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: What to do
+        type: choice
+        options: [unstick-and-deploy, unstick, deploy]
+        default: unstick-and-deploy
+
+concurrency:
+  group: vercel-tools
+  cancel-in-progress: false
+
+env:
+  VERCEL_TEAM_SLUG: parsas-projects-f8b4ea7e
+  VERCEL_PROJECT: valorians
+
+jobs:
+  vercel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Find the team and project
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo "::error::Add the VERCEL_TOKEN repository secret first."; exit 1; }
+          team=$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v2/teams/$VERCEL_TEAM_SLUG?slug=$VERCEL_TEAM_SLUG" | jq -r .id)
+          project=$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$VERCEL_PROJECT?teamId=$team" | jq -r .id)
+          echo "VERCEL_ORG_ID=$team" >> "$GITHUB_ENV"
+          echo "VERCEL_PROJECT_ID=$project" >> "$GITHUB_ENV"
+          echo "Team $team, project $project"
+
+      - name: Cancel stuck deployments
+        if: inputs.action != 'deploy'
+        run: |
+          set -euo pipefail
+          for state in BUILDING QUEUED INITIALIZING; do
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?teamId=$VERCEL_ORG_ID&projectId=$VERCEL_PROJECT_ID&state=$state&limit=50" \
+              | jq -r '.deployments[] | "\(.uid) \(.meta.githubCommitSha // "-" | .[0:7]) \(.url)"'
+          done | while read -r id sha url; do
+            echo "Cancelling $id ($sha, $url)"
+            curl -fsS -X PATCH -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v12/deployments/$id/cancel?teamId=$VERCEL_ORG_ID" > /dev/null || echo "::warning::Could not cancel $id"
+          done
+
+      - uses: actions/checkout@v4
+        if: inputs.action != 'unstick'
+        with:
+          ref: main
+
+      - uses: oven-sh/setup-bun@v2
+        if: inputs.action != 'unstick'
+
+      - name: Deploy main to production
+        if: inputs.action != 'unstick'
+        run: |
+          set -euo pipefail
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+          url=$(npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "Deployed: $url" | tee -a "$GITHUB_STEP_SUMMARY"
