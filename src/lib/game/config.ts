@@ -600,6 +600,12 @@ export function campName(level: number) {
 /** Cleared camps can be raided again for a smaller haul after this cooldown. */
 export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
+/**
+ * Only your newest beaten camps stay on the map to raid again; older ones are
+ * gone (they still count as beaten). Keeps the map tidy and stops sweeping
+ * every old camp each cooldown.
+ */
+export const CAMPS_KEPT = 3;
 
 // ─── Bandits ─────────────────────────────────────────────────────────────────
 //

@@ -9,7 +9,7 @@ import { storedFlag } from "@/lib/game/clan";
 import { banditStrength, campDefense, campName, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoastal, settledShare, terrainAt } from "@/lib/game/map";
-import { campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
+import { campGone, campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
 import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
 import type { StoredBattle } from "./war";
 
@@ -189,7 +189,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const c = center ?? home;
   const db = await getDb();
   const r = Math.max(8, Math.min(30, Math.round(radius) || VIEW_RADIUS));
-  // Camps never run out: beaten ones, the next one, and two beyond.
+  // Camps never run out: your newest beaten ones, the next one, and two beyond.
   const shown = me.state.camps.cleared + 3;
 
   // Everything below only needs the view: ask for it all at once instead of
@@ -271,8 +271,9 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     };
   });
 
-  const camps = spots.map((p, i) => {
+  const camps = spots.flatMap((p, i) => {
     const level = i + 1;
+    if (campGone(me.state, level)) return [];
     const st = campStatus(me.state, level, now);
 
     return {
