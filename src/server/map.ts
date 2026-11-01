@@ -12,6 +12,7 @@ import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoast
 import { campGone, campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
 import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
 import type { StoredBattle } from "./war";
+import { mySpies } from "./spies";
 
 /**
  * A tribe's home tile, settling it on the map the first time it is needed.
@@ -194,7 +195,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
 
   // Everything below only needs the view: ask for it all at once instead of
   // one query after another (each a round trip to the database).
-  const [rs, spots, mv, tr, lairsIn] = await Promise.all([
+  const [rs, spots, mv, tr, lairsIn, spies] = await Promise.all([
     // A village's state only comes along when its copied columns are stale (see tribeColumns).
     db.execute({
       sql: `SELECT u.id, u.username, u.first_name, u.photo_url, u.population, u.power, u.shield_until, u.map_x, u.map_y,
@@ -237,6 +238,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     }),
     // Bandit lairs in view: the same for everyone.
     lairsAround({ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }, now),
+    // The tribes you have a spy on.
+    mySpies(me.id, now),
   ]);
 
   const tribes = rs.rows.map((row) => {
@@ -268,6 +271,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           : { id: Number(row.clan_id), tag: String(row.clan_tag ?? ""), flag: storedFlag(row.clan_flag, Number(row.clan_id)) },
       /** In the viewer's clan: can't be attacked. */
       ally: id !== me.id && me.clanId != null && Number(row.clan_id) === me.clanId,
+      /** Until when the viewer has a spy in this village (none: null). */
+      spiedUntil: spies.get(id) ?? null,
     };
   });
 

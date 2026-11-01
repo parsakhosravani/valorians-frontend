@@ -525,6 +525,22 @@ export const TRIBE_SPACING = 4;
 /** Shortest possible one-way march. */
 export const MIN_MARCH_SECONDS = 20;
 /** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
+/**
+ * Spies (needs an Exploration Center): planted on a tribe for `durationMs`,
+ * a spy sends word the moment that tribe's army marches out, so you can hit
+ * the village while it's away. Costs `costFactor`× a scouting trip; up to
+ * `maxActive` at once. The target's Watchtower may catch one as it's
+ * planted (`catchPerLevel` a level, up to `catchMax`): the coins are lost
+ * and the target learns who sent it.
+ */
+export const SPY = {
+  durationMs: 24 * 3600 * 1000,
+  costFactor: 3,
+  maxActive: 3,
+  catchPerLevel: 0.04,
+  catchMax: 0.6,
+} as const;
+
 export const SCOUT_COST_PER_TILE = 10;
 export const SCOUT_MIN_COST = 30;
 /** Anti-cavalry troops (Spearmen) defend this much better against the mounted share of an attack. */
