@@ -1,25 +1,26 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { ROUGH } from "./MapGround";
+import { parchmentImage } from "./parchmentImage";
 
 import { Drawer } from "@/components/molecules/Drawer";
-import { MAP_CENTER, MAP_MAX, MAP_MIN, MAP_SIZE } from "@/lib/game/config";
+import { MAP_CENTER, MAP_MAX, MAP_MIN, MAP_SIZE, shownXY } from "@/lib/game/config";
 import { terrainAt } from "@/lib/game/map";
 
 /**
  * The whole world on one card: tap anywhere to go there, or type a spot.
  *
- * Players read coordinates Travian-style, with 0|0 in the middle of the world
- * (MAP_CENTER), so they run from -200 to 199 on each axis.
+ * Drawn as the same old parchment map as the war map far out.
+ *
+ * Players read coordinates as "x, y" with 0, 0 in the middle of the world
+ * (MAP_CENTER), so they run from -200 to 199 on each axis (see shownXY).
  */
 
 type Pt = { x: number; y: number };
 
-const shownCoord = (v: number) => v - MAP_CENTER;
 const fromShown = (v: number) => v + MAP_CENTER;
 
-/** Parses "12|-40", "12, -40" or "12 -40" into world tiles. */
+/** Parses "12, -40" (or "12, -40", "12 -40") into world tiles. */
 const parseCoords = (s: string): Pt | null => {
   const m = s.trim().match(/^(-?\d{1,4})\s*[|,;/\s]\s*(-?\d{1,4})$/);
 
@@ -27,33 +28,6 @@ const parseCoords = (s: string): Pt | null => {
   const p = { x: fromShown(Number(m[1])), y: fromShown(Number(m[2])) };
 
   return p.x >= MAP_MIN && p.x < MAP_MAX && p.y >= MAP_MIN && p.y < MAP_MAX ? p : null;
-};
-
-// One pixel per tile, worked out once a session: 160,000 tiles takes a moment.
-let picture: string | null = null;
-
-const paintWorld = () => {
-  const c = document.createElement("canvas");
-
-  c.width = c.height = MAP_SIZE;
-  const g = c.getContext("2d");
-
-  if (!g) return "";
-  const img = g.createImageData(MAP_SIZE, MAP_SIZE);
-
-  for (let j = 0; j < MAP_SIZE; j++)
-    for (let i = 0; i < MAP_SIZE; i++) {
-      const [r, gr, b] = ROUGH[terrainAt(MAP_MIN + i, MAP_MIN + j)];
-      const p = (j * MAP_SIZE + i) * 4;
-
-      img.data[p] = r;
-      img.data[p + 1] = gr;
-      img.data[p + 2] = b;
-      img.data[p + 3] = 255;
-    }
-  g.putImageData(img, 0, 0);
-
-  return c.toDataURL("image/png");
 };
 
 /** Where a world tile sits on the card, in %. */
@@ -73,17 +47,36 @@ export function WorldMap({
   onClose: () => void;
   onGo: (p: Pt) => void;
 }) {
-  const [src, setSrc] = useState<string | null>(picture);
+  // The parchment world, painted once a session (shared with the war map).
+  const [img, setImg] = useState<CanvasImageSource | null>(null);
+  const card = useRef<HTMLCanvasElement>(null);
   const [text, setText] = useState("");
   const [bad, setBad] = useState(false);
 
   useEffect(() => {
-    if (!open || src) return;
-    // Let the sheet slide up first.
-    const t = setTimeout(() => setSrc((picture ??= paintWorld())), 60);
+    if (!open || img) return;
+    let on = true;
 
-    return () => clearTimeout(t);
-  }, [open, src]);
+    parchmentImage(MAP_SIZE, (i, j) => terrainAt(MAP_MIN + i, MAP_MIN + j)).then((p) => {
+      if (on && p) setImg(p);
+    });
+
+    return () => {
+      on = false;
+    };
+  }, [open, img]);
+
+  useEffect(() => {
+    const c = card.current;
+    const g = c?.getContext("2d");
+
+    if (!c || !g || !img) return;
+    const side = Math.round(c.clientWidth * Math.min(2, window.devicePixelRatio || 1));
+
+    c.width = c.height = side;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(img, 0, 0, side, side);
+  }, [img, open]);
 
   const go = (p: Pt) => {
     onGo(p);
@@ -105,7 +98,7 @@ export function WorldMap({
       <div className="flex flex-col gap-3">
         <button
           aria-label="Tap a spot to go there"
-          className="relative w-full aspect-square rounded-xl overflow-hidden border border-frame bg-[#1C3F54] shadow-[inset_0_0_24px_rgba(0,0,0,0.5)]"
+          className="relative w-full aspect-square rounded-xl overflow-hidden border border-frame bg-[#E9D7AC] shadow-[inset_0_0_24px_rgba(0,0,0,0.5)]"
           type="button"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
@@ -116,8 +109,8 @@ export function WorldMap({
             });
           }}
         >
-          {src ? (
-            <img alt="" className="absolute inset-0 w-full h-full" draggable={false} src={src} />
+          {img ? (
+            <canvas ref={card} aria-hidden="true" className="absolute inset-0 w-full h-full" />
           ) : (
             <span className="absolute inset-0 flex items-center justify-center text-sm text-muted font-display">
               Charting the world…
@@ -145,13 +138,13 @@ export function WorldMap({
         <p className="text-xs text-sub leading-snug">
           Tap anywhere to go there. Your tribe is at{" "}
           <b className="text-goldtext tabular-nums">
-            {shownCoord(home.x)}|{shownCoord(home.y)}
+            {shownXY(home)}
           </b>
           {mid && (
             <>
               , and you&apos;re looking at{" "}
               <b className="text-parch tabular-nums">
-                {shownCoord(mid.x)}|{shownCoord(mid.y)}
+                {shownXY(mid)}
               </b>
             </>
           )}
@@ -161,10 +154,10 @@ export function WorldMap({
         <form className="flex gap-2" onSubmit={submit}>
           <input
             aria-invalid={bad}
-            aria-label="Go to x|y"
+            aria-label="Go to x, y"
             autoComplete="off"
             className="inset flex-1 min-w-0 h-10 px-3 text-sm font-bold text-parch tabular-nums placeholder:text-muted/70 outline-none focus:border-gold aria-[invalid=true]:border-bad"
-            placeholder="Go to x|y, e.g. 12|-40"
+            placeholder="Go to x, y, e.g. 12, -40"
             value={text}
             onChange={(e) => {
               setText(e.target.value);
@@ -175,7 +168,7 @@ export function WorldMap({
             Go
           </button>
         </form>
-        {bad && <p className="-mt-1.5 text-xs text-bad">Type two numbers from -200 to 199, like 12|-40.</p>}
+        {bad && <p className="-mt-1.5 text-xs text-bad">Type two numbers from -200 to 199, like 12, -40.</p>}
       </div>
     </Drawer>
   );

@@ -10,6 +10,7 @@ import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { EmptyState } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
+import { shownXY } from "@/lib/game/config";
 
 type Item = {
   id: number;
@@ -28,7 +29,7 @@ type Item = {
 const Place = ({ at }: { at: { x: number; y: number } }) => (
   <span className="inline-flex items-center gap-0.5 text-goldtext font-bold tabular-nums">
     <GameIcon e="📍" />
-    {at.x}, {at.y}
+    {shownXY(at)}
   </span>
 );
 
@@ -98,7 +99,7 @@ export const ReportsTab = ({ onShowOnMap }: { onShowOnMap?: (playerId: number) =
                   onShowOnMap?.(open.opponentId!);
                 }}
               >
-                <GameIcon e="📍" /> {open.opponent}&apos;s village at {open.opponentAt.x}, {open.opponentAt.y}: show on map
+                <GameIcon e="📍" /> {open.opponent}&apos;s village at {shownXY(open.opponentAt)}: show on map
               </button>
             )}
             <BattleSummary asDefender={open.role === "defender"} report={open.report} />

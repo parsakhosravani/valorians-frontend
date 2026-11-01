@@ -520,6 +520,14 @@ export const MAP_CENTER = 60;
 export const MAP_SIZE = 400;
 export const MAP_MIN = MAP_CENTER - MAP_SIZE / 2;
 export const MAP_MAX = MAP_CENTER + MAP_SIZE / 2;
+
+/**
+ * A place as players see it: "12, -40", counted from the middle of the world
+ * (world tile minus MAP_CENTER). Every coordinate shown in the game, in its
+ * messages and typed into "Go to" uses this; tiles themselves never change.
+ */
+export const shownXY = (p: { x: number; y: number }) =>
+  `${Math.round(p.x) - MAP_CENTER}, ${Math.round(p.y) - MAP_CENTER}`;
 /** Tiles between neighbouring tribes when new players are placed. */
 export const TRIBE_SPACING = 4;
 /** Shortest possible one-way march. */
