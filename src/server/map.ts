@@ -6,7 +6,7 @@ import { Player, avatarUrl } from "./players";
 import { TRIBE_FRESH, TRIBE_SELECT, tribeLook } from "./tribeColumns";
 
 import { storedFlag } from "@/lib/game/clan";
-import { banditStrength, campDefense, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
+import { banditStrength, campDefense, campName, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoastal, settledShare, terrainAt } from "@/lib/game/map";
 import { campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
@@ -312,7 +312,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
         x: Number(a.to_x),
         y: Number(a.to_y),
         name: campLevel
-          ? `Barbarian camp ${campLevel}`
+          ? campName(campLevel)
           : a.lair_level != null
             ? "Bandit lair"
             : outgoing

@@ -28,6 +28,7 @@ import {
   UnitId,
   campDefense,
   campFirstReward,
+  campName,
   militiaDefense,
   MAX_RANK,
   RANKS,
@@ -786,7 +787,7 @@ export function dispatchCamp(s0: GameState, level: number, units: Army, now: num
 /** The fight at a barbarian camp, once the army arrives. Survivors march home with the reward. */
 export function campBattle(s0: GameState, level: number, sent: Army, now: number, rand: number, opts: MapOpts = {}) {
   const outcome = opts.outcome ?? campOutcome(s0, level, sent, rand, opts);
-  return pveBattle(s0, sent, now, rand, opts, outcome, `Barbarian camp ${level}`, (s) => {
+  return pveBattle(s0, sent, now, rand, opts, outcome, campName(level), (s) => {
     const reward = campReward(s, level);
     if (reward.first) s.camps.cleared = Math.max(s.camps.cleared, level);
     s.camps.lastRaid[level] = now;

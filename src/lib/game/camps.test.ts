@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 
 import * as E from "./engine";
 import * as W from "./war";
-import { CAMP_STEEP_UNTIL, campDefense, campFirstReward } from "./config";
+import { CAMP_STEEP_UNTIL, campDefense, campFirstReward, campName } from "./config";
 import { CAMP_REACH, campPositions, distance, homeSlot } from "./map";
 
 const T0 = Date.UTC(2026, 9, 31, 12);
@@ -51,4 +51,29 @@ test("camps 1–30 sit where they always did", () => {
   const home = homeSlot(9);
 
   expect(campPositions(7, home, 60).slice(0, 30)).toEqual(campPositions(7, home, 30));
+});
+
+test("rewards past camp 30 grow in a straight line, slower than the barbarians", () => {
+  const r30 = campFirstReward(30).resources;
+
+  expect(campFirstReward(40).resources / r30).toBeCloseTo(1.4, 2);
+  expect(campFirstReward(60).resources / r30).toBeCloseTo(2.2, 2);
+  // Each step pays less than the camp gets tougher.
+  for (let level = CAMP_STEEP_UNTIL + 1; level < 80; level++) {
+    const d = campDefense(level + 1) / campDefense(level);
+    const r = campFirstReward(level + 1).resources / campFirstReward(level).resources;
+
+    expect(r).toBeLessThan(d);
+  }
+});
+
+test("camps have names, the same each time, and neighbours differ", () => {
+  expect(campName(7)).toBe(campName(7));
+  expect(campName(5)).toMatch(/ Camp$/);
+  expect(campName(15)).toMatch(/ Hold$/);
+  expect(campName(25)).toMatch(/ Fortress$/);
+  expect(campName(45)).toMatch(/ Citadel$/);
+  for (let level = 1; level < 100; level++) expect(campName(level)).not.toBe(campName(level + 1));
+  // No two camps share a name within a tier.
+  expect(new Set(Array.from({ length: 10 }, (_, i) => campName(i + 1))).size).toBe(10);
 });

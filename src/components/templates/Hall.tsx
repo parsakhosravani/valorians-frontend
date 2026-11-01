@@ -11,7 +11,7 @@ import { ACTIVE_QUESTS, QUEST_ICONS } from "@/components/organisms/quest/QuestDr
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, buildingImage, unitPlural } from "@/lib/game/config";
+import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, buildingImage, campName, unitPlural } from "@/lib/game/config";
 import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, defensePower, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
@@ -373,7 +373,7 @@ export const Hall = () => {
     tasks.push({
       key: "camp",
       img: buildingImage(BUILDING_BY_ID["military-command"]),
-      title: `Raid barbarian camp ${nextCamp}`,
+      title: `Raid ${campName(nextCamp)}`,
       sub: `First win: ${compact(r.resources)} each + ${compact(r.coins)} coins`,
       state: "todo",
       action: { label: "Raid", href: `/battle?camp=${nextCamp}` },

@@ -10,7 +10,7 @@ import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { maybeRefreshRanks } from "./ranks";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
-import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
+import { CAMP_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, pointAlong, routeFor, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
@@ -230,7 +230,7 @@ async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Poi
 
     if (busy.rows.length) throw new GameError("An army is already on its way to this camp", "busy");
 
-    return { dest, defenderId: null, campLevel, lairLevel: null, name: `Barbarian camp ${campLevel}` };
+    return { dest, defenderId: null, campLevel, lairLevel: null, name: campName(campLevel) };
   }
   const defenderId = Math.floor(Number(to.target));
 
@@ -427,7 +427,7 @@ async function finishBattle(a: AttackRow, now: number) {
 
       return r.state;
     });
-    const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: `Barbarian camp ${a.campLevel}` };
+    const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: campName(a.campLevel) };
 
     await saveReport(attacker.id, null, a.campLevel, full, at, a.id);
     await notify.attackResult(attacker.id, full.defenderName, report, now);
@@ -612,7 +612,7 @@ async function springAmbushes(now: number, playerId?: number) {
 
     if (claim.rowsAffected !== 1 || done.foiled) continue;
     const target = a.campLevel
-      ? `Barbarian camp ${a.campLevel}`
+      ? campName(a.campLevel)
       : a.lairLevel
         ? "the bandit lair"
         : String((row as Record<string, unknown>).d_name || "a tribe");

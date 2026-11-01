@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef } from "react";
 
 import { pinScale } from "./useMapCamera";
 
-import { BUILDING_BY_ID, buildingImage } from "@/lib/game/config";
+import { BUILDING_BY_ID, buildingImage, campName } from "@/lib/game/config";
 import { ClanFlag as Flag, FLAG_COLORS, FlagPattern, emblemImage } from "@/lib/game/clan";
 import { formatDuration } from "@/lib/format";
 
@@ -59,7 +59,7 @@ export type CanvasCamp = {
   state: "locked" | "new" | "ready" | "cooldown";
   readyAt: number;
   picked: boolean;
-  /** Full label ("Camp 3"), or only the small numbered badge. */
+  /** Full label (the camp's name), or only the small numbered badge. */
   label: boolean;
 };
 
@@ -588,7 +588,7 @@ export class MapPainter {
     const look = CAMP_LABEL[c.state];
 
     if (c.label) {
-      const text = locked ? String(c.level) : c.state === "cooldown" ? formatDuration(c.readyAt - this.now) : `Camp ${c.level}`;
+      const text = locked ? String(c.level) : c.state === "cooldown" ? formatDuration(c.readyAt - this.now) : campName(c.level);
 
       plate(g, text, 32, 45, {
         font: `900 9.5px ${DISPLAY}`,
