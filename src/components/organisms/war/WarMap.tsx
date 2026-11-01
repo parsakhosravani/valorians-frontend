@@ -34,7 +34,7 @@ import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
 import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, PARCHMENT_FULL, VILLAGE_GROW, VILLAGE_MIN, parchmentShare } from "./MapCanvas";
-import { parchmentImage } from "./parchment";
+import { parchmentImage } from "./parchmentImage";
 import { WorldMap } from "./WorldMap";
 import { roadShape, timeAt } from "./roadShape";
 
