@@ -201,6 +201,10 @@ export async function mutatePlayer(
       args: [JSON.stringify(next), ...stateColumns(next), id, player.version],
     });
     if (rs.rowsAffected === 1) return { ...player, version: player.version + 1, state: next };
+    // Someone saved first. Wait a short random moment before trying again, so
+    // requests that clashed don't all retry together and clash again (without
+    // this, ten parallel requests for one player already ran out of attempts).
+    await new Promise((r) => setTimeout(r, Math.random() * 15 * (attempt + 1)));
   }
   throw new Error("Too many simultaneous updates, try again");
 }

@@ -164,7 +164,7 @@ async function migrate(client: Client) {
       want          TEXT NOT NULL,
       want_amount   INTEGER NOT NULL,
       created_at    INTEGER NOT NULL,
-      status        TEXT NOT NULL DEFAULT 'open', -- open | accepted | delivering | delivered | cancelled
+      status        TEXT NOT NULL DEFAULT 'open', -- open | accepted | delivering | seller-paid | delivered | cancelled
       buyer_id      INTEGER,
       accepted_at   INTEGER,
       arrives_at    INTEGER

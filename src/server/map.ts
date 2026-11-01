@@ -228,7 +228,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
             FROM trades t
             JOIN users su ON su.id = t.seller_id
             JOIN users bu ON bu.id = t.buyer_id
-            WHERE t.status IN ('accepted', 'delivering') AND su.map_x IS NOT NULL AND bu.map_x IS NOT NULL
+            WHERE t.status IN ('accepted', 'delivering', 'seller-paid') AND su.map_x IS NOT NULL AND bu.map_x IS NOT NULL
               AND (t.seller_id = ? OR t.buyer_id = ?
                    OR (su.map_x BETWEEN ? AND ? AND su.map_y BETWEEN ? AND ?)
                    OR (bu.map_x BETWEEN ? AND ? AND bu.map_y BETWEEN ? AND ?))
