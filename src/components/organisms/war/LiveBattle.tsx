@@ -19,6 +19,8 @@ export type LiveBattleData = {
   nextRoundAt: number | null;
   /** The defenders on the field (none at a barbarian camp). */
   defenders: Army | null;
+  /** The defense they fought at: soldiers, villagers, Watchtower and walls (older servers don't send it). */
+  defense?: number;
 };
 
 export type BattleMovement = {
@@ -239,7 +241,9 @@ export const LiveBattleDrawer = ({
               <ArmyLine army={minus(m.units, last?.attackerFallen ?? null)} />
             </div>
             <div>
-              <span className="text-muted">{names.defender} standing: </span>
+              <span className="text-muted">
+                {b.defenders && !m.campLevel ? `${names.defender === "Your troops" ? "Your" : `${names.defender}'s`} soldiers standing: ` : `${names.defender} standing: `}
+              </span>
               {b.defenders ? (
                 <ArmyLine army={minus(b.defenders, last?.defenderFallen ?? null)} />
               ) : m.campLevel ? (
@@ -248,6 +252,19 @@ export const LiveBattleDrawer = ({
                 <span>the town militia</span>
               )}
             </div>
+            {/* A village fights with more than its soldiers: say what, so an empty one isn't a mystery. */}
+            {!m.campLevel && b.defense != null && (
+              <div className="inset px-2.5 py-2 text-xs text-sub flex items-start gap-2">
+                <GameIcon e="🛡️" />
+                <span>
+                  <b className="text-parch">Village defense {b.defense.toLocaleString("en-US")}</b>
+                  {": "}
+                  {b.defenders && Object.values(b.defenders).some((n) => n > 0) ? "soldiers, " : ""}
+                  villagers, the Watchtower and the walls, with the Armory and City Gate bonuses. Even with
+                  no soldiers home, a village fights back.
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Round by round, newest first */}

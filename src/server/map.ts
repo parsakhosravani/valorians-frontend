@@ -162,6 +162,8 @@ type LiveBattle = {
   nextRoundAt: number | null;
   /** The defenders on the field (none at a barbarian camp). */
   defenders: Record<string, number> | null;
+  /** The defense they fought at: soldiers, villagers, Watchtower and walls, with bonuses. */
+  defense?: number;
 };
 
 type Caravan = {
@@ -311,6 +313,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           rounds: roundsSoFar(stored.plan, now),
           nextRoundAt: nextRoundAt(stored.plan, now),
           defenders: stored.engaged,
+          defense: Math.round(stored.outcome.defense),
         }
       : null;
 

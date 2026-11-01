@@ -116,3 +116,13 @@ test("a camp battle applies the result decided on arrival", () => {
   expect(report.returnsAt).toBe(end + 30_000);
   expect(state.camps.cleared).toBe(1);
 });
+
+test("a battle lasts by the smaller side: a big army on an empty village is over fast", () => {
+  expect(B.battleSize(4800, 100)).toBe(200);
+  expect(B.battleSize(50, 4800)).toBe(100);
+  // 4,800 against an empty village worth ~100 troops: a few rounds, not ten.
+  expect(B.roundCount(B.battleDurationMs(B.battleSize(4800, 100)))).toBeLessThan(B.roundCount(B.battleDurationMs(4800 + 100)));
+  expect(B.roundCount(B.battleDurationMs(B.battleSize(4800, 0)))).toBe(3);
+  // Two big armies still fight it out.
+  expect(B.roundCount(B.battleDurationMs(B.battleSize(4800, 4000)))).toBe(10);
+});
