@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef } from "react";
  * The war map's camera: one finger (or the mouse) drags the map and lets it
  * glide on, two fingers pinch to zoom around the spot between them, the
  * mouse wheel and trackpad pinch zoom toward the pointer, trackpad swipes
- * pan, and a double tap zooms in.
+ * pan, and a double tap zooms in. As on Google Maps, a double tap held and
+ * dragged zooms with one finger (down in, up out), and a two-finger tap
+ * zooms out.
  *
  * The browser does none of it (touch-action: none): native scrolling fought
  * the pinch, so zooming jumped and stuck. The camera is a single
@@ -354,7 +356,13 @@ export function useMapCamera({
     /** A drag, in screen coordinates (the map itself may scroll with the page). */
     type Shifts = typeof shifts.current;
     let pan: { start: Pt; cam: Cam; moved: boolean; id: number; over: number; base: Shifts } | null = null;
-    let pinch: { d: number; z: number; m: Pt; base: Shifts } | null = null;
+    let pinch: { d: number; z: number; m: Pt; base: Shifts; t: number; mid: Pt; moved: boolean } | null = null;
+    /**
+     * Tap, then tap again and drag (like Google Maps): one finger zooms, in
+     * as it drags down and out as it drags up, around where it touched. Let go
+     * without dragging and it was a double tap.
+     */
+    let quick: { id: number; y: number; z: number; f: Pt; moved: boolean } | null = null;
     /** Where the gesture's starting camera has moved to since (a new area loaded under it). */
     const panCam = (p: NonNullable<typeof pan>): Cam => ({
       ...p.cam,
@@ -384,7 +392,15 @@ export function useMapCamera({
       const { d, mid } = two();
       const c = cam.current;
 
-      pinch = { d, z: c.z, m: { x: (mid.x - c.x) / c.z, y: (mid.y - c.y) / c.z }, base: { ...shifts.current } };
+      pinch = {
+        d,
+        z: c.z,
+        m: { x: (mid.x - c.x) / c.z, y: (mid.y - c.y) / c.z },
+        base: { ...shifts.current },
+        t: performance.now(),
+        mid,
+        moved: false,
+      };
       dragged.current = true;
     };
 
@@ -397,9 +413,25 @@ export function useMapCamera({
       moving.current = true;
       if (pointers.size === 1) {
         dragged.current = false;
+        const onThing = (e.target as Element | null)?.closest?.("button, a");
+
+        // The second tap of a double tap: zoom with this finger (see `quick`).
+        if (!onThing && lastTap && performance.now() - lastTap.t < 320 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 30) {
+          lastTap = null;
+          pan = null;
+          quick = { id: e.pointerId, y: p.y, z: cam.current.z, f: p, moved: false };
+          try {
+            el.setPointerCapture(e.pointerId);
+          } catch {
+            // Pointer already gone.
+          }
+
+          return;
+        }
         startPan(e.pointerId, { x: e.clientX, y: e.clientY }, false);
       } else if (pointers.size === 2) {
         pan = null;
+        quick = null;
         startPinch();
         try {
           Array.from(pointers.keys()).forEach((id) => el.setPointerCapture(id));
@@ -414,8 +446,26 @@ export function useMapCamera({
       const p = local(e);
 
       pointers.set(e.pointerId, p);
+      if (quick && quick.id === e.pointerId) {
+        const dy = p.y - quick.y;
+
+        if (!quick.moved && Math.abs(dy) < 6) return;
+        quick.moved = true;
+        dragged.current = true;
+        // Down zooms in, up zooms out: twice as close for every 150 px.
+        const z = clampZ(quick.z * Math.pow(2, dy / 150));
+        const c = cam.current;
+        const wx = (quick.f.x - c.x) / c.z;
+        const wy = (quick.f.y - c.y) / c.z;
+
+        set({ z, x: quick.f.x - wx * z, y: quick.f.y - wy * z });
+
+        return;
+      }
       if (pinch && pointers.size >= 2) {
         const { d, mid } = two();
+
+        if (Math.abs(d / pinch.d - 1) > 0.08 || Math.hypot(mid.x - pinch.mid.x, mid.y - pinch.mid.y) > 10) pinch.moved = true;
         const z = clampZ(pinch.z * (d / pinch.d));
         const mx = pinch.m.x + shifts.current.mx - pinch.base.mx;
         const my = pinch.m.y + shifts.current.my - pinch.base.my;
@@ -479,7 +529,30 @@ export function useMapCamera({
       } catch {
         // Not captured.
       }
+      if (quick && quick.id === e.pointerId) {
+        const q = quick;
+
+        quick = null;
+        // No drag after the second tap: an ordinary double tap, zooming in there.
+        if (!q.moved && e.type === "pointerup") {
+          const z = cam.current.z;
+
+          zoomTo(z >= maxZoom * 0.98 ? lowest() : z * 1.8, q.f);
+        }
+
+        return;
+      }
       if (pinch) {
+        // Two fingers tapped together, without pinching: zoom out (like Google Maps).
+        if (pointers.size === 1 && !pinch.moved && e.type === "pointerup" && performance.now() - pinch.t < 300) {
+          const at = pinch.mid;
+
+          pinch = null;
+          pan = null;
+          zoomTo(cam.current.z / 1.8, at);
+
+          return;
+        }
         if (pointers.size < 2) pinch = null;
         // One finger left: carry on dragging with it, without a jump.
         if (pointers.size === 1) {

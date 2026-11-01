@@ -33,7 +33,8 @@ import {
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
-import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, VILLAGE_GROW, VILLAGE_MIN } from "./MapCanvas";
+import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, PARCHMENT_FULL, VILLAGE_GROW, VILLAGE_MIN, parchmentShare } from "./MapCanvas";
+import { parchmentImage } from "./parchment";
 import { WorldMap } from "./WorldMap";
 import { roadShape, timeAt } from "./roadShape";
 
@@ -172,7 +173,10 @@ type ReportItem = { attackId: number | null; report: BattleReport };
 // ─── Drawing ─────────────────────────────────────────────────────────────────
 
 const T = TILE;
-const MIN_ZOOM = 0.4;
+/** Far enough out to see a good stretch of the world, drawn as an old parchment map (see PARCHMENT_FULL). */
+const MIN_ZOOM = 0.1;
+/** The farthest zoom the painted land and an area's load are sized for. */
+const LAND_MIN_ZOOM = 0.4;
 const MAX_ZOOM = 2.2;
 
 /** The middle of a loaded area of radius r, kept so the area stays inside the world. */
@@ -218,7 +222,7 @@ const keepSeen = (d: MapData, before: MapData | null): MapData => {
 const wantedRadius = (el: HTMLElement | null) => {
   const side = el ? Math.max(el.clientWidth, el.clientHeight) : 0;
 
-  return Math.min(30, Math.max(24, Math.ceil(side / (T * MIN_ZOOM) / 2) + 1 + EDGE));
+  return Math.min(30, Math.max(24, Math.ceil(side / (T * LAND_MIN_ZOOM) / 2) + 1 + EDGE));
 };
 
 const TERRAIN_ICON: Record<Terrain, string> = {
@@ -820,7 +824,8 @@ export const WarMap = ({
   // a margin round them, plus full-detail pieces on screen when zoomed in. A
   // piece is only told about what stands on it, so it repaints only when that changes.
   const ground = useMemo(() => {
-    if (!view || !n || homeX == null || homeY == null) return [];
+    // Far out the old map stands in for the land: none to paint.
+    if (!view || !n || homeX == null || homeY == null || restZoom <= PARCHMENT_FULL) return [];
     const out: { key: string; x: number; y: number; n: number; detail: boolean; res: number; occupied: string; home: string; prio: number }[] = [];
     const mx = (view.x0 + view.x1) / 2;
     const my = (view.y0 + view.y1) / 2;
@@ -868,6 +873,22 @@ export const WarMap = ({
 
     return out;
   }, [view, n, occupied, homeX, homeY, restZoom]);
+
+  // The old parchment map for zoomed far out: painted once, as soon as a zoom heads that way.
+  const wantParchment = restZoom < 0.6;
+
+  useEffect(() => {
+    if (!wantParchment) return;
+    let on = true;
+
+    parchmentImage(MAP_SIZE, (i, j) => terrainAt(MAP_MIN + i, MAP_MIN + j)).then((img) => {
+      if (on && img) painter.current?.setParchment({ img, size: MAP_SIZE * T });
+    });
+
+    return () => {
+      on = false;
+    };
+  }, [wantParchment]);
 
   // The rough-colour backdrop under the pieces: the loaded area and as much
   // again round it (all of the world at once took too long to work out on a phone).
@@ -1253,6 +1274,33 @@ export const WarMap = ({
               Cancel
             </button>
           </div>
+        )}
+        {/* Zoomed far out: a compass rose, as on an old map. */}
+        {parchmentShare(restZoom) > 0 && (
+          <svg
+            aria-hidden
+            className="absolute left-2 top-2 z-10 pointer-events-none transition-opacity duration-300 drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]"
+            height="64"
+            style={{ opacity: parchmentShare(restZoom) }}
+            viewBox="-32 -32 64 64"
+            width="64"
+          >
+            <circle fill="rgba(233,215,172,0.85)" r="27" stroke="#4A3520" strokeWidth="1.2" />
+            <circle fill="none" r="22" stroke="#4A3520" strokeWidth="0.6" />
+            {[0, 90, 180, 270].map((a) => (
+              <g key={a} transform={`rotate(${a})`}>
+                <path d="M0 -25 L5 0 L0 0 Z" fill="#4A3520" />
+                <path d="M0 -25 L-5 0 L0 0 Z" fill="#B8862E" stroke="#4A3520" strokeWidth="0.5" />
+              </g>
+            ))}
+            {[45, 135, 225, 315].map((a) => (
+              <path key={a} d="M0 -15 L3 0 L-3 0 Z" fill="#7a5a34" transform={`rotate(${a})`} />
+            ))}
+            <circle fill="#4A3520" r="2" />
+            <text fill="#4A3520" fontFamily="Cinzel, Georgia, serif" fontSize="9" fontWeight="700" textAnchor="middle" y="-27.5">
+              N
+            </text>
+          </svg>
         )}
         {data && (
           <div className="absolute right-2 bottom-2 z-10 flex flex-col items-center gap-2">
