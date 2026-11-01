@@ -174,10 +174,13 @@ export const LiveBattleDrawer = ({
   m,
   now,
   onClose,
+  onLocate,
 }: {
   m: BattleMovement | null;
   now: number;
   onClose: () => void;
+  /** Show a place on the map: the attacker's village, so you know which player it is. */
+  onLocate?: (p: { x: number; y: number }) => void;
 }) => {
   const b = m?.battle;
   const last = b ? lastRound(b) : null;
@@ -194,6 +197,16 @@ export const LiveBattleDrawer = ({
             <div className="text-sm text-muted">
               {names.attacker} attacking {names.defender === "Your troops" ? "you" : names.defender}
             </div>
+            {/* Which player it is: where their village is, tap to see it on the map. */}
+            {m.kind !== "outgoing" && (
+              <button
+                className="mt-1 inline-flex items-center gap-1 rounded-full border border-gold/60 bg-ink/60 px-2.5 py-0.5 text-xs font-extrabold text-goldtext tabular-nums disabled:opacity-100"
+                disabled={!onLocate}
+                onClick={() => onLocate?.(m.from)}
+              >
+                <GameIcon e="📍" /> {m.from.name}&apos;s village: {m.from.x}, {m.from.y}
+              </button>
+            )}
           </div>
 
           {/* Time */}

@@ -17,11 +17,23 @@ type Item = {
   role: "attacker" | "defender";
   won: boolean;
   opponent: string;
+  opponentId: number | null;
+  /** Their village on the map (older servers don't send it). */
+  opponentAt?: { x: number; y: number } | null;
   campLevel: number | null;
   report: BattleReport;
 };
 
-export const ReportsTab = () => {
+/** "📍 120, 87": where a village is, so you know which player it was. */
+const Place = ({ at }: { at: { x: number; y: number } }) => (
+  <span className="inline-flex items-center gap-0.5 text-goldtext font-bold tabular-nums">
+    <GameIcon e="📍" />
+    {at.x}, {at.y}
+  </span>
+);
+
+/** `onShowOnMap`: jump to a player's village on the map. */
+export const ReportsTab = ({ onShowOnMap }: { onShowOnMap?: (playerId: number) => void }) => {
   const { authHeader, now } = useGame();
   const [items, setItems] = useState<Item[] | null>(null);
   const [open, setOpen] = useState<Item | null>(null);
@@ -59,6 +71,11 @@ export const ReportsTab = () => {
                       : `${it.opponent} attacked you`}
                 </div>
                 <div className="text-xs text-muted">
+                  {it.opponentAt && !it.report.ambush && (
+                    <>
+                      <Place at={it.opponentAt} />{" · "}
+                    </>
+                  )}
                   {formatDuration(now - it.at)} ago
                   {loot > 0 && ` · ${it.role === "attacker" ? "+" : "−"}${fmt(loot)} resources`}
                 </div>
@@ -71,7 +88,22 @@ export const ReportsTab = () => {
         );
       })}
       <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
-        {open && <BattleSummary asDefender={open.role === "defender"} report={open.report} />}
+        {open && (
+          <div className="flex flex-col gap-3">
+            {open.opponentAt && open.opponentId != null && !open.report.ambush && (
+              <button
+                className="btn btn-wood btn-sm self-center"
+                onClick={() => {
+                  setOpen(null);
+                  onShowOnMap?.(open.opponentId!);
+                }}
+              >
+                <GameIcon e="📍" /> {open.opponent}&apos;s village at {open.opponentAt.x}, {open.opponentAt.y}: show on map
+              </button>
+            )}
+            <BattleSummary asDefender={open.role === "defender"} report={open.report} />
+          </div>
+        )}
       </Drawer>
     </div>
   );

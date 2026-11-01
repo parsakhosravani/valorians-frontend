@@ -1820,7 +1820,15 @@ export const WarMap = ({
             );
           })()}
       </Drawer>
-      <LiveBattleDrawer m={watched} now={battleNow || now} onClose={() => setWatching(null)} />
+      <LiveBattleDrawer
+        m={watched}
+        now={battleNow || now}
+        onClose={() => setWatching(null)}
+        onLocate={(p) => {
+          setWatching(null);
+          goTo(p);
+        }}
+      />
       <ArmyOrdersDrawer
         army={ordersFor}
         onClose={() => setOrdersFor(null)}
