@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import clsx from "clsx";
@@ -30,7 +30,43 @@ import type { MarketView } from "@/server/trade";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 import { ScreenHeader } from "@/components/atoms/Ui";
 
-type Tab = "buy" | "sell" | "mine";
+type Tab = "buy" | "sell" | "reports";
+type MyTrade = MarketView["mine"][number];
+
+/** When you last opened Reports, so the badge counts only what's new. */
+const SEEN_KEY = "valorians.market.reportsSeen";
+const readSeen = () => {
+  try {
+    return Number(localStorage.getItem(SEEN_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+};
+const seenListeners = new Set<() => void>();
+const subscribeSeen = (cb: () => void) => {
+  seenListeners.add(cb);
+
+  return () => {
+    seenListeners.delete(cb);
+  };
+};
+/** A finished trade's report time: when the merchants arrived. */
+const reportAt = (t: MyTrade) => t.arrivesAt ?? t.createdAt;
+/** Marks every report in this view as read. */
+const markReportsRead = (view: MarketView) => {
+  const latest = view.mine.reduce(
+    (m, t) => (t.status === "delivered" ? Math.max(m, reportAt(t)) : m),
+    0,
+  );
+
+  if (latest <= readSeen()) return;
+  try {
+    localStorage.setItem(SEEN_KEY, String(latest));
+  } catch {
+    // Private mode: the badge just won't remember.
+  }
+  seenListeners.forEach((cb) => cb());
+};
 
 /** A tick box for hiring guards, with what they cost. */
 const GuardToggle = ({
@@ -172,16 +208,127 @@ const AmountInput = ({
   </div>
 );
 
+/** One of your trades: on the market, on the road, or (in Reports) delivered. */
+const TradeCard = ({
+  t,
+  now,
+  busy,
+  onCancel,
+}: {
+  t: MyTrade;
+  now: number;
+  busy: number | "post" | null;
+  onCancel: (id: number) => void;
+}) => {
+  const travelling = t.status === "accepted" || t.status === "delivering";
+  const delivered = t.status === "delivered";
+  const incoming = t.selling
+    ? { id: t.want, n: t.wantAmount }
+    : { id: t.give, n: t.giveAmount };
+  const outgoing = t.selling
+    ? { id: t.give, n: t.giveAmount }
+    : { id: t.want, n: t.wantAmount };
+  const lost = t.robbed?.stolen ?? 0;
+
+  return (
+    <Card className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 text-xs">
+        <span
+          className={clsx(
+            "pill h-5",
+            t.status === "open" && "pill-gold",
+            travelling && "pill-sea",
+            delivered && (t.robbed ? "pill-bad" : "pill-good"),
+          )}
+        >
+          {t.status === "open"
+            ? "On the market"
+            : travelling
+              ? <IconText text="🐪 On the road" />
+              : t.robbed
+                ? <IconText text="🗡️ Robbed" />
+                : "✓ Delivered"}
+        </span>
+        <span className="flex-1 min-w-0 truncate text-sub text-right">
+          {t.status === "open"
+            ? "Waiting for a buyer"
+            : `${t.selling ? "Bought by" : "Sold by"} ${t.other?.name ?? "a chief"}`}
+          {delivered && `, ${formatDuration(Math.max(0, now - reportAt(t)))} ago`}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 text-sm">
+        <div className="flex-1 flex flex-col">
+          <span className="text-[10px] uppercase tracking-wider text-muted">
+            You give
+          </span>
+          <Res amount={outgoing.n} id={outgoing.id} />
+        </div>
+        <span className="text-muted">⇄</span>
+        <div className="flex-1 flex flex-col items-end">
+          <span className="text-[10px] uppercase tracking-wider text-muted">
+            {delivered ? "You got" : "You get"}
+          </span>
+          <Res amount={incoming.n - lost} id={incoming.id} />
+        </div>
+      </div>
+      {t.robbed ? (
+        <p className="text-xs font-bold text-[#FFB27A]">
+          <GameIcon e="🗡️" /> Bandits robbed your merchants of {fmt(lost)}{" "}
+          {RESOURCE_NAMES[incoming.id].toLowerCase()} on the road.
+        </p>
+      ) : t.guarded ? (
+        <p className="text-xs text-good">
+          <GameIcon e="🛡️" />{" "}
+          {delivered
+            ? `Guards brought your ${RESOURCE_NAMES[incoming.id].toLowerCase()} home safe.`
+            : `Guards escort your ${RESOURCE_NAMES[incoming.id].toLowerCase()}.`}
+        </p>
+      ) : null}
+      {t.robbedOut && (
+        <p className="text-xs text-sub">
+          <GameIcon e="🗡️" /> Bandits took {fmt(t.robbedOut.stolen)} of the{" "}
+          {RESOURCE_NAMES[outgoing.id].toLowerCase()} you sent.
+        </p>
+      )}
+      {t.status === "open" && (
+        <Button
+          disabled={busy != null}
+          size="small"
+          variant="outline"
+          onClick={() => onCancel(t.id)}
+        >
+          {busy === t.id ? "…" : "Cancel and take back"}
+        </Button>
+      )}
+      {travelling && t.arrivesAt && (
+        <p className="text-xs text-sub">
+          Your {RESOURCE_NAMES[incoming.id].toLowerCase()} arrives in{" "}
+          <b className="text-parch">
+            {formatDuration(Math.max(0, t.arrivesAt - now))}
+          </b>
+        </p>
+      )}
+    </Card>
+  );
+};
+
 export const Market = () => {
   const { authHeader, state, rates, now, trade, refresh } = useGame();
   const [tab, setTab] = useState<Tab>("buy");
 
-  // /market?tab=mine (from the bot's "offer taken" message) or ?tab=sell.
+  // /market?tab=sell or ?tab=reports. Older bot messages say ?tab=mine: those are
+  // about trades on the road, which now live at the top of Buy.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
 
-    if (t === "mine" || t === "sell" || t === "buy") setTab(t);
+    if (t === "sell" || t === "buy" || t === "reports") setTab(t);
   }, []);
+  const seen = useSyncExternalStore(subscribeSeen, readSeen, () => 0);
+  const tabRef = useRef(tab);
+
+  useEffect(() => {
+    tabRef.current = tab;
+  }, [tab]);
   const [data, setData] = useState<MarketView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ResourceId | "all">("all");
@@ -199,8 +346,11 @@ export const Market = () => {
   const load = useCallback(async () => {
     if (!authHeader) return;
     try {
-      setData(await apiRequest<MarketView>(authHeader, "trade"));
+      const view = await apiRequest<MarketView>(authHeader, "trade");
+
+      setData(view);
       setError(null);
+      if (tabRef.current === "reports") markReportsRead(view);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -268,16 +418,15 @@ export const Market = () => {
     setBusy(null);
     if (ok) {
       await load();
-      setTab("mine");
+      setTab("buy");
     }
   };
   const accept = async (id: number) => {
     setBusy(id);
-    const ok = await trade.accept(id, !!guards[id]);
+    await trade.accept(id, !!guards[id]);
 
     setBusy(null);
     await load();
-    if (ok) setTab("mine");
   };
   const cancel = async (id: number) => {
     setBusy(id);
@@ -290,6 +439,11 @@ export const Market = () => {
     (o) => filter === "all" || o.give === filter,
   );
   const active = (data?.mine ?? []).filter((t) => t.status !== "delivered");
+  const reports = (data?.mine ?? [])
+    .filter((t) => t.status === "delivered")
+    .sort((a, b) => reportAt(b) - reportAt(a));
+  const fresh = reports.filter((t) => reportAt(t) > seen).length;
+
   const post_ = BUILDING_BY_ID[TRADING_POST];
 
   return (
@@ -305,13 +459,17 @@ export const Market = () => {
             { id: "buy", label: "Buy" },
             { id: "sell", label: "Sell" },
             {
-              id: "mine",
-              label: "My trades",
-              badge: active.length || undefined,
+              id: "reports",
+              label: "Reports",
+              badge: fresh || undefined,
             },
           ]}
           value={tab}
-          onChange={setTab}
+          onChange={(t) => {
+            setTab(t);
+            // Opening Reports marks them read.
+            if (t === "reports" && data) markReportsRead(data);
+          }}
         />
 
         {data && level < 1 && (
@@ -351,6 +509,25 @@ export const Market = () => {
 
         {tab === "buy" && data && (
           <>
+            {active.length > 0 && (
+              <>
+                <h2 className="text-sm font-extrabold text-parch px-1 pt-1">
+                  Your trades
+                </h2>
+                {active.map((t) => (
+                  <TradeCard
+                    key={t.id}
+                    busy={busy}
+                    now={now}
+                    t={t}
+                    onCancel={cancel}
+                  />
+                ))}
+                <h2 className="text-sm font-extrabold text-parch px-1 pt-2">
+                  Offers from other tribes
+                </h2>
+              </>
+            )}
             <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
               {(["all", ...RESOURCES.map((r) => r.id)] as const).map((f) => (
                 <button
@@ -544,106 +721,17 @@ export const Market = () => {
           </Card>
         )}
 
-        {tab === "mine" && data && (
+        {tab === "reports" && data && (
           <>
-            {data.mine.length === 0 && (
+            {reports.length === 0 && (
               <Card className="text-center text-sm text-sub">
-                No trades yet.
+                No finished trades this week. When merchants arrive, the
+                report shows up here.
               </Card>
             )}
-            {data.mine.map((t) => {
-              const travelling =
-                t.status === "accepted" || t.status === "delivering";
-              const incoming = t.selling
-                ? { id: t.want, n: t.wantAmount }
-                : { id: t.give, n: t.giveAmount };
-              const outgoing = t.selling
-                ? { id: t.give, n: t.giveAmount }
-                : { id: t.want, n: t.wantAmount };
-              const lost = t.robbed?.stolen ?? 0;
-
-              return (
-                <Card
-                  key={t.id}
-                  className={clsx(
-                    "flex flex-col gap-2",
-                    t.status === "delivered" && "opacity-70",
-                  )}
-                >
-                  <div className="flex items-center gap-2 text-xs">
-                    <span
-                      className={clsx(
-                        "pill h-5",
-                        t.status === "open" && "pill-gold",
-                        travelling && "pill-sea",
-                        t.status === "delivered" && "pill-good",
-                      )}
-                    >
-                      {t.status === "open"
-                        ? "On the market"
-                        : travelling
-                          ? <IconText text="🐪 On the road" />
-                          : "✓ Delivered"}
-                    </span>
-                    <span className="flex-1 min-w-0 truncate text-sub text-right">
-                      {t.status === "open"
-                        ? "Waiting for a buyer"
-                        : `${t.selling ? "Bought by" : "Sold by"} ${t.other?.name ?? "a chief"}`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <div className="flex-1 flex flex-col">
-                      <span className="text-[10px] uppercase tracking-wider text-muted">
-                        You give
-                      </span>
-                      <Res amount={outgoing.n} id={outgoing.id} />
-                    </div>
-                    <span className="text-muted">⇄</span>
-                    <div className="flex-1 flex flex-col items-end">
-                      <span className="text-[10px] uppercase tracking-wider text-muted">
-                        You get
-                      </span>
-                      <Res amount={incoming.n - lost} id={incoming.id} />
-                    </div>
-                  </div>
-                  {t.robbed ? (
-                    <p className="text-xs font-bold text-[#FFB27A]">
-                      <GameIcon e="🗡️" /> Bandits robbed your merchants of {fmt(lost)}{" "}
-                      {RESOURCE_NAMES[incoming.id].toLowerCase()} on the road.
-                    </p>
-                  ) : t.guarded && t.status !== "delivered" ? (
-                    <p className="text-xs text-good">
-                      <GameIcon e="🛡️" /> Guards escort your {RESOURCE_NAMES[incoming.id].toLowerCase()}.
-                    </p>
-                  ) : null}
-                  {t.robbedOut && (
-                    <p className="text-xs text-sub">
-                      <GameIcon e="🗡️" /> Bandits took {fmt(t.robbedOut.stolen)} of the{" "}
-                      {RESOURCE_NAMES[outgoing.id].toLowerCase()} you sent.
-                    </p>
-                  )}
-                  {t.status === "open" && (
-                    <Button
-                      disabled={busy != null}
-                      size="small"
-                      variant="outline"
-                      onClick={() => cancel(t.id)}
-                    >
-                      {busy === t.id ? "…" : "Cancel and take back"}
-                    </Button>
-                  )}
-                  {travelling && t.arrivesAt && (
-                    <p className="text-xs text-sub">
-                      Your {RESOURCE_NAMES[incoming.id].toLowerCase()} arrives
-                      in{" "}
-                      <b className="text-parch">
-                        {formatDuration(Math.max(0, t.arrivesAt - now))}
-                      </b>
-                    </p>
-                  )}
-                </Card>
-              );
-            })}
+            {reports.map((t) => (
+              <TradeCard key={t.id} busy={busy} now={now} t={t} onCancel={cancel} />
+            ))}
           </>
         )}
       </div>

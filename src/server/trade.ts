@@ -318,8 +318,9 @@ export async function marketView(me: Player, now: number) {
         sql: `SELECT * FROM trades
               WHERE (seller_id = ? OR buyer_id = ?)
                 AND (status IN ('open', 'accepted', 'delivering') OR (status = 'delivered' AND arrives_at > ?))
-              ORDER BY created_at DESC LIMIT 40`,
-        args: [me.id, me.id, now - 24 * 3600 * 1000],
+              ORDER BY created_at DESC LIMIT 60`,
+        // Finished trades stay a week, as reports.
+        args: [me.id, me.id, now - 7 * 24 * 3600 * 1000],
       },
     ],
     "read",
