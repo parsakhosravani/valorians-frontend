@@ -532,9 +532,15 @@ export const CAMP_DEFENSE_PER_TROOP = 20;
 // where the old curve would have needed 20×.
 /** The last camp on the steep curve. Camps past it follow the gentle one. */
 export const CAMP_STEEP_UNTIL = 30;
-/** Past CAMP_STEEP_UNTIL: defense and first-win resources grow by these per level. */
+/** Past CAMP_STEEP_UNTIL: defense grows by this per level. */
 const CAMP_LATE_DEFENSE_GROWTH = 1.12;
-const CAMP_LATE_REWARD_GROWTH = 1.1;
+/**
+ * Past CAMP_STEEP_UNTIL, first-win resources grow by this share of camp 30's
+ * reward per level, in a straight line rather than compounding: camp 40 pays
+ * 1.4× camp 30 and camp 60 2.2×, while the barbarians keep getting tougher.
+ * (Compounding 10% a level paid camp 50 almost 7× and outran players' villages.)
+ */
+const CAMP_LATE_REWARD_STEP = 0.04;
 /** Is there a camp at this level? (Every whole level from 1 up.) */
 export const isCampLevel = (level: number) => Number.isInteger(level) && level >= 1;
 const steepDefense = (level: number) => 80 * Math.pow(1.35, level - 1);
@@ -550,10 +556,23 @@ export const campFirstReward = (level: number) => ({
   resources: Math.round(
     level <= CAMP_STEEP_UNTIL
       ? steepResources(level)
-      : steepResources(CAMP_STEEP_UNTIL) * Math.pow(CAMP_LATE_REWARD_GROWTH, level - CAMP_STEEP_UNTIL),
+      : steepResources(CAMP_STEEP_UNTIL) * (1 + CAMP_LATE_REWARD_STEP * (level - CAMP_STEEP_UNTIL)),
   ),
   coins: 100 * level,
 });
+/**
+ * Each camp's name: a warlord's or a place's, with a word for how tough it is
+ * (Camp, Hold, Fortress, Citadel). The same level always has the same name.
+ */
+const CAMP_ADJECTIVES = ["Burnt", "Howling", "Red", "Broken", "Ashen", "Iron", "Bloody", "Silent", "Black", "Frozen", "Rotten", "Wild"];
+const CAMP_WARLORDS = ["Grul", "Varka", "Thorg", "Bresk", "Ulmar", "Krag", "Dosk", "Hilda", "Morv", "Skarn", "Brann", "Yrsa"];
+export const campTier = (level: number) => (level <= 10 ? "Camp" : level <= 20 ? "Hold" : level <= 30 ? "Fortress" : "Citadel");
+export function campName(level: number) {
+  const words = level % 2 ? CAMP_ADJECTIVES : CAMP_WARLORDS;
+  // Step through the list by 5 (no common factor with 12) so neighbours differ.
+  const word = words[(Math.floor(level / 2) * 5) % words.length];
+  return level % 2 ? `${word} ${campTier(level)}` : `${word}'s ${campTier(level)}`;
+}
 /** Cleared camps can be raided again for a smaller haul after this cooldown. */
 export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;

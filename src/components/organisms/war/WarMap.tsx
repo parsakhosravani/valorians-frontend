@@ -66,6 +66,7 @@ import {
   ResourceId,
   UnitId,
   buildingImage,
+  campName,
 } from "@/lib/game/config";
 import {
   MarchRoute,
@@ -965,7 +966,7 @@ export const WarMap = ({
     };
   };
   const campTarget = (c: Camp, from: { x: number; y: number }): AttackTarget => ({
-    title: `Barbarian camp ${c.level}`,
+    title: campName(c.level),
     to: { camp: c.level },
     defense: { min: c.defense, max: c.defense, exact: true },
     distance: Math.round(Math.hypot(c.x - from.x, c.y - from.y) * 10) / 10,
@@ -1511,7 +1512,7 @@ export const WarMap = ({
         position="bottom"
         title={
           selected?.kind === "camp"
-            ? `Barbarian camp ${selected.camp.level}`
+            ? campName(selected.camp.level)
             : selected?.kind === "tribe"
               ? selected.tribe.isMe
                 ? "Your tribe"
