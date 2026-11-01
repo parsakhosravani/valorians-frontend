@@ -35,7 +35,7 @@ This repo is the whole game — the Next.js frontend **and** its backend (API ro
 - **Raids on players:** the Raid tab lists unshielded tribes close to your power. Attack power vs defense (troops at home + Watchtower + militia, boosted by Armory, Trapmaker and City Gate; rams break the gate bonus), ±10% luck. The loser's army is wiped out; the winner loses (loser/winner)^1.5 of theirs. Hospital saves part of the losses.
 - **Loot:** winners carry home up to half of what the defender has above their Hideout's protected amount, limited by carry capacity. Armies take time to come home (War hall shortens it); loot arrives with them.
 - **Protection:** new players get a 72h shield (attacking a player ends it), and a raided tribe gets a 2h shield.
-- **Barbarian camps:** 30 levels of PvE. First win gives a big reward and unlocks the next camp; beaten camps can be raided again hourly for 30%.
+- **Barbarian camps:** endless named camps of PvE (Camp, Hold, Fortress, then Citadel past level 30). Up to camp 30 each one is a big step up; after that they get tougher gently and rewards grow in a straight line. First win gives a big reward and unlocks the next camp; beaten camps can be raided again hourly for 30%.
 - **Ranks:** each troop type is a regiment; only the troop types that fight in a battle (attacking or defending) earn XP, shared by how much each contributed; losses cost XP because veterans die too. Recruit → Soldier → Veteran → Elite → Champion → Legend, each rank +4% attack and defense. Promotions show in the battle report and the Telegram message.
 - **Reports and leaderboard:** every battle is saved for both sides; the leaderboard ranks tribes by population, power and victories (tap your rank in the header).
 
