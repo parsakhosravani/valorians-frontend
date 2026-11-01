@@ -5,7 +5,7 @@ import { ArmyLine } from "./shared";
 
 import { Drawer } from "@/components/molecules/Drawer";
 import { formatDuration } from "@/lib/format";
-import { UNITS } from "@/lib/game/config";
+import { UNITS, shownXY } from "@/lib/game/config";
 import type { BattleRound } from "@/lib/game/battle";
 import type { Army } from "@/lib/game/engine";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
@@ -206,7 +206,7 @@ export const LiveBattleDrawer = ({
                 disabled={!onLocate}
                 onClick={() => onLocate?.(m.from)}
               >
-                <GameIcon e="📍" /> {m.from.name}&apos;s village: {m.from.x}, {m.from.y}
+                <GameIcon e="📍" /> {m.from.name}&apos;s village: {shownXY(m.from)}
               </button>
             )}
           </div>

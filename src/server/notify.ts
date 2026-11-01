@@ -1,6 +1,6 @@
 import "server-only";
 
-import { RANKS, RESOURCE_IDS, UNITS, unitPlural } from "@/lib/game/config";
+import { RANKS, RESOURCE_IDS, UNITS, shownXY, unitPlural } from "@/lib/game/config";
 import type { Army, BanditRaid, BanditRaidReport } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
@@ -91,7 +91,7 @@ export const notify = {
   incoming(defenderId: number, attacker: string, units: Army | null, travelMs: number, from?: { x: number; y: number }) {
     return sendToPlayer(
       defenderId,
-      `🔥 <b>${esc(attacker)}</b>${from ? ` (village at 📍 ${from.x}, ${from.y})` : ""} is marching on your tribe!\n\n` +
+      `🔥 <b>${esc(attacker)}</b>${from ? ` (village at 📍 ${shownXY(from)})` : ""} is marching on your tribe!\n\n` +
         `Army: ${armyText(units)}${units ? "" : " (build a Watchtower to see which troops)"}\n` +
         `Arrives in <b>${inMinutes(travelMs)}</b>. Train defenders or upgrade your walls now.`,
       "🛡️ Prepare defenses",
@@ -237,7 +237,7 @@ export const notify = {
     return sendToPlayer(
       userId,
       `🗡️ <b>Bandits are gathering to raid your village!</b>\n\n` +
-        `A band about <b>${fmt(raid.strength)}</b> strong is massing at their lair (${raid.x}, ${raid.y}). ` +
+        `A band about <b>${fmt(raid.strength)}</b> strong is massing at their lair (📍 ${shownXY(raid)}). ` +
         `Your defense is ${fmt(defense)}. They strike in about ${hours} hours.\n\n` +
         `Train defenders, or clear their lair first to call the raid off.`,
       "🗺️ Open the map",
