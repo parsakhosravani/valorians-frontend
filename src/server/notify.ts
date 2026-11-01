@@ -99,6 +99,29 @@ export const notify = {
     );
   },
 
+  /** A spy on `target` saw its army march out: strike while the village is bare. */
+  spyReport(watcherId: number, target: string, targetId: number, units: Army, defense: number, awayMs: number) {
+    return sendToPlayer(
+      watcherId,
+      `🕵️ <b>Your spy in ${esc(target)}'s village:</b> their army just marched out!\n\n` +
+        `Left: ${armyText(units)}\n` +
+        `Defense left at home: about <b>${fmt(defense)}</b>. They're away for about <b>${inMinutes(awayMs)}</b>.\n\n` +
+        `Strike now, while the village is bare.`,
+      "⚔️ Attack them",
+      `/battle?revenge=${targetId}`
+    );
+  },
+
+  /** A Watchtower caught a spy being planted. */
+  spyCaught(targetId: number, watcher: string) {
+    return sendToPlayer(
+      targetId,
+      `🗼 <b>Your Watchtower caught a spy</b> sent by <b>${esc(watcher)}</b>. They wanted to know when your army leaves.`,
+      "🗺️ Open the map",
+      "/battle?tab=map"
+    );
+  },
+
   battleBegun(defenderId: number, attacker: string, durationMs: number) {
     return sendToPlayer(
       defenderId,

@@ -280,6 +280,17 @@ async function migrate(client: Client) {
     );
     CREATE INDEX IF NOT EXISTS announcements_status ON announcements(status);
 
+    -- Spies: a player watching another tribe until \`until\` (see SPY).
+    CREATE TABLE IF NOT EXISTS spies (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      watcher_id    INTEGER NOT NULL,
+      target_id     INTEGER NOT NULL,
+      placed_at     INTEGER NOT NULL,
+      until         INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS spies_target ON spies(target_id, until);
+    CREATE INDEX IF NOT EXISTS spies_watcher ON spies(watcher_id, until);
+
     -- Small settings the server keeps, e.g. the last version announced.
     CREATE TABLE IF NOT EXISTS meta (
       key           TEXT PRIMARY KEY,

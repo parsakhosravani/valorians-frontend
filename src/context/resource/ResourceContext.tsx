@@ -114,6 +114,8 @@ interface GameContextType {
   /** Quietly reloads the player's state (e.g. after a battle was fought on the server). */
   refresh: () => Promise<void>;
   scout: (target: number) => Promise<ScoutReport | null>;
+  /** Plants a spy on a tribe: until when it watches, or null if it was caught (or failed). */
+  spy: (target: number) => Promise<{ caught: boolean; until: number | null } | null>;
   /** Marketplace: post an offer, buy one, or take yours back. */
   trade: {
     /** `guard`: hire guards for the goods coming back to you. */
@@ -526,6 +528,17 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       const res = await send<PlayerView & { scout: ScoutReport }>("war/scout", { target });
 
       return res?.scout ?? null;
+    },
+    spy: async (target) => {
+      const res = await send<PlayerView & { spy: { caught: boolean; until: number | null } }>("war/spy", { target });
+
+      if (res?.spy) {
+        toast.dismiss();
+        if (res.spy.caught) toast.error(<IconText text="🗼 Their Watchtower caught your spy! The coins are lost." />);
+        else toast.success(<IconText text="🕵️ Spy planted for a day. You'll hear the moment their army marches out." />);
+      }
+
+      return res?.spy ?? null;
     },
     trade: {
       post: (o) => act("trade/offer", o, "Offer posted on the market"),

@@ -8,6 +8,7 @@ const ICON_BY_EMOJI: Record<string, string> = {
   "👑": "crown",
   "🎖️": "medal",
   "💀": "skull",
+  "🕵️": "spy",
   "🎒": "loot",
   "⏱": "hourglass",
   "⏳": "hourglass",

@@ -63,6 +63,7 @@ import {
   MAP_MIN,
   MAP_SIZE,
   RESOURCE_NAMES,
+  SPY,
   ResourceId,
   UnitId,
   buildingImage,
@@ -111,6 +112,8 @@ type Tribe = {
   clan: { id: number; tag: string; flag: ClanFlagData } | null;
   /** In your clan: can't be attacked. */
   ally: boolean;
+  /** Until when you have a spy in this village (older servers don't send it). */
+  spiedUntil?: number | null;
 };
 
 type Camp = {
@@ -489,7 +492,7 @@ export const WarMap = ({
   focusCamp?: number;
 }) => {
   const { authHeader } = useGameStatus();
-  const { recall, scout, refresh } = useGameActions();
+  const { recall, scout, spy, refresh } = useGameActions();
   // The map follows the clock in 5-second steps (has a shield run out, has a
   // caravan arrived). What moves or counts down every second does so on its
   // own (Travellers, Countdown), so the whole map isn't redrawn every second.
@@ -1000,6 +1003,16 @@ export const WarMap = ({
     if (r) setScouts((m) => ({ ...m, [t.id]: r }));
   };
 
+  // Plant a spy: on success the tribe shows it until the map reloads.
+  const doSpy = async (t: Tribe) => {
+    setBusy(true);
+    const r = await spy(t.id);
+
+    setBusy(false);
+    if (r?.until)
+      setData((d) => (d ? { ...d, tribes: d.tribes.map((x) => (x.id === t.id ? { ...x, spiedUntil: r.until } : x)) } : d));
+  };
+
   const doRecall = async (id: number) => {
     if (await recall(id)) load();
   };
@@ -1472,6 +1485,11 @@ export const WarMap = ({
                   Raiding a tribe under half your power takes only half the loot.
                 </span>
                 <span>
+                  <GameIcon e="🕵️" /> With an Exploration Center you can plant a spy on a tribe for a day: the
+                  moment their army marches out, you hear about it, so you can strike while they&apos;re away. A
+                  Watchtower may catch spies.
+                </span>
+                <span>
                   <GameIcon e="🧭" /> Tap one of your armies on the road to give it new orders: on its way out or
                   on its way home with the spoils, it can march on another tribe or camp from where it stands.
                   It can leave troops behind but never take on more. Supplies for the new road come out of the
@@ -1648,14 +1666,21 @@ export const WarMap = ({
                     )}
                     <div className="flex gap-2">
                       {canScout ? (
-                        <Button
-                          className="flex-1"
-                          disabled={busy}
-                          variant="outline"
-                          onClick={() => doScout(t)}
-                        >
-                          <GameIcon e="🔭" /> Scout · {fmt(scoutCost(t.distance))} coins
-                        </Button>
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <Button disabled={busy} variant="outline" onClick={() => doScout(t)}>
+                            <GameIcon e="🔭" /> Scout · {fmt(scoutCost(t.distance))} coins
+                          </Button>
+                          {!t.ally &&
+                            (t.spiedUntil && t.spiedUntil > now ? (
+                              <p className="text-xs font-bold text-good text-center">
+                                <GameIcon e="🕵️" /> Your spy is watching: <Countdown to={t.spiedUntil} />
+                              </p>
+                            ) : (
+                              <Button disabled={busy} variant="outline" onClick={() => doSpy(t)}>
+                                <GameIcon e="🕵️" /> Spy 24h · {fmt(scoutCost(t.distance) * SPY.costFactor)} coins
+                              </Button>
+                            ))}
+                        </div>
                       ) : (
                         <p className="flex-1 text-xs text-muted self-center">
                           Build an Exploration Center to scout.

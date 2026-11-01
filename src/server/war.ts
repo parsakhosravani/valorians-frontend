@@ -8,6 +8,7 @@ import { campSpots, homeOf } from "./map";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { maybeRefreshRanks } from "./ranks";
+import { spiesSeeMarch } from "./spies";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
@@ -181,6 +182,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
 
       await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel);
     }
+    // Anyone with a spy in this village hears the army has gone.
+    await spiesSeeMarch(after, sent, travel, now).catch((e) => console.error("spies", e));
 
     return { player: after, march: { id: Number(ins.lastInsertRowid), arrivesAt: now + travel } };
   } catch (e) {
