@@ -77,3 +77,19 @@ test("camps have names, the same each time, and neighbours differ", () => {
   // No two camps share a name within a tier.
   expect(new Set(Array.from({ length: 10 }, (_, i) => campName(i + 1))).size).toBe(10);
 });
+
+test("only your newest beaten camps can be raided again", () => {
+  const s = E.createInitialState(0);
+  s.camps.cleared = 30;
+  s.army.spearman = 10;
+  const now = 10 * 60 * 60 * 1000;
+
+  // The newest 3 beaten camps and the next one stay.
+  for (const level of [28, 29, 30, 31]) expect(W.campGone(s, level)).toBe(false);
+  expect(() => W.dispatchCamp(s, 28, { spearman: 1 } as never, now)).not.toThrow();
+  // Older ones are gone.
+  expect(W.campGone(s, 27)).toBe(true);
+  expect(W.campGone(s, 1)).toBe(true);
+  expect(() => W.dispatchCamp(s, 27, { spearman: 1 } as never, now)).toThrow("moved on");
+  expect(() => W.checkCamp(s, 5, now)).toThrow("moved on");
+});

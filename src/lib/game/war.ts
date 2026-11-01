@@ -7,6 +7,7 @@ import {
   BUILDINGS,
   CAMP_REPEAT_COOLDOWN_MS,
   CAMP_REPEAT_SHARE,
+  CAMPS_KEPT,
   CAMP_TRAVEL_SECONDS,
   FOREST_CAVALRY_PENALTY,
   LUCK,
@@ -756,6 +757,9 @@ export function receiveRaidReport(
 
 // ─── Barbarian camps ─────────────────────────────────────────────────────────
 
+/** A beaten camp too old to stay on the map (see CAMPS_KEPT). */
+export const campGone = (s: GameState, level: number) => level <= s.camps.cleared - CAMPS_KEPT;
+
 export function campStatus(s: GameState, level: number, now: number) {
   const last = s.camps.lastRaid[level] ?? 0;
   if (level > s.camps.cleared + 1) return { state: "locked" as const, readyAt: 0 };
@@ -777,6 +781,7 @@ export function dispatchCamp(s0: GameState, level: number, units: Army, now: num
   if (!isCampLevel(level)) throw new GameError("Unknown camp");
   const st = campStatus(s0, level, now);
   if (st.state === "locked") throw new GameError("Clear the previous camp first", "locked");
+  if (campGone(s0, level)) throw new GameError("These barbarians have moved on", "gone");
   if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");
   const s = cloneState(s0);
   const sent = validateSend(s, units);
@@ -791,6 +796,8 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
     const reward = campReward(s, level);
     if (reward.first) s.camps.cleared = Math.max(s.camps.cleared, level);
     s.camps.lastRaid[level] = now;
+    // Camps that dropped off the map don't need their raid times kept.
+    for (const l of Object.keys(s.camps.lastRaid)) if (campGone(s, Number(l))) delete s.camps.lastRaid[l];
     return reward;
   });
 }
@@ -1072,6 +1079,7 @@ export function checkCamp(s: GameState, level: number, now: number) {
   if (!isCampLevel(level)) throw new GameError("Unknown camp");
   const st = campStatus(s, level, now);
   if (st.state === "locked") throw new GameError("Clear the previous camp first", "locked");
+  if (campGone(s, level)) throw new GameError("These barbarians have moved on", "gone");
   if (st.state === "cooldown") throw new GameError("These barbarians are still regrouping", "cooldown");
 }
 
