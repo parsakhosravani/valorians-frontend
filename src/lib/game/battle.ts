@@ -153,6 +153,14 @@ export const nextRoundAt = (plan: BattlePlan, now: number) => {
   return r ? plan.startedAt + r.at : null;
 };
 
+/**
+ * How many fighters a battle counts, for how long it lasts: twice the smaller
+ * side. A great army storming an empty village, or a handful raiding a camp,
+ * is over in a few rounds; only two big armies fight for long. `defenders`
+ * is troops or, for a village with few or none, its defense in troop terms.
+ */
+export const battleSize = (attackers: number, defenders: number) => 2 * Math.max(0, Math.min(attackers, defenders));
+
 /** Fighting troops in an army (ships wait offshore and don't count). */
 export const troopsOnField = (army: Army) =>
   UNIT_IDS.reduce((n, u) => n + (UNIT_BY_ID[u].transport ? 0 : (army[u] ?? 0)), 0);

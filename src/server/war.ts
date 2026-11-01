@@ -13,7 +13,7 @@ import { spiesSeeMarch } from "./spies";
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
-import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
+import { BattlePlan, battleSize, planBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, pointAlong, routeFor, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   BattleOutcome,
@@ -201,6 +201,9 @@ async function ambushOnRoad(me: Player, units: Army, from: Point, to: Point, sta
 
 type Target = { dest: Point; defenderId: number | null; campLevel: number | null; lairLevel: number | null; name: string };
 
+/** An empty village's defense, in troops for how long the battle lasts: a village of 3,000 defense counts as 10. */
+const EMPTY_VILLAGE_DEFENSE_PER_TROOP = 300;
+
 /** Where an attack on a tribe, one of your camps or a bandit lair goes, after checking it's allowed. */
 async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Point): Promise<Target> {
   const db = await getDb();
@@ -340,11 +343,13 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 
   let outcome!: BattleOutcome;
   let engaged: Army | null = null;
-  let troops = troopsOnField(a.units);
+  // The two sides, in troops: the battle lasts by the smaller (see battleSize).
+  const attackers = troopsOnField(a.units);
+  let defenders = 0;
 
   if (a.campLevel) {
     outcome = campOutcome(attacker.state, a.campLevel, a.units, rand(), { terrain });
-    troops += Math.round(campDefense(a.campLevel) / CAMP_DEFENSE_PER_TROOP);
+    defenders = Math.round(campDefense(a.campLevel) / CAMP_DEFENSE_PER_TROOP);
   } else if (a.lairLevel) {
     // Someone else cleared it first: nobody left to fight.
     if (!(await lairManned(a.to, at))) {
@@ -353,7 +358,7 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
       return false;
     }
     outcome = lairOutcome(attacker.state, a.lairLevel, a.units, rand(), { terrain });
-    troops += Math.round(banditStrength(a.lairLevel) / CAMP_DEFENSE_PER_TROOP);
+    defenders = Math.round(banditStrength(a.lairLevel) / CAMP_DEFENSE_PER_TROOP);
   } else {
     const defender = a.defenderId ? await findById(a.defenderId) : null;
 
@@ -380,10 +385,14 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 
       return false;
     }
-    troops += troopsOnField(engaged!);
+    // Its soldiers; with none home, the village itself (villagers, Watchtower, walls) counts as only a
+    // few, so storming an empty village is over in about 3 rounds (see EMPTY_VILLAGE_DEFENSE_PER_TROOP).
+    const soldiers = troopsOnField(engaged!);
+
+    defenders = soldiers > 0 ? soldiers : Math.round(outcome.defense / EMPTY_VILLAGE_DEFENSE_PER_TROOP);
   }
 
-  const plan = planBattle(outcome, at, troops, rand());
+  const plan = planBattle(outcome, at, battleSize(attackers, defenders), rand());
   const battle: StoredBattle = { plan, outcome, engaged };
 
   try {
