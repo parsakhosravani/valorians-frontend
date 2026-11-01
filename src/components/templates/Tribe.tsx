@@ -256,7 +256,8 @@ export const Tribe: FunctionComponent = () => {
 
   return (
     <div className="w-full mx-auto px-3 pt-1 pb-4 flex flex-col gap-4 max-w-md">
-      <div className="grid gap-4 w-full items-stretch">
+      {/* One column that never grows past the screen: a long line in a card can't push it wider. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 w-full items-stretch">
         {/* Builders and what they are doing */}
         <section
           className={clsx(

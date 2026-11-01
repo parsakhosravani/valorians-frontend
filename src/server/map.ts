@@ -238,8 +238,12 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     }),
     // Bandit lairs in view: the same for everyone.
     lairsAround({ x: c.x - r, y: c.y - r }, { x: c.x + r, y: c.y + r }, now),
-    // The tribes you have a spy on.
-    mySpies(me.id, now),
+    // The tribes you have a spy on (never worth failing the whole map over).
+    mySpies(me.id, now).catch((e) => {
+      console.error("mySpies", e);
+
+      return new Map<number, number>();
+    }),
   ]);
 
   const tribes = rs.rows.map((row) => {

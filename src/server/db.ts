@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5; // 5: spies
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
