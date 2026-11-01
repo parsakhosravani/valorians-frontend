@@ -207,7 +207,7 @@ test("winning at a camp gives XP; enough XP promotes the regiment and makes it s
   expect(W.attackPower(back, { ...E.emptyArmy(), spearman: 50 })).toBeCloseTo(weak * 1.04);
 });
 
-test("XP is shared by contribution and a wiped-out regiment loses some of its XP", () => {
+test("XP is shared by contribution and a wiped-out regiment loses all of its XP", () => {
   const s = withBarracks(3);
   s.buildings.stable = 1;
   s.army = { spearman: 10, archer: 0, cavalry: 10, ram: 0 };
@@ -220,8 +220,8 @@ test("XP is shared by contribution and a wiped-out regiment loses some of its XP
   t.army.spearman = 2;
   t.troops.spearman.xp = 1000;
   const { state } = W.raidCamp(t, 1, { ...E.emptyArmy(), spearman: 2 }, T0, 0.5);
-  // all 2 died: −40%, then +8 XP for the lost fight (80 × 0.2 × 0.5)
-  expect(state.troops.spearman.xp).toBe(608);
+  // all 2 died: no one is left to carry the experience, so it is all gone
+  expect(state.troops.spearman.xp).toBe(0);
 });
 
 test("defenders earn XP too, and raid attackers get theirs when the report arrives", () => {
@@ -234,7 +234,8 @@ test("defenders earn XP too, and raid attackers get theirs when the report arriv
   const { state: defAfter, report } = W.defendRaid(def, d.state, d.sent, T0, 0.5);
   expect(report.attackerWon).toBe(true);
   expect(report.defenderXp!.spearman).toBeGreaterThan(0);
-  expect(defAfter.troops.spearman.xp).toBeGreaterThan(0);
+  // the defenders fought well but all fell, so their regiment keeps nothing
+  expect(defAfter.troops.spearman.xp).toBe(0);
 
   const atkAfter = W.receiveRaidReport(d.state, report, "Def", T0, 0.3);
   expect(atkAfter.troops.spearman.xp).toBeGreaterThan(0);
@@ -486,4 +487,17 @@ test("archers defend far better against a dragon than against an army as strong"
   const vsAxes = W.battleNumbers(attacker, { ...E.emptyArmy(), axeman: 89 }, defender).defense;
 
   expect(vsDragon).toBeGreaterThan(vsAxes * 2.5);
+});
+
+test("the dead take their share of a regiment's experience", () => {
+  const s = E.createInitialState(T0);
+  const empty = () => Object.fromEntries(Object.keys(s.troops).map((u) => [u, 0])) as any;
+  s.troops.spearman.xp = 1000;
+  s.troops.archer.xp = 1000;
+  const regiment = { ...empty(), spearman: 100, archer: 50 };
+  const dead = { ...empty(), spearman: 40, archer: 50 };
+  const earned = { ...empty(), spearman: 10, archer: 10 };
+  W.applyBattleXp(s, regiment, dead, earned);
+  expect(s.troops.spearman.xp).toBe(610); // 40% died → 40% of XP lost, then +10
+  expect(s.troops.archer.xp).toBe(0); // all died → all XP lost, nothing earned
 });

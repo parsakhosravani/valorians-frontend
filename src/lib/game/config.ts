@@ -729,6 +729,9 @@ export const RANK_BONUS = 0.04;
 /** XP for a battle = enemy strength × this (×0.5 for a defeat), shared by the troop types that fought. */
 export const XP_PER_STRENGTH = 0.2;
 export const XP_DEFEAT_SHARE = 0.5;
-/** Losing a share of a regiment costs this share of its XP (losing all of it costs 40%). */
-export const XP_LOSS_SHARE = 0.4;
+/**
+ * Experience lives in the soldiers: losing a share of a regiment costs that same
+ * share of its XP, and a regiment that is wiped out loses all of it (owner's rule).
+ */
+export const XP_LOSS_SHARE = 1;
 

@@ -30,6 +30,9 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Raid shield grows** when a player is raided again and again.
 - Attacking a **much weaker target gives half loot**.
 - Knight and Paladin are strong elite cavalry.
+- **Experience lives in the soldiers.** Each troop type keeps one rank (no split ranks). When
+  troops die, the regiment loses that same share of its XP; if the whole regiment dies, its XP
+  is gone. Survivors keep theirs, and new recruits join the regiment's current rank.
 - **Dragon:** one per player, very expensive, flies straight to the target, **carries no loot**.
 - **Bandit raids** hit villages from nearby lairs, with an **advance warning** and a chance to
   clear the lair first.
