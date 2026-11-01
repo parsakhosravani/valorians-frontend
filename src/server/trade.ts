@@ -31,7 +31,8 @@ type TradeRow = Offer & {
   id: number;
   sellerId: number;
   buyerId: number | null;
-  status: "open" | "accepted" | "delivering" | "delivered" | "cancelled";
+  /** "seller-paid": the seller got their goods but the buyer's delivery failed; only the buyer's is retried. */
+  status: "open" | "accepted" | "delivering" | "seller-paid" | "delivered" | "cancelled";
   createdAt: number;
   acceptedAt: number | null;
   arrivesAt: number | null;
@@ -215,23 +216,30 @@ export async function resolveDueTrades(now: number, playerId?: number) {
   // Bandits strike before the merchants arrive.
   await springRobberies(now, playerId);
   const rs = await db.execute({
-    sql: `SELECT * FROM trades WHERE status = 'accepted' AND arrives_at <= ?${mine} ORDER BY arrives_at ASC LIMIT 20`,
+    sql: `SELECT * FROM trades WHERE status IN ('accepted', 'seller-paid') AND arrives_at <= ?${mine} ORDER BY arrives_at ASC LIMIT 20`,
     args: playerId == null ? [now] : [now, playerId, playerId],
   });
 
   for (const row of rs.rows) {
     const t = toTrade(row);
     const claim = await db.execute({
-      sql: "UPDATE trades SET status = 'delivering' WHERE id = ? AND status = 'accepted'",
-      args: [t.id],
+      sql: "UPDATE trades SET status = 'delivering' WHERE id = ? AND status = ?",
+      args: [t.id, t.status],
     });
 
     if (claim.rowsAffected !== 1 || t.buyerId == null) continue;
+    // Each side is paid once: if the buyer's delivery fails after the seller
+    // was paid, the retry only delivers the buyer's (it used to pay the seller again).
+    let sellerPaid = t.status === "seller-paid";
+
     try {
       // What the bandits took doesn't arrive.
-      await mutatePlayer(t.sellerId, now, (s) =>
-        receiveGoods(s, t.want, t.wantAmount - stolenFrom(t.robB)),
-      );
+      if (!sellerPaid) {
+        await mutatePlayer(t.sellerId, now, (s) =>
+          receiveGoods(s, t.want, t.wantAmount - stolenFrom(t.robB)),
+        );
+        sellerPaid = true;
+      }
       await mutatePlayer(t.buyerId, now, (s) =>
         receiveGoods(s, t.give, t.giveAmount - stolenFrom(t.robA)),
       );
@@ -240,11 +248,11 @@ export async function resolveDueTrades(now: number, playerId?: number) {
         args: [t.id],
       });
     } catch (e) {
-      // Put it back so the next request retries the delivery.
+      // Put it back so the next request retries what's left of the delivery.
       console.error("trade delivery failed", t.id, e);
       await db.execute({
-        sql: "UPDATE trades SET status = 'accepted' WHERE id = ?",
-        args: [t.id],
+        sql: "UPDATE trades SET status = ? WHERE id = ?",
+        args: [sellerPaid ? "seller-paid" : "accepted", t.id],
       });
     }
   }
@@ -317,7 +325,7 @@ export async function marketView(me: Player, now: number) {
       {
         sql: `SELECT * FROM trades
               WHERE (seller_id = ? OR buyer_id = ?)
-                AND (status IN ('open', 'accepted', 'delivering') OR (status = 'delivered' AND arrives_at > ?))
+                AND (status IN ('open', 'accepted', 'delivering', 'seller-paid') OR (status = 'delivered' AND arrives_at > ?))
               ORDER BY created_at DESC LIMIT 60`,
         // Finished trades stay a week, as reports.
         args: [me.id, me.id, now - 7 * 24 * 3600 * 1000],

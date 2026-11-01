@@ -220,7 +220,7 @@ const TradeCard = ({
   busy: number | "post" | null;
   onCancel: (id: number) => void;
 }) => {
-  const travelling = t.status === "accepted" || t.status === "delivering";
+  const travelling = t.status === "accepted" || t.status === "delivering" || t.status === "seller-paid";
   const delivered = t.status === "delivered";
   const incoming = t.selling
     ? { id: t.want, n: t.wantAmount }
