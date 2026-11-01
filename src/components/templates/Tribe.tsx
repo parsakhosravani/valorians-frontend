@@ -113,21 +113,31 @@ const UpgradeRow = ({
 
 type Job = { building: string; toLevel: number; startedAt: number; endsAt: number };
 
-/** What each builder is doing: work under way with its timer, then the free ones. */
+/**
+ * What each builder is doing: work under way with its timer, then the free
+ * ones, each offered the next job it could start (`picks`, best first) with a
+ * one-tap button, or, when nothing is affordable, what to save up for.
+ */
 const BuilderRows = ({
   jobs,
   free,
   now,
-  hint,
+  picks,
+  saving,
+  busy,
   thumb = 44,
   onOpen,
+  onUpgrade,
 }: {
   jobs: Job[];
   free: number;
   now: number;
-  hint: string;
+  picks: (UpgradeOption & { why?: string })[];
+  saving: UpgradeOption | null;
+  busy: string | null;
   thumb?: number;
   onOpen: (b: BuildingDef) => void;
+  onUpgrade: (id: string) => void;
 }) => (
   <>
     {jobs.map((j) => {
@@ -148,12 +158,48 @@ const BuilderRows = ({
         </button>
       );
     })}
-    {Array.from({ length: Math.max(0, free) }, (_, i) => (
-      <div key={i} className="inset flex items-center gap-3 border-dashed !border-gold/50 px-3 py-2 text-sm text-sub">
-        <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)]" />
-        Free builder · {hint}
-      </div>
-    ))}
+    {Array.from({ length: Math.max(0, free) }, (_, i) => {
+      const o = picks[i];
+
+      if (o)
+        return (
+          <div key={i} className="rounded-xl border border-gold/60 bg-gold/10 flex items-center gap-3 px-2.5 py-2">
+            <button aria-label={`${o.building.name} details`} className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={() => onOpen(o.building)}>
+              <BuildingThumb b={o.building} level={o.level} size={thumb} />
+              <span className="flex flex-col min-w-0">
+                <span className="text-micro font-extrabold text-good uppercase tracking-wide">
+                  Free builder{o.why ? `: ${o.why}` : ""}
+                </span>
+                <span className="font-bold leading-tight truncate">
+                  {o.building.name} <span className="text-muted text-xs">→ {o.toLevel}</span>
+                </span>
+                <span className="text-xs text-sub truncate">
+                  {nextLevelGain(o.building, o.level)}, {compact(o.cost)} each
+                </span>
+              </span>
+            </button>
+            <button className="btn btn-sm btn-gold shrink-0" disabled={busy === o.building.id} onClick={() => onUpgrade(o.building.id)}>
+              {o.level === 0 ? "Build" : "Upgrade"}
+            </button>
+          </div>
+        );
+
+      return (
+        <div key={i} className="inset flex items-center gap-3 border-dashed !border-gold/50 px-3 py-2 text-sm text-sub">
+          <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)] shrink-0" />
+          {saving ? (
+            <span className="min-w-0">
+              Free builder. Next up: <b className="text-parch">{saving.building.name}</b>,{" "}
+              {saving.hoursToAfford === null
+                ? "after a bigger warehouse"
+                : `affordable in about ${formatDuration(saving.hoursToAfford * 3600e3)}`}
+            </span>
+          ) : (
+            "Free builder"
+          )}
+        </div>
+      );
+    })}
   </>
 );
 
@@ -171,6 +217,16 @@ export const Tribe: FunctionComponent = () => {
   const jobs = [...state.queue].sort((a, b) => a.endsAt - b.endsAt);
 
   const ready = options.filter((o) => canStart(o) && o.building.id !== advice?.id).sort((a, b) => a.cost - b.cost);
+  const best0 = advice ? options.find((o) => o.building.id === advice.id) ?? null : null;
+  // Idle builders get the next jobs right in their slot: the best one first, then the cheapest ready.
+  const picks = freeBuilders > 0 ? [...(best0 && canStart(best0) ? [{ ...best0, why: advice!.reason }] : []), ...ready].slice(0, freeBuilders) : [];
+  const picked = new Set(picks.map((o) => o.building.id));
+  // Nothing to start: what to save up for, the soonest affordable.
+  const saving =
+    options
+      .filter((o) => !o.job && !canStart(o) && o.hoursToAfford !== null)
+      .sort((a, b) => (a.hoursToAfford ?? 1e9) - (b.hoursToAfford ?? 1e9))[0] ?? null;
+  const nextFree = jobs.length ? jobs[0].endsAt : null;
   // Everything not being built: ready ones first (cheapest), then closest to affordable.
   const rank = (o: UpgradeOption) => (canStart(o) ? 0 : 1);
   const rest = options
@@ -187,7 +243,6 @@ export const Tribe: FunctionComponent = () => {
     if (ok) telegram?.WebApp.HapticFeedback.notificationOccurred("success");
   };
 
-  const hint = advice ? "start the upgrade below" : ready.length ? "pick an upgrade below" : "save up for an upgrade";
 
   const drawer = (
     <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
@@ -203,7 +258,12 @@ export const Tribe: FunctionComponent = () => {
     <div className="w-full mx-auto px-3 pt-1 pb-4 flex flex-col gap-4 max-w-md">
       <div className="grid gap-4 w-full items-stretch">
         {/* Builders and what they are doing */}
-        <section className="card p-3 flex flex-col gap-2.5">
+        <section
+          className={clsx(
+            "card p-3 flex flex-col gap-2.5",
+            picks.length > 0 && "!border-gold/80 shadow-[0_0_18px_rgba(227,169,72,0.25)]"
+          )}
+        >
           <div className="flex items-center gap-2">
             <Image alt="" className="w-6 h-6" src={builderImg} />
             <h2 className="title-section flex-1">
@@ -213,15 +273,32 @@ export const Tribe: FunctionComponent = () => {
               </span>
             </h2>
             <InfoDrawer
-              content="Each builder works on one building at a time. Upgrade your Town Hall to hire more builders at levels 5, 10 and 15, and to build faster."
+              content="Each builder works on one building at a time. Upgrade your Town Hall to hire another builder every 5 levels, and to build faster."
               title="Builders"
             />
           </div>
-          <BuilderRows free={freeBuilders} hint={hint} jobs={jobs} now={now} onOpen={setOpen} />
+          {picks.length > 0 && (
+            <p className="text-sm font-bold text-goldtext -mt-1">
+              {picks.length === 1 ? "A builder is" : `${picks.length} builders are`} waiting for work. Tap to start.
+            </p>
+          )}
+          <BuilderRows
+            busy={busy}
+            free={freeBuilders}
+            jobs={jobs}
+            now={now}
+            picks={picks}
+            saving={saving}
+            onOpen={setOpen}
+            onUpgrade={upgrade}
+          />
+          {freeBuilders <= 0 && nextFree && (
+            <p className="text-xs text-muted">A builder is free again in {formatDuration(nextFree - now)}.</p>
+          )}
         </section>
 
         {/* The one best next step */}
-        {best && advice && (
+        {best && advice && !picked.has(best.building.id) && (
           <section className="card-hero p-3 flex flex-col gap-2.5">
             <span className="pill-gold pill self-start text-micro tracking-[0.12em]">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
             <div className="flex flex-col gap-2.5">
@@ -247,10 +324,10 @@ export const Tribe: FunctionComponent = () => {
         <SectionTitle>All buildings</SectionTitle>
 
         {/* A few quick wins you can start right now */}
-        {ready.length > 0 && (
+        {ready.some((o) => !picked.has(o.building.id)) && (
           <section className="flex flex-col gap-2">
             <SectionTitle right={`${ready.length} ready`}>Quick upgrades</SectionTitle>
-            {ready.slice(0, 3).map((o) => (
+            {ready.filter((o) => !picked.has(o.building.id)).slice(0, 3).map((o) => (
               <UpgradeRow
                 key={o.building.id}
                 busy={busy === o.building.id}
