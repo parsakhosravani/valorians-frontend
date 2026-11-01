@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import * as E from "./engine";
 import * as W from "./war";
+import * as M from "./map";
 import { campDefense, hiddenResources } from "./config";
 
 const T0 = Date.UTC(2026, 9, 23, 10);
@@ -415,4 +416,74 @@ test("the Hideout never hides more than 40% of the warehouse", () => {
   s.buildings["hideout"] = 60;
   const r = E.getRates(s);
   expect(r.hidden).toBe(Math.round(r.capacity * 0.4));
+});
+
+// ─── The dragon ──────────────────────────────────────────────────────────────
+
+const withRoost = (lvl = 1) => {
+  const s = withBarracks();
+  s.buildings["dragon-roost"] = lvl;
+  for (const r of ["iron", "wood", "clay", "crop"] as const) s.resources[r] = 500000;
+  return s;
+};
+
+test("one dragon per tribe, counted from the moment it's ordered", () => {
+  const s = W.trainTroops(withRoost(), "dragon", 1, T0);
+
+  expect(() => W.trainTroops(s, "dragon", 1, T0)).toThrow("only 1");
+  // Out on the march it isn't home or in the marches home, but it's still yours.
+  const away = { ...s, training: [], army: { ...s.army, dragon: 0 } };
+  expect(() => W.trainTroops(away, "dragon", 1, T0)).toThrow("only 1");
+  // Cancelled before it hatched: you may order it again.
+  const cancelled = W.cancelTraining(s, s.training[0].startsAt, T0);
+  expect(W.trainTroops(cancelled, "dragon", 1, T0).training).toHaveLength(1);
+  // Needs the Roost.
+  expect(() => W.trainTroops(withBarracks(), "dragon", 1, T0)).toThrow("Dragon Roost");
+});
+
+test("the Roost makes the dragon stronger every level, without end", () => {
+  expect(W.unitAttack(withRoost(1), "dragon")).toBe(4000);
+  expect(W.unitAttack(withRoost(11), "dragon")).toBeCloseTo(4000 * 2.5);
+});
+
+test("a dragon flies straight: no ships, no road, no bandits", () => {
+  const d = { ...E.emptyArmy(), dragon: 1 };
+  const mixed = { ...d, axeman: 10 };
+
+  expect(M.isFlight(d)).toBe(true);
+  expect(M.isFlight(mixed)).toBe(false);
+  expect(M.shipsNeeded(d)).toBe(0);
+  const r = M.routeFor(d, { x: 0, y: 0 }, { x: 30, y: 40 });
+  expect(r.naval).toBe(false);
+  expect(r.distance).toBe(50);
+  expect(M.routeMs(d, { x: 0, y: 0 }, { x: 30, y: 40 })).toBe(50 * 4 * 1000);
+});
+
+test("a beaten dragon isn't lost: it comes home wounded and rests", () => {
+  const attacker = withRoost();
+  attacker.army.dragon = 1;
+  const defender = withBarracks();
+  defender.shieldUntil = 0;
+  defender.army.archer = 3000; // archers shoot it down
+  const { report } = W.defendRaid(defender, attacker, { ...E.emptyArmy(), dragon: 1 }, T0, 0.5);
+
+  expect(report.attackerWon).toBe(false);
+  expect(report.attackerLosses.dragon).toBe(0);
+  const home = W.receiveRaidReport(attacker, report, "x", T0, 0.5);
+  expect(home.dragonRestUntil).toBe(report.returnsAt + 12 * 3600e3);
+  // Resting, it can't be sent.
+  const rested = { ...home, army: { ...home.army, dragon: 1 }, updatedAt: report.returnsAt + 3600e3 };
+  expect(() => W.dispatchRaid(rested, { ...E.emptyArmy(), dragon: 1 }, rested.updatedAt)).toThrow("resting");
+});
+
+test("archers defend far better against a dragon than against an army as strong", () => {
+  const attacker = withRoost();
+  attacker.army.dragon = 1;
+  attacker.army.axeman = 89;
+  const defender = withBarracks();
+  defender.army.archer = 200;
+  const vsDragon = W.battleNumbers(attacker, { ...E.emptyArmy(), dragon: 1 }, defender).defense;
+  const vsAxes = W.battleNumbers(attacker, { ...E.emptyArmy(), axeman: 89 }, defender).defense;
+
+  expect(vsDragon).toBeGreaterThan(vsAxes * 2.5);
 });

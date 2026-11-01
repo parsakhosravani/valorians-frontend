@@ -119,6 +119,7 @@ type MilitaryStat =
   | "scout" // reveals exact enemy defense
   | "heal" // % of lost troops recovered
   | "traps" // % of attackers caught before the battle (see TRAP_MAX)
+  | "dragon" // hatches the dragon; % stronger dragon per level past the first
   | "seaDefense"; // % more defense against armies landing from the sea
 
 export type BuildingDef = {
@@ -220,6 +221,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Treats the wounded after a battle: saves 4% of them per level (max 50%). The killed can't be saved."),
   def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
   def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
+  def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after."),
   def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
 ];
 
@@ -347,7 +349,7 @@ export const shieldOption = (id: unknown) => SHIELDS.options.find((o) => o.id ==
 
 // ─── War ─────────────────────────────────────────────────────────────────────
 
-export const UNIT_IDS = ["spearman", "swordsman", "archer", "axeman", "cavalry", "paladin", "knight", "ram", "catapult", "longship"] as const;
+export const UNIT_IDS = ["spearman", "swordsman", "archer", "axeman", "cavalry", "paladin", "knight", "ram", "catapult", "longship", "dragon"] as const;
 export type UnitId = (typeof UNIT_IDS)[number];
 
 export type UnitDef = {
@@ -381,6 +383,10 @@ export type UnitDef = {
    * ships `speed` is the sailing speed.
    */
   transport?: number;
+  /** Flies: alone, it goes straight to its target over sea and mountains (no ships, no bandits). */
+  flying?: boolean;
+  /** Only this many per tribe, ever (home, training and away together). */
+  maxOwned?: number;
 };
 
 export const UNITS: UnitDef[] = [
@@ -451,7 +457,25 @@ export const UNITS: UnitDef[] = [
     description: "Carries 20 foot soldiers (10 horsemen, 5 siege engines) across the sea, plus 300 loot. Never fights; it waits off the beach and sails the survivors home.",
     transport: 20,
   },
+  {
+    id: "dragon", name: "Dragon", icon: "🐉", attack: 4000, defense: 3000, carry: 0,
+    cost: { iron: 60000, wood: 60000, clay: 60000, crop: 60000 }, time: 24 * 3600, upkeep: 40, speed: 4,
+    requires: { building: "dragon-roost", level: 1 },
+    description:
+      "One per tribe. Flies straight to any target, over seas and mountains, too fast for bandits. Its fire breaks half of a City Gate and a Watchtower. Carries no loot. Never dies: beaten, it comes home wounded and rests 12 hours. Archers hit it hard.",
+    flying: true,
+    maxOwned: 1,
+    wallBreak: 0.5,
+    towerBreak: 0.5,
+  },
 ];
+
+/**
+ * The dragon (see UNITS): stronger by `perRoostLevel` for every Dragon Roost
+ * level past the first, without end; beaten, it rests `restMs` once home;
+ * Archers defend `archerBonus` better against the share of an attack it makes.
+ */
+export const DRAGON = { perRoostLevel: 0.15, restMs: 12 * 3600 * 1000, archerBonus: 2 } as const;
 
 export const UNIT_BY_ID = Object.fromEntries(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
 
@@ -659,7 +683,8 @@ export const REDIRECT = {
 export const LANDING_DEFENSE = 0.25;
 
 /** Room a troop takes on a ship: foot soldiers 1, horsemen 2, siege engines 4. */
-export const unitSlots = (u: UnitDef) => (u.transport ? 0 : u.wallBreak || u.towerBreak ? 4 : u.mounted ? 2 : 1);
+// Flyers fly alongside the ships, taking no room on them.
+export const unitSlots = (u: UnitDef) => (u.transport || u.flying ? 0 : u.wallBreak || u.towerBreak ? 4 : u.mounted ? 2 : 1);
 
 // ─── Troop ranks ───────────────────────────────────────────────────────────────
 //

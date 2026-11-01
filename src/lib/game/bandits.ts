@@ -8,7 +8,7 @@
  */
 import { BANDIT, BANDIT_RAID, RESOURCE_IDS, UNIT_BY_ID, UNIT_IDS, banditStrength, banditTheft, lairBounty } from "./config";
 import { Army, BanditRaidReport, GameState, cloneState, emptyArmy, getRates, totalArmy } from "./engine";
-import { MarchRoute, Point, TERRAIN, distance, hash, inMap, routeTimeline, terrainAt } from "./map";
+import { MarchRoute, Point, TERRAIN, distance, hash, inMap, isFlight, routeTimeline, terrainAt } from "./map";
 import { Loot, applyBattleXp, attackPower, battleXp, defensePower, luckFrom } from "./war";
 
 export type Lair = Point & { level: number };
@@ -87,6 +87,8 @@ export type Exposure = { lair: Lair; /** Share of the trip's time when the trave
  * ambush you on the way there.
  */
 export function lairsOnRoute(r: MarchRoute, lairs: Lair[], units: Army | null): Exposure[] {
+  // A dragon flies high over the bandits.
+  if (units && isFlight(units)) return [];
   const stops = routeTimeline(r, units);
   const first = r.path[0];
   const last = r.path[r.path.length - 1];
@@ -205,7 +207,7 @@ export function rollAmbush(
     const share = ambushLosses(attack, strength);
     const lost = emptyArmy();
 
-    for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport) lost[u] = Math.floor((units[u] ?? 0) * share);
+    for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport && !UNIT_BY_ID[u].maxOwned) lost[u] = Math.floor((units[u] ?? 0) * share);
 
     return {
       x: lair.x,
@@ -315,7 +317,8 @@ export function resolveBanditRaid(s0: GameState, manned: boolean, rand: () => nu
   const share = won ? 0.3 * Math.pow(attack / Math.max(1, defense), 1.5) : BANDIT_RAID.defenderLoss;
   const lost = emptyArmy();
 
-  for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport) lost[u] = Math.floor((s.army[u] ?? 0) * share);
+  // The dragon is never lost.
+  for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport && !UNIT_BY_ID[u].maxOwned) lost[u] = Math.floor((s.army[u] ?? 0) * share);
   const xp = battleXp(s, defenders, attack, won, "defense");
 
   applyBattleXp(s, totalArmy(s), lost, xp);

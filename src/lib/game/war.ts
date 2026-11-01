@@ -14,6 +14,8 @@ import {
   isCampLevel,
   MAX_LOOT_SHARE,
   RAIDED_SHIELDS_MS,
+  unitPlural,
+  DRAGON,
   WEAK_TARGET_RATIO,
   LOOT_WEAK_SHARE,
   RAID_TRAVEL_SECONDS,
@@ -77,6 +79,13 @@ export function unitUnlocked(s: GameState, unit: UnitId) {
 
 // ─── Training ────────────────────────────────────────────────────────────────
 
+/** How many of a unit the tribe has: ordered and never lost (see GameState.owned), or failing that what's home, away and training. */
+export const ownedOf = (s: GameState, unit: UnitId) =>
+  Math.max(
+    s.owned?.[unit] ?? 0,
+    totalArmy(s)[unit] + s.training.filter((t) => t.unit === unit).reduce((n, t) => n + t.count - t.done, 0),
+  );
+
 export function trainTroops(s0: GameState, unit: UnitId, count: number, now: number): GameState {
   const def = UNIT_BY_ID[unit];
   if (!def) throw new GameError("Unknown unit");
@@ -87,6 +96,8 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
     throw new GameError(`Needs ${b.name} level ${def.requires.level}`, "locked");
   }
   if (s0.training.length >= maxTrainBatches(s0)) throw new GameError("Training queue is full", "queue_full");
+  if (def.maxOwned != null && ownedOf(s0, unit) + count > def.maxOwned)
+    throw new GameError(`A tribe can have only ${def.maxOwned} ${def.maxOwned === 1 ? def.name.toLowerCase() : unitPlural(unit)}`, "max_owned");
 
   const s = cloneState(s0);
   for (const r of RESOURCE_IDS) {
@@ -94,6 +105,7 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
   }
   for (const r of RESOURCE_IDS) s.resources[r] -= def.cost[r] * count;
 
+  if (def.maxOwned != null) s.owned = { ...s.owned, [unit]: ownedOf(s0, unit) + count };
   const lastEnd = s.training.reduce((m, t) => Math.max(m, trainingEndsAt(t)), now);
   s.training.push({
     unit,
@@ -124,6 +136,9 @@ export function cancelTraining(s0: GameState, startsAt: number, now: number): Ga
   const s = cloneState(s0);
   const [batch] = s.training.splice(i, 1);
   const refund = trainingRefund(batch);
+
+  if (UNIT_BY_ID[batch.unit].maxOwned != null && s.owned?.[batch.unit])
+    s.owned = { ...s.owned, [batch.unit]: Math.max(0, s.owned[batch.unit]! - (batch.count - batch.done)) };
   const cap = getRates(s).capacity;
   for (const r of RESOURCE_IDS) {
     if (refund[r] > 0) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
@@ -209,7 +224,15 @@ export function battleNumbers(
       UNITS.filter((u) => u.antiCavalry).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) *
       (1 + r.defenseBonus);
 
-    defense = defensePower(defender, sent) * ground + spears * ANTI_CAVALRY_BONUS * cavShare;
+    // Archers shoot the dragon down: they defend DRAGON.archerBonus better against its share of the attack.
+    const dragon = (sent.dragon ?? 0) * unitAttack(attacker, "dragon") * bonus;
+    const dragonShare = attack > 0 ? dragon / attack : 0;
+    const archers = unitDefense(defender, "archer") * defender.army.archer * (1 + r.defenseBonus);
+
+    defense =
+      defensePower(defender, sent) * ground +
+      spears * ANTI_CAVALRY_BONUS * cavShare +
+      archers * DRAGON.archerBonus * dragonShare;
     if (landing) defense *= landingFactor(defender);
   } else {
     defense = campDef * ground;
@@ -344,6 +367,8 @@ function resolve(
     const healed = emptyArmy();
     // Ships never fight: they wait off the beach and are never lost.
     for (const u of FIGHTERS) {
+      // The dragon is never lost: beaten, it flies home wounded (see woundDragon).
+      if (UNIT_BY_ID[u].maxOwned) continue;
       const fallen = Math.min(army[u], Math.round(army[u] * share));
       // The Hospital treats the wounded only: never the killed.
       const wounded = Math.round(fallen * (won ? WOUNDED_SHARE.won : WOUNDED_SHARE.lost));
@@ -386,6 +411,8 @@ function validateSend(s: GameState, units: Army): Army {
     clean[u] = n;
   }
   if (fighterCount(clean) === 0) throw new GameError("Choose some troops to send", "no_troops");
+  if (clean.dragon && (s.dragonRestUntil ?? 0) > s.updatedAt)
+    throw new GameError("Your dragon is wounded and resting. It can fly again soon.", "dragon_resting");
   return clean;
 }
 
@@ -541,6 +568,7 @@ export function raidOutcome(
 
   if (trapShare > 0)
     for (const u of FIGHTERS) {
+      if (UNIT_BY_ID[u].flying) continue; // traps on the ground don't catch a dragon
       trapped[u] = Math.floor((sent[u] ?? 0) * trapShare);
       fighting[u] = (sent[u] ?? 0) - trapped[u];
     }
@@ -681,6 +709,11 @@ export function defendRaid(
   };
 }
 
+/** A dragon that lost its fight comes home wounded, and rests DRAGON.restMs from then. */
+function woundDragon(s: GameState, sent: Army, won: boolean, homeAt: number) {
+  if (!won && (sent.dragon ?? 0) > 0) s.dragonRestUntil = Math.max(s.dragonRestUntil ?? 0, homeAt + DRAGON.restMs);
+}
+
 /** Step 3: survivors (and healed troops) march home with the loot. */
 export function receiveRaidReport(
   s0: GameState,
@@ -693,6 +726,7 @@ export function receiveRaidReport(
 ) {
   const s = cloneState(s0);
   if (report.attackerXp) applyBattleXp(s, regimentWith(s, report.sent), report.attackerLosses, report.attackerXp);
+  woundDragon(s, report.sent, report.attackerWon, report.returnsAt);
   const units = survivorsOf(report.sent, report.attackerLosses);
   for (const u of UNIT_IDS) units[u] += report.attackerHealed[u];
   // A winner keeps the spoils it brought; a beaten army drops them on the field.
@@ -819,6 +853,7 @@ function pveBattle(
   }
 
   const returnsAt = now + (opts.travelMs ?? Math.round(CAMP_TRAVEL_SECONDS * 1000 * r.marchMultiplier));
+  woundDragon(s, sent, outcome.attackerWon, returnsAt);
   if (armySize(home) > 0) {
     s.marches.push({
       id: marchId(now, rand),

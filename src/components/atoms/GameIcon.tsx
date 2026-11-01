@@ -48,6 +48,7 @@ const ICON_BY_EMOJI: Record<string, string> = {
   "📍": "compass",
   "🪙": "resources/coin",
   "⛵": "troops/longship",
+  "🐉": "troops/dragon",
   "🪓": "troops/axeman",
 };
 

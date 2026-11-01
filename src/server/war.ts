@@ -13,7 +13,7 @@ import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/e
 import { CAMP_DEFENSE_PER_TROOP, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, planBattle, troopsOnField } from "@/lib/game/battle";
-import { Point, distance, marchRoute, pointAlong, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
+import { Point, distance, pointAlong, routeFor, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   BattleOutcome,
   Loot,
@@ -137,7 +137,7 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
   const { dest, defenderId, campLevel, lairLevel } = await resolveTarget(me, to, now, home);
 
   // Across the sea the army sails, and takes the Longships it needs along.
-  const naval = seaRoute(home, dest).naval;
+  const naval = seaRoute(home, dest, units).naval;
   let sent!: Army;
   let travel = 0;
   const after = await mutatePlayer(me.id, now, (s) => {
@@ -359,7 +359,7 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 
       return false;
     }
-    const landing = seaRoute(a.from, a.to).naval;
+    const landing = seaRoute(a.from, a.to, a.units).naval;
 
     try {
       await mutatePlayer(defender.id, now, (s) => {
@@ -407,7 +407,7 @@ async function finishBattle(a: AttackRow, now: number) {
   const travelMs = homeTripMs(a);
   const carried = { carried: a.loot ?? undefined, carriedCoins: a.coins, hops: a.hops };
   const terrain = terrainAt(a.to.x, a.to.y);
-  const landing = seaRoute(a.from, a.to).naval;
+  const landing = seaRoute(a.from, a.to, a.units).naval;
   const story = { battleMs: plan.endsAt - plan.startedAt, rounds: plan.rounds };
   const attacker = await findById(a.attackerId);
 
@@ -679,7 +679,7 @@ export async function recallMarch(me: Player, id: number, now: number) {
 
 /** Where an army is along its road, `f` of the way through in time: on a whole tile, and whether it's at sea. */
 function spotOnRoad(from: Point, to: Point, units: Army, f: number) {
-  const road = marchRoute(from, to);
+  const road = routeFor(units, from, to);
   const spot = pointAlong(road, routeTimeline(road, units), Math.min(1, Math.max(0, f)));
   const tile = { x: Math.round(spot.x), y: Math.round(spot.y) };
 
