@@ -23,6 +23,16 @@ import { formatDuration } from "@/lib/format";
  */
 
 // Shared with WarMap: a village's box, and the tile's centre inside it.
+/**
+ * Zoomed out this far or more, the map is the parchment world (see
+ * paintParchment); zoomed in to PARCHMENT_NONE or closer, the painted land.
+ * In between, one fades into the other.
+ */
+export const PARCHMENT_FULL = 0.22;
+export const PARCHMENT_NONE = 0.34;
+/** How much of the parchment shows at a zoom: 1 far out, 0 close in. */
+export const parchmentShare = (z: number) => Math.min(1, Math.max(0, (PARCHMENT_NONE - z) / (PARCHMENT_NONE - PARCHMENT_FULL)));
+
 export const VILLAGE_MIN = 34;
 export const VILLAGE_GROW = 12;
 const VX = 36;
@@ -327,6 +337,8 @@ export class MapPainter {
   private frame = 0;
   private pieces = new Map<string, CanvasPiece>();
   private backdrop: CanvasBackdrop | null = null;
+  /** The whole world as an old map, drawn when zoomed far out (world px: 0 to `size`). */
+  private parchment: { img: CanvasImageSource; size: number } | null = null;
   private tribes: CanvasTribe[] = [];
   private camps: CanvasCamp[] = [];
   /** The clock for camp cooldown labels. */
@@ -367,6 +379,11 @@ export class MapPainter {
   setPiece(key: string, p: CanvasPiece | null) {
     if (p) this.pieces.set(key, p);
     else this.pieces.delete(key);
+    this.request();
+  }
+
+  setParchment(p: { img: CanvasImageSource; size: number } | null) {
+    this.parchment = p;
     this.request();
   }
 
@@ -426,12 +443,21 @@ export class MapPainter {
     const onScreen = (l: number, t: number, s: number) => l < vx1 && l + s > vx0 && t < vy1 && t + s > vy0;
 
     const b = this.backdrop;
+    const old = this.parchment ? parchmentShare(z) : 0;
 
-    if (b) g.drawImage(b.canvas, b.left, b.top, b.size, b.size);
-    // Whole-view pieces first, close-up ones over them.
-    for (const detail of [false, true])
-      for (const p of this.pieces.values())
-        if (p.detail === detail && onScreen(p.left, p.top, p.size)) g.drawImage(p.img, p.left, p.top, p.size, p.size);
+    // Far out, only the old map; close in, only the land; between, the map fades over the land.
+    if (old < 1) {
+      if (b) g.drawImage(b.canvas, b.left, b.top, b.size, b.size);
+      // Whole-view pieces first, close-up ones over them.
+      for (const detail of [false, true])
+        for (const p of this.pieces.values())
+          if (p.detail === detail && onScreen(p.left, p.top, p.size)) g.drawImage(p.img, p.left, p.top, p.size, p.size);
+    }
+    if (old > 0 && this.parchment) {
+      g.globalAlpha = old;
+      g.drawImage(this.parchment.img, 0, 0, this.parchment.size, this.parchment.size);
+      g.globalAlpha = 1;
+    }
 
     // Markers: in world px around their tile, scaled less than the land (pinScale).
     const pin = pinScale(z);
