@@ -2,7 +2,7 @@
  * Advice for the Build and Hall screens: what can be upgraded now, what is
  * missing, and which upgrade is the best next step. Pure functions.
  */
-import { BUILDINGS, BuildingDef, RESOURCE_IDS, ResourceId, RESOURCE_NAMES, productionAt } from "./config";
+import { BUILDINGS, BuildingDef, RESOURCE_IDS, ResourceId, RESOURCE_NAMES, productionAt, costTotal } from "./config";
 import { GameState, buildingUpgradeInfo, getRates } from "./engine";
 
 export type BuildingGroup = "economy" | "military" | "defense";
@@ -72,7 +72,7 @@ export type UpgradeOption = {
   level: number;
   /** Level after this upgrade. */
   toLevel: number;
-  cost: number;
+  cost: Record<ResourceId, number>;
   seconds: number;
   /** Being upgraded right now. */
   job?: { toLevel: number; startedAt: number; endsAt: number };
@@ -92,13 +92,13 @@ export function upgradeOptions(state: GameState): UpgradeOption[] {
     let hours = 0;
 
     for (const r of RESOURCE_IDS) {
-      const short = info.cost - state.resources[r];
+      const short = info.cost[r] - state.resources[r];
 
       if (short > 0) {
         missing[r] = Math.ceil(short);
         const perHour = rates.productionPerHour[r];
         // Storage caps what can pile up, so an upgrade above capacity never comes.
-        hours = perHour > 0 && info.cost <= rates.capacity ? Math.max(hours, short / perHour) : Infinity;
+        hours = perHour > 0 && info.cost[r] <= rates.capacity ? Math.max(hours, short / perHour) : Infinity;
       }
     }
 
@@ -155,7 +155,7 @@ export function recommendUpgrade(state: GameState, options = upgradeOptions(stat
 
     return { id: weakest.building.id, reason: "Boosts your weakest resource" };
   }
-  const cheapest = [...ready].sort((a, b) => a.cost - b.cost)[0];
+  const cheapest = [...ready].sort((a, b) => costTotal(a.cost) - costTotal(b.cost))[0];
 
   return { id: cheapest.building.id, reason: "Cheapest upgrade" };
 }

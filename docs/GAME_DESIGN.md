@@ -13,6 +13,7 @@ ask before "fixing" either. Add new decisions here when they are made.
 ## Buildings and village
 
 - Buildings have **no max level**.
+- Each building costs a **different mix of resources** by what it is made of (City Gate: brick, then iron, then wood, a little crop; Harbor: mostly wood). The total per level is unchanged; only the split differs (`BUILDING_MIX` in config.ts).
 - The **Build page is the list only**. The village picture lives on the **War map**:
   zooming in on your own tribe shows its buildings.
 - The village uses a **natural layout**, not a tidy grid of rows.

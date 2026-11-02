@@ -19,7 +19,7 @@ test("options report what is missing and when it will be affordable", () => {
   const mine = upgradeOptions(s).find((o) => o.building.id === "iron-mine")!;
 
   expect(mine.affordable).toBe(false);
-  expect(mine.missing.clay).toBe(50);
+  expect(mine.missing.clay).toBe(mine.cost.clay - 100);
   expect(mine.missing.iron).toBeUndefined();
 });
 

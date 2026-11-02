@@ -25,13 +25,13 @@ test("taps rate limited, energy limited, capacity limited", () => {
 test("building upgrade completes and changes rates mid-interval", () => {
   let s = E.createInitialState(T0);
   s = E.upgradeBuilding(s, "iron-mine", T0);
-  expect(s.resources.wood).toBe(2000 - 150);
+  expect(s.resources.wood).toBe(2000 - 240); // mines are mostly wood and clay (mix 1.6 × 150)
   expect(() => E.upgradeBuilding(s, "sawmill", T0)).toThrow("All builders are busy");
   s = E.advance(s, T0 + 10_000 + 3600e3);
   expect(s.buildings["iron-mine"]).toBe(1);
   expect(s.queue.length).toBe(0);
   // ~1h at 160/h after the 10s build
-  expect(Math.round(s.resources.iron)).toBe(Math.round(1850 + 100 * 10/3600 + 160));
+  expect(Math.round(s.resources.iron)).toBe(Math.round(2000 - 60 + 100 * 10/3600 + 160));
 });
 test("stamina is daily: no regen, refills at UTC midnight", () => {
   let s = E.createInitialState(T0);
@@ -113,7 +113,7 @@ test("producers yield 15% more each level, and their upgrades pay back in days",
 
   const b = C.BUILDING_BY_ID["iron-mine"];
   for (const lvl of [5, 10, 15, 20]) {
-    const cost = C.buildingUpgradeCost(b, lvl) * 4;
+    const cost = C.costTotal(C.buildingUpgradeCost(b, lvl));
     const gain = C.productionAt(60, lvl + 1) - C.productionAt(60, lvl);
     expect(cost / gain / 24).toBeLessThan(6); // days to pay back
   }
@@ -135,4 +135,27 @@ test("starving troops desert, the hungriest first, until the rest can be fed", (
   const fed = E.createInitialState(0);
   fed.army.spearman = 10;
   expect(E.advance(fed, t).army.spearman).toBe(10);
+});
+
+test("each building's cost is split by what it's made of, keeping the same total", () => {
+  for (const b of C.BUILDINGS) {
+    const sum = C.RESOURCE_IDS.reduce((t, r) => t + b.mix[r], 0);
+    expect(sum).toBeCloseTo(4); // a mix only moves cost between resources
+    expect(C.RESOURCE_IDS.every((r) => b.mix[r] > 0)).toBe(true);
+  }
+  const gate = C.buildingUpgradeCost(C.BUILDING_BY_ID["city-gate"], 5);
+  expect(gate.clay).toBeGreaterThan(gate.iron);
+  expect(gate.iron).toBeGreaterThan(gate.wood);
+  expect(gate.wood).toBeGreaterThan(gate.crop);
+  const harbor = C.buildingUpgradeCost(C.BUILDING_BY_ID["harbor"], 5);
+  expect(harbor.wood).toBe(Math.max(...C.RESOURCE_IDS.map((r) => harbor[r])));
+  expect(harbor.wood).toBeGreaterThan(2 * harbor.clay);
+});
+
+test("upgrading takes each resource by the building's mix", () => {
+  const s = E.createInitialState(0);
+  for (const r of C.RESOURCE_IDS) s.resources[r] = 100000;
+  const cost = E.buildingUpgradeInfo(s, "harbor").cost;
+  const after = E.upgradeBuilding(s, "harbor", 0);
+  for (const r of C.RESOURCE_IDS) expect(after.resources[r]).toBe(100000 - cost[r]);
 });
