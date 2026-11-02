@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Image, { StaticImageData } from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 
 import coinImg from "~/images/resources/coin.webp";
@@ -154,12 +155,17 @@ export const Hall = () => {
   };
 
   // The bot's /plus button opens the game on /hall?plus=1 (and /hall?shield=1 for shields).
+  const query = useSearchParams().toString();
+
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
+    const q = new URLSearchParams(query);
 
     if (q.get("plus")) setPlusOpen(true);
     else if (q.get("shield")) setShieldOpen(true);
-  }, []);
+    else return;
+    // Once: so the same link tapped again later opens it again.
+    window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+  }, [query]);
 
   useEffect(() => {
     if (!authHeader) return;

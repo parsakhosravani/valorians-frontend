@@ -1,6 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 
 import bg from "~/images/background/battle.webp";
 
@@ -32,18 +33,27 @@ export const Battle = () => {
 
   // /battle?revenge=<playerId> (Hall) or ?target=<playerId> (Leaderboard) opens the map on
   // that tribe with its card up; ?camp=<level> (Hall) does the same for a barbarian camp;
-  // /battle?tab=<tab> picks a tab. A jump to a tribe or camp happens once: it's taken off
-  // the address, and leaving the map forgets it (see pickTab).
+  // /battle?tab=<tab> picks a tab. Each happens once: it's taken off the address (so the
+  // same link tapped again later still works), and leaving the map forgets a jump (see pickTab).
+  // Read from the router, and again whenever the address changes: a button in the
+  // 🔔 inbox can send you to ?tab=reports while you're already on this screen, and
+  // on slow phones the page could open before window.location had the new address.
+  const query = useSearchParams().toString();
+
   useEffect(() => {
     const url = new URL(window.location.href);
-    const q = url.searchParams;
+    const q = new URLSearchParams(query);
     const id = Number(q.get("revenge") || q.get("target"));
     const t = q.get("tab");
     const c = Number(q.get("camp"));
 
-    if (q.has("revenge") || q.has("target") || q.has("camp")) {
-      ["revenge", "target", "camp"].forEach((k) => q.delete(k));
-      window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    if (["revenge", "target", "camp", "tab"].some((k) => q.has(k))) {
+      const rest = new URLSearchParams(query);
+
+      ["revenge", "target", "camp", "tab"].forEach((k) => rest.delete(k));
+      const search = rest.toString();
+
+      window.history.replaceState(null, "", url.pathname + (search ? `?${search}` : "") + url.hash);
     }
 
     if (c) {
@@ -57,7 +67,7 @@ export const Battle = () => {
     } else if (t === "camps" || t === "raid") {
       setTab("map");
     }
-  }, []);
+  }, [query]);
   const showResult = useCallback((r: BattleReport) => setResult(r), []);
   // Back on the map after another tab: it opens on your own tribe, not the one you jumped to.
   const pickTab = (t: Tab) => {
