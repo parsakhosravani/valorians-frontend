@@ -17,12 +17,11 @@ import {
   UpgradeOption,
   buildingGroup,
   canStart,
-  nextLevelGain,
   recommendUpgrade,
   upgradeOptions,
 } from "@/lib/game/advice";
 import { compact, formatDuration } from "@/lib/format";
-import { Bar, SectionTitle } from "@/components/atoms/Ui";
+import { Bar, SectionTitle, Segmented } from "@/components/atoms/Ui";
 
 const RES_IMG = Object.fromEntries(RESOURCES.map((r) => [r.id, r.img])) as Record<ResourceId, (typeof RESOURCES)[number]["img"]>;
 
@@ -41,42 +40,47 @@ const BuildingThumb = ({ b, level, size = 52 }: { b: BuildingDef; level: number;
   </div>
 );
 
-/** "150 each" with the resources you are short of in red. */
-const CostLine = ({ o }: { o: UpgradeOption }) => {
+/**
+ * One short status line for a building you can't start yet, or what it costs
+ * when you can: kept to a single line so the list reads at a glance.
+ */
+const StatusLine = ({ o }: { o: UpgradeOption }) => {
   const short = Object.entries(o.missing) as [ResourceId, number][];
 
   if (!short.length) {
     return (
-      <span className="text-xs text-sub">
+      <span className="text-xs text-muted tabular-nums truncate">
         {compact(o.cost)} each · {formatDuration(o.seconds * 1000)}
       </span>
     );
   }
 
   return (
-    <span className="text-xs flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-      <span className="text-bad font-bold">Need</span>
+    <span className="text-xs flex items-center gap-1.5 min-w-0 tabular-nums">
       {short.map(([r, n]) => (
-        <span key={r} className="inline-flex items-center gap-0.5 text-bad font-bold">
+        <span key={r} className="inline-flex items-center gap-0.5 text-bad font-bold shrink-0">
           <Image alt={RESOURCE_NAMES[r]} className="w-3.5 h-3.5" src={RES_IMG[r]} />
           {compact(n)}
         </span>
       ))}
-      <span className="text-muted">
-        {o.hoursToAfford === null ? "· upgrade storage first" : `· ready in ~${formatDuration(o.hoursToAfford * 3600e3)}`}
+      <span className="text-muted truncate">
+        {o.hoursToAfford === null ? "needs more storage" : `~${formatDuration(o.hoursToAfford * 3600e3)}`}
       </span>
     </span>
   );
 };
 
+/** One building in the list: picture, name and level, one status line, and a button only when it can start now. */
 const UpgradeRow = ({
   o,
+  best,
   freeBuilder,
   onOpen,
   onUpgrade,
   busy,
 }: {
   o: UpgradeOption;
+  best: boolean;
   freeBuilder: boolean;
   onOpen: () => void;
   onUpgrade: () => void;
@@ -85,28 +89,22 @@ const UpgradeRow = ({
   const startable = canStart(o) && freeBuilder;
 
   return (
-    <div className="card flex items-center gap-3 px-3 py-2.5">
+    <div className={clsx("flex items-center gap-3 px-2.5 py-2 rounded-xl", best ? "card-hero !shadow-none" : "card-flat")}>
       <button aria-label={`${o.building.name} details`} className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={onOpen}>
-        <BuildingThumb b={o.building} level={o.level} />
+        <BuildingThumb b={o.building} level={o.level} size={44} />
         <span className="flex flex-col gap-0.5 min-w-0">
-          <span className="font-bold leading-tight truncate">
-            {o.building.name}
-            <span className="text-muted font-bold text-xs">
-              {"  "}
-              {o.level} → {o.toLevel}
-            </span>
+          <span className="flex items-center gap-1.5 min-w-0">
+            <span className="font-bold leading-tight truncate">{o.building.name}</span>
+            {best && <span className="pill pill-gold h-5 px-1.5 text-micro shrink-0">BEST</span>}
           </span>
-          <span className="text-xs font-bold text-good truncate">{nextLevelGain(o.building, o.level)}</span>
-          {!o.job && <CostLine o={o} />}
+          <StatusLine o={o} />
         </span>
       </button>
-      {startable ? (
+      {startable && (
         <button className="btn btn-sm btn-gold shrink-0" disabled={busy} onClick={onUpgrade}>
           {o.level === 0 ? "Build" : "Upgrade"}
         </button>
-      ) : canStart(o) && !freeBuilder ? (
-        <span className="shrink-0 text-[11px] font-bold text-muted text-right leading-tight w-16">Builders busy</span>
-      ) : null}
+      )}
     </div>
   );
 };
@@ -114,47 +112,37 @@ const UpgradeRow = ({
 type Job = { building: string; toLevel: number; startedAt: number; endsAt: number };
 
 /**
- * What each builder is doing: work under way with its timer, then the free
- * ones, each offered the next job it could start (`picks`, best first) with a
- * one-tap button, or, when nothing is affordable, what to save up for.
+ * The builders as a row of small slots instead of a stack of big rows:
+ * busy ones show the building, a thin bar and the time left; a free one
+ * offers its best job with one button, or just says it is free.
  */
-const BuilderRows = ({
+const BuilderSlots = ({
   jobs,
   free,
   now,
   picks,
-  saving,
   busy,
-  thumb = 44,
   onOpen,
   onUpgrade,
 }: {
   jobs: Job[];
   free: number;
   now: number;
-  picks: (UpgradeOption & { why?: string })[];
-  saving: UpgradeOption | null;
+  picks: UpgradeOption[];
   busy: string | null;
-  thumb?: number;
   onOpen: (b: BuildingDef) => void;
   onUpgrade: (id: string) => void;
 }) => (
-  <>
+  <div className="grid grid-cols-4 gap-2">
     {jobs.map((j) => {
       const b = BUILDING_BY_ID[j.building];
 
       return (
-        <button key={j.building} className="flex items-center gap-3 text-left" onClick={() => onOpen(b)}>
-          <BuildingThumb b={b} level={j.toLevel - 1} size={thumb} />
-          <span className="flex-1 min-w-0 flex flex-col gap-1">
-            <span className="flex justify-between gap-2 text-sm font-bold">
-              <span className="truncate">
-                {b.name} → {j.toLevel}
-              </span>
-              <span className="text-goldtext shrink-0">{formatDuration(j.endsAt - now)}</span>
-            </span>
-            <Bar max={j.endsAt - j.startedAt} value={now - j.startedAt} />
-          </span>
+        <button key={j.building} className="inset flex flex-col items-center gap-1 px-1.5 pt-2 pb-1.5 min-w-0" onClick={() => onOpen(b)}>
+          <BuildingThumb b={b} level={j.toLevel - 1} size={40} />
+          <span className="text-[11px] font-bold leading-tight truncate w-full text-center">{b.name}</span>
+          <Bar className="!h-1.5" max={j.endsAt - j.startedAt} value={now - j.startedAt} />
+          <span className="text-[11px] font-bold text-goldtext tabular-nums leading-none">{formatDuration(j.endsAt - now)}</span>
         </button>
       );
     })}
@@ -163,44 +151,25 @@ const BuilderRows = ({
 
       if (o)
         return (
-          <div key={i} className="rounded-xl border border-gold/60 bg-gold/10 flex items-center gap-3 px-2.5 py-2">
-            <button aria-label={`${o.building.name} details`} className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={() => onOpen(o.building)}>
-              <BuildingThumb b={o.building} level={o.level} size={thumb} />
-              <span className="flex flex-col min-w-0">
-                <span className="text-micro font-extrabold text-good uppercase tracking-wide">
-                  Free builder{o.why ? `: ${o.why}` : ""}
-                </span>
-                <span className="font-bold leading-tight truncate">
-                  {o.building.name} <span className="text-muted text-xs">→ {o.toLevel}</span>
-                </span>
-                <span className="text-xs text-sub truncate">
-                  {nextLevelGain(o.building, o.level)}, {compact(o.cost)} each
-                </span>
-              </span>
+          <div key={i} className="rounded-xl border border-gold/70 bg-gold/10 flex flex-col items-center gap-1 px-1.5 pt-2 pb-1.5 min-w-0">
+            <button aria-label={`${o.building.name} details`} className="flex flex-col items-center gap-1 w-full min-w-0" onClick={() => onOpen(o.building)}>
+              <BuildingThumb b={o.building} level={o.level} size={40} />
+              <span className="text-[11px] font-bold leading-tight truncate w-full text-center">{o.building.name}</span>
             </button>
-            <button className="btn btn-sm btn-gold shrink-0" disabled={busy === o.building.id} onClick={() => onUpgrade(o.building.id)}>
-              {o.level === 0 ? "Build" : "Upgrade"}
+            <button className="btn btn-gold !h-6 !px-0 w-full !text-[11px] !rounded-lg" disabled={busy === o.building.id} onClick={() => onUpgrade(o.building.id)}>
+              {o.level === 0 ? "Build" : "Start"}
             </button>
           </div>
         );
 
       return (
-        <div key={i} className="inset flex items-center gap-3 border-dashed !border-gold/50 px-3 py-2 text-sm text-sub">
-          <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)] shrink-0" />
-          {saving ? (
-            <span className="min-w-0">
-              Free builder. Next up: <b className="text-parch">{saving.building.name}</b>,{" "}
-              {saving.hoursToAfford === null
-                ? "after a bigger warehouse"
-                : `affordable in about ${formatDuration(saving.hoursToAfford * 3600e3)}`}
-            </span>
-          ) : (
-            "Free builder"
-          )}
+        <div key={i} className="rounded-xl border border-dashed border-gold/40 flex flex-col items-center justify-center gap-1 py-2 min-h-[96px]">
+          <span className="w-2 h-2 rounded-full bg-good shadow-[0_0_6px_rgba(157,208,127,0.8)]" />
+          <span className="text-[11px] font-bold text-sub">Free</span>
         </div>
       );
     })}
-  </>
+  </div>
 );
 
 type Filter = "all" | BuildingGroup;
@@ -217,9 +186,9 @@ export const Tribe: FunctionComponent = () => {
   const jobs = [...state.queue].sort((a, b) => a.endsAt - b.endsAt);
 
   const ready = options.filter((o) => canStart(o) && o.building.id !== advice?.id).sort((a, b) => a.cost - b.cost);
-  const best0 = advice ? options.find((o) => o.building.id === advice.id) ?? null : null;
+  const best = advice ? options.find((o) => o.building.id === advice.id) ?? null : null;
   // Idle builders get the next jobs right in their slot: the best one first, then the cheapest ready.
-  const picks = freeBuilders > 0 ? [...(best0 && canStart(best0) ? [{ ...best0, why: advice!.reason }] : []), ...ready].slice(0, freeBuilders) : [];
+  const picks = freeBuilders > 0 ? [...(best && canStart(best) ? [best] : []), ...ready].slice(0, freeBuilders) : [];
   const picked = new Set(picks.map((o) => o.building.id));
   // Nothing to start: what to save up for, the soonest affordable.
   const saving =
@@ -227,13 +196,13 @@ export const Tribe: FunctionComponent = () => {
       .filter((o) => !o.job && !canStart(o) && o.hoursToAfford !== null)
       .sort((a, b) => (a.hoursToAfford ?? 1e9) - (b.hoursToAfford ?? 1e9))[0] ?? null;
   const nextFree = jobs.length ? jobs[0].endsAt : null;
-  // Everything not being built: ready ones first (cheapest), then closest to affordable.
-  const rank = (o: UpgradeOption) => (canStart(o) ? 0 : 1);
+  // Everything not being built or already offered in a builder slot: the advised
+  // one first, then ready ones (cheapest), then closest to affordable.
+  const rank = (o: UpgradeOption) => (o.building.id === best?.building.id ? -1 : canStart(o) ? 0 : 1);
   const rest = options
-    .filter((o) => !o.job)
+    .filter((o) => !o.job && !picked.has(o.building.id))
     .filter((o) => filter === "all" || buildingGroup(o.building) === filter)
     .sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? a.cost - b.cost : (a.hoursToAfford ?? 1e9) - (b.hoursToAfford ?? 1e9)));
-  const best = advice ? options.find((o) => o.building.id === advice.id)! : null;
 
   const upgrade = async (id: string) => {
     setBusy(id);
@@ -243,120 +212,46 @@ export const Tribe: FunctionComponent = () => {
     if (ok) telegram?.WebApp.HapticFeedback.notificationOccurred("success");
   };
 
-
-  const drawer = (
-    <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
-      {open && (
-        <div className="pt-1">
-          <Building building={open} />
-        </div>
-      )}
-    </Drawer>
-  );
-
   return (
-    <div className="w-full mx-auto px-3 pt-1 pb-4 flex flex-col gap-4 max-w-md">
-      {/* One column that never grows past the screen: a long line in a card can't push it wider. */}
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 w-full items-stretch">
-        {/* Builders and what they are doing */}
-        <section
-          className={clsx(
-            "card p-3 flex flex-col gap-2.5",
-            picks.length > 0 && "!border-gold/80 shadow-[0_0_18px_rgba(227,169,72,0.25)]"
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <Image alt="" className="w-6 h-6" src={builderImg} />
-            <h2 className="title-section flex-1">
-              Builders{" "}
-              <span className="text-muted text-xs font-sans font-bold normal-case tracking-normal">
-                {freeBuilders} of {rates.builders} free
-              </span>
-            </h2>
-            <InfoDrawer
-              content="Each builder works on one building at a time. Upgrade your Town Hall to hire another builder every 5 levels, and to build faster."
-              title="Builders"
-            />
-          </div>
-          {picks.length > 0 && (
-            <p className="text-sm font-bold text-goldtext -mt-1">
-              {picks.length === 1 ? "A builder is" : `${picks.length} builders are`} waiting for work. Tap to start.
-            </p>
-          )}
-          <BuilderRows
-            busy={busy}
-            free={freeBuilders}
-            jobs={jobs}
-            now={now}
-            picks={picks}
-            saving={saving}
-            onOpen={setOpen}
-            onUpgrade={upgrade}
+    <div className="w-full mx-auto px-3 pt-1 pb-4 flex flex-col gap-5 max-w-md min-w-0">
+      {/* Builders: one compact row of slots */}
+      <section className="flex flex-col gap-2.5 min-w-0">
+        <div className="flex items-center gap-2">
+          <Image alt="" className="w-5 h-5" src={builderImg} />
+          <h2 className="title-section flex-1">Builders</h2>
+          <span className="text-xs font-bold text-muted tabular-nums">
+            {freeBuilders > 0
+              ? `${freeBuilders} of ${rates.builders} free`
+              : nextFree
+                ? `next free in ${formatDuration(nextFree - now)}`
+                : ""}
+          </span>
+          <InfoDrawer
+            content="Each builder works on one building at a time. Upgrade your Town Hall to hire another builder every 5 levels, and to build faster."
+            title="Builders"
           />
-          {freeBuilders <= 0 && nextFree && (
-            <p className="text-xs text-muted">A builder is free again in {formatDuration(nextFree - now)}.</p>
-          )}
-        </section>
-
-        {/* The one best next step */}
-        {best && advice && !picked.has(best.building.id) && (
-          <section className="card-hero p-3 flex flex-col gap-2.5">
-            <span className="pill-gold pill self-start text-micro tracking-[0.12em]">BEST NEXT STEP · {advice.reason.toUpperCase()}</span>
-            <div className="flex flex-col gap-2.5">
-              <button className="flex items-center gap-3 text-left flex-1 min-w-0" onClick={() => setOpen(best.building)}>
-                <BuildingThumb b={best.building} level={best.level} size={68} />
-                <span className="flex flex-col gap-0.5 min-w-0">
-                  <span className="font-display font-black text-[19px] leading-tight">
-                    {best.building.name} <span className="text-muted text-sm font-sans">→ {best.toLevel}</span>
-                  </span>
-                  <span className="text-sm font-bold text-good">{nextLevelGain(best.building, best.level)}</span>
-                  <CostLine o={best} />
-                </span>
-              </button>
-              <button className="btn btn-gold btn-lg w-full" disabled={busy === best.building.id} onClick={() => upgrade(best.building.id)}>
-                {best.level === 0 ? "Build" : "Upgrade"} {best.building.name}
-              </button>
-            </div>
-          </section>
+        </div>
+        <BuilderSlots busy={busy} free={freeBuilders} jobs={jobs} now={now} picks={picks} onOpen={setOpen} onUpgrade={upgrade} />
+        {freeBuilders > picks.length && saving && (
+          <p className="text-xs text-muted">
+            Saving for <b className="text-sub">{saving.building.name}</b>, ready in ~{formatDuration((saving.hoursToAfford ?? 0) * 3600e3)}.
+          </p>
         )}
-      </div>
+      </section>
 
-      <div className="flex flex-col gap-4 min-w-0">
-        <SectionTitle>All buildings</SectionTitle>
-
-        {/* A few quick wins you can start right now */}
-        {ready.some((o) => !picked.has(o.building.id)) && (
-          <section className="flex flex-col gap-2">
-            <SectionTitle right={`${ready.length} ready`}>Quick upgrades</SectionTitle>
-            {ready.filter((o) => !picked.has(o.building.id)).slice(0, 3).map((o) => (
-              <UpgradeRow
-                key={o.building.id}
-                busy={busy === o.building.id}
-                freeBuilder={freeBuilders > 0}
-                o={o}
-                onOpen={() => setOpen(o.building)}
-                onUpgrade={() => upgrade(o.building.id)}
-              />
-            ))}
-          </section>
-        )}
-
-        {/* Every building, filterable */}
-        <section className="flex flex-col gap-2">
-          <div className="flex gap-1.5 overflow-x-auto scrollable -mx-3 px-3">
-            {(["all", "economy", "military", "defense"] as Filter[]).map((f) => (
-              <button
-                key={f}
-                className={clsx("pill h-8 px-3.5 text-sm shrink-0", filter === f ? "pill-gold !border-gold" : "text-sub")}
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" ? "All" : GROUP_LABEL[f]}
-              </button>
-            ))}
-          </div>
+      {/* Every building, filterable */}
+      <section className="flex flex-col gap-2.5 min-w-0">
+        <SectionTitle>Buildings</SectionTitle>
+        <Segmented
+          tabs={(["all", "economy", "military", "defense"] as Filter[]).map((f) => ({ id: f, label: f === "all" ? "All" : GROUP_LABEL[f] }))}
+          value={filter}
+          onChange={setFilter}
+        />
+        <div className="flex flex-col gap-1.5">
           {rest.map((o) => (
             <UpgradeRow
               key={o.building.id}
+              best={o.building.id === best?.building.id}
               busy={busy === o.building.id}
               freeBuilder={freeBuilders > 0}
               o={o}
@@ -365,10 +260,16 @@ export const Tribe: FunctionComponent = () => {
             />
           ))}
           {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
-        </section>
+        </div>
+      </section>
 
-        {drawer}
-      </div>
+      <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
+        {open && (
+          <div className="pt-1">
+            <Building building={open} />
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };
