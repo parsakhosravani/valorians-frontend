@@ -13,6 +13,14 @@ import { Point } from "@/lib/game/map";
 
 const T = TILE;
 
+/**
+ * Building size on the war map (px at zoom 1). The village stands packed
+ * here (its plots ~0.8 of a tile, 38 px, apart, inside the war map's wall),
+ * so at the village view's size (33, the Town Hall half again) they covered
+ * each other zoomed in; this leaves a little ground between them.
+ */
+const BUILDING = 24;
+
 /** Zoomed in at least this far on the war map, your own tribe shows its buildings instead of its marker. */
 export const VILLAGE_ZOOM = 1.3;
 
@@ -95,6 +103,7 @@ export const HomeVillage = ({
         plan.plots[o.building.id] ? (
           <VillageBuilding
             key={o.building.id}
+            base={BUILDING}
             at={toPx(o.building.id)}
             compact={compact}
             freeBuilder={freeBuilder}
