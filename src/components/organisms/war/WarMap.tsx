@@ -59,7 +59,6 @@ import {
 } from "@/context";
 import { apiRequest } from "@/lib/api";
 import {
-  BUILDING_BY_ID,
   MAP_MAX,
   MAP_MIN,
   MAP_SIZE,
@@ -67,7 +66,6 @@ import {
   SPY,
   ResourceId,
   UnitId,
-  buildingImage,
   campName,
 } from "@/lib/game/config";
 import {
@@ -779,17 +777,21 @@ export const WarMap = ({
     }
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The zoom to arrive at with a far flight (see goTo).
+  const flyZoom = useRef<number | null>(null);
+
   // A far spot was asked for: once the area round it has loaded, glide there.
   useLayoutEffect(() => {
     const f = flyTo.current;
 
     if (!data || !f || f.x < ox || f.y < oy || f.x >= ox + n || f.y >= oy + n) return;
     flyTo.current = null;
-    camera.centerOn(px(f.x), py(f.y));
+    camera.centerOn(px(f.x), py(f.y), { z: flyZoom.current ?? undefined });
+    flyZoom.current = null;
   }, [data, ox, oy]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Go to any tile in the world, loading the area round it first if it's far. */
-  const goTo = (p: { x: number; y: number }) => {
+  /** Go to any tile in the world, loading the area round it first if it's far; `z`: arrive at this zoom. */
+  const goTo = (p: { x: number; y: number }, z?: number) => {
     if (!data) return;
     const t = {
       x: Math.min(MAP_MAX - 1, Math.max(MAP_MIN, Math.round(p.x))),
@@ -801,17 +803,34 @@ export const WarMap = ({
 
     if (inside(t.x, ox) && inside(t.y, oy)) {
       flyTo.current = null;
-      camera.centerOn(px(t.x), py(t.y));
+      camera.centerOn(px(t.x), py(t.y), { z });
 
       return;
     }
     centre.current = keepInWorld(t, radius.current);
     flyTo.current = t;
+    flyZoom.current = z ?? null;
     load();
   };
 
+  // Where your village is from the middle of the screen: on screen or not, and which way.
+  const mid = view ? { x: (view.x0 + view.x1) / 2, y: (view.y0 + view.y1) / 2 } : null;
+  const homeOnScreen =
+    !!view && !!data && data.home.x >= view.x0 && data.home.x <= view.x1 && data.home.y >= view.y0 && data.home.y <= view.y1;
+  const homeHere = !!mid && !!data && Math.hypot(data.home.x - mid.x, data.home.y - mid.y) < 1.5;
+  const homeBearing = mid && data ? (Math.atan2(data.home.y - mid.y, data.home.x - mid.x) * 180) / Math.PI + 90 : 0;
+
+  /**
+   * "My village", as on Google Maps: from anywhere, glide home and arrive close
+   * enough to see your village's buildings; already there, tap again to step
+   * back out for the view round it, and again to come close.
+   */
   const recentre = () => {
-    if (data) goTo(data.home);
+    if (!data) return;
+    const near = VILLAGE_ZOOM + 0.25;
+
+    if (homeHere) camera.centerOn(px(data.home.x), py(data.home.y), { z: restZoom >= VILLAGE_ZOOM ? 0.8 : near });
+    else goTo(data.home, Math.max(restZoom, near));
   };
 
   // Tiles with something standing on them: the ground leaves them clear.
@@ -1348,19 +1367,32 @@ export const WarMap = ({
             >
               <Image draggable={false} alt="" className="w-7 h-7 object-contain" height={64} src="/images/icons/compass.webp" width={64} />
             </button>
+            {/* My village: a locator, filled when your village is in view; away from it,
+                a needle points home. */}
             <button
-              aria-label="Back to my tribe"
-              className="w-11 h-11 rounded-full border-2 border-gold bg-ink/85 shadow-[0_0_12px_rgba(227,169,72,0.55),0_4px_10px_rgba(0,0,0,0.6)] flex items-center justify-center active:scale-95 transition-transform"
+              aria-label={homeHere ? (restZoom >= VILLAGE_ZOOM ? "Step back from my village" : "Zoom in on my village") : "Go to my village"}
+              className={clsx(
+                "relative w-12 h-12 rounded-full border-2 flex items-center justify-center active:scale-90 transition-[transform,border-color,background-color] duration-150",
+                homeOnScreen
+                  ? "border-goldhi bg-gradient-to-b from-[#5A4226] to-[#2A1E12] shadow-[0_0_14px_rgba(227,169,72,0.7),0_4px_10px_rgba(0,0,0,0.6)]"
+                  : "border-gold/80 bg-ink/90 shadow-[0_4px_10px_rgba(0,0,0,0.6)]",
+              )}
               onClick={recentre}
             >
-              <Image
-                draggable={false}
-                alt=""
-                className="w-8 h-8 object-contain"
-                height={64}
-                src={buildingImage(BUILDING_BY_ID["town-hall"])}
-                width={64}
-              />
+              <svg aria-hidden className="w-7 h-7 text-goldtext" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="7" strokeWidth="2" />
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" strokeLinecap="round" strokeWidth="2" />
+                <circle cx="12" cy="12" fill={homeOnScreen ? "currentColor" : "none"} r="2.6" strokeWidth={homeOnScreen ? 0 : 1.6} />
+              </svg>
+              {!homeOnScreen && data && (
+                <span
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none transition-transform duration-300"
+                  style={{ transform: `rotate(${homeBearing}deg)` }}
+                >
+                  <span className="absolute left-1/2 -top-[7px] -translate-x-1/2 w-0 h-0 border-x-[6px] border-x-transparent border-b-[9px] border-b-goldhi drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]" />
+                </span>
+              )}
             </button>
             <div className="flex flex-col items-center rounded-xl border border-frame bg-gradient-to-b from-[#3A2B1E]/95 to-[#1E1610]/95 shadow-raised overflow-hidden">
               <button
