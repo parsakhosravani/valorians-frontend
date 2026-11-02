@@ -59,6 +59,16 @@ Bot updates ──────────────────────�
 `npx tgcloud migrate` will list the game's tables as *undocumented* (they are
 created by `db.ts`, not `tgcloud/schema.js`). That's expected; never let it drop them.
 
+## Deploying from GitHub (no computer needed)
+
+The **Deploy mirror** action (`.github/workflows/mirror-deploy.yml`) does steps 3–7
+on GitHub's servers. Add two repository secrets, then run it from the Actions tab:
+
+- `TGCLOUD_TOKEN`: the CLI access token from @BotFather (mirror bot → Serverless).
+- `MIRROR_ENV`: what you'd put in `.env.mirror`, including a fixed `MIRROR_SECRET=` line.
+
+The run log prints the Mini App URL. Add it to `MIRROR_ENV` as `APP_URL` and run it once more.
+
 ## Day to day
 
 ```bash

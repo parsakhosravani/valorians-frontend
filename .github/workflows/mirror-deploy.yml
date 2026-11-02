@@ -1,0 +1,64 @@
+# Builds the Telegram Serverless mirror (mirror/) from this repo and pushes it.
+# Manual only: Actions → "Deploy mirror" → Run workflow. The Vercel app is not involved.
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   TGCLOUD_TOKEN  the CLI access token from @BotFather (mirror bot → Serverless)
+#   MIRROR_ENV     the contents of mirror/.env.mirror (see mirror/.env.mirror.example),
+#                  including a fixed MIRROR_SECRET line
+name: Deploy mirror
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: mirror-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install
+        run: |
+          bun install --frozen-lockfile
+          cd mirror && npm install --no-audit --no-fund
+
+      - name: Settings
+        env:
+          MIRROR_ENV: ${{ secrets.MIRROR_ENV }}
+        run: |
+          if [ -z "$MIRROR_ENV" ]; then echo "::error::Add the MIRROR_ENV secret (see the top of this file)"; exit 1; fi
+          if ! grep -q '^MIRROR_SECRET=' <<< "$MIRROR_ENV"; then
+            echo "::error::MIRROR_ENV needs a MIRROR_SECRET=<random 48 hex chars> line, or derived secrets change on every deploy"; exit 1
+          fi
+          printf '%s\n' "$MIRROR_ENV" > mirror/.env.mirror
+
+      - name: Build
+        run: bun mirror/build.ts
+
+      - name: Smoke test
+        run: bun mirror/test/smoke.ts
+
+      - name: Push to Telegram Serverless
+        working-directory: mirror
+        env:
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+          TGCLOUD_NO_PAGER: "1"
+        run: |
+          if [ -z "$TGCLOUD_TOKEN" ]; then echo "::error::Add the TGCLOUD_TOKEN secret (see the top of this file)"; exit 1; fi
+          # A fresh checkout has no CLI state; the folder marks the project root.
+          mkdir -p .tgcloud
+          # CI is the only deployer, so overwrite what's in the cloud.
+          npx tgcloud push --force
+          npx tgcloud webhook || true
