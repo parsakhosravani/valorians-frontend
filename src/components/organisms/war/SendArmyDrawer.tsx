@@ -53,7 +53,10 @@ function enoughShare(s: GameState, terrain: Terrain, defMax: number): number | n
   return null;
 }
 
+// "0" clears every row so a player can send just one troop type (say, only
+// dragons) without dragging each slider back down by hand.
 const PRESETS = [
+  { label: "0", f: 0 },
   { label: "¼", f: 0.25 },
   { label: "½", f: 0.5 },
   { label: "¾", f: 0.75 },
@@ -125,11 +128,9 @@ export const SendArmyDrawer = ({
   // Attack's share of attack + defense, for the balance bar.
   const balance = power + defMax > 0 ? power / (power + (defMin + defMax) / 2) : 0;
 
-  const presets = [
-    // Skip "Enough" when it lands on one of the fixed picks anyway.
-    ...(enough != null && !PRESETS.some((p) => Math.abs(p.f - enough) < 0.01) ? [{ label: "Enough", f: enough }] : []),
-    ...PRESETS,
-  ];
+  // Skip "Enough" when it lands on one of the fixed picks anyway. It sits right after "0".
+  const showEnough = enough != null && !PRESETS.some((p) => Math.abs(p.f - enough) < 0.01);
+  const presets = [PRESETS[0], ...(showEnough ? [{ label: "Enough", f: enough }] : []), ...PRESETS.slice(1)];
 
   const send = async () => {
     if (!target) return;
@@ -180,8 +181,11 @@ export const SendArmyDrawer = ({
             {presets.map((p) => {
               // An empty pick matches every preset when nobody is home, so only a real selection counts.
               // Only the tapped pick lights up, and only while the sliders still match it.
+              // "0" is the exception: it lights up while nothing is picked.
               const active =
-                size > 0 && picked != null && Math.abs(picked - p.f) < 0.01 && sameArmy(units, scaled(state.army, p.f));
+                p.f === 0
+                  ? size === 0 && picked === 0
+                  : size > 0 && picked != null && Math.abs(picked - p.f) < 0.01 && sameArmy(units, scaled(state.army, p.f));
               const disabled = home.length === 0;
 
               return (
