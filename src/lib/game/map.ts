@@ -17,6 +17,7 @@ import {
   SCOUT_MIN_COST,
   unitSlots,
 } from "./config";
+import { NORTH, lonLat, northGrid } from "./northMap";
 import type { Army } from "./engine";
 
 export type Point = { x: number; y: number };
@@ -58,25 +59,99 @@ const noise = (x: number, y: number, seed: number, cell = 6) => {
   return lerp(top, bottom, fy);
 };
 
-/** Seas: big, slow noise for the coastline's shape, a little fine noise to make it ragged. */
-export const seaAt = (x: number, y: number) => noise(x, y, 13, 14) * 0.75 + noise(x, y, 14, 4) * 0.25 > 0.62;
-
 /**
- * Mountains: solid massifs where the hill country is highest, plus long thin
- * ridges that wall valleys off, broken here and there by a pass.
+ * The world is the real North of the Viking age (see northMap): its seas,
+ * coasts and great lakes are where they really are. Inside the land the
+ * country is still drawn tile by tile from noise, but leaning the way the
+ * real land does: mountains along the Norwegian spine, in Iceland, the
+ * Scottish Highlands, the Alps and the Carpathians, and hardly anywhere else;
+ * deep forest across Sweden, Finland and the lands round the Baltic; bare
+ * ground in Iceland and the far north.
  */
-const peakAt = (x: number, y: number) => noise(x, y, 7) * 0.85 + noise(x, y, 9, 2) * 0.15 > 0.78;
-const ridgeAt = (x: number, y: number) => 1 - Math.abs(2 * noise(x, y, 31, 11) - 1) > 0.94 && noise(x, y, 33, 4) > 0.35;
+const wetAt = (x: number, y: number) => {
+  const i = x - MAP_MIN;
+  const j = y - MAP_MIN;
+
+  return i < 0 || j < 0 || i >= NORTH.size || j >= NORTH.size ? 0 : northGrid()[j * NORTH.size + i];
+};
+
+export const seaAt = (x: number, y: number) => wetAt(x, y) === 0;
+
+/** Distance (in degrees, longitude halved as on the map) from a point to a chain of points. */
+const toChain = (lon: number, lat: number, chain: [number, number][]) => {
+  let best = Infinity;
+
+  for (let k = 0; k + 1 < chain.length; k++) {
+    const [ax, ay] = chain[k];
+    const [bx, by] = chain[k + 1];
+    const dx = (bx - ax) * 0.5;
+    const dy = by - ay;
+    const px = (lon - ax) * 0.5;
+    const py = lat - ay;
+    const t = Math.max(0, Math.min(1, (px * dx + py * dy) / (dx * dx + dy * dy || 1)));
+
+    best = Math.min(best, Math.hypot(px - t * dx, py - t * dy));
+  }
+
+  return best;
+};
+
+/** The great mountain chains: [chain of lon/lat points, half-width in degrees]. */
+const RANGES: [[number, number][], number][] = [
+  // The Scandinavian mountains, down the spine of Norway into Lapland.
+  [[[6.6, 58.7], [7.4, 60], [8.6, 61.6], [11, 63.1], [13.4, 65], [15.6, 66.8], [18, 68.3], [21.5, 69.6], [26, 70.2]], 1.3],
+  [[[-22, 64.6], [-18.6, 64.9], [-15.5, 65]], 1.1], // Iceland's highlands
+  [[[-6.4, 56.6], [-4.4, 57.4], [-4.2, 58.3]], 0.75], // the Scottish Highlands
+  [[[-4, 52.8], [-3.6, 51.9]], 0.4], // the Welsh hills
+  [[[5.8, 45.5], [8, 46.3], [11, 46.7], [14, 47.1]], 1], // the Alps
+  [[[17.5, 49.4], [21, 49.2], [24.5, 48], [25.6, 46.8]], 0.8], // the Carpathians
+];
+
+/** How mountainous, how wooded and how bare the land is around each tile (worked out once). */
+let LEAN: { relief: Float32Array; wood: Float32Array; bare: Float32Array } | null = null;
+
+const lean = () => {
+  if (LEAN) return LEAN;
+  const n = NORTH.size;
+  const relief = new Float32Array(n * n);
+  const wood = new Float32Array(n * n);
+  const bare = new Float32Array(n * n);
+
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const { lon, lat } = lonLat(i, j);
+      let r = 0;
+
+      for (const [chain, width] of RANGES) r = Math.max(r, 1 - toChain(lon, lat, chain) / width);
+      const k = j * n + i;
+
+      relief[k] = Math.max(0, r);
+      // The boreal forest: Sweden, Finland and the shores of the Baltic, thinning north and west.
+      wood[k] = lat > 55 && lat < 67 && lon > 11 ? Math.min(1, (lon - 11) / 4) * Math.min(1, (67 - lat) / 3) : 0.3;
+      // Treeless: Iceland, the Faroes and the far north.
+      bare[k] = lon < -6 && lat > 61 ? 1 : lat > 69 ? Math.min(1, (lat - 69) / 2) : 0;
+    }
+  LEAN = { relief, wood, bare };
+
+  return LEAN;
+};
 
 export function terrainAt(x: number, y: number): Terrain {
-  if (seaAt(x, y)) return "sea";
-  const water = noise(x, y, 3);
-  const n = noise(x, y, 7) * 0.7 + hash(x, y, 9) * 0.3;
+  const wet = wetAt(x, y);
 
-  if (water > 0.82) return "lake";
-  if (peakAt(x, y) || ridgeAt(x, y)) return "mountains";
-  if (n > 0.62) return "hills";
-  if (n < 0.36) return "forest";
+  if (wet === 0) return "sea";
+  if (wet === 2) return "lake";
+  const k = (y - MAP_MIN) * NORTH.size + (x - MAP_MIN);
+  const { relief, wood, bare } = lean();
+  const r = relief[k];
+  const peak = noise(x, y, 7) * 0.85 + noise(x, y, 9, 2) * 0.15;
+  const n = noise(x, y, 7) * 0.7 + hash(x, y, 9) * 0.3;
+  const ridge = r > 0.35 && 1 - Math.abs(2 * noise(x, y, 31, 11) - 1) > 0.93 && noise(x, y, 33, 4) > 0.35;
+
+  // Massifs where the chains run, solid at their heart; long ridges with passes through them.
+  if (peak > 0.9 - 0.42 * r || ridge) return "mountains";
+  if (n > 0.66 - 0.22 * r) return "hills";
+  if (n < 0.3 + 0.18 * wood[k] - 0.25 * bare[k]) return "forest";
 
   return "plains";
 }

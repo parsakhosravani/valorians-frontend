@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import * as E from "./engine";
-import { MAP_CENTER, MAP_MAX, MAP_MIN, MAP_SIZE } from "./config";
+import { MAP_CENTER, MAP_MAX, MAP_MIN } from "./config";
 import { Point, TERRAIN, campPositions, homeSlot, marchRoute, pointAlong, routeMs, routeTimeline, terrainAt } from "./map";
 
 const army = (a: Partial<E.Army>) => ({ ...E.emptyArmy(), ...a });
@@ -21,10 +21,16 @@ function acrossMountains(): { a: Point; b: Point } {
   throw new Error("no mountains to march around near the middle of the map");
 }
 
-test("there are mountains on the map, but not too many", () => {
+test("there are mountains on the land, but not too many", () => {
   let m = 0;
-  for (let y = MAP_MIN; y < MAP_MAX; y++) for (let x = MAP_MIN; x < MAP_MAX; x++) if (terrainAt(x, y) === "mountains") m++;
-  const share = m / (MAP_SIZE * MAP_SIZE);
+  let land = 0;
+  for (let y = MAP_MIN; y < MAP_MAX; y++)
+    for (let x = MAP_MIN; x < MAP_MAX; x++) {
+      const t = terrainAt(x, y);
+      if (t !== "sea" && t !== "lake") land++;
+      if (t === "mountains") m++;
+    }
+  const share = m / land;
   expect(share).toBeGreaterThan(0.03);
   expect(share).toBeLessThan(0.15);
 });
