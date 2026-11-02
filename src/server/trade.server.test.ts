@@ -1,5 +1,6 @@
 import "@/server/testing/harness";
-import { describe, expect, spyOn, test } from "bun:test";
+import crypto from "crypto";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
@@ -31,7 +32,17 @@ async function trade(id: number) {
 /** The player's resources as of `at` (production included), to compare like with like. */
 const resourcesAt = async (id: number, at: number) => (await mutatePlayer(id, at, (s) => s)).state.resources;
 
+/**
+ * These tests are about delivery, not bandits: when the merchants' road
+ * passes a manned lair (it depends on where the test tribes happened to
+ * settle), a robbery could take part of a load and fail them at random.
+ * Here the robbery roll always comes up "no robbery".
+ */
+const noBandits = () => spyOn(crypto, "randomInt").mockImplementation((() => 999_999) as never);
+
 describe("market trades (server)", () => {
+  afterEach(() => mock.restore());
+
   test("two buyers at once: one gets the offer, the other is paid back", async () => {
     const T0 = Date.now();
     const { id } = await offer(T0);
@@ -51,6 +62,8 @@ describe("market trades (server)", () => {
   });
 
   test("goods are delivered once, however many requests resolve it", async () => {
+    noBandits();
+
     const T0 = Date.now();
     const { seller, id } = await offer(T0);
     const buyer = await merchant(T0);
@@ -69,6 +82,8 @@ describe("market trades (server)", () => {
   });
 
   test("if the buyer's delivery fails, retrying never pays the seller twice", async () => {
+    noBandits();
+
     const T0 = Date.now();
     const { seller, id } = await offer(T0);
     const buyer = await merchant(T0);
