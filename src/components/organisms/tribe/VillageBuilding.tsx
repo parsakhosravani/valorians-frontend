@@ -84,11 +84,13 @@ type PlotProps = {
   /** Zoomed out: smaller plates, and no level medallion unless it's named. */
   compact: boolean;
   onOpen: (b: BuildingDef) => void;
+  /** How wide an ordinary building's art is (px at zoom 1); the Town Hall and a few others are bigger. */
+  base?: number;
 };
 
 /** A building on its plot: the art (zooms with the land), a level medallion and name at its foot, and what's going on over its roof. */
-export const VillageBuilding = memo(function Building({ o, at, freeBuilder, now, named, compact, onOpen }: PlotProps) {
-  const size = SIZE * (BIG[o.building.id] ?? 1);
+export const VillageBuilding = memo(function Building({ o, at, freeBuilder, now, named, compact, onOpen, base = SIZE }: PlotProps) {
+  const size = base * (BIG[o.building.id] ?? 1);
   const built = o.level > 0;
   const ready = !o.job && freeBuilder && canStart(o);
   // The gem is for upgrading what stands; an empty plot you can build on shows a green "+".
