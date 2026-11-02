@@ -81,7 +81,7 @@ export const Drawer: React.FC<DrawerProps> = ({ position, children, isOpen, titl
           style={{ background: "linear-gradient(90deg, rgba(227,169,72,0) 0%, #E3A948 20%, #FBE3A6 50%, #E3A948 80%, rgba(227,169,72,0) 100%)" }}
         />
         <div
-          className="px-4 pt-2.5 relative max-h-[85svh] overflow-y-auto scrollable overscroll-contain"
+          className="px-4 pt-2.5 relative max-h-[85svh] overflow-y-auto overflow-x-hidden scrollable overscroll-contain"
           style={{ paddingBottom: "max(2rem, calc(env(safe-area-inset-bottom) + 1rem))" }}
         >
           {position === "bottom" && <div aria-hidden="true" className="mx-auto mb-2.5 h-1 w-10 rounded-full bg-line" />}

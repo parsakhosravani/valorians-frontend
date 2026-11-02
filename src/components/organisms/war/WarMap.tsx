@@ -1712,10 +1712,29 @@ export const WarMap = ({
                         You can't attack until it ends.
                       </p>
                     )}
-                    <div className="flex gap-2">
+                    {/* Stacked, full width: side by side, the coin prices pushed the
+                        buttons past the screen edge and the whole sheet scrolled sideways. */}
+                    <div className="flex flex-col gap-2">
+                      {t.ally ? (
+                        <p className="text-xs font-bold text-[#A9D3EA]">
+                          <GameIcon e="🤝" /> Clanmate. You fight side by side, not against each other.
+                        </p>
+                      ) : picking ? (
+                        <Button
+                          isFull
+                          disabled={shielded}
+                          onClick={() => redirectTo((from) => tribeTarget(t, from))}
+                        >
+                          <GameIcon e="🧭" /> Send army here
+                        </Button>
+                      ) : (
+                        <Button isFull disabled={shielded} onClick={() => attackTribe(t)}>
+                          <GameIcon e="⚔️" /> Attack
+                        </Button>
+                      )}
                       {canScout ? (
-                        <div className="flex-1 flex flex-col gap-1.5">
-                          <Button disabled={busy} variant="outline" onClick={() => doScout(t)}>
+                        <>
+                          <Button isFull disabled={busy} variant="outline" onClick={() => doScout(t)}>
                             <GameIcon e="🔭" /> Scout · {fmt(scoutCost(t.distance))} coins
                           </Button>
                           {!t.ally &&
@@ -1724,36 +1743,13 @@ export const WarMap = ({
                                 <GameIcon e="🕵️" /> Your spy is watching: <Countdown to={t.spiedUntil} />
                               </p>
                             ) : (
-                              <Button disabled={busy} variant="outline" onClick={() => doSpy(t)}>
+                              <Button isFull disabled={busy} variant="outline" onClick={() => doSpy(t)}>
                                 <GameIcon e="🕵️" /> Spy 24h · {fmt(scoutCost(t.distance) * SPY.costFactor)} coins
                               </Button>
                             ))}
-                        </div>
+                        </>
                       ) : (
-                        <p className="flex-1 text-xs text-muted self-center">
-                          Build an Exploration Center to scout.
-                        </p>
-                      )}
-                      {t.ally ? (
-                        <p className="flex-1 text-xs font-bold text-[#A9D3EA] self-center">
-                          <GameIcon e="🤝" /> Clanmate. You fight side by side, not against each other.
-                        </p>
-                      ) : picking ? (
-                        <Button
-                          className="flex-1"
-                          disabled={shielded}
-                          onClick={() => redirectTo((from) => tribeTarget(t, from))}
-                        >
-                          <GameIcon e="🧭" /> Send army here
-                        </Button>
-                      ) : (
-                        <Button
-                          className="flex-1"
-                          disabled={shielded}
-                          onClick={() => attackTribe(t)}
-                        >
-                          <GameIcon e="⚔️" /> Attack
-                        </Button>
+                        <p className="text-xs text-muted text-center">Build an Exploration Center to scout.</p>
                       )}
                     </div>
                   </>
