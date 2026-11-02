@@ -227,6 +227,161 @@ export function homeSlot(n: number): Point {
   return { x: mid, y: mid };
 }
 
+/**
+ * How good a spot is to settle, as the Norse chose: by the sea above all (a
+ * beach for the ships), or on a lake shore, on open farmland or the edge of
+ * the woods; less in the hills, little in the bare far north or the deep
+ * south of the Frankish lands. 0 where nobody can settle at all.
+ */
+export function siteScore(p: Point): number {
+  if (!inMap(p)) return 0;
+  const t = terrainAt(p.x, p.y);
+
+  if (unsettled(t)) return 0;
+  let s = t === "plains" ? 1 : t === "forest" ? 0.8 : 0.5;
+  let sea = false;
+  let lake = false;
+
+  for (let dy = -2; dy <= 2; dy++)
+    for (let dx = -2; dx <= 2; dx++) {
+      const n = terrainAt(p.x + dx, p.y + dy);
+
+      if (n === "sea") sea = true;
+      if (n === "lake") lake = true;
+    }
+  if (sea) s *= 4;
+  else if (lake) s *= 2;
+  const { lat } = lonLat(p.x - MAP_MIN, p.y - MAP_MIN);
+
+  // The far north is hard living; the deep south is Frankish land, raided more than settled.
+  if (lat > 68) s *= 0.4;
+  if (lat < 52) s *= 0.5;
+
+  return s;
+}
+
+/** Least distance (tiles) between two tribes' homes. */
+export const HOME_SPACING = 5;
+/** New tribes settle within about this many tiles of another, so nobody starts alone at the edge of the world. */
+export const HOME_NEAR = 22;
+
+/**
+ * Where a new tribe settles: somewhere random on the map, picked the way the
+ * Norse picked (siteScore: shores first), at least HOME_SPACING from every
+ * other tribe, and within reach of others (HOME_NEAR) once there are any, so
+ * the world fills out from the first villages in natural, uneven clusters
+ * along coasts and lakes rather than on a grid. `taken`: every tribe's home.
+ * Returns null if no spot can be found (the world is full).
+ */
+export function pickHomeSite(taken: Point[], rand: () => number = Math.random, tries = 600): Point | null {
+  // Tribes bucketed by area, so spacing checks stay cheap with thousands of them.
+  const B = 16;
+  const buckets = new Map<string, Point[]>();
+
+  for (const t of taken) {
+    const k = `${Math.floor(t.x / B)},${Math.floor(t.y / B)}`;
+
+    (buckets.get(k) ?? buckets.set(k, []).get(k)!).push(t);
+  }
+  const nearest = (p: Point, reach: number) => {
+    let best = Infinity;
+    const r = Math.ceil(reach / B);
+    const bx = Math.floor(p.x / B);
+    const by = Math.floor(p.y / B);
+
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++)
+        for (const t of buckets.get(`${bx + dx},${by + dy}`) ?? []) best = Math.min(best, distance(p, t));
+
+    return best;
+  };
+  const picks: { p: Point; w: number }[] = [];
+
+  for (let i = 0; i < tries && picks.length < 40; i++) {
+    // Anywhere near a tribe (or, for the first, near the middle of the map).
+    const from = taken.length ? taken[Math.floor(rand() * taken.length)] : { x: MAP_CENTER, y: MAP_CENTER };
+    const a = rand() * Math.PI * 2;
+    const r = HOME_SPACING + rand() * (HOME_NEAR - HOME_SPACING);
+    const p = { x: Math.round(from.x + Math.cos(a) * r), y: Math.round(from.y + Math.sin(a) * r) };
+    const w = siteScore(p);
+
+    if (w <= 0 || nearest(p, HOME_SPACING) < HOME_SPACING) continue;
+    picks.push({ p, w });
+  }
+  // A weighted draw: good shores far more often, but anywhere decent now and then;
+  // never a valley the mountains wall off from the tribes around it.
+  while (picks.length) {
+    let roll = rand() * picks.reduce((n, c) => n + c.w, 0);
+    let k = picks.length - 1;
+
+    for (let i = 0; i < picks.length; i++) {
+      roll -= picks[i].w;
+      if (roll <= 0) {
+        k = i;
+        break;
+      }
+    }
+    const [{ p }] = picks.splice(k, 1);
+    const near = taken.length
+      ? taken.reduce((a, b) => (distance(a, p) <= distance(b, p) ? a : b))
+      : { x: MAP_CENTER, y: MAP_CENTER };
+
+    if (!marchRoute(near, p).climbed) return p;
+  }
+
+  return null;
+}
+
+/**
+ * A better spot for a village already on the map (laid out on the old grid,
+ * or on ground the redrawn world turned to water or mountain): the best place
+ * near where it stands, picked like a new settler's (siteScore, shores
+ * first), so it moves only a little and its neighbours stay its neighbours.
+ * Looks within `reach` tiles (further for a village now on water or a
+ * mountain, to find the nearest good land), keeps `spacing` from every
+ * village already resettled or staying (`placed`), and never into a valley
+ * the mountains wall off. Stays put if nowhere nearby will do.
+ */
+export function resettleSpot(from: Point, placed: Point[], rand: () => number = Math.random, reach = 4, spacing = 4): Point {
+  const t = terrainAt(from.x, from.y);
+  const far = reach >= 18 ? reach : t === "sea" || t === "lake" ? 12 : t === "mountains" ? 7 : reach;
+  const near = placed.filter((q) => Math.abs(q.x - from.x) <= far + spacing && Math.abs(q.y - from.y) <= far + spacing);
+  const clear = (p: Point) => near.every((q) => distance(p, q) >= spacing);
+  const options: { p: Point; w: number }[] = [];
+
+  for (let dy = -far; dy <= far; dy++)
+    for (let dx = -far; dx <= far; dx++) {
+      const d = Math.hypot(dx, dy);
+
+      if (d > far) continue;
+      const p = { x: from.x + dx, y: from.y + dy };
+      const score = siteScore(p);
+
+      if (score <= 0 || !clear(p)) continue;
+      // Good ground close to home wins; a dash of chance so villages don't line up again.
+      options.push({ p, w: score * (1 - (d / (far + 1)) * 0.6) * (0.6 + rand() * 0.8) });
+    }
+  options.sort((a, b) => b.w - a.w);
+  for (const o of options.slice(0, 6)) if (unsettled(t) || !marchRoute(from, o.p).climbed) return o.p;
+  // Still on water or a mountain with no room near: look further, and settle a little closer to the others.
+  if (unsettled(t) && reach < 18) return resettleSpot(from, placed, rand, 18, 3);
+
+  return from;
+}
+
+/** About how many tribes the world holds: its good land, at the spacing tribes keep. */
+let CAPACITY = 0;
+
+export const worldCapacity = () => {
+  if (CAPACITY) return CAPACITY;
+  let land = 0;
+
+  for (let y = MAP_MIN; y < MAP_MAX; y += 2) for (let x = MAP_MIN; x < MAP_MAX; x += 2) if (!unsettled(terrainAt(x, y))) land += 4;
+  CAPACITY = Math.round(land / (HOME_SPACING * HOME_SPACING * 1.3));
+
+  return CAPACITY;
+};
+
 /** The outermost ring of the settling spiral that still fits in the world. */
 export const MAX_RING = Math.floor((MAP_SIZE / 2 - 2) / TRIBE_SPACING);
 

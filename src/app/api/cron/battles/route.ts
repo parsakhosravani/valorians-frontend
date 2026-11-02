@@ -5,6 +5,7 @@ import { resolveDueTrades } from "@/server/trade";
 import { ensureBotSetup } from "@/server/bot";
 import { checkRelease, deliverAnnouncements } from "@/server/announce";
 import { settleAll } from "@/server/map";
+import { resettleVillages } from "@/server/resettle";
 import { refreshTribeColumns } from "@/server/tribeColumns";
 import { maybeRefreshRanks } from "@/server/ranks";
 
@@ -40,6 +41,8 @@ export async function GET(req: NextRequest) {
   await settleAll().catch((e) =>
     console.error("settling new tribes failed", e)
   );
+  // Villages already on the map move to better land nearby, a batch at a time (see resettleVillages).
+  await resettleVillages().catch((e) => console.error("resettling villages failed", e));
   // Map copies of tribes that went stale (or predate them): a few seconds at most.
   await refreshTribeColumns(started, 8_000).catch((e) =>
     console.error("refreshing tribe columns failed", e)

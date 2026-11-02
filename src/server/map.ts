@@ -8,7 +8,7 @@ import { TRIBE_FRESH, TRIBE_SELECT, tribeLook } from "./tribeColumns";
 import { storedFlag } from "@/lib/game/clan";
 import { banditStrength, campDefense, campName, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
-import { CAMP_REACH, MAX_RING, Point, campPositions, distance, homeSlot, isCoastal, settledShare, terrainAt } from "@/lib/game/map";
+import { CAMP_REACH, Point, campPositions, distance, isCoastal, pickHomeSite, terrainAt, worldCapacity } from "@/lib/game/map";
 import { campGone, campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
 import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
 import type { StoredBattle } from "./war";
@@ -17,11 +17,10 @@ import { mySpies } from "./spies";
 /**
  * A tribe's home tile, settling it on the map the first time it is needed.
  *
- * New tribes take the next free spot on the spiral out from the middle
- * (`homeSlot`). The spiral index to start from is kept in meta, so each new
- * tribe picks up where the last one settled. (Starting from the number of
- * tribes, as before, fell behind the spiral: slots on water or mountains are
- * skipped, so after a few hundred tribes every slot it tried was taken.)
+ * New tribes settle at a random spot picked the way the Norse settled: by
+ * the shore first, spaced from other tribes and within reach of them (see
+ * pickHomeSite), so the world fills out in natural clusters along coasts and
+ * lakes instead of on a grid round the middle.
  */
 export async function homeOf(id: number): Promise<Point> {
   const db = await getDb();
@@ -30,20 +29,16 @@ export async function homeOf(id: number): Promise<Point> {
 
   if (row && row.map_x != null) return { x: Number(row.map_x), y: Number(row.map_y) };
 
-  const taken = new Set(
-    (await db.execute("SELECT map_x, map_y FROM users WHERE map_x IS NOT NULL")).rows.map(
-      (r) => `${Number(r.map_x)},${Number(r.map_y)}`,
-    ),
-  );
-  const cursor = Number((await db.execute("SELECT value FROM meta WHERE key = 'spiral_next'")).rows[0]?.value ?? 0);
-  // Every spiral slot inside the world, with room to skip the unusable ones.
-  const last = (2 * MAX_RING + 1) ** 2 + 60;
+  const taken = (await db.execute("SELECT map_x, map_y FROM users WHERE map_x IS NOT NULL")).rows.map((r) => ({
+    x: Number(r.map_x),
+    y: Number(r.map_y),
+  }));
 
-  for (let n = cursor; n < last; n++) {
-    const p = homeSlot(n);
+  // A random spot, picked the way the Norse settled (see pickHomeSite); again if someone took it meanwhile.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const p = pickHomeSite(taken);
 
-    if (taken.has(`${p.x},${p.y}`)) continue;
-    // Settle here unless someone else took the tile (or settled us) meanwhile.
+    if (!p) break;
     const up = await db.execute({
       sql: `UPDATE users SET map_x = ?, map_y = ? WHERE id = ? AND map_x IS NULL
             AND NOT EXISTS (SELECT 1 FROM users WHERE map_x = ? AND map_y = ?)`,
@@ -51,18 +46,14 @@ export async function homeOf(id: number): Promise<Point> {
     });
 
     if (up.rowsAffected === 1) {
-      await db.execute({
-        sql: "INSERT INTO meta (key, value) VALUES ('spiral_next', ?) ON CONFLICT(key) DO UPDATE SET value = MAX(CAST(value AS INTEGER), CAST(excluded.value AS INTEGER))",
-        args: [String(n + 1)],
-      });
-      await warnIfFilling(settledShare(p));
+      await warnIfFilling((taken.length + 1) / worldCapacity());
 
       return p;
     }
     const again = await db.execute({ sql: "SELECT map_x FROM users WHERE id = ?", args: [id] });
 
     if (again.rows[0]?.map_x != null) return homeOf(id);
-    taken.add(`${p.x},${p.y}`);
+    taken.push(p);
   }
   await warnIfFilling(1);
   throw new Error("No free land left on the map");
