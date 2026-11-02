@@ -9,7 +9,7 @@ import type { Metadata, Viewport } from "next";
 import { Main } from "@/components/organisms/Main";
 import { Providers } from "../providers";
 import { ResourceProvider } from "@/context/resource/ResourceContext";
-import { Toaster } from "react-hot-toast";
+import { GameToaster } from "@/components/molecules/GameToaster";
 
 import GoogleScript from "@/scripts/GoogleScript";
 import TelegramScript from "@/scripts/TelegramScript";
@@ -39,41 +39,7 @@ export default function RootLayout({
   return (
     <html suppressHydrationWarning lang="en">
       <body className="bg-ground text-parch mx-auto flex justify-center">
-        {/* Toasts styled like the game's panels: dark wood, gold trim, ember for errors.
-            Just above the bottom bar, not at the top: there a toast sat right on the
-            header for a few seconds after almost every action, and taps on your
-            profile and the Trade button went to the toast instead. */}
-        <Toaster
-          containerStyle={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 88px)" }}
-          position="bottom-center"
-          toastOptions={{
-            duration: 2500,
-            style: {
-              background: "linear-gradient(180deg, #2A1F16 0%, #1E1610 100%)",
-              color: "#EFE3CC",
-              border: "1px solid #E3A948",
-              borderRadius: "14px",
-              boxShadow: "0 10px 28px rgba(0,0,0,0.6), inset 0 1px 0 rgba(242,198,109,0.18)",
-              padding: "10px 14px",
-              fontFamily: "'Alegreya Sans', sans-serif",
-              fontWeight: 700,
-              fontSize: "14px",
-              lineHeight: 1.3,
-              maxWidth: "360px",
-            },
-            success: { iconTheme: { primary: "#E3A948", secondary: "#1E1610" } },
-            error: {
-              duration: 3500,
-              iconTheme: { primary: "#E8612C", secondary: "#2A140E" },
-              style: {
-                background: "linear-gradient(180deg, #3A1A10 0%, #2A140E 100%)",
-                color: "#FFE3D6",
-                border: "1px solid #E8612C",
-              },
-            },
-            loading: { iconTheme: { primary: "#E3A948", secondary: "#4A3624" } },
-          }}
-        />
+        <GameToaster />
 
         <Providers>
           <ResourceProvider>
