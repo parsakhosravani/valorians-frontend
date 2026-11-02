@@ -804,9 +804,9 @@ export function upgradeBuilding(s0: GameState, id: BuildingId, now: number): Gam
   if (s.queue.some((q) => q.building === id)) throw new GameError("This building is already being upgraded", "busy");
   if (s.queue.length >= getRates(s).builders) throw new GameError("All builders are busy", "no_builder");
   for (const res of RESOURCE_IDS) {
-    if (s.resources[res] < info.cost) throw new GameError(`Not enough ${res}`, "not_enough_resources");
+    if (s.resources[res] < info.cost[res]) throw new GameError(`Not enough ${res}`, "not_enough_resources");
   }
-  for (const res of RESOURCE_IDS) s.resources[res] -= info.cost;
+  for (const res of RESOURCE_IDS) s.resources[res] -= info.cost[res];
   s.queue.push({ building: id, toLevel: info.from + 1, startedAt: now, endsAt: now + info.seconds * 1000 });
   return s;
 }

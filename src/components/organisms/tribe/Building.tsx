@@ -31,7 +31,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
   const inQueue = state.queue.find((q) => q.building === building.id);
   const info = buildingUpgradeInfo(state, building.id);
   const freeBuilder = state.queue.length < getRates(state).builders;
-  const missing = RESOURCES.filter((r) => state.resources[r.id] < info.cost);
+  const missing = RESOURCES.filter((r) => state.resources[r.id] < info.cost[r.id]);
 
   const onUpgrade = async () => {
     setBusy(true);
@@ -81,12 +81,12 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
           </SectionTitle>
           <div className="inset grid grid-cols-4 divide-x divide-line/50 py-2">
             {RESOURCES.map((r) => {
-              const short = state.resources[r.id] < info.cost;
+              const short = state.resources[r.id] < info.cost[r.id];
 
               return (
                 <span key={r.id} className="flex flex-col items-center gap-0.5">
                   <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
-                  <span className={clsx("text-xs font-extrabold tabular-nums", short ? "text-bad" : "text-parch")}>{compact(info.cost)}</span>
+                  <span className={clsx("text-xs font-extrabold tabular-nums", short ? "text-bad" : "text-parch")}>{compact(info.cost[r.id])}</span>
                 </span>
               );
             })}

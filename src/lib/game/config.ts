@@ -125,8 +125,10 @@ type MilitaryStat =
 export type BuildingDef = {
   id: string;
   name: string;
-  /** Resource cost (each of the four) for level 0 → 1. */
+  /** Average cost per resource for level 0 → 1 (the four together cost 4× this). */
   baseCost: number;
+  /** How that cost splits over iron, wood, clay, crop (BUILDING_MIX). */
+  mix: Record<ResourceId, number>;
   /** Seconds for level 0 → 1. */
   baseTime: number;
   /** How much dearer each level is than the last (BUILDING_COST_GROWTH unless set). */
@@ -134,6 +136,8 @@ export type BuildingDef = {
   effect: BuildingEffect;
   description: string;
 };
+
+const EVEN_MIX: Record<ResourceId, number> = { iron: 1, wood: 1, clay: 1, crop: 1 };
 
 const def = (
   name: string,
@@ -146,6 +150,7 @@ const def = (
   name,
   baseCost,
   baseTime,
+  mix: EVEN_MIX,
   effect,
   description,
 });
@@ -164,9 +169,15 @@ const PRODUCTION_GROWTH = 1.15;
 /** Each level takes this much longer to build than the last (was 1.55: level 30 took 12 days at best). */
 const BUILD_TIME_GROWTH = 1.4;
 
-/** Cost of each resource to go from `level` to `level + 1`. */
-export const buildingUpgradeCost = (b: BuildingDef, level: number) =>
-  Math.round(b.baseCost * Math.pow(b.costGrowth ?? BUILDING_COST_GROWTH, level));
+/** What each resource costs to go from `level` to `level + 1`, split by the building's mix. */
+export const buildingUpgradeCost = (b: BuildingDef, level: number): Record<ResourceId, number> => {
+  const avg = b.baseCost * Math.pow(b.costGrowth ?? BUILDING_COST_GROWTH, level);
+
+  return Object.fromEntries(RESOURCE_IDS.map((r) => [r, Math.round(avg * b.mix[r])])) as Record<ResourceId, number>;
+};
+
+/** All four resources of an upgrade added up: for sorting by price. */
+export const costTotal = (cost: Record<ResourceId, number>) => RESOURCE_IDS.reduce((sum, r) => sum + cost[r], 0);
 
 /** Raw seconds to go from `level` to `level + 1`, before Town Hall speedup. */
 export const buildingUpgradeBaseSeconds = (b: BuildingDef, level: number) =>
@@ -193,6 +204,48 @@ export const LOOT_WEAK_SHARE = 0.5;
  * until what's left can be fed.
  */
 export const DESERT_PER_HOUR = 0.02;
+
+/**
+ * What each building is made of: its share of iron, wood, clay and crop, as
+ * [iron, wood, clay, crop]. Every row adds up to 4, so a level costs the same
+ * in total as when all four were equal; only the split changed. Before, every
+ * building wanted the same amount of each (a City Gate took as much crop as
+ * clay), which made no sense: walls are brick, ships are wood, smiths are iron.
+ * Producers barely need what they make, so building one doesn't eat its own
+ * output. Crop stays in every recipe, a little, to feed the workers.
+ */
+const BUILDING_MIX: Record<BuildingId, Record<ResourceId, number>> = Object.fromEntries(
+  (
+    [
+      ["town-hall", [0.9, 1.2, 1.4, 0.5]],
+      ["resource-warehouse", [0.8, 1.6, 1.2, 0.4]],
+      ["iron-mine", [0.4, 1.6, 1.3, 0.7]],
+      ["sawmill", [1.3, 0.4, 1.5, 0.8]],
+      ["brickyard", [1.3, 1.6, 0.4, 0.7]],
+      ["windmill", [1.0, 1.6, 1.0, 0.4]],
+      ["fertilizer-workshop", [0.8, 1.2, 1.0, 1.0]],
+      ["treasury", [1.6, 0.6, 1.4, 0.4]], // an iron-bound vault in stone
+      ["trading-post", [0.6, 1.5, 0.8, 1.1]], // carts and stalls, food for the caravans
+      ["academy", [0.6, 1.4, 1.4, 0.6]],
+      ["embassy", [0.5, 1.0, 1.1, 1.4]], // feasts for guests
+      ["barracks", [1.2, 1.4, 0.9, 0.5]],
+      ["stable", [0.9, 1.5, 0.8, 0.8]], // horses eat
+      ["siege-workshop", [1.2, 1.7, 0.7, 0.4]],
+      ["military-command", [1.0, 1.0, 1.4, 0.6]],
+      ["arsenal", [1.7, 1.0, 0.8, 0.5]], // weapons are forged
+      ["armory", [1.7, 0.8, 1.0, 0.5]], // so is armour
+      ["city-gate", [1.1, 0.8, 1.8, 0.3]], // brick first, then iron, then wood, a little food
+      ["watchtower", [0.8, 1.3, 1.6, 0.3]],
+      ["trapmaker", [1.3, 1.6, 0.6, 0.5]],
+      ["hideout", [0.6, 1.3, 1.7, 0.4]],
+      ["hospital", [0.6, 1.0, 1.2, 1.2]],
+      ["war-hall", [1.0, 1.2, 1.3, 0.5]],
+      ["exploration-center", [0.8, 1.6, 0.9, 0.7]],
+      ["dragon-roost", [1.1, 0.7, 1.2, 1.0]], // the dragon eats
+      ["harbor", [0.7, 2.0, 0.9, 0.4]], // longships are mostly timber
+    ] as [string, number[]][]
+  ).map(([id, m]) => [id, Object.fromEntries(RESOURCE_IDS.map((r, i) => [r, m[i]])) as Record<ResourceId, number>])
+);
 
 const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH });
 
@@ -223,7 +276,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
   def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after."),
   def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
-];
+].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix }));
 
 export type BuildingId = string;
 

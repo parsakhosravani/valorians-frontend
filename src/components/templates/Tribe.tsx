@@ -10,7 +10,7 @@ import { Building } from "@/components/organisms/tribe/Building";
 import { Drawer } from "@/components/molecules/Drawer";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
-import { BUILDING_BY_ID, BuildingDef, RESOURCE_NAMES, ResourceId, buildingImage } from "@/lib/game/config";
+import { BUILDING_BY_ID, BuildingDef, RESOURCE_NAMES, ResourceId, buildingImage, costTotal } from "@/lib/game/config";
 import {
   BuildingGroup,
   GROUP_LABEL,
@@ -50,7 +50,7 @@ const StatusLine = ({ o }: { o: UpgradeOption }) => {
   if (!short.length) {
     return (
       <span className="text-xs text-muted tabular-nums truncate">
-        {compact(o.cost)} each · {formatDuration(o.seconds * 1000)}
+        {compact(costTotal(o.cost))} in all · {formatDuration(o.seconds * 1000)}
       </span>
     );
   }
@@ -185,7 +185,7 @@ export const Tribe: FunctionComponent = () => {
   const freeBuilders = rates.builders - state.queue.length;
   const jobs = [...state.queue].sort((a, b) => a.endsAt - b.endsAt);
 
-  const ready = options.filter((o) => canStart(o) && o.building.id !== advice?.id).sort((a, b) => a.cost - b.cost);
+  const ready = options.filter((o) => canStart(o) && o.building.id !== advice?.id).sort((a, b) => costTotal(a.cost) - costTotal(b.cost));
   const best = advice ? options.find((o) => o.building.id === advice.id) ?? null : null;
   // Idle builders get the next jobs right in their slot: the best one first, then the cheapest ready.
   const picks = freeBuilders > 0 ? [...(best && canStart(best) ? [best] : []), ...ready].slice(0, freeBuilders) : [];
@@ -202,7 +202,7 @@ export const Tribe: FunctionComponent = () => {
   const rest = options
     .filter((o) => !o.job && !picked.has(o.building.id))
     .filter((o) => filter === "all" || buildingGroup(o.building) === filter)
-    .sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? a.cost - b.cost : (a.hoursToAfford ?? 1e9) - (b.hoursToAfford ?? 1e9)));
+    .sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? costTotal(a.cost) - costTotal(b.cost) : (a.hoursToAfford ?? 1e9) - (b.hoursToAfford ?? 1e9)));
 
   const upgrade = async (id: string) => {
     setBusy(id);

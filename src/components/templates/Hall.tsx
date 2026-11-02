@@ -11,7 +11,7 @@ import { ACTIVE_QUESTS, QUEST_ICONS } from "@/components/organisms/quest/QuestDr
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, buildingImage, campName, unitPlural } from "@/lib/game/config";
+import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, buildingImage, campName, costTotal, unitPlural } from "@/lib/game/config";
 import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, defensePower, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
@@ -286,7 +286,7 @@ export const Hall = () => {
       key: "build",
       img: buildingImage(o.building),
       title: `${o.level === 0 ? "Build" : "Upgrade"} ${o.building.name} to ${o.toLevel}`,
-      sub: `${advice.reason}, ${compact(o.cost)} of each`,
+      sub: `${advice.reason}, ${compact(costTotal(o.cost))} resources`,
       state: "todo",
       tone: "gold",
       action: { label: o.level === 0 ? "Build" : "Upgrade", onClick: () => run("build", () => upgradeBuilding(o.building.id)), busy: busy === "build" },
