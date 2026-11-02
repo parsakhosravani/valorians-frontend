@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 
 import bg from "~/images/background/tribe.webp";
@@ -318,11 +319,17 @@ export const Market = () => {
 
   // /market?tab=sell or ?tab=reports. Older bot messages say ?tab=mine: those are
   // about trades on the road, which now live at the top of Buy.
-  useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab");
+  // Followed whenever it changes (e.g. a 🔔 inbox button while you're already here),
+  // then taken off the address so the same link tapped again later still works.
+  const askedTab = useSearchParams().get("tab");
 
+  useEffect(() => {
+    const t = askedTab;
+
+    if (!t) return;
     if (t === "sell" || t === "buy" || t === "reports") setTab(t);
-  }, []);
+    window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+  }, [askedTab]);
   const seen = useSyncExternalStore(subscribeSeen, readSeen, () => 0);
   const tabRef = useRef(tab);
 
