@@ -7,6 +7,10 @@ import {
   Point,
   campPosition,
   homeSlot,
+  pickHomeSite,
+  siteScore,
+  HOME_SPACING,
+  HOME_NEAR,
   isCoastal,
   marchMs,
   routeMs,
@@ -168,4 +172,30 @@ test("ships carry loot home", () => {
   const total = (l: Record<string, number>) => Object.values(l).reduce((a, b) => a + b, 0);
   expect(withShips.attackerWon).toBe(true);
   expect(total(withShips.loot)).toBeGreaterThan(total(without.loot));
+});
+
+test("new tribes settle at random, by the shore first, spaced out and near the others", () => {
+  let seed = 1;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const taken: Point[] = [];
+  let coastal = 0;
+
+  for (let n = 0; n < 150; n++) {
+    const p = pickHomeSite(taken, rand);
+
+    expect(p).not.toBeNull();
+    const t = terrainAt(p!.x, p!.y);
+    expect(t).not.toBe("sea");
+    expect(t).not.toBe("lake");
+    expect(t).not.toBe("mountains");
+    for (const q of taken) expect(Math.hypot(p!.x - q.x, p!.y - q.y)).toBeGreaterThanOrEqual(HOME_SPACING);
+    if (taken.length) expect(Math.min(...taken.map((q) => Math.hypot(p!.x - q.x, p!.y - q.y)))).toBeLessThanOrEqual(HOME_NEAR + 1);
+    if (isCoastal(p!) || siteScore(p!) > 1.6) coastal++;
+    taken.push(p!);
+  }
+  // Not a grid: spots don't line up every few tiles.
+  const xs = new Set(taken.map((p) => p.x % 4));
+  expect(xs.size).toBe(4);
+  // The shore draws settlers: well over a third settle by water.
+  expect(coastal / taken.length).toBeGreaterThan(0.35);
 });
