@@ -140,18 +140,39 @@ export function useMapCamera({
     onDrawRef.current?.(cam.current);
   }, []);
 
-  /** The zoom the layer was last drawn sharp at. */
-  const sharpAt = useRef(1);
+  /**
+   * The zoom the layer's picture was frozen at when it last started moving
+   * (will-change on), or null while it rests without will-change.
+   */
+  const frozenAt = useRef<number | null>(null);
 
   /**
-   * The camera stopped: resize the markers for this zoom and let the browser
-   * redraw the layer sharp at the new scale. Both repaint the whole map, so
-   * they wait until nothing moves; while it moves, the GPU only slides and
-   * scales the picture it already has.
+   * About to move: freeze the layer's picture so the GPU only slides and
+   * scales it, instead of the browser repainting the whole map every frame.
+   */
+  const freeze = useCallback(() => {
+    const l = layer.current;
+
+    if (!l || frozenAt.current != null) return;
+    frozenAt.current = cam.current.z;
+    l.style.willChange = "transform";
+  }, []);
+
+  /**
+   * The camera stopped: resize the markers for this zoom and, if the zoom
+   * changed, let the browser redraw the layer sharp at the new scale. Both
+   * repaint the whole map, so they wait until nothing moves.
    *
-   * The sharp redraw only happens when the zoom really changed: after a pan
-   * the picture is already sharp, and redrawing the whole layer after every
-   * drag was the hitch you felt each time the map stopped.
+   * The layer rests WITHOUT will-change after a zoom, and only gets it back
+   * when the next move starts (see freeze). The old way put will-change back
+   * two frames later, and on some browsers (Chromium on Linux, Telegram
+   * Desktop) that came before the sharp redraw had happened, so the village
+   * stayed blurry, a bitmap from the old zoom stretched up. With nothing put
+   * back, no frame timing can win the race.
+   *
+   * After a pan (same zoom) the frozen picture is already sharp: it's kept,
+   * since redrawing the whole layer after every drag was the hitch you felt
+   * each time the map stopped.
    */
   const settle = useCallback(() => {
     const l = layer.current;
@@ -162,18 +183,11 @@ export function useMapCamera({
 
     if (l.style.getPropertyValue("--pin") !== pin) l.style.setProperty("--pin", pin);
     onSettleRef.current?.({ ...cam.current });
-    if (Math.abs(cam.current.z / sharpAt.current - 1) < 0.1) return;
-    sharpAt.current = cam.current.z;
-    // A frame has to actually paint without will-change for the browser to
-    // drop the old bitmap and rasterize again at this zoom. One rAF isn't
-    // enough: it runs before that frame's style pass, so "auto" was undone
-    // unseen and the layer kept the blurry picture from the first zoom.
+    const was = frozenAt.current;
+
+    if (was == null || Math.abs(cam.current.z / was - 1) < 0.005) return;
+    frozenAt.current = null;
     l.style.willChange = "auto";
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (layer.current) layer.current.style.willChange = "";
-      }),
-    );
   }, []);
 
   const busy = useCallback(() => {
@@ -181,6 +195,7 @@ export function useMapCamera({
     const v = viewport.current;
 
     if (v && !v.hasAttribute("data-moving")) v.setAttribute("data-moving", "");
+    freeze();
     clearTimeout(idle.current);
     idle.current = setTimeout(() => {
       if (anim.current || fling.current) busy();
@@ -194,7 +209,7 @@ export function useMapCamera({
         busy();
       } else settle();
     }, 160);
-  }, [settle]);
+  }, [settle, freeze]);
 
   const tick = useCallback(
     (time: number) => {

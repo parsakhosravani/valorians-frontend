@@ -1188,7 +1188,7 @@ export const WarMap = ({
             {/* Taps go through to the canvas, except on the armies' and battles' own buttons. */}
             <div
               ref={camera.layer}
-              className="absolute left-0 top-0 origin-top-left will-change-transform pointer-events-none [&_button]:pointer-events-auto"
+              className="absolute left-0 top-0 origin-top-left pointer-events-none [&_button]:pointer-events-auto"
               style={{ width: MAP_SIZE * T, height: MAP_SIZE * T }}
             >
               <GroundOverview
