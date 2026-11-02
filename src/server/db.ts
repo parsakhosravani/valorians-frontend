@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 5; // 5: spies
+const SCHEMA_VERSION = 6; // 5: spies, 6: in-game notices
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -290,6 +290,19 @@ async function migrate(client: Client) {
     );
     CREATE INDEX IF NOT EXISTS spies_target ON spies(target_id, until);
     CREATE INDEX IF NOT EXISTS spies_watcher ON spies(watcher_id, until);
+
+    -- In-game copy of every bot notification (see notices.ts), so players who
+    -- never started the bot, or missed the message, still see it in the game.
+    CREATE TABLE IF NOT EXISTS notices (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id       INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      html          TEXT NOT NULL,                 -- same text as the bot message (only <b> tags)
+      button        TEXT NOT NULL,
+      path          TEXT NOT NULL,                 -- where tapping it takes you in the game
+      read          INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS notices_user ON notices(user_id, id DESC);
 
     -- Small settings the server keeps, e.g. the last version announced.
     CREATE TABLE IF NOT EXISTS meta (
