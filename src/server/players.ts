@@ -5,6 +5,7 @@ import type { InStatement, Row } from "@libsql/client";
 
 import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
+import { unreadNotices } from "./notices";
 
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
@@ -256,7 +257,12 @@ async function marketOffers(id: number) {
 
 export async function playerView(p: Player, now: number) {
   // Independent lookups: run them together instead of one after another.
-  const [clan, rank, trades] = await Promise.all([clanBadge(p.clanId), rankOf(p), marketOffers(p.id)]);
+  const [clan, rank, trades, notices] = await Promise.all([
+    clanBadge(p.clanId),
+    rankOf(p),
+    marketOffers(p.id),
+    unreadNotices(p.id).catch(() => 0),
+  ]);
 
   return {
     serverTime: now,
@@ -270,6 +276,8 @@ export async function playerView(p: Player, now: number) {
       rank,
       /** Other players' open offers, shown as a badge on the header's Trade button. */
       marketOffers: trades,
+      /** Unread messages in the in-game inbox (the bell in the header). */
+      unreadNotices: notices,
       /** Monthly Valorians Plus price in Telegram Stars. */
       plusPrice: plusPrice(),
     },

@@ -5,12 +5,16 @@ import type { Army, BanditRaid, BanditRaidReport } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
 import { whole } from "@/lib/format";
+import { recordNotice } from "./notices";
 
 /**
  * Battle news sent as Telegram messages from the bot, so players hear about
  * attacks while the game is closed. The bot can only message players who
  * started it or allowed it to write (the app asks once); other sends fail
  * quietly. Sending never blocks or breaks a game action.
+ *
+ * Every message is also kept in the in-game inbox (notices.ts), so the game
+ * shows it too, even to players the bot can't reach.
  */
 
 const token = () => process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
@@ -49,6 +53,7 @@ const inMinutes = (ms: number) => {
  * when tapped.) Resolves even on failure.
  */
 export async function sendToPlayer(userId: number, html: string, button = "⚔️ Open Valorians", path = "/hall") {
+  await recordNotice(userId, html, button, path).catch((e) => console.error("recordNotice", e));
   const t = token();
 
   if (!t || process.env.NOTIFICATIONS === "off") return;

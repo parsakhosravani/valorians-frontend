@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 import { Coin } from "@/components/molecules/Coin";
 import { NAV_ICONS } from "@/components/organisms/Navbar";
 import { User } from "@/components/molecules/User";
+import { NoticesBell } from "@/components/organisms/NoticesDrawer";
 import { RESOURCES, sameJson, useGameStatus, useLive } from "@/context";
 import { compact } from "@/lib/format";
 
@@ -52,6 +53,7 @@ export const Header: React.FC = () => {
       <div className="flex items-center gap-2">
         <User />
         <div className="flex-1" />
+        <NoticesBell />
         <div className="pill h-8 pl-1.5 pr-3 border-frame/70">
           <Coin amount={coins} />
         </div>
