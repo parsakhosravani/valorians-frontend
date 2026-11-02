@@ -168,8 +168,6 @@ type TechDef = {
   effect: (level: number) => string;
 };
 
-export const CLAN_TECH_MAX_LEVEL = 5;
-
 export const CLAN_TECHS: TechDef[] = [
   {
     id: "hall",
@@ -216,19 +214,33 @@ export const canAfford = (t: Treasury, cost: Treasury) => TREASURY_KEYS.every((k
 
 export const maxMembers = (techs: Techs) => CLAN.maxMembers + techs.hall * CLAN.seatsPerHallLevel;
 
-/** Clan level: 1 plus every tech level bought. */
-export const clanLevel = (techs: Techs) => 1 + TECH_IDS.reduce((n, id) => n + techs[id], 0);
+/**
+ * Clan level: 1, plus one for every full step (CLAN.techLevelsPerClanLevel)
+ * that *all* techs have reached. One lagging tech holds the clan back.
+ */
+export const clanLevel = (techs: Techs) =>
+  1 + Math.floor(Math.min(...TECH_IDS.map((id) => techs[id])) / CLAN.techLevelsPerClanLevel);
+
+/** Highest level any tech can reach at the clan's current level (5, then 10, 15, …). */
+export const techCap = (techs: Techs) => clanLevel(techs) * CLAN.techLevelsPerClanLevel;
+
+/** A clan with fewer than CLAN.minMembers members is still forming: no perks, no tech raising. */
+export const isFormed = (members: number) => members >= CLAN.minMembers;
 
 /** Perks every member of the clan gets, in percent. Stored in their game state. */
 export type ClanPerks = { production: number; attack: number; defense: number };
 
 export const NO_PERKS: ClanPerks = { production: 0, attack: 0, defense: 0 };
 
-export const perksFor = (techs: Techs): ClanPerks => ({
-  production: techs.fields * CLAN.fieldsPercent,
-  attack: techs.banners * CLAN.bannersPercent,
-  defense: techs.shieldwall * CLAN.shieldwallPercent,
-});
+/** What every member gets from the clan's techs, or nothing while the clan is still forming. */
+export const perksFor = (techs: Techs, members: number): ClanPerks =>
+  isFormed(members)
+    ? {
+        production: techs.fields * CLAN.fieldsPercent,
+        attack: techs.banners * CLAN.bannersPercent,
+        defense: techs.shieldwall * CLAN.shieldwallPercent,
+      }
+    : { ...NO_PERKS };
 
 export const samePerks = (a: ClanPerks | undefined, b: ClanPerks) =>
   (a?.production ?? 0) === b.production && (a?.attack ?? 0) === b.attack && (a?.defense ?? 0) === b.defense;

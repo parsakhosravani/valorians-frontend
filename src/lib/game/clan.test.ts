@@ -36,8 +36,7 @@ test("tech costs grow and perks follow levels", () => {
   const techs = { hall: 2, fields: 3, banners: 1, shieldwall: 0 };
 
   expect(C.maxMembers(techs)).toBe(CLAN.maxMembers + 2 * CLAN.seatsPerHallLevel);
-  expect(C.clanLevel(techs)).toBe(7);
-  expect(C.perksFor(techs)).toEqual({ production: 9, attack: 2, defense: 0 });
+  expect(C.perksFor(techs, 2)).toEqual({ production: 9, attack: 2, defense: 0 });
   expect(C.canAfford({ ...C.emptyTreasury(), iron: 4000, wood: 4000, clay: 4000, crop: 4000, coins: 499 }, C.techCost(0))).toBe(false);
 });
 
@@ -63,4 +62,34 @@ test("clan perks raise production, attack and defense", () => {
   const { clanPerks: _p, ...old } = base;
 
   expect(E.normalizeState(old as E.GameState).clanPerks).toEqual(C.NO_PERKS);
+});
+
+test("clan level rises when every tech reaches the cap, with no top", () => {
+  const step = CLAN.techLevelsPerClanLevel;
+  const at = (hall: number, fields: number, banners: number, shieldwall: number) => ({ hall, fields, banners, shieldwall });
+
+  expect(C.clanLevel(at(0, 0, 0, 0))).toBe(1);
+  expect(C.techCap(at(0, 0, 0, 0))).toBe(step);
+  // One tech behind holds the whole clan at level 1.
+  expect(C.clanLevel(at(step - 1, step, step, step))).toBe(1);
+  expect(C.techCap(at(step - 1, step, step, step))).toBe(step);
+  // All four at the cap: level 2, techs may go 5 levels higher.
+  expect(C.clanLevel(at(step, step, step, step))).toBe(2);
+  expect(C.techCap(at(step, step, step, step))).toBe(2 * step);
+  expect(C.clanLevel(at(4 * step, 4 * step, 4 * step, 4 * step + 3))).toBe(5);
+  // Costs keep growing past the old level-5 top.
+  expect(C.techCost(step + 1).iron).toBeGreaterThan(C.techCost(step).iron);
+});
+
+test("a clan of one is still forming: no perks until a second chief joins", () => {
+  const techs = { hall: 1, fields: 5, banners: 5, shieldwall: 5 };
+
+  expect(C.isFormed(1)).toBe(false);
+  expect(C.isFormed(CLAN.minMembers)).toBe(true);
+  expect(C.perksFor(techs, 1)).toEqual(C.NO_PERKS);
+  expect(C.perksFor(techs, 2)).toEqual({
+    production: 5 * CLAN.fieldsPercent,
+    attack: 5 * CLAN.bannersPercent,
+    defense: 5 * CLAN.shieldwallPercent,
+  });
 });

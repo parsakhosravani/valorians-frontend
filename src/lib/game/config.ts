@@ -289,6 +289,19 @@ export const CLAN = {
   maxOfficers: 4,
   /** Pending join requests one player can have out at once. */
   maxRequests: 3,
+  /**
+   * Fewest members a clan needs before its techs work. A chief alone could
+   * found a clan just to buy themselves perks; a clan is a band, so its techs
+   * stay asleep (no perks, no raising) until a second chief joins.
+   */
+  minMembers: 2,
+  /**
+   * Clan level: techs can be raised this many levels per clan level. When
+   * every tech reaches the cap the clan levels up and the cap rises by this
+   * much again. No top level for now: tech costs grow so fast that keeping
+   * all four techs raised is already the hard part.
+   */
+  techLevelsPerClanLevel: 5,
   /** Each Great Hall level adds this many member seats (on top of maxMembers). */
   seatsPerHallLevel: 5,
   /** Perk per tech level, in percent. */

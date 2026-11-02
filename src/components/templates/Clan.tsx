@@ -23,7 +23,6 @@ import { compact, formatDuration } from "@/lib/format";
 import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
 import {
   CLAN_TECHS,
-  CLAN_TECH_MAX_LEVEL,
   ClanFlag as Flag,
   ClanRole,
   JOIN_MODES,
@@ -113,6 +112,8 @@ function logText(e: Mine["log"][number]) {
 
       return { icon: tech?.icon ?? "🏛️", text: `${a} raised ${tech?.name ?? "a tech"} to level ${e.data.level}` };
     }
+    case "level":
+      return { icon: "⭐", text: `The clan reached level ${e.data.level}! Techs can now climb higher` };
     case "aid":
       return { icon: "📦", text: `${a} sent ${amount()} to ${t}` };
     case "flag":
@@ -232,6 +233,7 @@ const ClanSheet = ({ id, meId, onClose }: { id: number | null; meId: number; onC
               <div className="flex items-center gap-1.5 min-w-0">
                 <Tag tag={c.tag} />
                 <span className="text-[11px] font-bold text-goldtext">Level {c.level}</span>
+                {c.members.length < CLAN.minMembers && <span className="text-[11px] font-bold text-muted">Forming</span>}
                 {c.joinMode !== "open" && (
                   <span className="text-[11px] font-bold text-muted">
                     <IconText text={c.joinMode === "request" ? "✉️ By request" : "🔒 Closed"} />
@@ -641,9 +643,31 @@ export const Clan: FunctionComponent = () => {
       </Card>
 
       <SectionTitle right={<span className="text-xs font-bold text-muted">Every member gets these</span>}>Clan techs</SectionTitle>
+      <Card className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-parch">
+            <GameIcon e="⭐" /> Clan level {mine.level}
+          </span>
+          <span className="text-[11px] font-extrabold text-muted">Techs up to Lv {mine.techCap}</span>
+        </div>
+        <div className="flex gap-1">
+          {mine.techs.map((t) => (
+            <span
+              key={t.id}
+              className={clsx("h-1.5 flex-1 rounded-full", t.level >= mine.techCap ? "bg-gold" : "bg-panel2")}
+            />
+          ))}
+        </div>
+        <span className="text-[11px] text-sub">
+          Raise all {mine.techs.length} techs to level {mine.techCap} to reach clan level {mine.level + 1}. Each clan level
+          lets techs climb {CLAN.techLevelsPerClanLevel} levels higher.
+        </span>
+      </Card>
       {mine.techs.map((t) => {
         const def = TECH_BY_ID[t.id];
-        const maxed = t.level >= CLAN_TECH_MAX_LEVEL;
+        const maxed = t.level >= mine.techCap;
+        // The bar shows this clan level's stretch: levels 6-10 at clan level 2, and so on.
+        const stepStart = mine.techCap - CLAN.techLevelsPerClanLevel;
         const afford = !!t.cost && TREASURY_KEYS.every((k) => mine.treasury[k] >= t.cost![k]);
 
         return (
@@ -654,15 +678,18 @@ export const Clan: FunctionComponent = () => {
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-parch">{def.name}</span>
                   <span className="text-[11px] font-extrabold text-muted">
-                    Lv {t.level}/{CLAN_TECH_MAX_LEVEL}
+                    Lv {t.level}/{mine.techCap}
                   </span>
                 </div>
                 <span className="text-[11px] text-sub">{def.description}</span>
               </div>
             </div>
             <div className="flex gap-1">
-              {Array.from({ length: CLAN_TECH_MAX_LEVEL }, (_, i) => (
-                <span key={i} className={clsx("h-1.5 flex-1 rounded-full", i < t.level ? "bg-gold" : "bg-panel2")} />
+              {Array.from({ length: CLAN.techLevelsPerClanLevel }, (_, i) => (
+                <span
+                  key={i}
+                  className={clsx("h-1.5 flex-1 rounded-full", stepStart + i < t.level ? "bg-gold" : "bg-panel2")}
+                />
               ))}
             </div>
             <div className="text-xs font-bold">
@@ -684,7 +711,9 @@ export const Clan: FunctionComponent = () => {
                     </span>
                   ))}
                 </div>
-                {manager ? (
+                {!mine.formed ? (
+                  <span className="text-[11px] text-muted">Needs {CLAN.minMembers} members to raise techs.</span>
+                ) : manager ? (
                   <Button
                     disabled={busy != null || !afford}
                     size="small"
@@ -699,7 +728,11 @@ export const Clan: FunctionComponent = () => {
                 )}
               </>
             )}
-            {maxed && <span className="text-[11px] font-bold text-goldtext">Fully raised</span>}
+            {maxed && (
+              <span className="text-[11px] font-bold text-goldtext">
+                Raised for clan level {mine.level}. Bring every tech here to go further.
+              </span>
+            )}
           </Card>
         );
       })}
@@ -980,7 +1013,19 @@ export const Clan: FunctionComponent = () => {
               <Stat label="Power" value={compact(mine.power)} />
             </div>
 
-            <TechChips techs={mine.techs} />
+            {mine.formed ? (
+              <TechChips techs={mine.techs} />
+            ) : (
+              <Card className="flex flex-col gap-1 border-gold/40">
+                <span className="text-sm font-bold text-goldtext">
+                  <GameIcon e="🤝" /> Your clan is still forming
+                </span>
+                <span className="text-xs text-sub">
+                  A clan needs at least {CLAN.minMembers} members. Until another chief joins, clan techs give no perks and
+                  can't be raised. Donations wait safely in the treasury.
+                </span>
+              </Card>
+            )}
 
             <Tabs
               tabs={[
@@ -1073,6 +1118,9 @@ export const Clan: FunctionComponent = () => {
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </label>
+                <p className="text-[11px] text-sub">
+                  A clan needs at least {CLAN.minMembers} members: its techs wake up once a second chief joins.
+                </p>
                 <div className="flex items-center justify-between inset px-3 py-2 text-sm">
                   <span className="text-sub">Cost</span>
                   <Coin amount={CLAN.createCost} />
