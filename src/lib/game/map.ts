@@ -332,6 +332,43 @@ export function pickHomeSite(taken: Point[], rand: () => number = Math.random, t
   return null;
 }
 
+/**
+ * A better spot for a village already on the map (laid out on the old grid,
+ * or on ground the redrawn world turned to water or mountain): the best place
+ * near where it stands, picked like a new settler's (siteScore, shores
+ * first), so it moves only a little and its neighbours stay its neighbours.
+ * Looks within `reach` tiles (further for a village now on water or a
+ * mountain, to find the nearest good land), keeps `spacing` from every
+ * village already resettled or staying (`placed`), and never into a valley
+ * the mountains wall off. Stays put if nowhere nearby will do.
+ */
+export function resettleSpot(from: Point, placed: Point[], rand: () => number = Math.random, reach = 4, spacing = 4): Point {
+  const t = terrainAt(from.x, from.y);
+  const far = reach >= 18 ? reach : t === "sea" || t === "lake" ? 12 : t === "mountains" ? 7 : reach;
+  const near = placed.filter((q) => Math.abs(q.x - from.x) <= far + spacing && Math.abs(q.y - from.y) <= far + spacing);
+  const clear = (p: Point) => near.every((q) => distance(p, q) >= spacing);
+  const options: { p: Point; w: number }[] = [];
+
+  for (let dy = -far; dy <= far; dy++)
+    for (let dx = -far; dx <= far; dx++) {
+      const d = Math.hypot(dx, dy);
+
+      if (d > far) continue;
+      const p = { x: from.x + dx, y: from.y + dy };
+      const score = siteScore(p);
+
+      if (score <= 0 || !clear(p)) continue;
+      // Good ground close to home wins; a dash of chance so villages don't line up again.
+      options.push({ p, w: score * (1 - (d / (far + 1)) * 0.6) * (0.6 + rand() * 0.8) });
+    }
+  options.sort((a, b) => b.w - a.w);
+  for (const o of options.slice(0, 6)) if (unsettled(t) || !marchRoute(from, o.p).climbed) return o.p;
+  // Still on water or a mountain with no room near: look further, and settle a little closer to the others.
+  if (unsettled(t) && reach < 18) return resettleSpot(from, placed, rand, 18, 3);
+
+  return from;
+}
+
 /** About how many tribes the world holds: its good land, at the spacing tribes keep. */
 let CAPACITY = 0;
 

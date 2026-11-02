@@ -8,6 +8,7 @@ import {
   campPosition,
   homeSlot,
   pickHomeSite,
+  resettleSpot,
   siteScore,
   HOME_SPACING,
   HOME_NEAR,
@@ -198,4 +199,33 @@ test("new tribes settle at random, by the shore first, spaced out and near the o
   expect(xs.size).toBe(4);
   // The shore draws settlers: well over a third settle by water.
   expect(coastal / taken.length).toBeGreaterThan(0.35);
+});
+
+test("villages already on the map move a little, to good land, and stay neighbours", () => {
+  let seed = 3;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // The old grid: every 4 tiles round the middle, wherever the world put them.
+  const old: Point[] = [];
+  for (let y = 40; y <= 80; y += 4) for (let x = 40; x <= 80; x += 4) old.push({ x, y });
+  const placed: Point[] = [];
+  let wetBefore = 0;
+
+  for (const p of old) {
+    const t = terrainAt(p.x, p.y);
+    if (t === "sea" || t === "lake" || t === "mountains") wetBefore++;
+    const others = [...placed, ...old.slice(placed.length + 1)];
+    const to = resettleSpot(p, others, rand);
+    const tt = terrainAt(to.x, to.y);
+
+    // Never farther than it has to: a few tiles on land, a shore within reach from the water.
+    expect(Math.hypot(to.x - p.x, to.y - p.y)).toBeLessThanOrEqual(t === "sea" || t === "lake" || t === "mountains" ? 18 : 4);
+    if (!(to.x === p.x && to.y === p.y)) {
+      expect(["sea", "lake", "mountains"]).not.toContain(tt);
+      for (const q of placed) expect(Math.hypot(to.x - q.x, to.y - q.y)).toBeGreaterThanOrEqual(3);
+    }
+    placed.push(to);
+  }
+  // Off the water and mountains wherever there was land near.
+  const stuck = placed.filter((p) => ["sea", "lake", "mountains"].includes(terrainAt(p.x, p.y))).length;
+  expect(stuck).toBeLessThan(Math.max(1, wetBefore / 3));
 });
