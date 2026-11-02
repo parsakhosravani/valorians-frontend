@@ -930,6 +930,30 @@ export const WarMap = ({
   const merchants =
     data?.caravans?.filter((c) => c.kind !== "other" && c.arrivesAt > now) ??
     [];
+  // Every trade sends two loads that set off together and arrive together, so
+  // the list shows one row per trade (what you get, what you send, when it's
+  // done) rather than a row per load: four trades are four rows, not eight.
+  const trades = Object.values(
+    merchants.reduce<Record<string, { id: string; partner: string; coming?: Caravan; going?: Caravan; doneAt: number }>>(
+      (all, c) => {
+        // Both loads of a trade share its id: "<trade id>a" and "<trade id>b".
+        const id = c.id.slice(0, -1);
+        const t = (all[id] ??= { id, partner: "", doneAt: c.arrivesAt });
+
+        if (c.kind === "coming") {
+          t.coming = c;
+          t.partner = c.from.name;
+        } else {
+          t.going = c;
+          t.partner = c.to.name;
+        }
+        t.doneAt = Math.max(t.doneAt, c.arrivesAt);
+
+        return all;
+      },
+      {},
+    ),
+  ).sort((a, b) => a.doneAt - b.doneAt);
 
   /** One of your armies marching out, as something you can give orders. */
   const outbound = (m: Movement): ArmyOnRoad => ({
@@ -1370,7 +1394,7 @@ export const WarMap = ({
               {mine.length + returning.length > 0 && (
                 <span className="text-parch"><GameIcon e="🚩" /> {mine.length + returning.length} on the road</span>
               )}
-              {merchants.length > 0 && <span className="text-sub"><GameIcon e="🐪" /> {merchants.length}</span>}
+              {trades.length > 0 && <span className="text-sub"><GameIcon e="🐪" /> {trades.length}</span>}
               <span className={clsx("ml-auto text-sub transition-transform", movesOpen && "rotate-180")}>▾</span>
             </button>
             {movesOpen && (
@@ -1440,39 +1464,30 @@ export const WarMap = ({
                   })()}
                 </div>
               ))}
-              {merchants.map((c) => (
+              {trades.map((t) => (
                 <div
-                  key={c.id}
-                  className={clsx(
-                    "flex items-center gap-2 card px-2.5 py-1.5 text-sm",
-                    c.kind === "coming" ? "border-[#5E7F45]" : "border-line",
-                  )}
+                  key={t.id}
+                  className="flex items-center gap-2 card px-2.5 py-1.5 text-sm border-[#5E7F45]"
                 >
                   <span className="text-base"><GameIcon e="🐪" /></span>
-                  <span className="flex-1 min-w-0 truncate">
-                    {c.kind === "coming" ? (
-                      <>
-                        <b>
-                          {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
-                        </b>{" "}
-                        coming from {c.from.name}
-                      </>
-                    ) : (
-                      <>
-                        <b>
-                          {fmt(c.amount)} {RESOURCE_NAMES[c.resource]}
-                        </b>{" "}
-                        on its way to {c.to.name}
-                      </>
-                    )}
+                  <span className="flex-1 min-w-0">
+                    Trade with <b>{t.partner}</b>
+                    <span className="block text-xs text-muted">
+                      {t.coming && (
+                        <span className="text-good">
+                          +{fmt(t.coming.amount)} {RESOURCE_NAMES[t.coming.resource]}
+                        </span>
+                      )}
+                      {t.coming && t.going && " · "}
+                      {t.going && (
+                        <span>
+                          −{fmt(t.going.amount)} {RESOURCE_NAMES[t.going.resource]}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                  <span
-                    className={clsx(
-                      "font-display font-black shrink-0",
-                      c.kind === "coming" ? "text-good" : "text-sub",
-                    )}
-                  >
-                    <Countdown to={c.arrivesAt} />
+                  <span className="font-display font-black text-good shrink-0">
+                    <Countdown to={t.doneAt} />
                   </span>
                 </div>
               ))}
