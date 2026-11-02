@@ -39,6 +39,15 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Barbarian camps are endless** (no level-30 cap) and have **names, not numbers**.
   Rewards past level 30 were too high; they now grow gently while camps keep getting tougher.
 
+## Clans
+
+- **Clan level:** techs climb 5 levels per clan level. When **every** tech reaches the cap, the
+  clan levels up and the cap rises by 5 (5, 10, 15, …). **No top level for now**: costs grow
+  fast, so keeping all techs raised is the hard part.
+- **A clan needs at least 2 members.** A chief alone can found one, but it is *forming*: its
+  techs give no perks and can't be raised until a second chief joins (and stop again if it
+  drops back to one).
+
 ## Economy
 
 - When **crop runs out, troops desert** (slowly, per hour of starving).

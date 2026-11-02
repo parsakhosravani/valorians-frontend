@@ -19,12 +19,12 @@ import {
   TechId,
   Techs,
   Treasury,
-  CLAN_TECH_MAX_LEVEL,
   can,
   canAfford,
   canKick,
   clanLevel,
   contributionValue,
+  isFormed,
   isResource,
   isTreasuryKey,
   maxMembers,
@@ -32,6 +32,7 @@ import {
   perksFor,
   samePerks,
   storedFlag,
+  techCap,
   techCost,
 } from "@/lib/game/clan";
 import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
@@ -45,6 +46,10 @@ import { GameError, getRates } from "@/lib/game/engine";
  *   accept requests, remove warriors, spend the treasury and edit the flag
  * - members donate resources and coins to the treasury; officers spend it on
  *   clan techs (perks for every member) or send aid to a member
+ * - a clan of one is still forming: its techs give nothing and can't be
+ *   raised until a second chief joins (CLAN.minMembers)
+ * - techs climb 5 levels per clan level; when all reach the cap the clan
+ *   levels up and the cap rises (see clanLevel)
  * - when the leader leaves, the longest-serving officer (or else member)
  *   takes over; the last member to leave disbands the clan
  * Membership is users.clan_id, so a player is in at most one clan. Tech perks
@@ -179,6 +184,7 @@ type LogKind =
   | "leader"
   | "donated"
   | "tech"
+  | "level"
   | "aid"
   | "flag"
   | "settings";
@@ -205,25 +211,56 @@ async function setPerks(userId: number, perks: ClanPerks, now: number) {
   return mutatePlayer(userId, now, (s) => ({ ...s, clanPerks: { ...perks } }));
 }
 
-/** Brings every member's perks in line with the clan's techs. */
+/**
+ * Brings every member's perks in line with the clan's techs and size. Run it
+ * after any membership change too: a clan crossing CLAN.minMembers turns
+ * everyone's perks on or off.
+ */
 async function syncClanPerks(clanId: number, now: number) {
   const db = await getDb();
   const c = await clanRow(clanId);
 
   if (!c) return;
-  const perks = perksFor(techsOf(c));
   const rs = await db.execute({ sql: "SELECT id FROM users WHERE clan_id = ?", args: [clanId] });
+  const perks = perksFor(techsOf(c), rs.rows.length);
 
   await Promise.all(rs.rows.map((r) => setPerks(Number(r.id), perks, now).catch(() => null)));
 }
 
-/** Returns the player with fresh state after a membership change (perks applied). */
+/** Returns the player with fresh state after a membership change (perks applied for them and their clan). */
 async function afterMembership(player: Player, clanId: number | null, now: number): Promise<Player> {
-  const c = clanId == null ? null : await clanRow(clanId);
-  const perks = c ? perksFor(techsOf(c)) : NO_PERKS;
-  const p = await setPerks(player.id, perks, now);
+  if (clanId == null) {
+    const p = await setPerks(player.id, NO_PERKS, now);
 
-  return { ...(p ?? player), clanId };
+    return { ...(p ?? player), clanId };
+  }
+  await syncClanPerks(clanId, now);
+
+  return { ...((await findById(player.id)) ?? player), clanId };
+}
+
+/**
+ * Clans of one from before the two-member rule kept their perks. After each
+ * ranking pass (which counts members), take them away.
+ */
+async function stripLonePerks(now: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT u.id FROM users u JOIN clans c ON c.id = u.clan_id
+          WHERE c.sum_members < ?
+            AND (COALESCE(json_extract(u.state, '$.clanPerks.production'), 0) != 0
+              OR COALESCE(json_extract(u.state, '$.clanPerks.attack'), 0) != 0
+              OR COALESCE(json_extract(u.state, '$.clanPerks.defense'), 0) != 0)
+          LIMIT 200`,
+    args: [CLAN.minMembers],
+  });
+
+  for (const r of rs.rows) {
+    const id = Number(r.id);
+    const p = await findById(id);
+
+    if (p?.clanId != null) await syncClanPerks(p.clanId, now).catch(() => null);
+  }
 }
 
 // ─── Reading ─────────────────────────────────────────────────────────────────
@@ -234,7 +271,13 @@ export async function clanView(player: Player, search?: string) {
   const q = clean(search).slice(0, CLAN.nameMax);
 
   // Someone is looking: rank now if the last pass is over a minute old.
-  await maybeRefreshRanks().catch((e) => console.error("maybeRefreshRanks", e));
+  const ranked = await maybeRefreshRanks().catch((e) => {
+    console.error("maybeRefreshRanks", e);
+
+    return false;
+  });
+
+  if (ranked) await stripLonePerks(Date.now()).catch((e) => console.error("stripLonePerks", e));
   const [list, reqs] = await db.batch(
     [
       {
@@ -294,6 +337,7 @@ export async function clanView(player: Player, search?: string) {
         joinedAt: m.clan_joined_at == null ? null : Number(m.clan_joined_at),
       }));
       const myRole = mapped.find((m) => m.id === player.id)?.role ?? "member";
+      const cap = techCap(techs);
 
       mine = {
         ...c,
@@ -304,9 +348,11 @@ export async function clanView(player: Player, search?: string) {
         techs: CLAN_TECHS.map((t) => ({
           id: t.id,
           level: techs[t.id],
-          cost: techs[t.id] < CLAN_TECH_MAX_LEVEL ? techCost(techs[t.id]) : null,
+          cost: techs[t.id] < cap ? techCost(techs[t.id]) : null,
         })),
-        perks: perksFor(techs),
+        techCap: cap,
+        formed: isFormed(mapped.length),
+        perks: perksFor(techs, mapped.length),
         // Only officers see who's waiting at the gate.
         requests: can.manage(myRole)
           ? requests.rows
@@ -629,6 +675,8 @@ export async function leaveClan(player: Player, now: number): Promise<Player> {
   } else {
     await log(clanId, now, "left", player.id);
   }
+  // Those who stay may have dropped below CLAN.minMembers.
+  if (clan) await syncClanPerks(clanId, now);
 
   return afterMembership(player, null, now);
 }
@@ -653,6 +701,7 @@ export async function kickMember(player: Player, body: any, now: number): Promis
 
   if (rs.rowsAffected !== 1) throw new GameError("That player isn't in your clan", "not_member");
   await setPerks(target, NO_PERKS, now);
+  await syncClanPerks(clanId, now);
   await log(clanId, now, "kicked", player.id, target);
 }
 
@@ -833,14 +882,22 @@ export async function upgradeTech(player: Player, body: any, now: number) {
 
   if (!TECH_IDS.includes(tech)) throw new GameError("Pick a tech", "bad_request");
   const { clan, clanId } = await requireRole(player, can.manage, "Only the Jarl and Huscarls can spend the treasury");
-  const level = techsOf(clan)[tech];
+  const techs = techsOf(clan);
+  const level = techs[tech];
+  const db = await getDb();
+  const count = await db.execute({ sql: "SELECT COUNT(*) AS n FROM users WHERE clan_id = ?", args: [clanId] });
 
-  if (level >= CLAN_TECH_MAX_LEVEL) throw new GameError("That tech is already at its highest level", "max_level");
+  if (!isFormed(Number(count.rows[0]?.n ?? 0)))
+    throw new GameError(`A clan needs at least ${CLAN.minMembers} members before it can raise techs`, "not_formed");
+  if (level >= techCap(techs))
+    throw new GameError(
+      `Raise every tech to level ${techCap(techs)} to reach clan level ${clanLevel(techs) + 1}`,
+      "max_level"
+    );
   const cost = techCost(level);
 
   if (!canAfford(treasuryOf(clan), cost)) throw new GameError("The treasury can't cover that yet. Ask your clan to donate!", "not_enough");
 
-  const db = await getDb();
   const tcol = TECH_COL[tech];
   // One statement: checks the level and the funds and pays, so two officers can't both buy it.
   const rs = await db.execute({
@@ -853,6 +910,9 @@ export async function upgradeTech(player: Player, body: any, now: number) {
   if (rs.rowsAffected !== 1) throw new GameError("The treasury changed. Try again.", "conflict");
   await log(clanId, now, "tech", player.id, null, { tech, level: level + 1 });
   if (tech !== "hall") await syncClanPerks(clanId, now);
+  const after = { ...techs, [tech]: level + 1 };
+
+  if (clanLevel(after) > clanLevel(techs)) await log(clanId, now, "level", null, null, { level: clanLevel(after) });
 
   return { tech: TECH_BY_ID[tech].name, level: level + 1 };
 }
