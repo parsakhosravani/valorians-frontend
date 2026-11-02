@@ -21,8 +21,8 @@ const army = (a: Partial<E.Army>) => ({ ...E.emptyArmy(), ...a });
 
 /** A pair of land tiles with open sea between them and no sensible way round on foot. */
 function acrossTheSea(): { a: Point; b: Point } {
-  for (let y = 40; y < 80; y++) {
-    for (let x = 40; x < 80; x++) {
+  for (let y = 0; y < 120; y++) {
+    for (let x = 0; x < 120; x++) {
       if (seaAt(x, y) || !seaAt(x + 1, y)) continue;
       for (let k = 3; k < 12; k++) {
         if (seaAt(x + k, y)) continue;
@@ -46,16 +46,17 @@ function overLand(): { a: Point; b: Point } {
   throw new Error("no land near the middle of the map");
 }
 
-test("the world has seas, but not too much of it, and the heart of the map is land", () => {
+test("the world is the real North: much of it sea, the heart of the map land, with water near the first tribes", () => {
   let wet = 0;
   for (let y = MAP_MIN; y < MAP_MAX; y++) for (let x = MAP_MIN; x < MAP_MAX; x++) if (seaAt(x, y)) wet++;
   const share = wet / (MAP_SIZE * MAP_SIZE);
-  expect(share).toBeGreaterThan(0.12);
-  expect(share).toBeLessThan(0.45);
+  // The North Sea, the Norwegian Sea and the Baltic: a little over half the map.
+  expect(share).toBeGreaterThan(0.4);
+  expect(share).toBeLessThan(0.65);
   expect(seaAt(60, 60)).toBe(false);
   // Something to sail across within reach of the first tribes.
   let near = 0;
-  for (let y = 45; y < 75; y++) for (let x = 45; x < 75; x++) if (seaAt(x, y)) near++;
+  for (let y = 30; y < 90; y++) for (let x = 30; x < 90; x++) if (seaAt(x, y)) near++;
   expect(near).toBeGreaterThan(20);
 });
 

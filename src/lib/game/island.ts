@@ -35,17 +35,30 @@ export type ClaimShape = {
 export const PLAIN_CLAIM: ClaimShape = { w: 1, h: 1 };
 
 /**
- * The land round `home`, with its island raised when it sits at sea; just `base` when it doesn't.
+ * The land round `home`, with its island raised when it sits on water (or the
+ * mountain round it worn to hills); just `base` when it's on open land.
  * The island takes the claim's shape (see ClaimShape).
  */
 export function islandTerrain(home: Point | null | undefined, base: TerrainAt = terrainAt, claim: ClaimShape = PLAIN_CLAIM): TerrainAt {
-  if (!home || base(home.x, home.y) !== "sea") return base;
+  // A tribe on water (the world was redrawn under it): an island of its own in the sea or lake.
+  const wet = (t: string) => t === "sea" || t === "lake";
+
+  if (!home) return base;
   const { x: hx, y: hy } = home;
+
+  // A tribe on a mountain (likewise): the ground round its hall worn down to hills.
+  if (base(hx, hy) === "mountains")
+    return (x, y) => {
+      const t = base(x, y);
+
+      return t === "mountains" && Math.hypot((x - hx) / claim.w, (y - hy) / (0.92 * claim.h)) <= 1.6 ? "hills" : t;
+    };
+  if (!wet(base(hx, hy))) return base;
 
   return (x, y) => {
     const t = base(x, y);
 
-    if (t !== "sea") return t;
+    if (!wet(t)) return t;
     const d = Math.hypot((x - hx) / claim.w, (y - hy) / (0.92 * claim.h));
 
     if (d > ISLAND_RADIUS) return t;
