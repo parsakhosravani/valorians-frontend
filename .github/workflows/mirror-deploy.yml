@@ -9,6 +9,11 @@ name: Deploy mirror
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to build the mirror from (until the mirror is merged into main)
+        default: mirror/telegram-serverless
+        required: true
 
 concurrency:
   group: mirror-deploy
@@ -20,6 +25,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: oven-sh/setup-bun@v2
         with:
