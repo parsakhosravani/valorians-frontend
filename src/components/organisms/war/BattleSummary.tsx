@@ -4,9 +4,7 @@ import clsx from "clsx";
 
 import { ArmyLine, fmt } from "./shared";
 
-import { Button } from "@/components/atoms/Button";
-import { Drawer } from "@/components/molecules/Drawer";
-import { BattleReport, RESOURCES, useLiveWhile } from "@/context";
+import { BattleReport, RESOURCES } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { armySize } from "@/lib/game/war";
 import { RANKS, unitPlural } from "@/lib/game/config";
@@ -137,30 +135,5 @@ export const BattleSummary = ({ report, asDefender = false }: { report: BattleRe
         </div>
       )}
     </div>
-  );
-};
-
-export const BattleResultDrawer = ({ report, onClose }: { report: BattleReport | null; onClose: () => void }) => {
-  // The clock only while open: closed, it stays mounted without redrawing.
-  const { now } = useLiveWhile(!!report);
-  const home = report && armySize(report.sent) - armySize(report.attackerLosses) > 0;
-
-  return (
-    <Drawer isOpen={!!report} position="bottom" onClose={onClose}>
-      {report && (
-        <div className="flex flex-col gap-3">
-          <BattleSummary report={report} />
-          {home && (
-            <p className="text-center text-sm text-muted">
-              Your army returns in {formatDuration(report.returnsAt - now)}
-              {report.attackerWon ? " with the loot" : ""}.
-            </p>
-          )}
-          <Button isFull onClick={onClose}>
-            OK
-          </Button>
-        </div>
-      )}
-    </Drawer>
   );
 };

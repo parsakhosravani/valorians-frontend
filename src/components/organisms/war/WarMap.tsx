@@ -483,12 +483,10 @@ const Travellers = ({
 
 export const WarMap = ({
   onAttack,
-  onBattleDone,
   focusId,
   focusCamp,
 }: {
   onAttack: (t: AttackTarget) => void;
-  onBattleDone: (r: BattleReport) => void;
   focusId?: number;
   /** Open on this barbarian camp (by level) with its card up. */
   focusCamp?: number;
@@ -572,7 +570,8 @@ export const WarMap = ({
       if (delivered && !finished.length) refresh();
       setError(null);
       if (finished.length) {
-        // A battle was fought: bring the tribe up to date and show the result.
+        // A battle was fought: bring the tribe up to date and buzz the phone. The result
+        // itself arrives as a notice at the top (tap it for the full report), so no sheet.
         await refresh();
         const r = await apiRequest<{ reports: ReportItem[] }>(
           authHeader,
@@ -586,13 +585,12 @@ export const WarMap = ({
           telegram?.WebApp.HapticFeedback.notificationOccurred(
             hit.report.attackerWon ? "success" : "error",
           );
-          onBattleDone(hit.report);
         }
       }
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [authHeader, focusId, refresh, onBattleDone, telegram]);
+  }, [authHeader, focusId, refresh, telegram]);
 
   // Poll, and check again right after the next army arrives.
   useEffect(() => {

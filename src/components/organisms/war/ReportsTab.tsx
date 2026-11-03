@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 
 import { Card, fmt } from "./shared";
-import { BattleSummary } from "./BattleResultDrawer";
+import { BattleSummary } from "./BattleSummary";
 
 import { Drawer } from "@/components/molecules/Drawer";
 import { BattleReport, RESOURCES, useGame } from "@/context";
