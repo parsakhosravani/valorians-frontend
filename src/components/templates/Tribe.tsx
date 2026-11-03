@@ -7,10 +7,11 @@ import clsx from "clsx";
 import builderImg from "~/images/resources/builder.webp";
 
 import { Building } from "@/components/organisms/tribe/Building";
+import { Outposts } from "@/components/organisms/tribe/Outposts";
 import { Drawer } from "@/components/molecules/Drawer";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
-import { BUILDING_BY_ID, BuildingDef, RESOURCE_NAMES, ResourceId, buildingImage, costTotal } from "@/lib/game/config";
+import { BUILDING_BY_ID, BuildingDef, MASTERY, RESOURCE_NAMES, ResourceId, buildingImage, canMaster, costTotal } from "@/lib/game/config";
 import {
   BuildingGroup,
   GROUP_LABEL,
@@ -47,6 +48,10 @@ const BuildingThumb = ({ b, level, size = 52 }: { b: BuildingDef; level: number;
 const StatusLine = ({ o }: { o: UpgradeOption }) => {
   const short = Object.entries(o.missing) as [ResourceId, number][];
 
+  if (o.blocked === "Max level" && canMaster(o.building)) {
+    return <span className="text-xs text-goldtext truncate">Mastery {o.stars}/{MASTERY.stars} ★</span>;
+  }
+  if (o.blocked) return <span className="text-xs text-muted truncate">{o.blocked}</span>;
   if (!short.length) {
     return (
       <span className="text-xs text-muted tabular-nums truncate">
@@ -227,7 +232,7 @@ export const Tribe: FunctionComponent = () => {
                 : ""}
           </span>
           <InfoDrawer
-            content="Each builder works on one building at a time. Upgrade your Town Hall to hire another builder every 5 levels, and to build faster."
+            content="Each builder works on one building at a time. Upgrade your Town Hall to build faster and to hire a second builder at level 10 and a third at 20. No building can be higher than the Town Hall (mines and the Warehouse may be 2 levels ahead)."
             title="Builders"
           />
         </div>
@@ -262,6 +267,9 @@ export const Tribe: FunctionComponent = () => {
           {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
         </div>
       </section>
+
+      {/* Outposts open up at Town Hall 10; until then they'd only be a promise. */}
+      {(rates.builders > 1 || state.outposts.length > 0 || (state.buildings["town-hall"] ?? 0) >= 8) && <Outposts />}
 
       <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
         {open && (

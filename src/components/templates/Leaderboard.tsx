@@ -49,7 +49,7 @@ const RankRow = ({ r, metric }: { r: Row; metric: Metric }) => (
 
 export const Leaderboard = () => {
   const { authHeader } = useGameStatus();
-  const [metric, setMetric] = useState<Metric>("population");
+  const [metric, setMetric] = useState<Metric>("power");
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,8 +67,8 @@ export const Leaderboard = () => {
         <ScreenHeader className="pt-1" subtitle="The mightiest tribes of the north" title="Leaderboard" />
         <Tabs
           tabs={[
-            { id: "population", label: "Population" },
             { id: "power", label: "Power" },
+            { id: "population", label: "Population" },
             { id: "wins", label: "Victories" },
           ]}
           value={metric}

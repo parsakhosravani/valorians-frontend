@@ -7,6 +7,7 @@ Players grow a tribe, build, train troops, raid players and barbarian camps, joi
 Read this file first. For depth, read only what the task needs:
 - `docs/ARCHITECTURE.md` — how a request flows, how state is saved, battles, bot, payments.
 - `docs/GAME_DESIGN.md` — the owner's design decisions. **Follow them; don't "fix" them.**
+- `docs/VERSION_2.md` — what Valorians 2 changed, and where each system lives.
 
 ## Commands
 
@@ -16,6 +17,7 @@ bun dev              # http://localhost:3000 (needs NEXT_PUBLIC_DEV_LOGIN=true i
 bun run check        # typecheck + lint + test — run before saying a task is done
 bun run test         # bun:test, tests sit next to the code (*.test.ts)
 bun run build        # CI runs this too
+bun run e2e          # browser tests (Playwright, e2e/): starts its own dev server on :3100
 ```
 
 Add `?dev_user=2` to the URL to play as another test player.
@@ -42,6 +44,12 @@ Add `?dev_user=2` to the URL to play as another test player.
 9. **Secrets:** `.env` is committed defaults only. Real values go in `.env.local` or the host.
    Never commit a bot token. Never set `NEXT_PUBLIC_DEV_LOGIN` in production.
 10. Add or update a test in `src/lib/game/*.test.ts` for every rule or balance change.
+11. **`physics.test.ts` (laws) and `balance.test.ts` (pacing) must pass.** Physics failing = a bug
+    in your rule. Balance failing = your change moved the game's pace: change the numbers back,
+    or update the expectation and say why in the PR. New rules that move resources, people or
+    troops get a conservation/bounds check there.
+12. Lookup tables keyed by client input (`BUILDING_BY_ID`, `UNIT_BY_ID`, …) are built with
+    `table()` (no prototype), so ids like `__proto__` are refused, not crashes.
 
 ## Where things are
 
@@ -55,7 +63,8 @@ Add `?dev_user=2` to the URL to play as another test player.
 | Route wrapper (auth, errors, battle sweep) | `src/server/http.ts` |
 | DB + tables + `SCHEMA_VERSION` | `src/server/db.ts` |
 | Load/save players, `playerView` (what the client receives) | `src/server/players.ts` |
-| Server side of war, clans, trade, bandits, map | `src/server/war.ts`, `clans.ts`, `trade.ts`, `bandits.ts`, `map.ts` |
+| Server side of war, clans (+ seasons/World Wonder), trade, bandits, map, outposts | `src/server/war.ts`, `clans.ts`, `trade.ts`, `bandits.ts`, `map.ts`, `outposts.ts` |
+| Game physics (laws) and pacing tests | `src/lib/game/physics.test.ts`, `balance.test.ts` |
 | Telegram bot, announcements, notifications, payments | `src/server/bot.ts`, `announce.ts`, `notify.ts`, `plus.ts` |
 | API routes | `src/app/api/**/route.ts` |
 | Client fetch + sign-in header | `src/lib/api.ts` |
@@ -91,7 +100,7 @@ Then call it from the client through `src/lib/api.ts` / `useGame()`.
 
 **New building** — add a `def(...)` entry to `BUILDINGS` in config.ts (id is the name in kebab-case),
 add its effect to `BuildingEffect` if new and handle it in `getRates`, add the image
-`public/images/buildings/<Name>.webp`. Buildings have **no max level**.
+`public/images/buildings/<Name>.webp`. Buildings have a top (`maxLevel`, default 20) and can't pass the Town Hall (see `buildingCap`).
 
 **New troop** — add the id to `UNIT_IDS` and a `UnitDef` to `UNITS`, image in `public/images/troops/`,
 check `war.ts` (unlocks, special bonuses) and `normalizeState` (troops map is built from `UNIT_IDS`).

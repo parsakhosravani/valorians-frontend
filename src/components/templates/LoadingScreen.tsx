@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+
+import { ErrorPage } from "@/components/templates/ErrorPage";
 import clsx from "clsx";
 
 import bg from "~/images/background/intro.webp";
@@ -25,7 +27,7 @@ const TIPS = [
   "Upgrade your Hideout so raiders can't take everything.",
   "Claim your streak every day — day 7 opens a chest.",
   "Rams break enemy walls. Bring some to well-defended tribes.",
-  "Beaten barbarian camps can be raided again every hour.",
+  "Beaten barbarian camps can be raided again every 6 hours.",
   "Raided while away? The Hall has a Revenge button.",
   "Town Hall level 5 gives you a second builder.",
 ];
@@ -115,6 +117,11 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
     ] as const
   ).filter(([id]) => questLink(id));
 
+  // Couldn't reach the server (or it's down for maintenance): the one error page.
+  if (status === "error") {
+    return <ErrorPage detail={error} kind={/upgraded|maintenance/i.test(error ?? "") ? "maintenance" : "offline"} onAction={retry} />;
+  }
+
   return (
     <div className="fixed inset-0 max-w-md mx-auto overflow-hidden bg-ground text-parch">
       <Image
@@ -143,18 +150,7 @@ export const LoadingScreen = ({ onDone }: { onDone?: () => void }) => {
 
         <div className="flex-1" />
 
-        {status === "error" ? (
-          <div className="w-full flex flex-col items-center gap-3 text-center" role="alert">
-            <p className="font-display font-bold text-lg">The gates won&apos;t open</p>
-            <p className="text-sm text-sub">{error || "We couldn't reach your tribe. Check your connection."}</p>
-            <button
-              className="btn btn-gold btn-lg px-8"
-              onClick={retry}
-            >
-              Try again
-            </button>
-          </div>
-        ) : (
+        {(
           <div className="w-full flex flex-col items-center gap-3">
             <div
               aria-label="Loading"

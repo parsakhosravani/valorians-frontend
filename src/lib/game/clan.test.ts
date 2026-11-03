@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import * as C from "./clan";
 import * as E from "./engine";
-import { CLAN } from "./config";
+import { CLAN, WONDER } from "./config";
 
 const T0 = Date.UTC(2026, 9, 26, 10);
 
@@ -92,4 +92,53 @@ test("a clan of one is still forming: no perks until a second chief joins", () =
     attack: 5 * CLAN.bannersPercent,
     defense: 5 * CLAN.shieldwallPercent,
   });
+});
+
+test("clan perks stop at their top while clan levels go on", () => {
+  const techs = { hall: 40, fields: 40, banners: 40, shieldwall: 40 };
+  const p = C.perksFor(techs, 5);
+  expect(p.attack).toBe(CLAN.perkMaxLevel * CLAN.bannersPercent); // +30%
+  expect(p.defense).toBe(CLAN.perkMaxLevel * CLAN.shieldwallPercent); // +30%
+  expect(p.production).toBe(CLAN.perkMaxLevel * CLAN.fieldsPercent); // +45%
+  // The clan still levels up, and the Great Hall still adds seats.
+  expect(C.clanLevel(techs)).toBe(9);
+  expect(C.maxMembers(techs)).toBe(CLAN.maxMembers + 40 * CLAN.seatsPerHallLevel);
+  // Below the top, every level still counts.
+  expect(C.perksFor({ ...techs, banners: 10 }, 5).attack).toBe(10 * CLAN.bannersPercent);
+});
+
+test("aid is limited to a day of the member's own output, and not for brand-new members", () => {
+  const s = E.createInitialState(0);
+  const rates = E.getRates(s);
+  const day = Math.floor(rates.productionPerHour.iron * CLAN.aidDailyHours);
+  expect(C.aidRoom("iron", rates, 0)).toBe(day);
+  expect(C.aidRoom("iron", rates, day - 100)).toBe(100);
+  expect(C.aidRoom("iron", rates, day * 5)).toBe(0);
+  expect(C.aidRoom("coins", rates, 0)).toBe(Math.floor(rates.coinsPerHour * CLAN.aidDailyHours));
+  // Crop: at least the other resources' average, so an army's appetite doesn't block it.
+  const hungry = { ...rates, productionPerHour: { ...rates.productionPerHour, crop: -50 } };
+  expect(C.aidRoom("crop", hungry, 0)).toBeGreaterThan(0);
+  expect(C.aidTooSoon(null, 0)).toBe(true);
+  expect(C.aidTooSoon(0, CLAN.aidMinTenureMs - 1)).toBe(true);
+  expect(C.aidTooSoon(0, CLAN.aidMinTenureMs)).toBe(false);
+});
+
+test("the World Wonder: rising costs, a wait between levels, and a season's worth of work", () => {
+  for (let l = 1; l < WONDER.levels; l++) expect(C.wonderCost(l).iron).toBeGreaterThan(C.wonderCost(l - 1).iron);
+  let total = 0;
+  for (let l = 0; l < WONDER.levels; l++) total += C.wonderCost(l).iron;
+  // Weeks of a big clan's production, and never less than levels × the wait.
+  expect(total).toBeGreaterThan(50e6);
+  expect(total).toBeLessThan(100e6);
+  expect((WONDER.levels * WONDER.levelMs) / 86400e3).toBeGreaterThanOrEqual(7);
+
+  const techs = { hall: 5, fields: 5, banners: 5, shieldwall: 5 }; // clan level 2
+  const rich = { iron: 1e9, wood: 1e9, clay: 1e9, crop: 1e9, coins: 1e9 };
+  const base = { techs, members: 5, level: 0, nextAt: 0, treasury: rich };
+  expect(C.wonderBlocked(base, 0)).toBeNull();
+  expect(C.wonderBlocked({ ...base, members: 1 }, 0)).toContain("members");
+  expect(C.wonderBlocked({ ...base, techs: { ...techs, fields: 4 } }, 0)).toContain("clan level");
+  expect(C.wonderBlocked({ ...base, nextAt: 10 }, 5)).toContain("still at work");
+  expect(C.wonderBlocked({ ...base, level: WONDER.levels }, 0)).toContain("complete");
+  expect(C.wonderBlocked({ ...base, treasury: C.emptyTreasury() }, 0)).toContain("treasury");
 });

@@ -5,7 +5,7 @@ import type { Army, BanditRaid, BanditRaidReport } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
 import { whole } from "@/lib/format";
-import { appUrl } from "./appUrl";
+import { appUrl, webAppUrl } from "./appUrl";
 import { recordNotice } from "./notices";
 
 /**
@@ -67,7 +67,7 @@ export async function sendToPlayer(userId: number, html: string, button = "⚔�
         text: html,
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
-        reply_markup: { inline_keyboard: [[{ text: button, web_app: { url: `${appUrl()}${path}` } }]] },
+        reply_markup: { inline_keyboard: [[{ text: button, web_app: { url: webAppUrl(path) } }]] },
       }),
     });
   } catch {
@@ -83,6 +83,16 @@ export const notify = {
       officerId,
       `🛡️ <b>${esc(chief)}</b> asks to join <b>${esc(clan)}</b>.`,
       "🛡️ Review request",
+      "/clan"
+    );
+  },
+
+  seasonWon(userId: number, tag: string, season: number, coins: number) {
+    return sendToPlayer(
+      userId,
+      `🏛️ <b>Your clan [${esc(tag)}] finished the World Wonder and won season ${season}!</b>\n\n` +
+        `+${coins.toLocaleString("en-US")} coins. Every Wonder has fallen: a new season begins.`,
+      "🏛️ Open clan",
       "/clan"
     );
   },

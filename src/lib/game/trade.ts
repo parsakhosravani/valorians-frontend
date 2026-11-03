@@ -7,13 +7,23 @@
  * Pure functions shared by the server (authoritative) and the client (to show
  * limits and validate the form before sending).
  */
-import { RESOURCE_IDS, ResourceId, guardCost } from "./config";
+import { EXCHANGE_RATE, RESOURCE_IDS, ResourceId, compoundAt, guardCost } from "./config";
 import { GameError, GameState, cloneState, getRates } from "./engine";
 
 export const TRADING_POST = "trading-post";
 
-/** Each Trading Post level adds one merchant: one more open offer and this much more per load. */
+/**
+ * Each Trading Post level adds one merchant (one more open offer), and a load
+ * can hold MERCHANT_CARRY at level 1 and 15% more for each level after.
+ * Was +1,000 a level (20,000 at level 20) while late warehouses hold 800,000
+ * and buildings leave hundreds of thousands of one resource unused: the market
+ * couldn't move what the late game needs. Now ~100,000 at level 20.
+ */
 export const MERCHANT_CARRY = 1000;
+const MERCHANT_CARRY_GROWTH = 1.15;
+
+/** Most one merchant can carry at a Trading Post level. */
+export const merchantLoad = (level: number) => Math.round(compoundAt(MERCHANT_CARRY, level, MERCHANT_CARRY_GROWTH) / 100) * 100;
 /** Smallest amount worth sending a merchant for. */
 export const MIN_TRADE_AMOUNT = 50;
 /** Offers must ask between half and double what they give (stops gifting through the market). */
@@ -37,7 +47,7 @@ const tradingPostLevel = (s: GameState) =>
 export const tradeLimits = (s: GameState) => {
   const level = tradingPostLevel(s);
 
-  return { level, maxOffers: level, maxAmount: level * MERCHANT_CARRY };
+  return { level, maxOffers: level, maxAmount: merchantLoad(level) };
 };
 
 export const tradeTravelMs = (tiles: number) =>
@@ -149,6 +159,34 @@ export function refundGuards(s0: GameState, amount: number): GameState {
   const s = cloneState(s0);
 
   s.coins += guardCost(amount);
+
+  return s;
+}
+
+/** What the Merchant of the North gives back for `amount` (see EXCHANGE_RATE). */
+export const exchangeReturn = (amount: number) => Math.floor(amount * EXCHANGE_RATE);
+
+/**
+ * Swaps `amount` of one resource for another with the game's merchant, at
+ * once and at a loss. Refused when it wouldn't fit the warehouse rather than
+ * throwing the rest away.
+ */
+export function exchange(s0: GameState, give: unknown, want: unknown, rawAmount: unknown): GameState {
+  if (!isResource(give) || !isResource(want)) throw new GameError("Pick what to give and what you want");
+  if (give === want) throw new GameError("Swap two different resources");
+  const amount = Math.floor(Number(rawAmount));
+
+  if (!(amount >= MIN_TRADE_AMOUNT)) throw new GameError(`Swap at least ${MIN_TRADE_AMOUNT}`);
+  requirePost(s0, amount);
+  if (s0.resources[give] < amount) throw new GameError(`Not enough ${give}`, "not_enough_resources");
+  const got = exchangeReturn(amount);
+  const room = getRates(s0).capacity - s0.resources[want];
+
+  if (got > room) throw new GameError(`Your warehouse only has room for ${Math.max(0, Math.floor(room)).toLocaleString("en-US")} ${want}`, "no_room");
+  const s = cloneState(s0);
+
+  s.resources[give] -= amount;
+  s.resources[want] += got;
 
   return s;
 }

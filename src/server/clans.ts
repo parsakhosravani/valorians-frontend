@@ -22,6 +22,10 @@ import {
   can,
   canAfford,
   canKick,
+  aidRoom,
+  aidTooSoon,
+  wonderBlocked,
+  wonderCost,
   clanLevel,
   contributionValue,
   isFormed,
@@ -35,8 +39,8 @@ import {
   techCap,
   techCost,
 } from "@/lib/game/clan";
-import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
-import { GameError, getRates } from "@/lib/game/engine";
+import { CLAN, RESOURCE_NAMES, WONDER } from "@/lib/game/config";
+import { GameError, advance, getRates, peopleOf } from "@/lib/game/engine";
 
 /**
  * Clans: players band together under a name, a tag and a flag.
@@ -93,13 +97,13 @@ const liveTotals = (members: ClanRow[]) => ({
 });
 
 /**
- * A clan's place by total population: from the last ranking, or for a clan
+ * A clan's place by total power: from the last ranking, or for a clan
  * too new to have one, counted among the ranked (few rows: one per clan).
  */
 const CLAN_RANK = `
   SELECT COALESCE(c.pop_rank,
-           (SELECT COUNT(*) + 1 FROM clans o WHERE o.sum_population > c.sum_population
-              OR (o.sum_population = c.sum_population AND o.id < c.id))) AS rank
+           (SELECT COUNT(*) + 1 FROM clans o WHERE o.sum_power > c.sum_power
+              OR (o.sum_power = c.sum_power AND o.id < c.id))) AS rank
   FROM clans c WHERE c.id = ?`;
 
 type ClanRow = Record<string, unknown>;
@@ -135,6 +139,7 @@ const summary = (r: ClanRow) => {
     population: Math.floor(Number(r.population ?? 0)),
     power: Math.floor(Number(r.power ?? 0)),
     wins: Number(r.wins ?? 0),
+    wonder: Number(r.wonder_level ?? 0),
     createdAt: Number(r.created_at),
   };
 };
@@ -187,7 +192,8 @@ type LogKind =
   | "level"
   | "aid"
   | "flag"
-  | "settings";
+  | "settings"
+  | "wonder";
 
 const logStmt = (clanId: number, now: number, kind: LogKind, actorId: number | null, targetId: number | null = null, data: object = {}): InStatement => ({
   sql: "INSERT INTO clan_log (clan_id, at, actor_id, target_id, kind, data) VALUES (?, ?, ?, ?, ?, ?)",
@@ -351,6 +357,21 @@ export async function clanView(player: Player, search?: string) {
           cost: techs[t.id] < cap ? techCost(techs[t.id]) : null,
         })),
         techCap: cap,
+        wonder: {
+          level: Number(row.wonder_level ?? 0),
+          nextAt: Number(row.wonder_next_at ?? 0),
+          cost: Number(row.wonder_level ?? 0) < WONDER.levels ? wonderCost(Number(row.wonder_level ?? 0)) : null,
+          blocked: wonderBlocked(
+            {
+              techs,
+              members: mapped.length,
+              level: Number(row.wonder_level ?? 0),
+              nextAt: Number(row.wonder_next_at ?? 0),
+              treasury: treasuryOf(row),
+            },
+            Date.now()
+          ),
+        },
         formed: isFormed(mapped.length),
         perks: perksFor(techs, mapped.length),
         // Only officers see who's waiting at the gate.
@@ -383,7 +404,122 @@ export async function clanView(player: Player, search?: string) {
     clans: list.rows.map(summary),
     requested: reqs.rows.map((r) => Number(r.clan_id)),
     limits: CLAN,
+    season: await seasonView(Date.now()),
   };
+}
+
+// ─── Seasons and the World Wonder ─────────────────────────────────────────────
+
+/** The open season, started now if there is none yet. */
+async function openSeason(now: number) {
+  const db = await getDb();
+  const open = await db.execute("SELECT id, started_at FROM seasons WHERE ended_at IS NULL ORDER BY id DESC LIMIT 1");
+
+  if (open.rows[0]) return { id: Number(open.rows[0].id), startedAt: Number(open.rows[0].started_at) };
+  const ins = await db.execute({ sql: "INSERT INTO seasons (started_at) VALUES (?)", args: [now] });
+
+  return { id: Number(ins.lastInsertRowid), startedAt: now };
+}
+
+/** The season race as everyone sees it: the leading Wonders and the past winners. */
+export async function seasonView(now: number) {
+  const db = await getDb();
+  const season = await openSeason(now);
+  const [leaders, past] = await db.batch(
+    [
+      "SELECT id, name, tag, flag, wonder_level FROM clans WHERE wonder_level > 0 ORDER BY wonder_level DESC, wonder_next_at ASC, id ASC LIMIT 5",
+      "SELECT id, ended_at, winner_name, winner_tag FROM seasons WHERE ended_at IS NOT NULL ORDER BY id DESC LIMIT 5",
+    ],
+    "read"
+  );
+
+  return {
+    ...season,
+    levels: WONDER.levels,
+    leaders: leaders.rows.map((r) => ({
+      id: Number(r.id),
+      name: String(r.name),
+      tag: String(r.tag),
+      flag: storedFlag(r.flag, Number(r.id)),
+      level: Number(r.wonder_level),
+    })),
+    past: past.rows.map((r) => ({
+      season: Number(r.id),
+      endedAt: Number(r.ended_at),
+      name: String(r.winner_name ?? ""),
+      tag: String(r.winner_tag ?? ""),
+    })),
+  };
+}
+
+/**
+ * An officer raises the clan's World Wonder one level from the treasury. The
+ * clan that completes it first wins the season: its members are rewarded, every
+ * Wonder falls, and a new season starts (see WONDER).
+ */
+export async function raiseWonder(player: Player, now: number) {
+  const { clan, clanId } = await requireRole(player, can.manage, "Only the Jarl and Huscarls can spend the treasury");
+  const db = await getDb();
+  const count = await db.execute({ sql: "SELECT COUNT(*) AS n FROM users WHERE clan_id = ?", args: [clanId] });
+  const level = Number(clan.wonder_level ?? 0);
+  const blocked = wonderBlocked(
+    {
+      techs: techsOf(clan),
+      members: Number(count.rows[0]?.n ?? 0),
+      level,
+      nextAt: Number(clan.wonder_next_at ?? 0),
+      treasury: treasuryOf(clan),
+    },
+    now
+  );
+
+  if (blocked) throw new GameError(blocked, "blocked");
+  const cost = wonderCost(level);
+  // One statement checks the level, the wait and the funds, and pays.
+  const rs = await db.execute({
+    sql: `UPDATE clans SET wonder_level = wonder_level + 1, wonder_next_at = ?,
+            ${TREASURY_KEYS.map((k) => `${TREASURY_COL[k]} = ${TREASURY_COL[k]} - ?`).join(", ")}
+          WHERE id = ? AND wonder_level = ? AND wonder_next_at <= ? AND ${TREASURY_KEYS.map((k) => `${TREASURY_COL[k]} >= ?`).join(" AND ")}`,
+    args: [now + WONDER.levelMs, ...TREASURY_KEYS.map((k) => cost[k]), clanId, level, now, ...TREASURY_KEYS.map((k) => cost[k])],
+  });
+
+  if (rs.rowsAffected !== 1) throw new GameError("The treasury changed. Try again.", "conflict");
+  await log(clanId, now, "wonder", player.id, null, { level: level + 1 });
+  if (level + 1 >= WONDER.levels) await winSeason(clanId, now);
+
+  return { level: level + 1 };
+}
+
+/** A clan finished its Wonder: it wins the season (once), its members are rewarded, every Wonder falls. */
+async function winSeason(clanId: number, now: number) {
+  const db = await getDb();
+  const season = await openSeason(now);
+  const clan = await clanRow(clanId);
+
+  if (!clan) return;
+  const claim = await db.execute({
+    sql: "UPDATE seasons SET ended_at = ?, winner_clan_id = ?, winner_name = ?, winner_tag = ? WHERE id = ? AND ended_at IS NULL",
+    args: [now, clanId, String(clan.name), String(clan.tag), season.id],
+  });
+
+  if (claim.rowsAffected !== 1) return; // another clan got there first
+  await db.batch(
+    [
+      "UPDATE clans SET wonder_level = 0, wonder_next_at = 0",
+      { sql: "INSERT INTO seasons (started_at) VALUES (?)", args: [now] },
+    ],
+    "write"
+  );
+  const members = await db.execute({ sql: "SELECT id FROM users WHERE clan_id = ?", args: [clanId] });
+
+  for (const m of members.rows) {
+    const id = Number(m.id);
+
+    await mutatePlayer(id, now, (s) => ({ ...s, coins: s.coins + WONDER.winnerCoins, seasonWins: (s.seasonWins ?? 0) + 1 })).catch((e) =>
+      console.error("season reward", id, e)
+    );
+    await notify.seasonWon(id, String(clan.tag), season.id, WONDER.winnerCoins).catch(() => undefined);
+  }
 }
 
 export type ClanView = Awaited<ReturnType<typeof clanView>>;
@@ -554,7 +690,7 @@ export async function joinClan(player: Player, body: any, now: number): Promise<
   const minPop = Number(c.min_population ?? 0);
 
   if (mode === "closed") throw new GameError("This clan isn't taking new members", "closed");
-  if (player.state.population < minPop)
+  if (peopleOf(player.state) < minPop)
     throw new GameError(`This clan wants chiefs with at least ${minPop.toLocaleString("en-US")} people`, "too_small");
   const seats = maxMembers(techsOf(c));
   const db = await getDb();
@@ -932,6 +1068,36 @@ export async function sendAid(player: Player, body: any, now: number) {
   if (!who || who.clanId !== clanId) throw new GameError("That player isn't in your clan", "not_member");
 
   const db = await getDb();
+  // Limits against second accounts feeding a main one (see CLAN.aidDailyHours).
+  const joined = await db.execute({ sql: "SELECT clan_joined_at FROM users WHERE id = ?", args: [target] });
+  const joinedAt = joined.rows[0]?.clan_joined_at == null ? null : Number(joined.rows[0].clan_joined_at);
+
+  if (aidTooSoon(joinedAt, now)) {
+    throw new GameError(`New members can get aid after ${CLAN.aidMinTenureMs / 86400e3} days in the clan`, "too_soon");
+  }
+  const recent = await db.execute({
+    sql: "SELECT data FROM clan_log WHERE target_id = ? AND kind = 'aid' AND at > ?",
+    args: [target, now - 24 * 3600e3],
+  });
+  const received = recent.rows.reduce((sum, r) => {
+    try {
+      const d = JSON.parse(String(r.data));
+
+      return d.key === key ? sum + Number(d.amount || 0) : sum;
+    } catch {
+      return sum;
+    }
+  }, 0);
+  const room = aidRoom(key, getRates(advance(who.state, now)), received);
+
+  if (amount > room) {
+    throw new GameError(
+      room > 0
+        ? `They can get ${room.toLocaleString("en-US")} more ${keyName(key)} today (a day of their own output)`
+        : `They've had all the ${keyName(key)} aid they can get today`,
+      "aid_limit",
+    );
+  }
   const col = TREASURY_COL[key];
   const rs = await db.execute({
     sql: `UPDATE clans SET ${col} = ${col} - ? WHERE id = ? AND ${col} >= ?`,

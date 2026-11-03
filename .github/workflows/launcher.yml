@@ -1,0 +1,47 @@
+name: Launcher
+
+# Publishes launcher/ to GitHub Pages: the page Telegram opens (with
+# LAUNCHER_URL set) that checks the game is up and shows the error page when
+# it isn't. It must live away from the game's host to work when that's down.
+# One-time setup: repo Settings → Pages → Source: GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+    paths: ["launcher/**", ".github/workflows/launcher.yml", "public/images/background/intro.webp"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Gather the page, its painting and its fonts
+        run: |
+          mkdir -p _site
+          cp launcher/index.html _site/
+          cp public/images/background/intro.webp _site/
+          cp node_modules/@fontsource/cinzel/files/cinzel-latin-900-normal.woff2 _site/cinzel-900.woff2
+          cp node_modules/@fontsource/alegreya-sans/files/alegreya-sans-latin-700-normal.woff2 _site/alegreya-700.woff2
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

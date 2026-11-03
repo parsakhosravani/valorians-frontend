@@ -2,6 +2,7 @@ import "server-only";
 
 import { getDb } from "./db";
 import { appUrl, botToken, derive, tg } from "./bot";
+import { webAppUrl } from "./appUrl";
 import { whole } from "@/lib/format";
 
 /**
@@ -127,7 +128,7 @@ type TgResult = { ok: boolean; description?: string; error_code?: number; parame
 /** In a player's private chat: open the game in place, or mute news. */
 const playerMarkup = () => ({
   inline_keyboard: [
-    [{ text: "⚔️ Play now", web_app: { url: appUrl() } }],
+    [{ text: "⚔️ Play now", web_app: { url: webAppUrl() } }],
     [{ text: "🔕 Mute news", callback_data: "news:off" }],
   ],
 });

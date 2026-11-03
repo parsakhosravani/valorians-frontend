@@ -20,7 +20,9 @@ import { TextImage } from "@/components/molecules/TextImage";
 import { RESOURCES, useGame, useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
+import { CLAN, RESOURCE_NAMES, WONDER } from "@/lib/game/config";
+import { Bar } from "@/components/atoms/Ui";
+import { peopleOf } from "@/lib/game/engine";
 import {
   CLAN_TECHS,
   ClanFlag as Flag,
@@ -120,6 +122,8 @@ function logText(e: Mine["log"][number]) {
       return { icon: "🚩", text: `${a} raised a new banner` };
     case "settings":
       return { icon: "⚙️", text: `${a} changed the clan's ${e.data.what}` };
+    case "wonder":
+      return { icon: "🏛️", text: `${a} raised the World Wonder to level ${e.data.level}` };
     default:
       return { icon: "•", text: "Something happened" };
   }
@@ -642,6 +646,63 @@ export const Clan: FunctionComponent = () => {
         </Button>
       </Card>
 
+      <SectionTitle right={<span className="text-xs font-bold text-muted">Season {data?.season.id}</span>}>World Wonder</SectionTitle>
+      <Card className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="font-bold text-parch">
+            <GameIcon e="🏛️" /> Level {mine.wonder.level} of {data?.season.levels}
+          </span>
+          {mine.wonder.nextAt > now && (
+            <span className="text-xs text-muted">
+              Next level in {formatDuration(mine.wonder.nextAt - now)}
+            </span>
+          )}
+        </div>
+        <Bar max={data?.season.levels ?? 1} value={mine.wonder.level} />
+        <p className="text-xs text-sub">
+          The first clan to finish its Wonder wins the season: every member gets{" "}
+          {fmt(WONDER.winnerCoins)} coins and a crown, then every Wonder falls and the race begins again.
+        </p>
+        {mine.wonder.cost && (
+          <span className="text-xs text-muted">
+            Next level: {fmt(mine.wonder.cost.iron)} of each resource + {fmt(mine.wonder.cost.coins)} coins from the treasury
+          </span>
+        )}
+        {mine.wonder.blocked && <span className="text-xs text-bad">{mine.wonder.blocked}</span>}
+        {can.manage(mine.myRole) && mine.wonder.level < (data?.season.levels ?? 0) && (
+          <Button
+            disabled={!!mine.wonder.blocked || busy != null}
+            isFull
+            onClick={() => run("wonder", () => clan.raiseWonder())}
+          >
+            {busy === "wonder" ? "Raising…" : `Raise the Wonder to ${mine.wonder.level + 1}`}
+          </Button>
+        )}
+        {!!data?.season.leaders.length && (
+          <div className="flex flex-col gap-1 pt-1">
+            <span className="label">Leading the race</span>
+            {data.season.leaders.map((l, i) => (
+              <span key={l.id} className="flex justify-between text-sm">
+                <span>
+                  {i + 1}. [{l.tag}] {l.name}
+                </span>
+                <span className="text-goldtext font-bold">{l.level}/{data.season.levels}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {!!data?.season.past.length && (
+          <div className="flex flex-col gap-1 pt-1">
+            <span className="label">Past winners</span>
+            {data.season.past.map((p) => (
+              <span key={p.season} className="text-sm text-sub">
+                <GameIcon e="👑" /> Season {p.season}: [{p.tag}] {p.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </Card>
+
       <SectionTitle right={<span className="text-xs font-bold text-muted">Every member gets these</span>}>Clan techs</SectionTitle>
       <Card className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
@@ -850,7 +911,7 @@ export const Clan: FunctionComponent = () => {
   const joinButton = (c: ClanView["clans"][number]) => {
     const requested = data?.requested.includes(c.id);
     const full = c.members >= c.maxMembers;
-    const small = state.population < c.minPopulation;
+    const small = peopleOf(state) < c.minPopulation;
 
     if (requested)
       return (

@@ -18,7 +18,7 @@ import {
   startAnnounce,
   takeAdminPost,
 } from "./announce";
-import { appUrl } from "./appUrl";
+import { appUrl, webAppUrl } from "./appUrl";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
@@ -27,7 +27,7 @@ import { displayName } from "./war";
 
 import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from "@/lib/game/clan";
 import { CLAN, PLUS, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
-import { advance, plusActive } from "@/lib/game/engine";
+import { advance, peopleOf, plusActive } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 import { whole } from "@/lib/format";
 
@@ -71,7 +71,7 @@ export { appUrl };
 type Button = { text: string; url?: string; callback_data?: string; web_app?: { url: string } };
 
 /** In the bot's own chat a web_app button opens the game in place. `path` opens a screen. */
-const playButton = (text = "⚔️ Play Valorians", path = ""): Button => ({ text, web_app: { url: `${appUrl()}${path}` } });
+const playButton = (text = "⚔️ Play Valorians", path = ""): Button => ({ text, web_app: { url: webAppUrl(path) } });
 
 const channel = () => questUrl("telegram", process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL);
 
@@ -140,7 +140,7 @@ async function howToPlay(chatId: number) {
       `Hills and forests help defenders; scout before you attack.\n\n` +
       `<b>5. Join a clan.</b> Band together with other chiefs, or found your own clan and lead it up the clan ranks.\n\n` +
       `<b>6. Trade.</b> Build a Trading Post and swap your extra resources with other chiefs.\n\n` +
-      `<b>7. Rise.</b> Climb the leaderboard by population, power and victories. Claim your login streak every day!`,
+      `<b>7. Rise.</b> Climb the leaderboard by power, population and victories. Claim your login streak every day!`,
     [[playButton()], [{ text: "« Menu", callback_data: "menu" }]]
   );
 }
@@ -165,7 +165,7 @@ async function myTribe(chatId: number, userId: number) {
   await send(
     chatId,
     `🏰 <b>${esc(displayName(p))}'s tribe</b>\n\n` +
-      `🏆 Rank <b>#${fmt(rank)}</b> · 👥 ${fmt(s.population)} people\n` +
+      `🏆 Rank <b>#${fmt(rank)}</b> · 👥 ${fmt(peopleOf(s))} people\n` +
       `💪 Power ${compact(powerScore(s))} · ⚔️ ${fmt(s.war.attacksWon + s.war.defensesWon)} victories\n` +
       `🪙 ${fmt(s.coins)} coins\n` +
       `📦 ${res}\n\n` +
@@ -178,17 +178,17 @@ async function myTribe(chatId: number, userId: number) {
 async function topChiefs(chatId: number, userId: number) {
   const db = await getDb();
   const rs = await db.execute(
-    "SELECT id, username, first_name, population FROM users ORDER BY population DESC, id ASC LIMIT 10"
+    "SELECT id, username, first_name, power FROM users ORDER BY power DESC, id ASC LIMIT 10"
   );
   const medal = ["🥇", "🥈", "🥉"];
   const lines = rs.rows.map((r, i) => {
     const name = esc(String(r.first_name || (r.username ? `@${r.username}` : "Player")));
     const me = Number(r.id) === userId;
 
-    return `${medal[i] ?? `${i + 1}.`} ${me ? `<b>${name} (you)</b>` : name} · ${compact(Number(r.population))} 👥`;
+    return `${medal[i] ?? `${i + 1}.`} ${me ? `<b>${name} (you)</b>` : name} · ${compact(Number(r.power))} 💪`;
   });
 
-  await send(chatId, `🏆 <b>Top chiefs</b> by population\n\n${lines.join("\n") || "No tribes yet. Be the first!"}`, [
+  await send(chatId, `🏆 <b>Top chiefs</b> by power\n\n${lines.join("\n") || "No tribes yet. Be the first!"}`, [
     [playButton("⚔️ Climb the ranks")],
     [{ text: "« Menu", callback_data: "menu" }],
   ]);
@@ -416,7 +416,8 @@ export async function setupBot() {
   for (const id of await adminIds()) {
     await run("setMyCommands", { scope: { type: "chat", chat_id: id }, commands: ADMIN_COMMANDS });
   }
-  await run("setChatMenuButton", { menu_button: { type: "web_app", text: "Play", web_app: { url: base } } });
+  // Through the launcher when there is one (see webAppUrl): the webhook below stays on the game itself.
+  await run("setChatMenuButton", { menu_button: { type: "web_app", text: "Play", web_app: { url: webAppUrl() } } });
   await run("setWebhook", {
     url: `${base}/api/bot`,
     secret_token: webhookSecret(),

@@ -17,12 +17,15 @@ import {
   BUILDING_BY_ID,
   RESOURCE_NAMES,
   ResourceId,
+  EXCHANGE_RATE,
   buildingImage,
   guardCost,
 } from "@/lib/game/config";
 import {
   MAX_TRADE_RATIO,
   MERCHANT_CARRY,
+  exchangeReturn,
+  merchantLoad,
   MIN_TRADE_AMOUNT,
   MIN_TRADE_RATIO,
   TRADING_POST,
@@ -173,6 +176,67 @@ const ResourcePicker = ({
     ))}
   </div>
 );
+
+/**
+ * The Merchant of the North: swaps at once, at a loss (EXCHANGE_RATE), for
+ * when no player offer fits. The player market is always the better price.
+ */
+const ExchangeCard = ({ maxAmount }: { maxAmount: number }) => {
+  const { state, rates, trade } = useGame();
+  const [give, setGive] = useState<ResourceId>("iron");
+  const [want, setWant] = useState<ResourceId>("wood");
+  const [amount, setAmount] = useState(1000);
+  const [busy, setBusy] = useState(false);
+  const got = exchangeReturn(amount);
+  const problem =
+    amount < MIN_TRADE_AMOUNT
+      ? `Swap at least ${MIN_TRADE_AMOUNT}`
+      : amount > maxAmount
+        ? `Your merchant carries up to ${fmt(maxAmount)}`
+        : state.resources[give] < amount
+          ? `You have only ${fmt(state.resources[give])} ${RESOURCE_NAMES[give].toLowerCase()}`
+          : got > rates.capacity - state.resources[want]
+            ? `No room for ${fmt(got)} ${RESOURCE_NAMES[want].toLowerCase()}`
+            : null;
+
+  const swap = async () => {
+    setBusy(true);
+    await trade.exchange(give, want, amount);
+    setBusy(false);
+  };
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div>
+        <p className="font-extrabold text-parch">
+          <GameIcon e="⚖️" /> Merchant of the North
+        </p>
+        <p className="text-xs text-sub">
+          Swaps at once when no offer fits: {Math.round(EXCHANGE_RATE * 100)} back for every 100. Players usually pay better.
+        </p>
+      </div>
+      <ResourcePicker
+        value={give}
+        onChange={(r) => {
+          setGive(r);
+          if (r === want) setWant(give);
+        }}
+      />
+      <AmountInput max={Math.min(maxAmount, Math.floor(state.resources[give]))} value={amount} onChange={setAmount} />
+      <ResourcePicker disabled={give} value={want} onChange={setWant} />
+      <div className="inset flex items-center justify-between px-3 py-2 text-sm">
+        <span className="text-sub">You get</span>
+        <span className="font-extrabold text-parch">
+          {fmt(got)} {RESOURCE_NAMES[want].toLowerCase()}
+        </span>
+      </div>
+      {problem && <p className="text-xs text-bad">{problem}</p>}
+      <Button disabled={!!problem || busy} isFull onClick={swap}>
+        {busy ? "Swapping…" : "Swap now"}
+      </Button>
+    </Card>
+  );
+};
 
 const AmountInput = ({
   value,
@@ -395,7 +459,7 @@ export const Market = () => {
   }, [nextArrival, load, refresh]);
 
   const level = data?.limits.level ?? 0;
-  const maxAmount = level * MERCHANT_CARRY;
+  const maxAmount = merchantLoad(level);
   const freeMerchants = data
     ? data.limits.maxOffers - data.limits.openOffers
     : 0;
@@ -493,8 +557,8 @@ export const Market = () => {
                 Build a Trading Post to trade
               </p>
               <p className="text-xs text-sub">
-                Each level adds a merchant: one more offer and{" "}
-                {fmt(MERCHANT_CARRY)} more per load.
+                Each level adds a merchant: one more offer, and
+                bigger loads ({fmt(MERCHANT_CARRY)} at level 1, 15% more each level).
               </p>
             </div>
             <Link href="/tribe">
@@ -727,6 +791,7 @@ export const Market = () => {
             </Button>
           </Card>
         )}
+        {tab === "sell" && data && level >= 1 && <ExchangeCard maxAmount={maxAmount} />}
 
         {tab === "reports" && data && (
           <>

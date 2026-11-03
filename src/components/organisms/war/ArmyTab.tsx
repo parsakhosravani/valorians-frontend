@@ -7,7 +7,7 @@ import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
 
 import { Button } from "@/components/atoms/Button";
 import { RESOURCES, useGame } from "@/context";
-import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef } from "@/lib/game/config";
+import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef, unitPeople } from "@/lib/game/config";
 import { TrainItem, maxTrainBatches, trainingEndsAt } from "@/lib/game/engine";
 import {
   attackPower,
@@ -74,7 +74,13 @@ const TrainPanel = ({ unit }: { unit: UnitDef }) => {
   const [busy, setBusy] = useState(false);
   // One-of-a-kind units (the dragon): only as many as are still allowed.
   const room = unit.maxOwned != null ? unit.maxOwned - ownedOf(state, unit.id) : MAX_BATCH;
-  const affordable = Math.min(MAX_BATCH, room, ...RESOURCE_IDS.map((r) => Math.floor(state.resources[r] / unit.cost[r])));
+  const people = unitPeople(unit);
+  const affordable = Math.min(
+    MAX_BATCH,
+    room,
+    people ? Math.floor(state.population / people) : MAX_BATCH,
+    ...RESOURCE_IDS.map((r) => Math.floor(state.resources[r] / unit.cost[r]))
+  );
 
   if (unit.maxOwned != null && room <= 0) {
     const resting = unit.id === "dragon" && (state.dragonRestUntil ?? 0) > now;
@@ -109,6 +115,11 @@ const TrainPanel = ({ unit }: { unit: UnitDef }) => {
             {fmt(unit.cost[r.id] * count)}
           </span>
         ))}
+        {people > 0 && (
+          <span className={clsx("flex items-center gap-1", state.population < people * count && "text-bad")}>
+            <GameIcon e="👥" /> {fmt(people * count)}
+          </span>
+        )}
         <span className="text-muted"><GameIcon e="⏱" /> {formatDuration(seconds * 1000)}</span>
       </div>
       <div className="flex items-center justify-between gap-2">

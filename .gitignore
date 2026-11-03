@@ -36,3 +36,7 @@ next-env.d.ts
 
 # game database
 /data/
+
+# Playwright
+/playwright-report/
+/test-results/

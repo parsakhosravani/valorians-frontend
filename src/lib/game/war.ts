@@ -7,6 +7,7 @@ import {
   BUILDINGS,
   CAMP_REPEAT_COOLDOWN_MS,
   CAMP_REPEAT_SHARE,
+  CAMP_REPEAT_HOURS,
   CAMPS_KEPT,
   CAMP_TRAVEL_SECONDS,
   FOREST_CAVALRY_PENALTY,
@@ -23,6 +24,8 @@ import {
   RESOURCE_IDS,
   ResourceId,
   ANTI_CAVALRY_BONUS,
+  ANTI_INFANTRY_BONUS,
+  MIN_RAID_MARCH_SECONDS,
   UNITS,
   UNIT_BY_ID,
   UNIT_IDS,
@@ -35,7 +38,10 @@ import {
   RANKS,
   XP_DEFEAT_SHARE,
   XP_LOSS_SHARE,
-  XP_PER_STRENGTH,
+  XP_SCALE,
+  XP_POWER,
+  XP_REPEAT_CAMP_SHARE,
+  unitPeople,
   LANDING_DEFENSE,
   REDIRECT,
   banditStrength,
@@ -105,7 +111,12 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
   for (const r of RESOURCE_IDS) {
     if (s.resources[r] < def.cost[r] * count) throw new GameError(`Not enough ${r}`, "not_enough_resources");
   }
+  // Soldiers are recruited from the tribe's people (see unitPeople).
+  const people = unitPeople(def) * count;
+  if (s.population < people)
+    throw new GameError(`Not enough people: ${count} ${count === 1 ? def.name : unitPlural(unit)} need ${people}`, "not_enough_people");
   for (const r of RESOURCE_IDS) s.resources[r] -= def.cost[r] * count;
+  s.population -= people;
 
   if (def.maxOwned != null) s.owned = { ...s.owned, [unit]: ownedOf(s0, unit) + count };
   const lastEnd = s.training.reduce((m, t) => Math.max(m, trainingEndsAt(t)), now);
@@ -145,6 +156,8 @@ export function cancelTraining(s0: GameState, startsAt: number, now: number): Ga
   for (const r of RESOURCE_IDS) {
     if (refund[r] > 0) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
   }
+  // The recruits not yet trained go back to the village.
+  s.population += unitPeople(UNIT_BY_ID[batch.unit]) * (batch.count - batch.done);
 
   // Batches that haven't started yet close the gap; ones already running keep their timing.
   let cursor = now;
@@ -171,22 +184,34 @@ export function attackPower(s: GameState, units: Army) {
   return raw * (1 + getRates(s).attackBonus);
 }
 
-/** How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking army breaks, 0–1. */
-function siegeBreak(sent: Army) {
-  let wall = 0;
-  let tower = 0;
+/**
+ * How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking
+ * army breaks, 0–1: rams and catapults break levels (a gate of 20 needs twice
+ * the rams of a gate of 10), the dragon's fire a share whatever the level.
+ */
+function siegeBreak(sent: Army, gateLevel: number, towerLevel: number) {
+  let wallLevels = 0;
+  let towerLevels = 0;
+  let fire = 0;
   for (const u of UNITS) {
-    wall += (u.wallBreak ?? 0) * (sent[u.id] ?? 0);
-    tower += (u.towerBreak ?? 0) * (sent[u.id] ?? 0);
+    const n = sent[u.id] ?? 0;
+    wallLevels += (u.wallBreak ?? 0) * n;
+    towerLevels += (u.towerBreak ?? 0) * n;
+    fire += (u.fireBreak ?? 0) * n;
   }
-  return { wall: Math.min(1, wall), tower: Math.min(1, tower) };
+  const share = (levels: number, of: number) => (of > 0 ? levels / of : 1);
+
+  return {
+    wall: Math.min(1, share(wallLevels, gateLevel) + fire),
+    tower: Math.min(1, share(towerLevels, towerLevel) + fire),
+  };
 }
 
 /** Defense of a tribe against an attack by `sent` (its siege engines break walls and towers). */
 export function defensePower(s: GameState, sent?: Army) {
   const r = getRates(s);
   const troops = UNIT_IDS.reduce((sum, u) => sum + unitDefense(s, u) * s.army[u], 0);
-  const br = sent ? siegeBreak(sent) : { wall: 0, tower: 0 };
+  const br = sent ? siegeBreak(sent, s.buildings["city-gate"] ?? 0, s.buildings.watchtower ?? 0) : { wall: 0, tower: 0 };
   const wall = r.wallBonus * (1 - br.wall);
   const tower = r.flatDefense * (1 - br.tower);
   return (troops + tower + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
@@ -197,7 +222,8 @@ export function defensePower(s: GameState, sent?: Army) {
  * - the defender's terrain adds defense (hills +20%, forest +10%)
  * - mounted troops (Light Cavalry, Paladins, Knights) fight 25% weaker in a forest
  * - anti-cavalry troops (Spearmen) defend 50% better against the mounted share of the attack
- * - rams break the City Gate, catapults break the Watchtower
+ * - anti-infantry troops (Archers) defend 50% better against the foot soldiers' share
+ * - rams break City Gate levels, catapults Watchtower levels, the dragon's fire half of both
  * - an army landing from the sea fights uphill: the defenders get +25%, and
  *   their Harbor adds more
  * `defender` is null for a barbarian camp, which uses `campDef`.
@@ -222,9 +248,17 @@ export function battleNumbers(
 
   if (defender) {
     const r = getRates(defender);
-    const spears =
-      UNITS.filter((u) => u.antiCavalry).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) *
-      (1 + r.defenseBonus);
+    const guard = (pick: (u: (typeof UNITS)[number]) => boolean | undefined) =>
+      UNITS.filter(pick).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) * (1 + r.defenseBonus);
+    const spears = guard((u) => u.antiCavalry);
+    const bows = guard((u) => u.antiInfantry);
+    // Foot soldiers: everyone who isn't mounted, a siege engine or the dragon.
+    const foot =
+      UNITS.filter((u) => !u.mounted && !u.flying && !u.wallBreak && !u.towerBreak).reduce(
+        (a, u) => a + unitAttack(attacker, u.id) * (sent[u.id] ?? 0),
+        0
+      ) * bonus;
+    const footShare = attack > 0 ? foot / attack : 0;
 
     // Archers shoot the dragon down: they defend DRAGON.archerBonus better against its share of the attack.
     const dragon = (sent.dragon ?? 0) * unitAttack(attacker, "dragon") * bonus;
@@ -234,6 +268,7 @@ export function battleNumbers(
     defense =
       defensePower(defender, sent) * ground +
       spears * ANTI_CAVALRY_BONUS * cavShare +
+      bows * ANTI_INFANTRY_BONUS * footShare +
       archers * DRAGON.archerBonus * dragonShare;
     if (landing) defense *= landingFactor(defender);
   } else {
@@ -248,10 +283,10 @@ const landingFactor = (defender: GameState) => 1 + LANDING_DEFENSE + getRates(de
 
 /** The same, from the Harbor level alone (it's visible on the map). */
 export const landingFactorFor = (harborLevel: number) => {
-  const e = BUILDINGS.find((b) => b.id === "harbor")!.effect;
-  const perLevel = e.kind === "military" ? e.perLevel : 0;
+  const b = BUILDINGS.find((x) => x.id === "harbor")!;
+  const perLevel = b.effect.kind === "military" ? b.effect.perLevel : 0;
 
-  return 1 + LANDING_DEFENSE + (perLevel * harborLevel) / 100;
+  return 1 + LANDING_DEFENSE + (perLevel * Math.min(harborLevel, b.maxLevel)) / 100;
 };
 
 export function powerScore(s: GameState) {
@@ -288,12 +323,19 @@ export type Promotion = { unit: UnitId; rank: number };
  * XP from one battle, shared by the troop types that fought in proportion to
  * how much they contributed (attack when attacking, defense when defending).
  */
-export function battleXp(s: GameState, fought: Army, enemyStrength: number, won: boolean, as: "attack" | "defense"): Army {
+export function battleXp(
+  s: GameState,
+  fought: Army,
+  enemyStrength: number,
+  won: boolean,
+  as: "attack" | "defense",
+  share = 1
+): Army {
   const xp = emptyArmy();
   const weight = (u: UnitId) => (as === "attack" ? unitAttack(s, u) : unitDefense(s, u)) * (fought[u] ?? 0);
   const total = UNIT_IDS.reduce((a, u) => a + weight(u), 0);
   if (total <= 0) return xp;
-  const pool = enemyStrength * XP_PER_STRENGTH * (won ? 1 : XP_DEFEAT_SHARE);
+  const pool = XP_SCALE * Math.pow(Math.max(0, enemyStrength), XP_POWER) * (won ? 1 : XP_DEFEAT_SHARE) * share;
   for (const u of UNIT_IDS) xp[u] = Math.round((pool * weight(u)) / total);
   return xp;
 }
@@ -471,6 +513,9 @@ const marchId = (now: number, rand: number) => `${now.toString(36)}${Math.floor(
 // ─── Raids on other players ──────────────────────────────────────────────────
 
 /** Step 1: troops leave home. Attacking ends your own shield, bought ones too. */
+/** One-way march time to another player's tribe: never under MIN_RAID_MARCH_SECONDS. */
+export const raidTravelMs = (ms: number) => Math.max(MIN_RAID_MARCH_SECONDS * 1000, ms);
+
 export function dispatchRaid(s0: GameState, units: Army, now: number) {
   const s = cloneState(s0);
   const sent = validateSend(s, units);
@@ -521,7 +566,7 @@ export type RaidReport = BattleOutcome & {
  * One at Gate 11 with no rams; three with rams breaking half of it.
  */
 export const gateDamage = (gate: number, sent: Army) =>
-  gate > 0 ? Math.min(gate, 1 + Math.floor(siegeBreak(sent).wall * gate * 0.5)) : 0;
+  gate > 0 ? Math.min(gate, 1 + Math.floor(siegeBreak(sent, gate, 0).wall * gate * 0.5)) : 0;
 
 /**
  * Step 2: the battle, applied to the defender. Returns the defender's new
@@ -709,7 +754,7 @@ export function defendRaid(
       gate = { from, to: from - lost };
       d.buildings["city-gate"] = gate.to;
       // A rebuild under way carries on from what's left standing.
-      for (const q of d.queue) if (q.building === "city-gate") q.toLevel = gate.to + 1;
+      for (const q of d.queue) if (q.building === "city-gate" && !q.mastery) q.toLevel = gate.to + 1;
     }
   } else {
     d.war.defensesWon += 1;
@@ -804,8 +849,18 @@ export function campStatus(s: GameState, level: number, now: number) {
 export function campReward(s: GameState, level: number) {
   const first = level > s.camps.cleared;
   const r = campFirstReward(level);
-  const share = first ? 1 : CAMP_REPEAT_SHARE;
-  return { resources: Math.round(r.resources * share), coins: Math.round(r.coins * share), first };
+
+  if (first) return { resources: r.resources, coins: r.coins, first };
+  // A repeat pays at most a few hours of the tribe's own iron, wood and clay
+  // output (crop is left out: troops eat into it).
+  const p = getRates(s).productionPerHour;
+  const hourly = (p.iron + p.wood + p.clay) / 3;
+
+  return {
+    resources: Math.round(Math.min(r.resources * CAMP_REPEAT_SHARE, hourly * CAMP_REPEAT_HOURS)),
+    coins: Math.round(r.coins * CAMP_REPEAT_SHARE),
+    first,
+  };
 }
 
 /** Troops leave for a barbarian camp. Checks the camp can be attacked now. */
@@ -832,7 +887,7 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
     // Camps that dropped off the map don't need their raid times kept.
     for (const l of Object.keys(s.camps.lastRaid)) if (campGone(s, Number(l))) delete s.camps.lastRaid[l];
     return reward;
-  });
+  }, level <= s0.camps.cleared ? XP_REPEAT_CAMP_SHARE : 1);
 }
 
 // ─── Bandit lairs ────────────────────────────────────────────────────────────
@@ -870,11 +925,12 @@ function pveBattle(
   opts: MapOpts,
   outcome: BattleOutcome,
   target: string,
-  onWin: (s: GameState) => { resources: number; coins: number }
+  onWin: (s: GameState) => { resources: number; coins: number },
+  xpShare = 1
 ) {
   const s = cloneState(s0);
   const r = getRates(s);
-  const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack");
+  const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack", xpShare);
   const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp);
   const home = survivorsOf(sent, outcome.attackerLosses);
   for (const u of UNIT_IDS) home[u] += outcome.attackerHealed[u];

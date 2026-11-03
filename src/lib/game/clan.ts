@@ -2,7 +2,7 @@
  * Clan rules shared by the server (authoritative) and the client (rendering).
  * No I/O here: flags, clan techs, their costs and the perks members get.
  */
-import { CLAN, RESOURCE_IDS, ResourceId } from "./config";
+import { CLAN, RESOURCE_IDS, ResourceId, WONDER, table } from "./config";
 
 // ─── Flags ───────────────────────────────────────────────────────────────────
 //
@@ -181,25 +181,25 @@ export const CLAN_TECHS: TechDef[] = [
     name: "Shared Fields",
     icon: "🌾",
     description: "Members' iron, wood, clay and crop production rises.",
-    effect: (l) => `+${l * CLAN.fieldsPercent}% resource production`,
+    effect: (l) => `+${perkLevel(l) * CLAN.fieldsPercent}% resource production${l >= CLAN.perkMaxLevel ? " (top)" : ""}`,
   },
   {
     id: "banners",
     name: "War Banners",
     icon: "🚩",
     description: "Members' armies attack harder.",
-    effect: (l) => `+${l * CLAN.bannersPercent}% attack`,
+    effect: (l) => `+${perkLevel(l) * CLAN.bannersPercent}% attack${l >= CLAN.perkMaxLevel ? " (top)" : ""}`,
   },
   {
     id: "shieldwall",
     name: "Shield Wall",
     icon: "🛡️",
     description: "Members' villages defend better.",
-    effect: (l) => `+${l * CLAN.shieldwallPercent}% defense`,
+    effect: (l) => `+${perkLevel(l) * CLAN.shieldwallPercent}% defense${l >= CLAN.perkMaxLevel ? " (top)" : ""}`,
   },
 ];
 
-export const TECH_BY_ID = Object.fromEntries(CLAN_TECHS.map((t) => [t.id, t])) as Record<TechId, TechDef>;
+export const TECH_BY_ID = table(CLAN_TECHS.map((t) => [t.id, t])) as Record<TechId, TechDef>;
 
 
 /** Treasury cost to raise a tech from `level` to `level + 1`. */
@@ -232,13 +232,16 @@ export type ClanPerks = { production: number; attack: number; defense: number };
 
 export const NO_PERKS: ClanPerks = { production: 0, attack: 0, defense: 0 };
 
+/** Tech levels past CLAN.perkMaxLevel add no more perk (see CLAN.perkMaxLevel). */
+const perkLevel = (level: number) => Math.min(level, CLAN.perkMaxLevel);
+
 /** What every member gets from the clan's techs, or nothing while the clan is still forming. */
 export const perksFor = (techs: Techs, members: number): ClanPerks =>
   isFormed(members)
     ? {
-        production: techs.fields * CLAN.fieldsPercent,
-        attack: techs.banners * CLAN.bannersPercent,
-        defense: techs.shieldwall * CLAN.shieldwallPercent,
+        production: perkLevel(techs.fields) * CLAN.fieldsPercent,
+        attack: perkLevel(techs.banners) * CLAN.bannersPercent,
+        defense: perkLevel(techs.shieldwall) * CLAN.shieldwallPercent,
       }
     : { ...NO_PERKS };
 
@@ -249,5 +252,53 @@ export const samePerks = (a: ClanPerks | undefined, b: ClanPerks) =>
 export const contributionValue = (key: TreasuryKey, amount: number) =>
   key === "coins" ? amount * CLAN.coinContributionWeight : amount;
 
+/**
+ * How much more aid of `key` a member may receive today: CLAN.aidDailyHours of
+ * their own hourly output of it (for crop, at least the average of the other
+ * three, since troops eat into it), minus what they already got in the last 24 h.
+ */
+export function aidRoom(
+  key: TreasuryKey,
+  rates: { productionPerHour: Record<ResourceId, number>; coinsPerHour: number },
+  receivedToday: number
+) {
+  const p = rates.productionPerHour;
+  const hourly =
+    key === "coins"
+      ? rates.coinsPerHour
+      : key === "crop"
+        ? Math.max(p.crop, (p.iron + p.wood + p.clay) / 3)
+        : p[key];
+
+  return Math.max(0, Math.floor(CLAN.aidDailyHours * Math.max(0, hourly) - receivedToday));
+}
+
+/** A member who joined less than CLAN.aidMinTenureMs ago can't receive aid yet. */
+export const aidTooSoon = (joinedAt: number | null, now: number) => joinedAt == null || now - joinedAt < CLAN.aidMinTenureMs;
+
 export const isResource = (k: string): k is ResourceId => (RESOURCE_IDS as readonly string[]).includes(k);
 export const isTreasuryKey = (k: string): k is TreasuryKey => (TREASURY_KEYS as readonly string[]).includes(k);
+
+// ─── World Wonder ────────────────────────────────────────────────────────────
+
+/** Treasury cost to raise the Wonder from `level` to `level + 1`. */
+export function wonderCost(level: number): Treasury {
+  const f = Math.pow(WONDER.growth, level);
+  const res = Math.round((WONDER.baseResources * f) / 1000) * 1000;
+
+  return { iron: res, wood: res, clay: res, crop: res, coins: Math.round((WONDER.baseCoins * f) / 100) * 100 };
+}
+
+/**
+ * Why the clan can't raise its Wonder now, or null. `nextAt` is when the wait
+ * after the last level ends.
+ */
+export function wonderBlocked(c: { techs: Techs; members: number; level: number; nextAt: number; treasury: Treasury }, now: number) {
+  if (!isFormed(c.members)) return `A clan needs at least ${CLAN.minMembers} members`;
+  if (clanLevel(c.techs) < WONDER.minClanLevel) return `Reach clan level ${WONDER.minClanLevel} to start a Wonder`;
+  if (c.level >= WONDER.levels) return "The Wonder stands complete";
+  if (now < c.nextAt) return "The builders are still at work on the last level";
+  if (!canAfford(c.treasury, wonderCost(c.level))) return "The treasury can't cover the next level yet";
+
+  return null;
+}

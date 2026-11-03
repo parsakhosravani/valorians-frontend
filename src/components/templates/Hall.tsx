@@ -21,7 +21,7 @@ import dynamic from "next/dynamic";
 // Opened from buttons, so they load separately from the page.
 const PlusDrawer = dynamic(() => import("@/components/organisms/PlusDrawer").then((m) => m.PlusDrawer));
 const ShieldDrawer = dynamic(() => import("@/components/organisms/ShieldDrawer").then((m) => m.ShieldDrawer));
-import { plusActive } from "@/lib/game/engine";
+import { peopleOf, plusActive } from "@/lib/game/engine";
 import { GameIcon } from "@/components/atoms/GameIcon";
 import { Bar, SectionTitle } from "@/components/atoms/Ui";
 
@@ -338,7 +338,7 @@ export const Hall = () => {
     tasks.push({
       key: "army",
       img: buildingImage(BUILDING_BY_ID["barracks"]),
-      title: "Build Barracks to train troops",
+      title: (state.buildings["town-hall"] ?? 0) ? "Build Barracks to train troops" : "Build your Town Hall, then Barracks",
       sub: "Troops raid camps and defend your tribe",
       state: "todo",
       action: { label: "Go", href: "/tribe" },
@@ -449,7 +449,12 @@ export const Hall = () => {
             <div className="flex flex-wrap gap-1">
               <span className="pill">Hall {state.buildings["town-hall"] ?? 0}</span>
               <span className="pill"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
-              <span className="pill"><GameIcon e="👥" /> {compact(state.population)}</span>
+              <span className="pill"><GameIcon e="👥" /> {compact(peopleOf(state))}</span>
+              {!!state.seasonWins && (
+                <span className="pill pill-gold" title="Seasons won by finishing the World Wonder">
+                  <GameIcon e="👑" /> {state.seasonWins > 1 ? `×${state.seasonWins}` : "Wonder"}
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-1.5">
               <button

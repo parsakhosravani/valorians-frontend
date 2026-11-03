@@ -38,13 +38,20 @@ export const BASE_POPULATION_GROWTH = 10;
 
 export const MAX_SKILL_LEVEL = 20;
 
-/** Base resource gained per tap at a given "Earn more" level. */
+/**
+ * Base resource gained per tap at a given "Earn more" level, and daily
+ * stamina at a given "Stamina" level. Were ×1.2 and ×1.15 a level: maxed, a
+ * day of mining brought ~3M resources, five times a top village's whole
+ * output, and already at level 15 it matched it, for a few weeks of coins.
+ * Now a maxed day is ~100–300k with combos (under half a day's top
+ * production): still the big early boost it's meant to be (level 1 mining is
+ * worth about half a new village's day), never the main income.
+ */
 export const tapPowerForLevel = (level: number) =>
-  Math.round(30 * Math.pow(1.2, level - 1));
+  Math.round(30 * Math.pow(1.1, level - 1));
 
-/** Daily stamina at a given "Stamina" level. */
 export const energyCapacityForLevel = (level: number) =>
-  Math.round(1500 * Math.pow(1.15, level - 1));
+  Math.round(1500 * Math.pow(1.07, level - 1));
 
 /** Stamina spent per normal tap (Frenzy taps are free). */
 export const STAMINA_PER_TAP = 10;
@@ -93,18 +100,24 @@ export const TAP_BURST = 40;
 
 // ─── Buildings ───────────────────────────────────────────────────────────────
 
-// Buildings have no top level: each upgrade costs more and takes longer
-// than the last (see buildingUpgradeCost, buildingUpgradeBaseSeconds).
+// Every building has a top level (maxLevel, usually 20) and can't be built
+// higher than the Town Hall (producers and the Warehouse may run
+// TOWN_HALL_LEAD ahead). Before Nov 2026 there was no top: costs grew ×1.45 a
+// level while effects grew by a fixed step, so levels past ~20 cost hundreds
+// of hours of production for almost nothing, and +5% attack a level had no
+// ceiling (Arsenal 20 = +100%). A top makes each level a visible goal and
+// keeps old tribes beatable; the last levels (see STEEP_FROM) are a long climb
+// so a tribe that plays every day still needs months to finish its village.
 
 export type BuildingEffect =
   | { kind: "production"; resource: ResourceId; perLevel: number }
   | { kind: "cropBoost"; percentPerLevel: number }
   | { kind: "warehouse"; multiplierPerLevel: number }
   | { kind: "townHall" }
-  | { kind: "coins"; perLevel: number }
+  | { kind: "coins"; perLevel: number; growth?: number }
   | { kind: "population"; perLevel: number }
   | { kind: "tapBoost"; percentPerLevel: number }
-  | { kind: "military"; stat: MilitaryStat; perLevel: number };
+  | { kind: "military"; stat: MilitaryStat; perLevel: number; growth?: number };
 
 /** What a military building improves, per level. */
 type MilitaryStat =
@@ -129,49 +142,83 @@ export type BuildingDef = {
   baseCost: number;
   /** How that cost splits over iron, wood, clay, crop (BUILDING_MIX). */
   mix: Record<ResourceId, number>;
-  /** Seconds for level 0 → 1. */
-  baseTime: number;
-  /** How much dearer each level is than the last (BUILDING_COST_GROWTH unless set). */
+  /** Build time relative to an ordinary building (1); see buildingUpgradeBaseSeconds. */
+  timeWeight: number;
+  /** How much dearer each level is than the last, up to STEEP_FROM (BUILDING_COST_GROWTH unless set). */
   costGrowth?: number;
+  /** The highest level it can reach. */
+  maxLevel: number;
+  /** May be built TOWN_HALL_LEAD levels above the Town Hall (producers and the Warehouse). */
+  leadsTownHall?: boolean;
+  /** Buildings (and levels) it needs before it can be built at all (see BUILDING_REQUIRES). */
+  requires: { building: BuildingId; level: number }[];
   effect: BuildingEffect;
   description: string;
 };
 
 const EVEN_MIX: Record<ResourceId, number> = { iron: 1, wood: 1, clay: 1, crop: 1 };
 
+/** Most buildings stop at this level. */
+export const DEFAULT_MAX_LEVEL = 20;
+export const TOWN_HALL = "town-hall";
+/** Producers and the Warehouse may be this many levels above the Town Hall, so a new tribe can start its economy first. */
+export const TOWN_HALL_LEAD = 2;
+
 const def = (
   name: string,
   baseCost: number,
   effect: BuildingEffect,
   description: string,
-  baseTime = 10
+  extra: Partial<Pick<BuildingDef, "maxLevel" | "timeWeight" | "leadsTownHall">> = {}
 ): BuildingDef => ({
   id: name.toLowerCase().replace(/\s+/g, "-"),
   name,
   baseCost,
-  baseTime,
+  timeWeight: 1,
+  maxLevel: DEFAULT_MAX_LEVEL,
+  requires: [],
   mix: EVEN_MIX,
   effect,
   description,
+  ...extra,
 });
 
-/** Each building level costs this much more than the last (producers: PRODUCER_COST_GROWTH). */
-const BUILDING_COST_GROWTH = 1.45;
 /**
- * Mines, the Sawmill, Brickyard and Windmill get dearer more slowly, and each
- * of their levels yields PRODUCTION_GROWTH more than the last (see
- * productionAt), so an upgrade pays itself back in a day or two early on and
- * about five days by level 20, instead of never: the old +60 a level against
- * ×1.45 the cost took 17 days to pay back at level 10 and 110 at level 15.
+ * Each building level costs this much more than the last (producers:
+ * PRODUCER_COST_GROWTH), until STEEP_FROM. Was ×1.45 (×1.3 producers) with no
+ * top, which made level 20 cost 1,700× level 1; now level 15 costs ~55× level
+ * 1 and every level fits the Warehouse its Town Hall allows.
  */
-const PRODUCER_COST_GROWTH = 1.3;
+const BUILDING_COST_GROWTH = 1.33;
+const PRODUCER_COST_GROWTH = 1.28;
+/**
+ * Upgrades to level 16 and above get dearer by STEEP_GROWTH a level instead:
+ * the last five levels are the late game, ~90% of what a whole village costs.
+ * With the gentle curve all the way, a maxed village cost ~6M of each resource
+ * (~40 days of top production): an active tribe ran out of things to build in
+ * 2–3 months. Now it's ~45M (~75 days of top production; months more with the
+ * slow start and an army to feed).
+ */
+export const STEEP_FROM = 15;
+const STEEP_GROWTH = 1.8;
+/** Each level yields PRODUCTION_GROWTH more than the last (see productionAt). */
 const PRODUCTION_GROWTH = 1.15;
-/** Each level takes this much longer to build than the last (was 1.55: level 30 took 12 days at best). */
-const BUILD_TIME_GROWTH = 1.4;
+/**
+ * Seconds for level 0 → 1 of an ordinary building; each level takes
+ * BUILD_TIME_GROWTH longer than the last. Was 10 s × 1.4: the first ten levels
+ * finished in seconds (nothing to plan) and level 30 took 3 days. Now level 1
+ * is 40 s, level 10 ~20 min, level 15 ~2½ h, level 20 ~16 h, before the Town Hall.
+ */
+const BUILD_BASE_SECONDS = 40;
+const BUILD_TIME_GROWTH = 1.466;
+
+/** How much dearer level `level` → `level + 1` is than level 0 → 1. */
+const costFactor = (growth: number, level: number) =>
+  Math.pow(growth, Math.min(level, STEEP_FROM - 1)) * Math.pow(STEEP_GROWTH, Math.max(0, level - (STEEP_FROM - 1)));
 
 /** What each resource costs to go from `level` to `level + 1`, split by the building's mix. */
 export const buildingUpgradeCost = (b: BuildingDef, level: number): Record<ResourceId, number> => {
-  const avg = b.baseCost * Math.pow(b.costGrowth ?? BUILDING_COST_GROWTH, level);
+  const avg = b.baseCost * costFactor(b.costGrowth ?? BUILDING_COST_GROWTH, level);
 
   return Object.fromEntries(RESOURCE_IDS.map((r) => [r, Math.round(avg * b.mix[r])])) as Record<ResourceId, number>;
 };
@@ -181,11 +228,18 @@ export const costTotal = (cost: Record<ResourceId, number>) => RESOURCE_IDS.redu
 
 /** Raw seconds to go from `level` to `level + 1`, before Town Hall speedup. */
 export const buildingUpgradeBaseSeconds = (b: BuildingDef, level: number) =>
-  Math.round(b.baseTime * Math.pow(BUILD_TIME_GROWTH, level));
+  Math.round(BUILD_BASE_SECONDS * b.timeWeight * Math.pow(BUILD_TIME_GROWTH, level));
+
+/** perLevel at level 1, and each level `growth`× the step before it: the sum over `level` levels. */
+export const compoundAt = (perLevel: number, level: number, growth: number) =>
+  level > 0 ? (perLevel * (Math.pow(growth, level) - 1)) / (growth - 1) : 0;
 
 /** What a producer yields per hour at a level: `perLevel` at level 1, and each level PRODUCTION_GROWTH× the last. */
-export const productionAt = (perLevel: number, level: number) =>
-  level > 0 ? (perLevel * (Math.pow(PRODUCTION_GROWTH, level) - 1)) / (PRODUCTION_GROWTH - 1) : 0;
+export const productionAt = (perLevel: number, level: number) => compoundAt(perLevel, level, PRODUCTION_GROWTH);
+
+/** An effect at a level: a straight step a level, or a compounding one when it has a `growth`. */
+export const effectAt = (e: { perLevel: number; growth?: number }, level: number) =>
+  e.growth ? compoundAt(e.perLevel, level, e.growth) : e.perLevel * level;
 
 /** Most of a raid's attackers the Trapmaker's traps can catch. */
 export const TRAP_MAX = 0.25;
@@ -247,42 +301,114 @@ const BUILDING_MIX: Record<BuildingId, Record<ResourceId, number>> = Object.from
   ).map(([id, m]) => [id, Object.fromEntries(RESOURCE_IDS.map((r, i) => [r, m[i]])) as Record<ResourceId, number>])
 );
 
-const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH });
+/**
+ * The unlock tree: what a building needs before its first level. Before, all
+ * 26 buildings were open on day one (the Dragon Roost too): a new player faced
+ * a wall of choices and had no "next unlock" to aim for. Now the village opens
+ * up step by step, economy first. Only the first level checks it: buildings
+ * already standing keep growing.
+ */
+const BUILDING_REQUIRES: Record<string, { building: BuildingId; level: number }[]> = Object.fromEntries(
+  (
+    [
+      ["barracks", [["town-hall", 1]]],
+      ["city-gate", [["town-hall", 1]]],
+      ["hideout", [["town-hall", 1]]],
+      ["academy", [["town-hall", 3]]],
+      ["embassy", [["town-hall", 3]]],
+      ["fertilizer-workshop", [["windmill", 5]]],
+      ["trading-post", [["resource-warehouse", 3]]],
+      ["treasury", [["town-hall", 5], ["resource-warehouse", 5]]],
+      ["armory", [["barracks", 1]]],
+      ["arsenal", [["barracks", 3]]],
+      ["hospital", [["barracks", 3], ["town-hall", 5]]],
+      ["military-command", [["barracks", 5]]],
+      ["watchtower", [["city-gate", 3]]],
+      ["trapmaker", [["city-gate", 5]]],
+      ["exploration-center", [["watchtower", 3]]],
+      ["stable", [["barracks", 3], ["town-hall", 5]]],
+      ["war-hall", [["barracks", 5], ["stable", 1]]],
+      ["harbor", [["sawmill", 5], ["town-hall", 5]]],
+      ["siege-workshop", [["stable", 1], ["arsenal", 3], ["town-hall", 8]]],
+      ["dragon-roost", [["town-hall", 20], ["stable", 10], ["siege-workshop", 5]]],
+    ] as [string, [string, number][]][]
+  ).map(([id, req]) => [id, req.map(([building, level]) => ({ building, level }))])
+);
 
+// ─── Mastery ─────────────────────────────────────────────────────────────────
+
+/**
+ * A building at its top level can earn up to MASTERY.stars Mastery stars:
+ * each costs what its last level cost and takes longer each time, and counts
+ * as `levelsPerStar` more levels of its effect. A maxed village always has a
+ * next goal, and five stars on an Arsenal add only +5% attack (40% → 45%), so
+ * veterans grow without running away from everyone else. Unlock-only
+ * buildings (Barracks, Stable, Siege Workshop, Exploration Center) and the
+ * Town Hall have nothing to master.
+ */
+export const MASTERY = {
+  stars: 5,
+  levelsPerStar: 0.5,
+  /** Star k takes the last level's build time × (1 + timePerStar × k). */
+  timePerStar: 0.5,
+} as const;
+
+export const canMaster = (b: BuildingDef) =>
+  b.id !== TOWN_HALL && !(b.effect.kind === "military" && (b.effect.stat === "unlock" || b.effect.stat === "scout"));
+
+/** Mastery star `star` (1-based): costs the top level's price. */
+export const masteryCost = (b: BuildingDef) => buildingUpgradeCost(b, b.maxLevel - 1);
+export const masteryBaseSeconds = (b: BuildingDef, star: number) =>
+  Math.round(buildingUpgradeBaseSeconds(b, b.maxLevel - 1) * (1 + MASTERY.timePerStar * star));
+
+const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH, leadsTownHall: true, timeWeight: 0.8 });
+
+// Effects are set so the top level gives a round, readable maximum:
+// Arsenal/Armory +40%, City Gate +60%, Military Command and War Hall 50%,
+// Hospital 50%, Trapmaker 25%. (They were +5%/+6% a level with no top.)
 export const BUILDINGS: BuildingDef[] = [
-  def("Town Hall", 300, { kind: "townHall" }, "Builds 4% faster per level (up to 80%). An extra builder every 5 levels."),
-  def("Resource Warehouse", 200, { kind: "warehouse", multiplierPerLevel: 1.3 }, "+30% storage for every resource per level."),
+  def("Town Hall", 300, { kind: "townHall" }, "Builds 2.5% faster per level (up to 50% at level 20). A second builder at level 10, a third at 20. No other building can be higher than it.", { timeWeight: 1.5 }),
+  def("Resource Warehouse", 200, { kind: "warehouse", multiplierPerLevel: 1.22 }, "+22% storage for every resource per level.", { leadsTownHall: true, timeWeight: 0.8 }),
   producer(def("Iron Mine", 150, { kind: "production", resource: "iron", perLevel: 60 }, "+60 iron per hour at level 1, and each level adds 15% more than the last.")),
   producer(def("Sawmill", 150, { kind: "production", resource: "wood", perLevel: 60 }, "+60 wood per hour at level 1, and each level adds 15% more than the last.")),
   producer(def("Brickyard", 150, { kind: "production", resource: "clay", perLevel: 60 }, "+60 clay per hour at level 1, and each level adds 15% more than the last.")),
   producer(def("Windmill", 150, { kind: "production", resource: "crop", perLevel: 60 }, "+60 crop per hour at level 1, and each level adds 15% more than the last.")),
-  def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 10 }, "+10% crop production per level."),
-  def("Treasury", 300, { kind: "coins", perLevel: 40 }, "+40 coins per hour per level."),
-  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
-  def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per tap per level."),
-  def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
-  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5)."),
-  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10)."),
-  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break walls and Catapults (level 5) that break towers."),
-  def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 5 }, "Troops train 5% faster per level."),
-  def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 5 }, "+5% attack for all troops per level."),
-  def("Armory", 250, { kind: "military", stat: "defense", perLevel: 5 }, "+5% defense for all troops per level."),
-  def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 6 }, "+6% defense per level. Enemy rams can break it."),
-  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home."),
-  def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 0.5 }, "Traps catch 0.5% of attackers per level before the battle starts (up to 25%)."),
+  def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 5 }, "+5% crop production per level (up to +100%)."),
+  // Coins grow 10% a level like production, so a high Treasury is still worth building (was +40 flat).
+  def("Treasury", 300, { kind: "coins", perLevel: 40, growth: 1.1 }, "+40 coins per hour at level 1, and each level adds 10% more than the last."),
+  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant (one more offer) and lets loads carry 15% more."),
+  def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per strike per level (up to +50%).", { maxLevel: 10 }),
+  def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra people per hour per level: more recruits for your army."),
+  // Unlock buildings stop at their last unlock: higher levels did nothing.
+  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5).", { maxLevel: 5 }),
+  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10).", { maxLevel: 10 }),
+  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break walls and Catapults (level 5) that break towers.", { maxLevel: 5 }),
+  def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 2.5 }, "Troops train 2.5% faster per level (up to 50%)."),
+  def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 2 }, "+2% attack for all troops per level (up to +40%)."),
+  def("Armory", 250, { kind: "military", stat: "defense", perLevel: 2 }, "+2% defense for all troops per level (up to +40%)."),
+  def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 3 }, "+3% defense per level (up to +60%). Enemy rams can break it."),
+  // Grows 12% a level so it still counts against big late armies (was +60 flat: 1,200 at level 20, now ~4,300).
+  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60, growth: 1.12 }, "+60 defense points at level 1, and each level adds 12% more, even with no troops home."),
+  def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 1.25 }, "Traps catch 1.25% of attackers per level before the battle starts (up to 25%)."),
   def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
-  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Treats the wounded after a battle: saves 4% of them per level (max 50%). The killed can't be saved."),
-  def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
-  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
-  def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after."),
-  def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
-].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix }));
+  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 2.5 }, "Treats the wounded after a battle: saves 2.5% of them per level (up to 50%). The killed can't be saved."),
+  def("War hall", 350, { kind: "military", stat: "march", perLevel: 2.5 }, "Armies come home 2.5% faster per level (up to 50%)."),
+  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Reveals enemies' exact defense before you attack, and sends spies.", { maxLevel: 1 }),
+  def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after (up to level 10).", { maxLevel: 10, timeWeight: 3 }),
+  def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 3 }, "Builds Longships (level 1) to carry armies across the sea. +3% defense against landings from the sea per level (up to +60%)."),
+].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix, requires: BUILDING_REQUIRES[b.id] ?? [] }));
 
 export type BuildingId = string;
 
-export const BUILDING_BY_ID: Record<BuildingId, BuildingDef> = Object.fromEntries(
-  BUILDINGS.map((b) => [b.id, b])
-);
+/**
+ * A lookup table with no prototype: ids come from clients, and on a plain
+ * object "__proto__", "toString" or "constructor" find something, which
+ * crashed the server with a TypeError instead of a GameError.
+ */
+export const table = <T,>(entries: [string, T][]): Record<string, T> =>
+  Object.assign(Object.create(null) as Record<string, T>, Object.fromEntries(entries));
+
+export const BUILDING_BY_ID: Record<BuildingId, BuildingDef> = table(BUILDINGS.map((b) => [b.id, b]));
 
 export const buildingImage = (b: BuildingDef) =>
   `/images/buildings/${encodeURIComponent(b.name)}.webp`;
@@ -294,7 +420,26 @@ export const CROP_UPKEEP_PER_BUILDING_LEVEL = 1;
 
 
 
-export const TOWN_HALL_SPEEDUP_PER_LEVEL = 0.04;
+/**
+ * Queue controls. A cancelled upgrade gives everything back within
+ * CANCEL_FULL_REFUND_MS (a mis-tap), CANCEL_REFUND_SHARE after. One with
+ * under FREE_FINISH_MS left can be finished at once for free (Plus: under
+ * FREE_FINISH_PLUS_MS), so the last minutes of a short job don't need a
+ * second visit. Convenience, not power: it only saves a wait of minutes.
+ */
+export const CANCEL_FULL_REFUND_MS = 60_000;
+export const CANCEL_REFUND_SHARE = 0.8;
+export const FREE_FINISH_MS = 5 * 60_000;
+export const FREE_FINISH_PLUS_MS = 15 * 60_000;
+
+/** Town Hall: 2.5% faster building a level, so 50% at level 20 (was 4% up to 80%). */
+export const TOWN_HALL_SPEEDUP_PER_LEVEL = 0.025;
+/**
+ * Town Hall levels that each bring one more builder. It was one every 5
+ * levels with no end (Town Hall 30 = 7 builders), which let old tribes build
+ * everything at once and made the Plus builder worthless to them.
+ */
+export const TOWN_HALL_BUILDER_LEVELS = [10, 20];
 
 // ─── Quests ──────────────────────────────────────────────────────────────────
 
@@ -314,7 +459,7 @@ export const QUESTS: QuestDef[] = [
   { id: "x", title: "Follow our X Account", reward: { coins: 1000, population: 10, growth: 4 }, waitSeconds: 10 },
 ];
 
-export const QUEST_BY_ID = Object.fromEntries(QUESTS.map((q) => [q.id, q])) as Record<QuestId, QuestDef>;
+export const QUEST_BY_ID = table(QUESTS.map((q) => [q.id, q])) as Record<QuestId, QuestDef>;
 
 /** Turns a handle or URL from env into a link for a quest. */
 export const questUrl = (id: QuestId, value: string | undefined) => {
@@ -325,6 +470,18 @@ export const questUrl = (id: QuestId, value: string | undefined) => {
   if (id === "youtube") return `https://www.youtube.com/@${handle}`;
   return `https://x.com/${handle}`;
 };
+
+// ─── Merchant of the North (exchange) ─────────────────────────────────────────
+
+/**
+ * Swap one resource for another at once with the game's merchant, at a loss:
+ * every 100 given brings EXCHANGE_RATE × 100 back. Buildings each want their
+ * own mix, so late villages pile up hundreds of thousands of one resource
+ * while waiting for another, and there isn't always a player to trade with.
+ * The loss keeps the player market (about 1 : 1) the better deal. Needs a
+ * Trading Post; one swap at a time holds at most one merchant's load.
+ */
+export const EXCHANGE_RATE = 0.6;
 
 // ─── Clans ───────────────────────────────────────────────────────────────────
 
@@ -357,6 +514,14 @@ export const CLAN = {
   techLevelsPerClanLevel: 5,
   /** Each Great Hall level adds this many member seats (on top of maxMembers). */
   seatsPerHallLevel: 5,
+  /**
+   * Shared Fields, War Banners and Shield Wall stop adding perks past this
+   * tech level (+45% production, +30% attack, +30% defense). Clan levels and
+   * the Great Hall keep going without a top; only these perks stop. Buildings
+   * got tops in Nov 2026 and these were the last combat bonuses without one:
+   * a rich clan could keep stacking attack on top of a maxed Arsenal.
+   */
+  perkMaxLevel: 15,
   /** Perk per tech level, in percent. */
   fieldsPercent: 3,
   bannersPercent: 2,
@@ -365,10 +530,68 @@ export const CLAN = {
   techBaseResources: 4000,
   techBaseCoins: 500,
   techCostGrowth: 2.2,
+  /**
+   * Aid limits, against second accounts feeding a main one: a member gets
+   * aid only after aidMinTenureMs in the clan, and at most aidDailyHours of
+   * their own production of that resource (or coin income) in any day,
+   * whichever clan it comes from. A clan can still double a member's growth,
+   * but can't turn a dozen fake tribes into one giant.
+   */
+  aidMinTenureMs: 3 * 24 * 3600e3,
+  aidDailyHours: 24,
   /** A donated coin counts this much towards a member's contribution. */
   coinContributionWeight: 4,
   /** Entries kept in the clan chronicle shown to members. */
   logSize: 40,
+};
+
+// ─── Outposts ────────────────────────────────────────────────────────────────
+
+/**
+ * Outposts: new places on the map a tribe founds with resources and people,
+ * each with its own four resource fields and its own builder. They feed the
+ * home village's stores. The Town Hall allows one at each of `hallLevels`.
+ * Fields stop at `fieldMaxLevel`, so three outposts add about half a top
+ * village's output: a late-game step up for armies and the Wonder, not a
+ * second top village. Outposts can't be attacked (yet): raids still go home.
+ */
+export const OUTPOST = {
+  hallLevels: [10, 15, 20],
+  /** The n-th outpost (0-based) costs foundResources × foundGrowth^n of each resource, and foundPeople × (n + 1) people. */
+  foundResources: 40_000,
+  foundGrowth: 2,
+  foundPeople: 500,
+  fieldMaxLevel: 10,
+  /** Settled between these many tiles from home, on free dry land: past the home village's own walls on the map. */
+  minDistance: 5,
+  maxDistance: 10,
+} as const;
+
+// ─── Seasons and the World Wonder ─────────────────────────────────────────────
+
+/**
+ * The server-wide end goal. Clans raise a World Wonder from their treasury,
+ * one level at a time with a wait between levels; the first clan to reach
+ * `levels` wins the season. Then every Wonder falls back to nothing and a new
+ * season begins. Villages, armies and clans are kept: a season is a race,
+ * not a wipe.
+ *
+ * Numbers: the whole Wonder costs ~69M of each resource (and coins), about two
+ * weeks of everything a full clan of maxed villages makes, and at least
+ * levels × levelMs (10 days) however rich the clan is. A season lasts one to a
+ * few months.
+ */
+export const WONDER = {
+  levels: 20,
+  baseResources: 200_000,
+  baseCoins: 20_000,
+  growth: 1.25,
+  /** After a level is raised, the next can't be for this long. */
+  levelMs: 12 * 3600e3,
+  /** A clan needs this clan level before it can start a Wonder. */
+  minClanLevel: 2,
+  /** Each member of the winning clan gets this many coins. */
+  winnerCoins: 100_000,
 };
 
 // ─── Valorians Plus ──────────────────────────────────────────────────────────
@@ -439,10 +662,18 @@ export type UnitDef = {
   mounted?: boolean;
   /** Defends better against the mounted share of an attack (see ANTI_CAVALRY_BONUS). */
   antiCavalry?: boolean;
-  /** Share of the enemy's City Gate bonus each one breaks. */
+  /** Defends better against the foot-soldier share of an attack (see ANTI_INFANTRY_BONUS). */
+  antiInfantry?: boolean;
+  /**
+   * City Gate levels each one breaks for the battle (see siegeBreak). Was a
+   * share of the gate per ram (2%), so 50 rams undid any gate, even a City
+   * Gate 20 that took months: now a bigger gate needs more rams.
+   */
   wallBreak?: number;
-  /** Share of the enemy's Watchtower defense each one breaks. */
+  /** Watchtower levels each one breaks for the battle (was a 3% share per catapult). */
   towerBreak?: number;
+  /** Share of the City Gate and the Watchtower it breaks whatever their level (the dragon's fire). */
+  fireBreak?: number;
   /**
    * A ship: carries this many troop slots across the sea (see unitSlots). Ships
    * never fight; they wait off the beach and sail the survivors home. For
@@ -455,66 +686,81 @@ export type UnitDef = {
   maxOwned?: number;
 };
 
+/**
+ * Troops (Nov 2026 rebalance). Every troop has one job, and higher tiers buy
+ * efficiency with a deeper unlock:
+ * - Spearman: the cheapest defense, best against horsemen.
+ * - Archer: defends best against foot soldiers (and the dragon).
+ * - Swordsman: the all-rounder.
+ * - Axeman: the most attack for its crop, but it can't defend.
+ * - Light Cavalry: the raider, fastest with the biggest carry.
+ * - Paladin: the fast defender, the most defense for its crop.
+ * - Knight: the elite, the most attack for its cost and training time.
+ * Before, Axemen (Barracks 5) beat Knights (Stable 10) at attack per resource
+ * (21 vs 16 per 100) and per crop (45 vs 25), Archers were a weaker Axeman,
+ * and Spearmen did a Paladin's job for a quarter of the crop.
+ */
 export const UNITS: UnitDef[] = [
   {
-    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 18, carry: 25,
-    cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1, speed: 30,
+    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 22, carry: 25,
+    cost: { iron: 24, wood: 43, clay: 19, crop: 14 }, time: 20, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 1 },
     description: "Cheap, sturdy defender. Strong against cavalry.",
     antiCavalry: true,
   },
   {
-    id: "swordsman", name: "Swordsman", icon: "🗡️", attack: 30, defense: 22, carry: 40,
-    cost: { iron: 70, wood: 40, clay: 45, crop: 25 }, time: 25, upkeep: 1, speed: 30,
+    id: "swordsman", name: "Swordsman", icon: "🗡️", attack: 30, defense: 25, carry: 40,
+    cost: { iron: 74, wood: 42, clay: 48, crop: 26 }, time: 30, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 2 },
     description: "Well-armored all-rounder. Good in attack and defense.",
   },
   {
-    id: "archer", name: "Archer", icon: "🏹", attack: 22, defense: 10, carry: 15,
-    cost: { iron: 35, wood: 55, clay: 15, crop: 20 }, time: 20, upkeep: 1, speed: 27,
+    id: "archer", name: "Archer", icon: "🏹", attack: 15, defense: 20, carry: 20,
+    cost: { iron: 32, wood: 51, clay: 14, crop: 18 }, time: 22, upkeep: 1, speed: 27,
     requires: { building: "barracks", level: 3 },
-    description: "Strong attack, weak in defense.",
+    description: "Defender from the walls. Strong against foot soldiers, and shoots down dragons.",
+    antiInfantry: true,
   },
   {
-    id: "axeman", name: "Axeman", icon: "🪓", attack: 45, defense: 12, carry: 45,
-    cost: { iron: 85, wood: 60, clay: 30, crop: 35 }, time: 35, upkeep: 1, speed: 30,
+    id: "axeman", name: "Axeman", icon: "🪓", attack: 45, defense: 10, carry: 45,
+    cost: { iron: 93, wood: 66, clay: 33, crop: 38 }, time: 40, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 5 },
-    description: "The strongest foot soldier in attack, but weak in defense.",
+    description: "The most attack for the crop it eats, but weak in defense.",
   },
   {
-    id: "cavalry", name: "Light Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
-    cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3, speed: 12,
+    id: "cavalry", name: "Light Cavalry", icon: "🐎", attack: 40, defense: 20, carry: 100,
+    cost: { iron: 111, wood: 67, clay: 44, crop: 78 }, time: 50, upkeep: 2, speed: 10,
     requires: { building: "stable", level: 1 },
-    description: "Fast attack horsemen. Carry the most loot, but weak in forests and against spears.",
+    description: "The raider: the fastest troop, and carries the most loot. Weak in forests and against spears.",
     mounted: true,
   },
   {
-    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 75, carry: 60,
-    cost: { iron: 140, wood: 100, clay: 100, crop: 70 }, time: 60, upkeep: 2, speed: 15,
+    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 60, carry: 60,
+    cost: { iron: 137, wood: 97, clay: 98, crop: 68 }, time: 60, upkeep: 2, speed: 14,
     requires: { building: "stable", level: 3 },
-    description: "Defensive horseman. The best defender, and rides fast to help.",
+    description: "Defensive horseman. The most defense for its crop, and rides fast to help.",
     mounted: true,
   },
   {
-    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 100, defense: 40, carry: 80,
-    cost: { iron: 220, wood: 160, clay: 150, crop: 90 }, time: 90, upkeep: 4, speed: 14,
+    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 120, defense: 45, carry: 80,
+    cost: { iron: 213, wood: 155, clay: 145, crop: 87 }, time: 90, upkeep: 3, speed: 14,
     requires: { building: "stable", level: 10 },
-    description: "Heavy armored knight. The strongest attacker in the game.",
+    description: "Heavy armored knight. The most attack for its cost and training time.",
     mounted: true,
   },
   {
     id: "ram", name: "Battering Ram", icon: "🪵", attack: 30, defense: 5, carry: 0,
-    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 4, speed: 45,
+    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 3, speed: 45,
     requires: { building: "siege-workshop", level: 1 },
-    description: "Each ram breaks 2% of the enemy's City Gate bonus.",
-    wallBreak: 0.02,
+    description: "Every 10 rams break one level of the enemy's City Gate for the battle.",
+    wallBreak: 0.1,
   },
   {
     id: "catapult", name: "Catapult", icon: "☄️", attack: 75, defense: 4, carry: 0,
     cost: { iron: 250, wood: 300, clay: 150, crop: 60 }, time: 150, upkeep: 6, speed: 55,
     requires: { building: "siege-workshop", level: 5 },
-    description: "Huge attack but the slowest unit. Each catapult breaks 3% of the enemy's Watchtower defense.",
-    towerBreak: 0.03,
+    description: "Huge attack but the slowest unit. Every 8 catapults break one level of the enemy's Watchtower for the battle.",
+    towerBreak: 0.125,
   },
   {
     id: "longship", name: "Longship", icon: "⛵", attack: 0, defense: 0, carry: 300,
@@ -531,19 +777,18 @@ export const UNITS: UnitDef[] = [
       "One per tribe. Flies straight to any target, over seas and mountains, too fast for bandits. Its fire breaks half of a City Gate and a Watchtower. Carries no loot. Never dies: beaten, it comes home wounded and rests 12 hours. Archers hit it hard.",
     flying: true,
     maxOwned: 1,
-    wallBreak: 0.5,
-    towerBreak: 0.5,
+    fireBreak: 0.5,
   },
 ];
 
 /**
  * The dragon (see UNITS): stronger by `perRoostLevel` for every Dragon Roost
- * level past the first, without end; beaten, it rests `restMs` once home;
+ * level past the first, up to the Roost's top (level 10: +135%); beaten, it rests `restMs` once home;
  * Archers defend `archerBonus` better against the share of an attack it makes.
  */
 export const DRAGON = { perRoostLevel: 0.15, restMs: 12 * 3600 * 1000, archerBonus: 2 } as const;
 
-export const UNIT_BY_ID = Object.fromEntries(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
+export const UNIT_BY_ID = table(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
 
 /** A troop's name for many of them: Spearmen, Axemen, Light Cavalry, Archers. */
 export const unitPlural = (id: UnitId) => {
@@ -560,8 +805,21 @@ export const MAX_TRAIN_BATCHES = 5;
 /** Most units in one batch. */
 export const MAX_BATCH = 500;
 
-/** Every tribe has some militia even with no troops. */
-export const militiaDefense = (population: number) => Math.round(50 + population * 0.1);
+/**
+ * People a troop takes from the population when it's trained: one per crop it
+ * eats (a Spearman 1, a Knight 3). Soldiers come from your people, so the
+ * population is spent on armies and lost in battle, instead of only being a
+ * score that grows by itself. The dragon is hatched, not recruited.
+ */
+export const unitPeople = (u: UnitDef) => (u.maxOwned ? 0 : u.upkeep);
+
+/**
+ * Every tribe has some militia even with no troops: 50, and 0.1 per person,
+ * up to MILITIA_MAX. Population never stops growing, so without a top the
+ * militia alone would one day hold off real armies.
+ */
+export const MILITIA_MAX = 2000;
+export const militiaDefense = (population: number) => Math.round(Math.min(MILITIA_MAX, 50 + population * 0.1));
 
 /** Resources of each type a Hideout keeps safe from raiders. */
 export const hiddenResources = (hideoutLevel: number) => Math.round(500 * Math.pow(1.4, hideoutLevel));
@@ -598,6 +856,15 @@ export const shownXY = (p: { x: number; y: number }) =>
 export const TRIBE_SPACING = 4;
 /** Shortest possible one-way march. */
 export const MIN_MARCH_SECONDS = 20;
+/**
+ * Shortest march on another player's tribe. Tribes settle TRIBE_SPACING tiles
+ * apart, so a neighbour's cavalry arrived in 40 s: the "under attack" message
+ * came too late to train, call troops home or ask the clan for help. Five
+ * minutes gives the defender a real chance; camps and lairs keep MIN_MARCH_SECONDS.
+ */
+export const MIN_RAID_MARCH_SECONDS = 300;
+/** Armies one tribe can have on the move at once. */
+export const MAX_MARCHES = 5;
 /** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
 /**
  * Spies (needs an Exploration Center): planted on a tribe for `durationMs`,
@@ -619,6 +886,12 @@ export const SCOUT_COST_PER_TILE = 10;
 export const SCOUT_MIN_COST = 30;
 /** Anti-cavalry troops (Spearmen) defend this much better against the mounted share of an attack. */
 export const ANTI_CAVALRY_BONUS = 0.5;
+/**
+ * Anti-infantry troops (Archers) defend this much better against the foot
+ * soldiers' share of an attack. With the Spearmen against horsemen it makes a
+ * rock-paper-scissors: an attacker mixes foot and horse, a defender spears and bows.
+ */
+export const ANTI_INFANTRY_BONUS = 0.5;
 /** Mounted troops lose this much attack when fighting in a forest. */
 export const FOREST_CAVALRY_PENALTY = 0.25;
 
@@ -694,9 +967,17 @@ export function campName(level: number) {
   const word = words[(Math.floor(level / 2) * 5) % words.length];
   return level % 2 ? `${word} ${campTier(level)}` : `${word}'s ${campTier(level)}`;
 }
-/** Cleared camps can be raided again for a smaller haul after this cooldown. */
-export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
+/**
+ * Cleared camps can be raided again for a smaller haul after this cooldown:
+ * CAMP_REPEAT_SHARE of the first reward, but never more than
+ * CAMP_REPEAT_HOURS of the tribe's own production. Was every hour for 30%
+ * with no cap: three camps around level 30 farmed hourly paid ~40× a top
+ * village's production, so camps became the whole economy. Now farming all
+ * the camps you keep (CAMPS_KEPT) about doubles your income at most.
+ */
+export const CAMP_REPEAT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
+export const CAMP_REPEAT_HOURS = 2;
 /**
  * Only your newest beaten camps stay on the map to raid again; older ones are
  * gone (they still count as beaten). Keeps the map tidy and stops sweeping
@@ -829,9 +1110,19 @@ export const MAX_RANK = RANKS.length - 1;
 
 /** Each rank adds this much attack and defense to the regiment. */
 export const RANK_BONUS = 0.04;
-/** XP for a battle = enemy strength × this (×0.5 for a defeat), shared by the troop types that fought. */
-export const XP_PER_STRENGTH = 0.2;
+/**
+ * XP for a battle = XP_SCALE × enemy strength ^ XP_POWER (×XP_DEFEAT_SHARE for a
+ * defeat), shared by the troop types that fought. Was a straight 0.2 × strength:
+ * enemies grow ×1.35 a camp, so one late battle (camp 20: ~4,800 XP) carried a
+ * regiment half way to Legend and ranks were maxed weeks into the game. Grown
+ * by a power under 1, a camp 1 battle gives about the same as before (~17) and
+ * a camp 20 one ~700: Legend comes around camp 25–30, months in.
+ */
+export const XP_SCALE = 1;
+export const XP_POWER = 0.65;
 export const XP_DEFEAT_SHARE = 0.5;
+/** Barbarians already beaten teach less: a repeat camp raid gives this share of the XP. */
+export const XP_REPEAT_CAMP_SHARE = 0.3;
 /**
  * Experience lives in the soldiers: losing a share of a regiment costs that same
  * share of its XP, and a regiment that is wiped out loses all of it (owner's rule).

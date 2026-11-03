@@ -33,7 +33,7 @@ import {
 import { ArmyLine, UnitEmoji, fmt } from "./shared";
 import { CHUNK, DETAIL_CHUNK, GroundOverview, GroundPiece, TILE, baseRes, closeUpRes } from "./MapGround";
 import { pinScale, useMapCamera } from "./useMapCamera";
-import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, PARCHMENT_FULL, VILLAGE_GROW, VILLAGE_MIN, parchmentShare } from "./MapCanvas";
+import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, Ring, PARCHMENT_FULL, VILLAGE_GROW, VILLAGE_MIN, parchmentShare } from "./MapCanvas";
 import { parchmentImage } from "./parchmentImage";
 import { WorldMap } from "./WorldMap";
 import { roadShape, timeAt } from "./roadShape";
@@ -163,6 +163,8 @@ type MapData = {
   camps: Camp[];
   movements: Movement[];
   caravans?: Caravan[];
+  /** Outposts in view (see OUTPOST). */
+  outposts?: { ownerId: number; x: number; y: number; isMe: boolean; name: string; clanTag: string | null }[];
   myPower: number;
 };
 
@@ -1109,7 +1111,7 @@ export const WarMap = ({
   // ─── The villages and camps the canvas draws ───
   const canvasTribes: CanvasTribe[] =
     data
-      ? data.tribes.filter((t) => !(t.isMe && villageShown)).map((t) => {
+      ? data.tribes.filter((t) => !(t.isMe && villageShown)).map((t): CanvasTribe => {
           const picked = selected?.kind === "tribe" && selected.tribe.id === t.id;
 
           return {
@@ -1127,7 +1129,28 @@ export const WarMap = ({
             flag: t.clan?.flag ?? null,
             name: t.isMe ? "You" : t.clan ? `[${t.clan.tag}] ${t.name}` : t.name,
           };
-        })
+        }).concat(
+          // Outposts: small villages of their own on the map; tapping one opens its owner.
+          (data.outposts ?? []).map((o) => {
+            const owner = data.tribes.find((t) => t.id === o.ownerId);
+
+            return {
+              id: o.ownerId,
+              x: px(o.x),
+              y: py(o.y),
+              size: Math.round(VILLAGE_MIN * 0.7),
+              ring: (o.isMe ? "me" : owner?.ally ? "ally" : owner ? strength(owner.power) : "even") as Ring,
+              island: false,
+              picked: false,
+              loud: labelsAll || o.isMe,
+              shielded: false,
+              isMe: o.isMe,
+              townHall: 0,
+              flag: owner?.clan?.flag ?? null,
+              name: `${o.isMe ? "Your" : `${o.clanTag ? `[${o.clanTag}] ` : ""}${o.name}'s`} outpost`,
+            } satisfies CanvasTribe;
+          })
+        )
       : [];
   const canvasCamps: CanvasCamp[] =
     data
@@ -1833,7 +1856,7 @@ export const WarMap = ({
                   {fmt(c.reward.coins)}
                   {c.reward.first
                     ? " for the first win"
-                    : " (beaten camps give a smaller haul every hour)"}
+                    : " (beaten camps give a smaller haul every 6 hours)"}
                   .
                 </p>
                 {c.state === "locked" ? (

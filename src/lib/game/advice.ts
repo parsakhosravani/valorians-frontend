@@ -2,7 +2,7 @@
  * Advice for the Build and Hall screens: what can be upgraded now, what is
  * missing, and which upgrade is the best next step. Pure functions.
  */
-import { BUILDINGS, BuildingDef, RESOURCE_IDS, ResourceId, RESOURCE_NAMES, productionAt, costTotal } from "./config";
+import { BUILDINGS, BuildingDef, RESOURCE_IDS, ResourceId, RESOURCE_NAMES, TOWN_HALL_BUILDER_LEVELS, TOWN_HALL_SPEEDUP_PER_LEVEL, productionAt, costTotal, effectAt } from "./config";
 import { GameState, buildingUpgradeInfo, getRates } from "./engine";
 
 export type BuildingGroup = "economy" | "military" | "defense";
@@ -30,9 +30,9 @@ export const nextLevelGain = (b: BuildingDef, level = 0): string => {
     case "warehouse":
       return `+${Math.round((e.multiplierPerLevel - 1) * 100)}% storage`;
     case "townHall":
-      return "Builds 4% faster";
+      return TOWN_HALL_BUILDER_LEVELS.includes(level + 1) ? "One more builder" : `Builds ${TOWN_HALL_SPEEDUP_PER_LEVEL * 100}% faster`;
     case "coins":
-      return `+${e.perLevel} coins/h`;
+      return `+${Math.round(effectAt(e, level + 1) - effectAt(e, level))} coins/h`;
     case "population":
       return `+${e.perLevel} pop./h`;
     case "tapBoost":
@@ -48,7 +48,7 @@ export const nextLevelGain = (b: BuildingDef, level = 0): string => {
         case "wall":
           return `+${e.perLevel}% wall defense`;
         case "flatDefense":
-          return `+${e.perLevel} defense`;
+          return `+${Math.round(effectAt(e, level + 1) - effectAt(e, level))} defense`;
         case "dragon":
           return level === 0 ? "Hatches your dragon" : `Dragon ${e.perLevel}% stronger`;
         case "traps":
@@ -81,6 +81,10 @@ export type UpgradeOption = {
   affordable: boolean;
   /** Hours until production covers what is missing; null if it never will. */
   hoursToAfford: number | null;
+  /** Why it can't be upgraded whatever the resources (top level, Town Hall too low…), or null. */
+  blocked: string | null;
+  /** Mastery stars earned (see MASTERY). */
+  stars: number;
 };
 
 export function upgradeOptions(state: GameState): UpgradeOption[] {
@@ -111,12 +115,14 @@ export function upgradeOptions(state: GameState): UpgradeOption[] {
       job: state.queue.find((q) => q.building === b.id),
       missing,
       affordable: Object.keys(missing).length === 0,
-      hoursToAfford: Number.isFinite(hours) ? hours : null,
+      hoursToAfford: Number.isFinite(hours) && !info.blocked ? hours : null,
+      blocked: info.blocked,
+      stars: state.mastery?.[b.id] ?? 0,
     };
   });
 }
 
-export const canStart = (o: UpgradeOption) => o.affordable && !o.job;
+export const canStart = (o: UpgradeOption) => o.affordable && !o.job && !o.blocked;
 
 type Advice = { id: string; reason: string };
 
@@ -142,7 +148,9 @@ export function recommendUpgrade(state: GameState, options = upgradeOptions(stat
   }
   const hall = pick("town-hall");
 
-  if (hall && hall.toLevel % 5 === 0) return { id: "town-hall", reason: "Unlocks another builder" };
+  if (hall && TOWN_HALL_BUILDER_LEVELS.includes(hall.toLevel)) return { id: "town-hall", reason: "Unlocks another builder" };
+  // Everything else is waiting on the Town Hall: raise it.
+  if (hall && !ready.some((o) => o.building.id !== "town-hall")) return { id: "town-hall", reason: "Lets other buildings grow" };
   const producers = ready.filter((o) => o.building.effect.kind === "production");
 
   if (producers.length) {

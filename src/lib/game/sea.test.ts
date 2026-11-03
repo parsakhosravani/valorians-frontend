@@ -149,8 +149,8 @@ test("landing from the sea: defenders fight better, harbor adds more, ships neve
 
   def.buildings.harbor = 5;
   const harbored = W.battleNumbers(atk, sent, def, "plains", 0, true);
-  expect(harbored.defense / W.battleNumbers(atk, sent, def, "plains").defense).toBeCloseTo(1 + LANDING_DEFENSE + 0.2);
-  expect(W.landingFactorFor(5)).toBeCloseTo(1 + LANDING_DEFENSE + 0.2);
+  expect(harbored.defense / W.battleNumbers(atk, sent, def, "plains").defense).toBeCloseTo(1 + LANDING_DEFENSE + 0.15);
+  expect(W.landingFactorFor(5)).toBeCloseTo(1 + LANDING_DEFENSE + 0.15);
 
   const { report, state } = W.defendRaid(def, atk, sent, T0, 0.5, { landing: true });
   expect(report.attackerLosses.longship).toBe(0);

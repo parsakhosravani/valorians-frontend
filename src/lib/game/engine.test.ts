@@ -112,11 +112,11 @@ test("producers yield 15% more each level, and their upgrades pay back in days",
   expect(E.getRates(s).productionPerHour.iron - mine).toBeCloseTo(60 + 69);
 
   const b = C.BUILDING_BY_ID["iron-mine"];
-  for (const lvl of [5, 10, 15, 20]) {
-    const cost = C.costTotal(C.buildingUpgradeCost(b, lvl));
-    const gain = C.productionAt(60, lvl + 1) - C.productionAt(60, lvl);
-    expect(cost / gain / 24).toBeLessThan(6); // days to pay back
-  }
+  const payback = (lvl: number) =>
+    C.costTotal(C.buildingUpgradeCost(b, lvl)) / (C.productionAt(60, lvl + 1) - C.productionAt(60, lvl)) / 24; // days
+  for (const lvl of [5, 10, 14]) expect(payback(lvl)).toBeLessThan(3);
+  // The steep last levels are a long goal, but still pay back within three weeks.
+  expect(payback(19)).toBeLessThan(21);
 });
 
 test("starving troops desert, the hungriest first, until the rest can be fed", () => {
@@ -154,8 +154,226 @@ test("each building's cost is split by what it's made of, keeping the same total
 
 test("upgrading takes each resource by the building's mix", () => {
   const s = E.createInitialState(0);
+  s.buildings["town-hall"] = 5;
+  s.buildings.sawmill = 5; // the Harbor needs it
   for (const r of C.RESOURCE_IDS) s.resources[r] = 100000;
   const cost = E.buildingUpgradeInfo(s, "harbor").cost;
   const after = E.upgradeBuilding(s, "harbor", 0);
   for (const r of C.RESOURCE_IDS) expect(after.resources[r]).toBe(100000 - cost[r]);
+});
+
+
+// ─── Building tops (Nov 2026) ─────────────────────────────────────────────────
+
+const rich = () => {
+  const s = E.createInitialState(0);
+  for (const r of C.RESOURCE_IDS) s.resources[r] = 1e6;
+  return s;
+};
+
+test("no building can be raised above the Town Hall; producers may lead by two", () => {
+  const s = rich();
+  expect(() => E.upgradeBuilding(s, "barracks", 0)).toThrow("Needs Town Hall 1");
+  s.buildings["iron-mine"] = 2;
+  expect(() => E.upgradeBuilding(s, "iron-mine", 0)).toThrow("Needs Town Hall 1");
+  s.buildings["town-hall"] = 1;
+  expect(() => E.upgradeBuilding(s, "iron-mine", 0)).not.toThrow();
+  expect(() => E.upgradeBuilding(s, "barracks", 0)).not.toThrow();
+});
+
+test("buildings stop at their top level", () => {
+  const s = rich();
+  s.buildings["town-hall"] = 20;
+  s.buildings.arsenal = 20;
+  s.buildings.barracks = 5;
+  expect(() => E.upgradeBuilding(s, "arsenal", 0)).toThrow("top level");
+  expect(() => E.upgradeBuilding(s, "barracks", 0)).toThrow("top level");
+  expect(() => E.upgradeBuilding(s, "town-hall", 0)).toThrow("top level");
+  expect(E.getRates(s).attackBonus).toBeCloseTo(0.4);
+});
+
+test("Town Hall: a builder at 10 and 20, and at most half the build time", () => {
+  const s = E.createInitialState(0);
+  const at = (l: number) => ((s.buildings["town-hall"] = l), E.getRates(s));
+  expect(at(9).builders).toBe(1);
+  expect(at(10).builders).toBe(2);
+  expect(at(20).builders).toBe(3);
+  expect(at(20).buildSpeedMultiplier).toBeCloseTo(0.5);
+});
+
+test("build times: under a minute at first, about 16 hours for the last level", () => {
+  const b = C.BUILDING_BY_ID.arsenal;
+  expect(C.buildingUpgradeBaseSeconds(b, 0)).toBeLessThan(60);
+  expect(C.buildingUpgradeBaseSeconds(b, 9) / 60).toBeLessThan(30);
+  expect(C.buildingUpgradeBaseSeconds(b, 19) / 3600).toBeGreaterThan(12);
+  expect(C.buildingUpgradeBaseSeconds(b, 19) / 3600).toBeLessThan(20);
+});
+
+test("every upgrade fits in a Warehouse its Town Hall allows", () => {
+  const wh = C.BUILDING_BY_ID["resource-warehouse"];
+  const capAt = (l: number) => {
+    const s = E.createInitialState(0);
+    s.buildings["resource-warehouse"] = l;
+    return E.getRates(s).capacity;
+  };
+  for (const b of C.BUILDINGS) {
+    for (let l = 0; l < b.maxLevel; l++) {
+      // To reach l + 1 the Town Hall must be at least that (or l - 1 for those that lead it).
+      const hall = b.id === "town-hall" ? l : Math.max(0, l + 1 - (b.leadsTownHall ? C.TOWN_HALL_LEAD : 0));
+      const cost = C.buildingUpgradeCost(b, l);
+      const room = capAt(Math.min(wh.maxLevel, hall + C.TOWN_HALL_LEAD));
+      for (const r of C.RESOURCE_IDS) expect(cost[r]).toBeLessThanOrEqual(room);
+    }
+  }
+});
+
+test("the last levels are the long climb: maxing a village takes months of production", () => {
+  // All of every resource needed to take every building to the top, against the
+  // hourly output of all four producers at the top.
+  let need = 0;
+  for (const b of C.BUILDINGS) for (let l = 0; l < b.maxLevel; l++) need += C.costTotal(C.buildingUpgradeCost(b, l));
+  const topOutput = 4 * (C.BASE_PRODUCTION_PER_HOUR + C.productionAt(60, 20));
+  const days = need / topOutput / 24;
+  expect(days).toBeGreaterThan(60);
+  expect(days).toBeLessThan(100);
+});
+
+test("old saves above the top come down to it and get the lost levels back, up to a full warehouse", () => {
+  const s = E.createInitialState(0);
+  s.buildings.arsenal = 30;
+  s.buildings.barracks = 9;
+  for (const r of C.RESOURCE_IDS) s.resources[r] = 0;
+  const after = E.normalizeState(s);
+  expect(after.buildings.arsenal).toBe(20);
+  expect(after.buildings.barracks).toBe(5);
+  const cap = E.getRates(after).capacity;
+  for (const r of C.RESOURCE_IDS) expect(after.resources[r]).toBe(cap);
+  // Loading it again gives nothing more.
+  for (const r of C.RESOURCE_IDS) after.resources[r] = 7;
+  expect(E.normalizeState(after).resources.iron).toBe(7);
+});
+
+test("the Daily Mine stays a boost: a maxed day is well under a top village's day", () => {
+  const day = (lvl: number) => (C.energyCapacityForLevel(lvl) / C.STAMINA_PER_TAP) * C.tapPowerForLevel(lvl);
+  const topDay = 24 * 4 * (C.BASE_PRODUCTION_PER_HOUR + C.productionAt(60, 20));
+  // Even with the best combo and a maxed Academy.
+  expect(day(C.MAX_SKILL_LEVEL) * C.MAX_COMBO_MULTIPLIER * 1.5).toBeLessThan(topDay * 0.5);
+  // On day one it's worth about half of what the whole new village makes in a day.
+  expect(day(1)).toBeGreaterThan(24 * 2 * C.BASE_PRODUCTION_PER_HOUR * 0.9);
+});
+
+// ─── Unlock tree, Mastery, queue controls ─────────────────────────────────────
+
+test("the village opens up step by step: buildings need others first", () => {
+  const s = rich();
+  s.buildings["town-hall"] = 20;
+  expect(() => E.upgradeBuilding(s, "stable", 0)).toThrow("Needs Barracks 3");
+  s.buildings.barracks = 3;
+  expect(() => E.upgradeBuilding(s, "stable", 0)).not.toThrow();
+  expect(() => E.upgradeBuilding(s, "dragon-roost", 0)).toThrow("Needs Stable 10");
+  // Only the first level checks it: a building already standing keeps growing.
+  s.buildings.watchtower = 4;
+  s.buildings["city-gate"] = 0;
+  expect(() => E.upgradeBuilding(s, "watchtower", 0)).not.toThrow();
+  // Every requirement names a real building, and nothing needs itself.
+  for (const b of C.BUILDINGS) for (const r of b.requires) {
+    expect(C.BUILDING_BY_ID[r.building]).toBeDefined();
+    expect(r.building).not.toBe(b.id);
+    expect(r.level).toBeLessThanOrEqual(C.BUILDING_BY_ID[r.building].maxLevel);
+  }
+});
+
+test("a maxed building earns Mastery stars that add half a level each", () => {
+  let s = rich();
+  s.buildings["town-hall"] = 20;
+  s.buildings.arsenal = 19;
+  expect(E.masteryInfo(s, "arsenal").blocked).toBe("Reach level 20 first");
+  s.buildings.arsenal = 20;
+  const before = E.getRates(s).attackBonus;
+  s = E.masterBuilding(s, "arsenal", 0);
+  expect(s.queue[0]).toMatchObject({ building: "arsenal", mastery: true, toLevel: 1 });
+  s = E.advance(s, s.queue[0].endsAt + 1);
+  expect(s.mastery.arsenal).toBe(1);
+  expect(s.buildings.arsenal).toBe(20);
+  expect(E.getRates(s).attackBonus).toBeCloseTo(before + 0.01); // half of 2%
+  s.mastery.arsenal = C.MASTERY.stars;
+  expect(E.getRates(s).attackBonus).toBeCloseTo(0.45);
+  expect(E.masteryInfo(s, "arsenal").blocked).toBe("Fully mastered");
+  // Unlock-only buildings and the Town Hall have nothing to master.
+  s.buildings.barracks = 5;
+  expect(E.masteryInfo(s, "barracks").blocked).toBe("Nothing to master");
+  expect(E.masteryInfo(s, "town-hall").blocked).toBe("Nothing to master");
+  // Stars only count while the building stands at its top (rams can knock a gate down).
+  s.buildings["city-gate"] = 20;
+  s.mastery["city-gate"] = 5;
+  const top = E.getRates(s).wallBonus;
+  s.buildings["city-gate"] = 19;
+  expect(E.getRates(s).wallBonus).toBeCloseTo(top - 0.03 - 0.075);
+});
+
+test("cancelling gives everything back in the first minute, 80% after, and frees the builder", () => {
+  const s = rich();
+  s.buildings["town-hall"] = 5;
+  const started = E.upgradeBuilding(s, "iron-mine", 0);
+  const cost = E.buildingUpgradeInfo(s, "iron-mine").cost;
+  const quick = E.cancelBuilding(started, "iron-mine", 30_000);
+  for (const r of C.RESOURCE_IDS) expect(quick.resources[r]).toBe(s.resources[r]);
+  expect(quick.queue.length).toBe(0);
+  const late = E.cancelBuilding(started, "iron-mine", 120_000);
+  for (const r of C.RESOURCE_IDS) expect(late.resources[r]).toBe(s.resources[r] - cost[r] + Math.floor(cost[r] * 0.8));
+  expect(() => E.cancelBuilding(s, "iron-mine", 0)).toThrow("Nothing is being built");
+});
+
+test("the last few minutes of a job can be finished for free (longer with Plus)", () => {
+  const s = rich();
+  s.buildings["town-hall"] = 20;
+  s.buildings.arsenal = 12;
+  s.buildings["resource-warehouse"] = 20;
+  const started = E.upgradeBuilding(s, "arsenal", 0);
+  const end = started.queue[0].endsAt;
+  expect(() => E.finishBuilding(started, "arsenal", end - 10 * 60_000)).toThrow("last 5 minutes");
+  const done = E.finishBuilding(started, "arsenal", end - 4 * 60_000);
+  expect(done.buildings.arsenal).toBe(13);
+  expect(done.queue.length).toBe(0);
+  const plus = { ...started, plus: { until: Infinity, trialUsed: true, paid: true } };
+  expect(E.finishBuilding(plus, "arsenal", end - 14 * 60_000).buildings.arsenal).toBe(13);
+});
+
+// ─── Outposts ─────────────────────────────────────────────────────────────────
+
+test("outposts: the Town Hall allows them, they cost resources and settlers, and their fields feed home", () => {
+  let s = rich();
+  s.buildings["resource-warehouse"] = 20;
+  s.population = 5000;
+  expect(E.outpostSlots(s)).toBe(0);
+  expect(E.outpostBlocked(s)).toContain("Town Hall 10");
+  s.buildings["town-hall"] = 10;
+  expect(E.outpostSlots(s)).toBe(1);
+  const before = E.getRates(s).productionPerHour.iron;
+  s = E.foundOutpost(s, { x: 5, y: 5 }, 0);
+  expect(s.outposts.length).toBe(1);
+  expect(s.population).toBe(5000 - C.OUTPOST.foundPeople);
+  expect(E.outpostBlocked(s)).toContain("Town Hall 15");
+  // The second costs more.
+  s.buildings["town-hall"] = 15;
+  expect(E.outpostCost(s).resources.iron).toBe(C.OUTPOST.foundResources * C.OUTPOST.foundGrowth);
+
+  s = E.upgradeField(s, 0, "iron", 0);
+  expect(() => E.upgradeField(s, 0, "wood", 0)).toThrow("builder is busy"); // one builder per outpost
+  s = E.advance(s, s.outposts[0].job!.endsAt + 1);
+  expect(s.outposts[0].fields.iron).toBe(1);
+  expect(s.outposts[0].job).toBeUndefined();
+  expect(E.getRates(s).productionPerHour.iron).toBeCloseTo(before + 60, 5); // a level-1 field, like a level-1 mine
+
+  s.outposts[0].fields.iron = C.OUTPOST.fieldMaxLevel;
+  expect(() => E.upgradeField(s, 0, "iron", 0)).toThrow("Max level");
+  expect(() => E.upgradeField(s, 3, "iron", 0)).toThrow(E.GameError);
+  expect(() => E.upgradeField(s, 0, "gold" as C.ResourceId, 0)).toThrow(E.GameError);
+});
+
+test("three full outposts add about half a top village's output, not a second village", () => {
+  const top = C.productionAt(60, 20);
+  const outposts = 3 * C.productionAt(60, C.OUTPOST.fieldMaxLevel);
+  expect(outposts / top).toBeGreaterThan(0.4);
+  expect(outposts / top).toBeLessThan(0.8);
 });

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#120D09" />
+<meta name="robots" content="noindex" />
+<title>Valorians Legend</title>
+<!--
+  The launcher: what Telegram opens when LAUNCHER_URL is set (see webAppUrl in
+  src/server/appUrl.ts). It lives on GitHub Pages, away from the game's host,
+  so it still answers when the host is down, the project is paused or the last
+  build failed. It asks the game's /api/health, then opens the game (keeping
+  Telegram's sign-in data in the #hash) or shows the game's one error page,
+  with the same words as src/components/templates/ErrorPage.tsx ("down" and
+  "maintenance"), and checks again on its own every 20 seconds.
+-->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  @font-face { font-family: Cinzel; font-weight: 900; src: url(cinzel-900.woff2) format("woff2"); }
+  @font-face { font-family: Alegreya; font-weight: 700; src: url(alegreya-700.woff2) format("woff2"); }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; background: #120d09; color: #f1e4c6; font-family: Alegreya, Georgia, serif; }
+  .page { position: fixed; inset: 0; max-width: 28rem; margin: 0 auto; overflow: hidden; }
+  .art { position: absolute; inset: 0; background: url(intro.webp) 50% 30% / cover; }
+  .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(18,13,9,.8), rgba(18,13,9,.45) 45%, #120d09); }
+  .body { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; padding: 9svh 2rem 2.5rem; text-align: center; }
+  h1 { font: 900 42px/1 Cinzel, Georgia, serif; letter-spacing: .06em; background: linear-gradient(180deg, #fbe3a6, #f0c869, #d9a53a);
+       -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 6px rgba(0,0,0,.9)); }
+  .grow { flex: 1; }
+  .card { width: 100%; display: flex; flex-direction: column; align-items: center; gap: .75rem; padding: 1.25rem;
+          border-radius: 1rem; background: rgba(36,26,17,.85); border: 1px solid rgba(217,165,58,.35); backdrop-filter: blur(4px); }
+  h2 { font: 900 22px/1.2 Cinzel, Georgia, serif; color: #f3d28a; }
+  p { font-size: 14px; line-height: 1.35; color: #d8c9a8; }
+  button { width: 100%; height: 46px; border: 1px solid #8a5a1c; border-radius: 12px; cursor: pointer;
+           font: 900 16px Cinzel, Georgia, serif; color: #1a120b; background: linear-gradient(180deg, #f6cc72, #c98c2e);
+           box-shadow: 0 4px 0 #6b4314; }
+  button:disabled { opacity: .6; }
+  .bar { width: 70%; height: 10px; border-radius: 99px; background: rgba(36,26,17,.9); border: 1px solid rgba(217,165,58,.35); overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, #d9a53a, #f0c869, #e8612c); animation: go 1.2s ease-in-out infinite; }
+  @keyframes go { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+  .hidden { display: none; }
+  .small { font-size: 12px; color: #a8987a; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="art"></div>
+  <div class="shade"></div>
+  <div class="body">
+    <h1>VALORIANS</h1>
+    <div class="grow"></div>
+    <div id="checking" class="bar" aria-label="Loading"><span></span></div>
+    <div id="error" class="card hidden" role="alert" data-error-kind="down">
+      <h2 id="title">The north is quiet</h2>
+      <p id="message">Valorians can't be reached right now. Your tribe is safe and production keeps running. We're on it: try again in a few minutes.</p>
+      <button id="retry" type="button">Try again</button>
+      <p class="small" id="status"></p>
+    </div>
+  </div>
+</div>
+<script>
+  // The game's address: ?game= overrides it (for testing), otherwise production.
+  var params = new URLSearchParams(location.search);
+  var GAME = (params.get("game") || "https://valorians-frontend.vercel.app").replace(/\/$/, "");
+  var to = params.get("to") || "/hall";
+  if (to.charAt(0) !== "/" || to.indexOf("//") === 0) to = "/hall"; // only paths on the game, never another site
+  var TEXT = {
+    down: ["The north is quiet", "Valorians can't be reached right now. Your tribe is safe and production keeps running. We're on it: try again in a few minutes."],
+    maintenance: ["Back soon, Chief", "The longships are in the harbour for repairs: Valorians is being upgraded. Your tribe is safe and production keeps running. Back very soon!"]
+  };
+  var timer = null;
+  try { window.Telegram && Telegram.WebApp && (Telegram.WebApp.ready(), Telegram.WebApp.expand()); } catch (e) {}
+
+  function show(kind, extra) {
+    document.getElementById("checking").classList.add("hidden");
+    var card = document.getElementById("error");
+    card.classList.remove("hidden");
+    card.setAttribute("data-error-kind", kind);
+    document.getElementById("title").textContent = TEXT[kind][0];
+    document.getElementById("message").textContent = extra || TEXT[kind][1];
+    document.getElementById("retry").disabled = false;
+    document.getElementById("status").textContent = "Checking again on its own every 20 seconds.";
+    clearTimeout(timer);
+    timer = setTimeout(check, 20000);
+  }
+
+  function check() {
+    document.getElementById("retry").disabled = true;
+    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var stop = setTimeout(function () { ctrl && ctrl.abort(); }, 8000);
+    fetch(GAME + "/api/health", { cache: "no-store", signal: ctrl ? ctrl.signal : undefined })
+      .then(function (res) {
+        clearTimeout(stop);
+        return res.json().catch(function () { return {}; }).then(function (body) { return { res: res, body: body }; });
+      })
+      .then(function (r) {
+        if (r.res.ok && r.body && r.body.ok) {
+          // Up: open the game where the button pointed, keeping Telegram's sign-in data (#tgWebAppData).
+          location.replace(GAME + to + location.hash);
+        } else if (r.body && r.body.reason === "maintenance") {
+          show("maintenance", r.body.message);
+        } else {
+          show("down");
+        }
+      })
+      .catch(function () { clearTimeout(stop); show("down"); });
+  }
+
+  document.getElementById("retry").addEventListener("click", check);
+  check();
+</script>
+</body>
+</html>

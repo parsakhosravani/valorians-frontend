@@ -91,6 +91,16 @@ interface GameContextType {
   claimStreak: () => Promise<boolean>;
   upgradeSkill: (skill: SkillId) => Promise<boolean>;
   upgradeBuilding: (id: string) => Promise<boolean>;
+  /** Cancels the job on a building (full refund in the first minute, 80% after). */
+  cancelBuilding: (id: string) => Promise<boolean>;
+  /** Finishes a job with only a few minutes left, for free. */
+  finishBuilding: (id: string) => Promise<boolean>;
+  /** Starts a maxed building's next Mastery star. */
+  masterBuilding: (id: string) => Promise<boolean>;
+  /** Founds the next outpost on free land near home. */
+  foundOutpost: () => Promise<boolean>;
+  /** Raises one field of an outpost. */
+  upgradeField: (outpost: number, resource: ResourceId) => Promise<boolean>;
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
   train: (unit: UnitId, count: number) => Promise<boolean>;
@@ -122,6 +132,8 @@ interface GameContextType {
     post: (o: Offer & { guard?: boolean }) => Promise<boolean>;
     accept: (id: number, guard?: boolean) => Promise<boolean>;
     cancel: (id: number) => Promise<boolean>;
+    /** Swaps with the Merchant of the North at once, at a loss. */
+    exchange: (give: ResourceId, want: ResourceId, amount: number) => Promise<boolean>;
   };
   /** Clans: membership, ranks, the flag, the treasury and clan techs. */
   clan: {
@@ -140,6 +152,8 @@ interface GameContextType {
     ) => Promise<boolean>;
     donate: (key: TreasuryKey, amount: number) => Promise<boolean>;
     upgradeTech: (tech: TechId) => Promise<boolean>;
+    /** Raises the clan's World Wonder one level (officers). */
+    raiseWonder: () => Promise<boolean>;
     aid: (id: number, key: TreasuryKey, amount: number) => Promise<boolean>;
   };
   /** Valorians Plus: the one free trial, or a monthly Telegram Stars subscription. */
@@ -495,6 +509,11 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     upgradeSkill: (skill) => act("skills/upgrade", { skill }, "Upgraded!"),
     claimStreak: () => act("streak", {}, "Reward claimed!"),
     upgradeBuilding: (building) => act("buildings/upgrade", { building }, "Construction started"),
+    cancelBuilding: (building) => act("buildings/cancel", { building }, "Cancelled, resources returned"),
+    finishBuilding: (building) => act("buildings/finish", { building }, "Done!"),
+    masterBuilding: (building) => act("buildings/master", { building }, "Mastery work started"),
+    foundOutpost: () => act("outposts/found", {}, "An outpost is founded!"),
+    upgradeField: (outpost, resource) => act("outposts/upgrade", { outpost, resource }, "The outpost's builder is at work"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),
@@ -544,6 +563,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       post: (o) => act("trade/offer", o, "Offer posted on the market"),
       accept: (id, guard) => act("trade/accept", { id, guard: !!guard }, "Deal! Merchants are on their way"),
       cancel: (id) => act("trade/cancel", { id }, "Offer cancelled, goods returned"),
+      exchange: (give, want, amount) => act("trade/exchange", { give, want, amount }, "The merchant made the swap"),
     },
     clan: {
       create: (c) => act("clan/create", c, "Clan founded!"),
@@ -566,6 +586,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       update: (c, success = "Clan updated") => act("clan/update", c, success),
       donate: (key, amount) => act("clan/donate", { key, amount }, "Donated to the treasury"),
       upgradeTech: (tech) => act("clan/tech", { tech }, "Clan tech raised!"),
+      raiseWonder: () => act("clan/wonder", {}, "The Wonder rises!"),
       aid: (id, key, amount) => act("clan/aid", { id, key, amount }, "Aid sent"),
     },
     plus: {
