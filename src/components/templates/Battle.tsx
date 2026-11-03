@@ -19,6 +19,7 @@ const BattleResultDrawer = dynamic(() =>
 );
 import { Tabs } from "@/components/organisms/war/shared";
 import { BattleReport, useLive } from "@/context";
+import { armySize } from "@/lib/game/war";
 
 type Tab = "map" | "army" | "reports";
 
@@ -68,7 +69,15 @@ export const Battle = () => {
       setTab("map");
     }
   }, [query]);
-  const showResult = useCallback((r: BattleReport) => setResult(r), []);
+  // A win already arrives as a 🏆 notice at the top (tap it for the report), so the
+  // sheet only opens when the news needs a closer look: a defeat, or a win that
+  // cost at least half the army.
+  const showResult = useCallback((r: BattleReport) => {
+    const sent = armySize(r.sent);
+    const heavy = sent > 0 && armySize(r.attackerLosses) * 2 >= sent;
+
+    if (!r.attackerWon || heavy) setResult(r);
+  }, []);
   // Back on the map after another tab: it opens on your own tribe, not the one you jumped to.
   const pickTab = (t: Tab) => {
     if (t !== tab) {
