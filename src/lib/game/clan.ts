@@ -181,21 +181,21 @@ export const CLAN_TECHS: TechDef[] = [
     name: "Shared Fields",
     icon: "🌾",
     description: "Members' iron, wood, clay and crop production rises.",
-    effect: (l) => `+${l * CLAN.fieldsPercent}% resource production`,
+    effect: (l) => `+${perkLevel(l) * CLAN.fieldsPercent}% resource production${l >= CLAN.perkMaxLevel ? " (top)" : ""}`,
   },
   {
     id: "banners",
     name: "War Banners",
     icon: "🚩",
     description: "Members' armies attack harder.",
-    effect: (l) => `+${l * CLAN.bannersPercent}% attack`,
+    effect: (l) => `+${perkLevel(l) * CLAN.bannersPercent}% attack${l >= CLAN.perkMaxLevel ? " (top)" : ""}`,
   },
   {
     id: "shieldwall",
     name: "Shield Wall",
     icon: "🛡️",
     description: "Members' villages defend better.",
-    effect: (l) => `+${l * CLAN.shieldwallPercent}% defense`,
+    effect: (l) => `+${perkLevel(l) * CLAN.shieldwallPercent}% defense${l >= CLAN.perkMaxLevel ? " (top)" : ""}`,
   },
 ];
 
@@ -232,13 +232,16 @@ export type ClanPerks = { production: number; attack: number; defense: number };
 
 export const NO_PERKS: ClanPerks = { production: 0, attack: 0, defense: 0 };
 
+/** Tech levels past CLAN.perkMaxLevel add no more perk (see CLAN.perkMaxLevel). */
+const perkLevel = (level: number) => Math.min(level, CLAN.perkMaxLevel);
+
 /** What every member gets from the clan's techs, or nothing while the clan is still forming. */
 export const perksFor = (techs: Techs, members: number): ClanPerks =>
   isFormed(members)
     ? {
-        production: techs.fields * CLAN.fieldsPercent,
-        attack: techs.banners * CLAN.bannersPercent,
-        defense: techs.shieldwall * CLAN.shieldwallPercent,
+        production: perkLevel(techs.fields) * CLAN.fieldsPercent,
+        attack: perkLevel(techs.banners) * CLAN.bannersPercent,
+        defense: perkLevel(techs.shieldwall) * CLAN.shieldwallPercent,
       }
     : { ...NO_PERKS };
 

@@ -71,6 +71,9 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Clan level:** techs climb 5 levels per clan level. When **every** tech reaches the cap, the
   clan levels up and the cap rises by 5 (5, 10, 15, …). **No top level for now**: costs grow
   fast, so keeping all techs raised is the hard part.
+- **Clan perks have a top** (Nov 2026): Shared Fields, War Banners and Shield Wall stop adding
+  past tech level 15 (+45% production, +30% attack, +30% defense). Clan levels and the Great
+  Hall still have no top.
 - **A clan needs at least 2 members.** A chief alone can found one, but it is *forming*: its
   techs give no perks and can't be raised until a second chief joins (and stop again if it
   drops back to one).
@@ -87,6 +90,15 @@ ask before "fixing" either. Add new decisions here when they are made.
   weeks and finishes the village in about four months; an army comes from the resources that
   pile up while the village waits for others. Change the economy → those tests tell you the
   new pace.
+- **Merchant of the North:** with a Trading Post, swap one resource for another at once at
+  60% (one merchant's load at a time). The player market stays the better price.
+- **Leaderboard ranks by power** by default (tabs for population and victories), the bot's
+  Top chiefs too, and clans rank by their members' total power. Population grows with time
+  played; power with what a tribe built and kept.
+- **Embassy stays the population building**: since soldiers are recruited from people, more
+  people per hour means more recruits.
+- **Pace:** about 4 months to finish a village with perfect play is the target (owner's call,
+  Nov 2026); `balance.test.ts` holds it.
 - **Market:** your own trade offers show on the **Buy** tab; **My trades** is a reports-only tab.
 - Valorians Plus sells **convenience, never power** (extra builder, extra training slots, crown).
 

@@ -140,7 +140,7 @@ async function howToPlay(chatId: number) {
       `Hills and forests help defenders; scout before you attack.\n\n` +
       `<b>5. Join a clan.</b> Band together with other chiefs, or found your own clan and lead it up the clan ranks.\n\n` +
       `<b>6. Trade.</b> Build a Trading Post and swap your extra resources with other chiefs.\n\n` +
-      `<b>7. Rise.</b> Climb the leaderboard by population, power and victories. Claim your login streak every day!`,
+      `<b>7. Rise.</b> Climb the leaderboard by power, population and victories. Claim your login streak every day!`,
     [[playButton()], [{ text: "« Menu", callback_data: "menu" }]]
   );
 }
@@ -178,17 +178,17 @@ async function myTribe(chatId: number, userId: number) {
 async function topChiefs(chatId: number, userId: number) {
   const db = await getDb();
   const rs = await db.execute(
-    "SELECT id, username, first_name, population FROM users ORDER BY population DESC, id ASC LIMIT 10"
+    "SELECT id, username, first_name, power FROM users ORDER BY power DESC, id ASC LIMIT 10"
   );
   const medal = ["🥇", "🥈", "🥉"];
   const lines = rs.rows.map((r, i) => {
     const name = esc(String(r.first_name || (r.username ? `@${r.username}` : "Player")));
     const me = Number(r.id) === userId;
 
-    return `${medal[i] ?? `${i + 1}.`} ${me ? `<b>${name} (you)</b>` : name} · ${compact(Number(r.population))} 👥`;
+    return `${medal[i] ?? `${i + 1}.`} ${me ? `<b>${name} (you)</b>` : name} · ${compact(Number(r.power))} 💪`;
   });
 
-  await send(chatId, `🏆 <b>Top chiefs</b> by population\n\n${lines.join("\n") || "No tribes yet. Be the first!"}`, [
+  await send(chatId, `🏆 <b>Top chiefs</b> by power\n\n${lines.join("\n") || "No tribes yet. Be the first!"}`, [
     [playButton("⚔️ Climb the ranks")],
     [{ text: "« Menu", callback_data: "menu" }],
   ]);

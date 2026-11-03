@@ -7,7 +7,7 @@
  * Pure functions shared by the server (authoritative) and the client (to show
  * limits and validate the form before sending).
  */
-import { RESOURCE_IDS, ResourceId, compoundAt, guardCost } from "./config";
+import { EXCHANGE_RATE, RESOURCE_IDS, ResourceId, compoundAt, guardCost } from "./config";
 import { GameError, GameState, cloneState, getRates } from "./engine";
 
 export const TRADING_POST = "trading-post";
@@ -159,6 +159,34 @@ export function refundGuards(s0: GameState, amount: number): GameState {
   const s = cloneState(s0);
 
   s.coins += guardCost(amount);
+
+  return s;
+}
+
+/** What the Merchant of the North gives back for `amount` (see EXCHANGE_RATE). */
+export const exchangeReturn = (amount: number) => Math.floor(amount * EXCHANGE_RATE);
+
+/**
+ * Swaps `amount` of one resource for another with the game's merchant, at
+ * once and at a loss. Refused when it wouldn't fit the warehouse rather than
+ * throwing the rest away.
+ */
+export function exchange(s0: GameState, give: unknown, want: unknown, rawAmount: unknown): GameState {
+  if (!isResource(give) || !isResource(want)) throw new GameError("Pick what to give and what you want");
+  if (give === want) throw new GameError("Swap two different resources");
+  const amount = Math.floor(Number(rawAmount));
+
+  if (!(amount >= MIN_TRADE_AMOUNT)) throw new GameError(`Swap at least ${MIN_TRADE_AMOUNT}`);
+  requirePost(s0, amount);
+  if (s0.resources[give] < amount) throw new GameError(`Not enough ${give}`, "not_enough_resources");
+  const got = exchangeReturn(amount);
+  const room = getRates(s0).capacity - s0.resources[want];
+
+  if (got > room) throw new GameError(`Your warehouse only has room for ${Math.max(0, Math.floor(room)).toLocaleString("en-US")} ${want}`, "no_room");
+  const s = cloneState(s0);
+
+  s.resources[give] -= amount;
+  s.resources[want] += got;
 
   return s;
 }

@@ -93,13 +93,13 @@ const liveTotals = (members: ClanRow[]) => ({
 });
 
 /**
- * A clan's place by total population: from the last ranking, or for a clan
+ * A clan's place by total power: from the last ranking, or for a clan
  * too new to have one, counted among the ranked (few rows: one per clan).
  */
 const CLAN_RANK = `
   SELECT COALESCE(c.pop_rank,
-           (SELECT COUNT(*) + 1 FROM clans o WHERE o.sum_population > c.sum_population
-              OR (o.sum_population = c.sum_population AND o.id < c.id))) AS rank
+           (SELECT COUNT(*) + 1 FROM clans o WHERE o.sum_power > c.sum_power
+              OR (o.sum_power = c.sum_power AND o.id < c.id))) AS rank
   FROM clans c WHERE c.id = ?`;
 
 type ClanRow = Record<string, unknown>;

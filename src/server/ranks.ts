@@ -5,8 +5,10 @@ import { getDb } from "./db";
 /**
  * Ranks, worked out for everyone at once and kept in columns: players by
  * population, power and wins (users.pop_rank, power_rank, wins_rank), and
- * clans by their members' total population (clans.pop_rank, with the totals
- * in clans.sum_*).
+ * clans by their members' total power (clans.pop_rank, a name kept from when
+ * clans ranked by population; the totals are in clans.sum_*). Power is the
+ * main ranking since Nov 2026: population grows with time played, power with
+ * what a tribe built and kept.
  *
  * They used to be counted on every request: each action counted every player
  * ahead of you (more rows the lower you are), and the Clan screen added up
@@ -32,7 +34,7 @@ const CLAN_RANKS = `
                COALESCE(SUM(u.population), 0) AS p,
                COALESCE(SUM(u.power), 0) AS w,
                COALESCE(SUM(u.wins), 0) AS v,
-               ROW_NUMBER() OVER (ORDER BY COALESCE(SUM(u.population), 0) DESC, c.id ASC) AS r
+               ROW_NUMBER() OVER (ORDER BY COALESCE(SUM(u.power), 0) DESC, c.id ASC) AS r
         FROM clans c LEFT JOIN users u ON u.clan_id = c.id
         GROUP BY c.id) AS t
   WHERE clans.id = t.id

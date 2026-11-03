@@ -46,6 +46,8 @@ export type Player = {
   home?: { x: number; y: number } | null;
   /** Place by population, as of the last ranking (see ranks.ts); null before their first. */
   popRank?: number | null;
+  /** Place by power (the main ranking), as of the last ranking; null before their first. */
+  powerRank?: number | null;
 };
 
 const str = (v: unknown) => (v == null ? null : String(v));
@@ -66,6 +68,7 @@ const toPlayer = (r: Row): Player => ({
   state: normalizeState(JSON.parse(String(r.state))),
   home: r.map_x == null ? null : { x: Number(r.map_x), y: Number(r.map_y) },
   popRank: r.pop_rank == null ? null : Number(r.pop_rank),
+  powerRank: r.power_rank == null ? null : Number(r.power_rank),
 });
 
 export async function findById(id: number) {
@@ -218,16 +221,17 @@ export async function mutatePlayer(
 export const avatarUrl = (id: number) => `/api/avatar/${id}`;
 
 /**
- * The player's place by population: kept in a column (see ranks.ts), counted
- * only for someone not ranked yet (just joined). Ties go to the older id, as
- * on the leaderboard.
+ * The player's place by power (the main ranking): kept in a column (see
+ * ranks.ts), counted only for someone not ranked yet (just joined). Ties go to
+ * the older id, as on the leaderboard.
  */
-export async function rankOf(p: Pick<Player, "id" | "popRank" | "state">) {
-  if (p.popRank != null) return p.popRank;
+export async function rankOf(p: Pick<Player, "id" | "powerRank" | "state">) {
+  if (p.powerRank != null) return p.powerRank;
   const db = await getDb();
+  const power = powerScore(p.state);
   const rs = await db.execute({
-    sql: "SELECT COUNT(*) + 1 AS rank FROM users WHERE population > ? OR (population = ? AND id < ?)",
-    args: [peopleOf(p.state), peopleOf(p.state), p.id],
+    sql: "SELECT COUNT(*) + 1 AS rank FROM users WHERE power > ? OR (power = ? AND id < ?)",
+    args: [power, power, p.id],
   });
   return Number(rs.rows[0].rank);
 }

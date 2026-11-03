@@ -93,3 +93,16 @@ test("a clan of one is still forming: no perks until a second chief joins", () =
     defense: 5 * CLAN.shieldwallPercent,
   });
 });
+
+test("clan perks stop at their top while clan levels go on", () => {
+  const techs = { hall: 40, fields: 40, banners: 40, shieldwall: 40 };
+  const p = C.perksFor(techs, 5);
+  expect(p.attack).toBe(CLAN.perkMaxLevel * CLAN.bannersPercent); // +30%
+  expect(p.defense).toBe(CLAN.perkMaxLevel * CLAN.shieldwallPercent); // +30%
+  expect(p.production).toBe(CLAN.perkMaxLevel * CLAN.fieldsPercent); // +45%
+  // The clan still levels up, and the Great Hall still adds seats.
+  expect(C.clanLevel(techs)).toBe(9);
+  expect(C.maxMembers(techs)).toBe(CLAN.maxMembers + 40 * CLAN.seatsPerHallLevel);
+  // Below the top, every level still counts.
+  expect(C.perksFor({ ...techs, banners: 10 }, 5).attack).toBe(10 * CLAN.bannersPercent);
+});

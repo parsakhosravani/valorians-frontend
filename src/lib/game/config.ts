@@ -315,7 +315,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Treasury", 300, { kind: "coins", perLevel: 40, growth: 1.1 }, "+40 coins per hour at level 1, and each level adds 10% more than the last."),
   def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant (one more offer) and lets loads carry 15% more."),
   def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per strike per level (up to +50%).", { maxLevel: 10 }),
-  def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
+  def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra people per hour per level: more recruits for your army."),
   // Unlock buildings stop at their last unlock: higher levels did nothing.
   def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5).", { maxLevel: 5 }),
   def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10).", { maxLevel: 10 }),
@@ -396,6 +396,18 @@ export const questUrl = (id: QuestId, value: string | undefined) => {
   return `https://x.com/${handle}`;
 };
 
+// ─── Merchant of the North (exchange) ─────────────────────────────────────────
+
+/**
+ * Swap one resource for another at once with the game's merchant, at a loss:
+ * every 100 given brings EXCHANGE_RATE × 100 back. Buildings each want their
+ * own mix, so late villages pile up hundreds of thousands of one resource
+ * while waiting for another, and there isn't always a player to trade with.
+ * The loss keeps the player market (about 1 : 1) the better deal. Needs a
+ * Trading Post; one swap at a time holds at most one merchant's load.
+ */
+export const EXCHANGE_RATE = 0.6;
+
 // ─── Clans ───────────────────────────────────────────────────────────────────
 
 export const CLAN = {
@@ -427,6 +439,14 @@ export const CLAN = {
   techLevelsPerClanLevel: 5,
   /** Each Great Hall level adds this many member seats (on top of maxMembers). */
   seatsPerHallLevel: 5,
+  /**
+   * Shared Fields, War Banners and Shield Wall stop adding perks past this
+   * tech level (+45% production, +30% attack, +30% defense). Clan levels and
+   * the Great Hall keep going without a top; only these perks stop. Buildings
+   * got tops in Nov 2026 and these were the last combat bonuses without one:
+   * a rich clan could keep stacking attack on top of a maxed Arsenal.
+   */
+  perkMaxLevel: 15,
   /** Perk per tech level, in percent. */
   fieldsPercent: 3,
   bannersPercent: 2,

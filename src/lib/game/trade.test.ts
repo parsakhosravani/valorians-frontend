@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import * as E from "./engine";
 import * as Tr from "./trade";
+import * as C from "./config";
 import { guardCost } from "./config";
 
 const T0 = Date.UTC(2026, 9, 25, 10);
@@ -107,4 +108,26 @@ test("merchant loads grow with the Trading Post so the late market can move real
   const s = E.createInitialState(0);
   s.buildings["trading-post"] = 20;
   expect(Tr.tradeLimits(s)).toMatchObject({ maxOffers: 20, maxAmount: Tr.merchantLoad(20) });
+});
+
+test("the Merchant of the North swaps at once, always at a loss, and never overfills", () => {
+  const s = E.createInitialState(0);
+  expect(() => Tr.exchange(s, "iron", "wood", 1000)).toThrow("Trading Post");
+  s.buildings["trading-post"] = 3;
+  const out = Tr.exchange(s, "iron", "wood", 1000);
+  expect(out.resources.iron).toBe(s.resources.iron - 1000);
+  expect(out.resources.wood).toBe(s.resources.wood + Tr.exchangeReturn(1000));
+  expect(Tr.exchangeReturn(1000)).toBeLessThan(1000);
+  // Junk and impossible swaps are refused.
+  for (const bad of [NaN, -5, 0, 10, "x", Infinity]) expect(() => Tr.exchange(s, "iron", "wood", bad)).toThrow(E.GameError);
+  expect(() => Tr.exchange(s, "iron", "iron", 1000)).toThrow(E.GameError);
+  expect(() => Tr.exchange(s, "gold", "iron", 1000)).toThrow(E.GameError);
+  expect(() => Tr.exchange(s, "iron", "wood", Tr.merchantLoad(3) + 1)).toThrow(E.GameError);
+  const full = { ...s, resources: { ...s.resources, wood: E.getRates(s).capacity } };
+  expect(() => Tr.exchange(full, "iron", "wood", 1000)).toThrow("room");
+  // Swapping round and round only ever loses.
+  let t = s;
+  for (let i = 0; i < 5; i++) t = Tr.exchange(Tr.exchange(t, "iron", "wood", 500), "wood", "iron", 300);
+  const total = (x: typeof s) => C.RESOURCE_IDS.reduce((a, r) => a + x.resources[r], 0);
+  expect(total(t)).toBeLessThan(total(s));
 });

@@ -122,6 +122,8 @@ interface GameContextType {
     post: (o: Offer & { guard?: boolean }) => Promise<boolean>;
     accept: (id: number, guard?: boolean) => Promise<boolean>;
     cancel: (id: number) => Promise<boolean>;
+    /** Swaps with the Merchant of the North at once, at a loss. */
+    exchange: (give: ResourceId, want: ResourceId, amount: number) => Promise<boolean>;
   };
   /** Clans: membership, ranks, the flag, the treasury and clan techs. */
   clan: {
@@ -544,6 +546,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       post: (o) => act("trade/offer", o, "Offer posted on the market"),
       accept: (id, guard) => act("trade/accept", { id, guard: !!guard }, "Deal! Merchants are on their way"),
       cancel: (id) => act("trade/cancel", { id }, "Offer cancelled, goods returned"),
+      exchange: (give, want, amount) => act("trade/exchange", { give, want, amount }, "The merchant made the swap"),
     },
     clan: {
       create: (c) => act("clan/create", c, "Clan founded!"),
