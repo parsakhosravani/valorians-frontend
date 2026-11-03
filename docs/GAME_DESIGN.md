@@ -31,7 +31,7 @@ ask before "fixing" either. Add new decisions here when they are made.
 - The **wall's look upgrades with City Gate level** (wood, then stone, and onward without end).
 - Wall art comes from **Gemini-generated sprite sheets** the owner makes — don't hand-draw walls.
   Dragon art also comes from the owner's Gemini images.
-- The Hall shows **urgent alerts on top**, then short next steps.
+- The Hall shows **urgent alerts on top**, then short next steps. Name and rank live in the top bar only; the banner carries Town Hall level, power, people, clan, shield, Plus and the stores. Below the steps: everything on a clock (builds, training, armies coming home, outpost fields) and the army at home. No "Places" grid: the navbar and Trade button already go there.
 
 ## War
 
