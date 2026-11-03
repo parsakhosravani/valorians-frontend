@@ -63,6 +63,10 @@ test player instead (`?dev_user=N` picks which one).
 - `resolveDueAttacks(now, playerId?)` fights every arrived army using the pure rules in
   `src/lib/game/war.ts` / `battle.ts`, saves a report for both sides in `battles`, and
   notifies players through the bot (`src/server/notify.ts`).
+- Reinforcements: while a village fights, its state holds `defending` (battle id + `joinBy`).
+  `advance()` sends soldiers of a march returning before `joinBy` to `joining` instead of home;
+  `joinReinforcements` (run first in each sweep) takes them and re-plans the battle with
+  `reinforceBattle` in `battle.ts`. `finishBattle` / `abandon` close the window with `leaveField`.
 - Battles get resolved by: the player's own requests, the post-response sweep, and the cron
   `GET /api/cron/battles`, called every 5 minutes by `.github/workflows/battles.yml`
   (also right after each production deploy). `CRON_SECRET` can protect it.

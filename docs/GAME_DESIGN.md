@@ -27,6 +27,10 @@ ask before "fixing" either. Add new decisions here when they are made.
 - A **won raid knocks the City Gate down some levels**, even when the tribe is empty.
 - The **Hospital saves only wounded troops, never the killed**.
 - **Trapmaker catches attackers** before the battle (it does not just add defense).
+- **An army coming home to a village under attack joins the fight** from the next round (the
+  round under way is fought out as it was). The rest of the battle is decided again with them;
+  rounds already fought never change. Ships and carried loot go home. Arriving after the last
+  round has begun is too late: they wait at home for the result.
 - **Hideout** protection is capped.
 - **Raid shield grows** when a player is raided again and again.
 - Attacking a **much weaker target gives half loot**.

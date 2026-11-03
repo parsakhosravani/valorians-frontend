@@ -10,7 +10,7 @@ import { banditStrength, campDefense, campName, lairBounty, CAMP_STEEP_UNTIL } f
 import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, Point, campPositions, distance, isCoastal, pickHomeSite, terrainAt, worldCapacity } from "@/lib/game/map";
 import { campGone, campReward, campStatus, powerScore, scoutFromDefense } from "@/lib/game/war";
-import { BattleRound, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
+import { BattleRound, defendersSoFar, nextRoundAt, roundsSoFar } from "@/lib/game/battle";
 import type { StoredBattle } from "./war";
 import { mySpies } from "./spies";
 
@@ -303,7 +303,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           totalRounds: stored.plan.rounds.length,
           rounds: roundsSoFar(stored.plan, now),
           nextRoundAt: nextRoundAt(stored.plan, now),
-          defenders: stored.engaged,
+          defenders: defendersSoFar(stored.plan, stored.engaged, now),
           defense: Math.round(stored.outcome.defense),
         }
       : null;

@@ -98,6 +98,47 @@ describe("raiding another player (server)", () => {
     expect(after.state.marches.filter((m) => m.target).length).toBe(1);
   });
 
+  test("the village's army coming home mid-battle joins the fight and can turn it", async () => {
+    const T0 = Date.now();
+    const atk = await newPlayer(T0, (s) => {
+      s.army.axeman = 300;
+      s.shieldUntil = 0;
+    });
+    const def = await newPlayer(T0, (s) => {
+      s.shieldUntil = 0;
+      s.army.spearman = 40;
+    });
+    const { march } = await marchTo(atk, { target: def.id }, axemen(300), T0);
+    const home = { ...emptyArmy(), spearman: 3000 };
+
+    // The defender's own army is on its way home and gets there just after the attack lands.
+    await mutatePlayer(def.id, T0, (s) => {
+      s.marches.push({ id: "home", target: "camp", units: { ...home }, loot: { iron: 50, wood: 0, clay: 0, crop: 0 }, coins: 0, returnsAt: march.arrivesAt + 1000 });
+      return s;
+    });
+
+    await resolveDueAttacks(march.arrivesAt + 1); // the battle starts without them
+    await resolveDueAttacks(march.arrivesAt + 2000); // they're home: onto the field
+    const db = await getDb();
+    const row = (await db.execute({ sql: "SELECT battle, status FROM attacks WHERE id = ?", args: [march.id] })).rows[0];
+    const battle = JSON.parse(String(row.battle));
+
+    expect(String(row.status)).toBe("fighting");
+    expect(battle.plan.rounds[1].joined.spearman).toBe(3000);
+    expect(battle.engaged.spearman).toBe(3040);
+    expect((await reload(def.id)).state.joining ?? []).toEqual([]);
+
+    await resolveDueAttacks(march.arrivesAt + 2 * HOUR); // the last round is over
+    const [report] = await battlesFor(march.id);
+
+    expect(Number(report.attacker_won)).toBe(0);
+    const after = await reload(def.id);
+    const lost = JSON.parse(String(report.report)).defenderLosses.spearman;
+
+    expect(after.state.army.spearman).toBe(3040 - lost); // the survivors are home
+    expect(after.state.defending ?? []).toEqual([]);
+  });
+
   test("a shielded tribe can't be raided and the troops stay home", async () => {
     const T0 = Date.now();
     const atk = await newPlayer(T0, (s) => {
