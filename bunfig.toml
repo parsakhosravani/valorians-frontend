@@ -1,0 +1,4 @@
+[test]
+# Unit and server tests live next to the code in src/. The browser tests in
+# e2e/ run with Playwright (bun run e2e), not bun test.
+root = "src"

@@ -13,3 +13,18 @@ export const appUrl = () => {
 
   return url.replace(/\/$/, "");
 };
+
+/**
+ * The address a Telegram button opens for `path`. With LAUNCHER_URL set (the
+ * launcher on GitHub Pages, see launcher/index.html) buttons go through it: it
+ * checks the game is up first and shows the error page when it isn't, even
+ * when the host itself is down, paused, or its last build failed, where no
+ * code of the game can run to say so. Without it, straight to the game.
+ */
+export const webAppUrl = (path = "") => {
+  const launcher = (process.env.LAUNCHER_URL || "").replace(/\/$/, "");
+
+  if (!launcher) return `${appUrl()}${path}`;
+
+  return path && path !== "/" ? `${launcher}/?to=${encodeURIComponent(path)}` : `${launcher}/`;
+};

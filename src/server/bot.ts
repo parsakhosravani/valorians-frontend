@@ -18,7 +18,7 @@ import {
   startAnnounce,
   takeAdminPost,
 } from "./announce";
-import { appUrl } from "./appUrl";
+import { appUrl, webAppUrl } from "./appUrl";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
@@ -71,7 +71,7 @@ export { appUrl };
 type Button = { text: string; url?: string; callback_data?: string; web_app?: { url: string } };
 
 /** In the bot's own chat a web_app button opens the game in place. `path` opens a screen. */
-const playButton = (text = "⚔️ Play Valorians", path = ""): Button => ({ text, web_app: { url: `${appUrl()}${path}` } });
+const playButton = (text = "⚔️ Play Valorians", path = ""): Button => ({ text, web_app: { url: webAppUrl(path) } });
 
 const channel = () => questUrl("telegram", process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL);
 
@@ -416,7 +416,8 @@ export async function setupBot() {
   for (const id of await adminIds()) {
     await run("setMyCommands", { scope: { type: "chat", chat_id: id }, commands: ADMIN_COMMANDS });
   }
-  await run("setChatMenuButton", { menu_button: { type: "web_app", text: "Play", web_app: { url: base } } });
+  // Through the launcher when there is one (see webAppUrl): the webhook below stays on the game itself.
+  await run("setChatMenuButton", { menu_button: { type: "web_app", text: "Play", web_app: { url: webAppUrl() } } });
   await run("setWebhook", {
     url: `${base}/api/bot`,
     secret_token: webhookSecret(),

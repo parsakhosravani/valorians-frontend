@@ -3,6 +3,7 @@ import "server-only";
 import { getDb } from "./db";
 import { mutatePlayer } from "./players";
 import { appUrl, tg } from "./bot";
+import { webAppUrl } from "./appUrl";
 import { checkShieldCheckout, endRefundedShield, parseShieldPayload, recordShieldPayment } from "./shields";
 
 import { PLUS } from "@/lib/game/config";
@@ -130,7 +131,7 @@ export async function recordPayment(payerId: number, p: SuccessfulPayment, now =
         `🔨 +${PLUS.extraBuilders} builder\n⚔️ +${PLUS.extraTrainBatches} training slots\n` +
         `🛡️ A free ${PLUS.weeklyShieldHours}h shield every week\n👑 The Plus crown next to your name\n\n` +
         `It renews every month. You can cancel anytime from your Telegram subscription settings.`,
-    reply_markup: { inline_keyboard: [[{ text: "⚔️ Back to my tribe", web_app: { url: `${appUrl()}/tribe` } }]] },
+    reply_markup: { inline_keyboard: [[{ text: "⚔️ Back to my tribe", web_app: { url: webAppUrl("/tribe") } }]] },
   });
 
   return true;

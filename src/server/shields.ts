@@ -3,6 +3,7 @@ import "server-only";
 import { getDb } from "./db";
 import { findById, mutatePlayer } from "./players";
 import { appUrl, tg } from "./bot";
+import { webAppUrl } from "./appUrl";
 import type { PreCheckoutQuery, SuccessfulPayment } from "./plus";
 
 import { SHIELDS, ShieldId, shieldOption } from "@/lib/game/config";
@@ -103,7 +104,7 @@ export async function recordShieldPayment(payerId: number, p: SuccessfulPayment,
       `🛡️ <b>Shield raised for ${hoursLabel(parsed.option.hours)}.</b>\n\n` +
       `No one can attack your tribe until it ends. Sending an army against another tribe breaks it, ` +
       `and after a shield ends the next one needs ${Math.round(SHIELDS.cooldownMs / 3600e3)}h to recharge.`,
-    reply_markup: { inline_keyboard: [[{ text: "⚔️ Back to my tribe", web_app: { url: `${appUrl()}/hall` } }]] },
+    reply_markup: { inline_keyboard: [[{ text: "⚔️ Back to my tribe", web_app: { url: webAppUrl("/hall") } }]] },
   });
 
   return true;

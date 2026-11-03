@@ -100,3 +100,27 @@ test player instead (`?dev_user=N` picks which one).
 - Hosted on Vercel (live: `https://valorians-frontend.vercel.app`), Node 24, bun 1.4.4.
 - `.github/workflows/ci.yml` runs typecheck, lint, test and build on every PR and on `main`.
 - `NEXT_PUBLIC_*` values are baked in at build time — redeploy after changing them.
+
+## When the game is down
+
+Everything that can go wrong ends on **one error page**, `src/components/templates/ErrorPage.tsx`,
+painted like the loading screen and always with a way forward:
+
+| What failed | Who shows the page | Kind |
+| --- | --- | --- |
+| A screen crashed | `app/(routes)/error.tsx` | `crash` |
+| The whole frame crashed | `app/global-error.tsx` | `crash` |
+| A link to a page that doesn't exist | `app/(routes)/not-found.tsx` (+ the catch-all `[...missing]`) | `missing` |
+| The server couldn't be reached on start | `LoadingScreen.tsx` | `offline` |
+| Down on purpose: `MAINTENANCE=on` | `src/proxy.ts` → `app/(status)/maintenance` (API answers 503) | `maintenance` |
+| The host is down, the project paused, or the last build failed | the **launcher** (`launcher/index.html`, GitHub Pages) | `down` |
+
+None of the game's code runs when the host itself is down, so that last case needs a page that
+lives elsewhere. The launcher asks `GET /api/health` (200 when the server and database answer),
+then opens the game, keeping Telegram's `#tgWebAppData`, or shows the page and checks again every 20 s.
+
+**Turning it on (once):** repo Settings → Pages → Source: GitHub Actions; merge to `main` (the
+`Launcher` workflow publishes it); set `LAUNCHER_URL` on the host to the Pages URL and redeploy;
+open `/api/bot/setup` so the bot's menu button points at it; and in BotFather `/myapps` → Edit Web
+App URL → the launcher URL. Bot buttons (`webAppUrl()`) then go through the launcher; the bot's
+webhook stays on the game.

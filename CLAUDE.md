@@ -17,6 +17,7 @@ bun dev              # http://localhost:3000 (needs NEXT_PUBLIC_DEV_LOGIN=true i
 bun run check        # typecheck + lint + test — run before saying a task is done
 bun run test         # bun:test, tests sit next to the code (*.test.ts)
 bun run build        # CI runs this too
+bun run e2e          # browser tests (Playwright, e2e/): starts its own dev server on :3100
 ```
 
 Add `?dev_user=2` to the URL to play as another test player.

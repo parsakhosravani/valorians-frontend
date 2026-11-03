@@ -66,8 +66,19 @@ Design decisions behind each change are in `GAME_DESIGN.md`; this file is the re
 **Saves:** old saves load through `normalizeState` (+ `capBuildingLevels`, idempotent).
 New state fields: `mastery`, `outposts`, `seasonWins`.
 
-**Tests:** `physics.test.ts` (laws: time, conservation, bounds, junk input, 6,000-action chaos),
-`balance.test.ts` (pacing sims), plus rule tests per file. Both must pass (CLAUDE.md rule 11).
+**Tests:**
+- Unit (rules): `src/lib/game/*.test.ts`, incl. `physics.test.ts` (laws: time, conservation, bounds,
+  junk input, 6,000-action chaos) and `balance.test.ts` (pacing sims). Both must pass (CLAUDE.md rule 11).
+- Integration (server + DB): `src/server/*.server.test.ts`, incl. `routes.server.test.ts` (every
+  Valorians 2 API route, refusals as 400 `{ error, code }`, health, maintenance, launcher links).
+- End to end (Chromium, real screens): `e2e/`, run with `bun run e2e` (CI job `e2e`): every screen
+  opens; core journeys (daily reward, Daily Mine, first build, training, Plus trial, clan found/join/
+  donate, market post/buy); Valorians 2 features (Mastery, outposts, merchant, people, World Wonder);
+  the one error page (lost link, offline) and the launcher (up, down/paused, maintenance, no open redirect).
+
+**When the game is down:** one error page for every failure, a maintenance switch
+(`MAINTENANCE=on`) and a launcher outside the host for outages and failed builds. See
+`docs/ARCHITECTURE.md`, "When the game is down".
 
 **Bugs fixed on the way:** troops finishing training while away ate no crop; ids like
 `__proto__` crashed routes; flaky raid tests (targets across the sea).
