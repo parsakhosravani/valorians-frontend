@@ -116,6 +116,8 @@ interface GameContextType {
   scout: (target: number) => Promise<ScoutReport | null>;
   /** Plants a spy on a tribe: until when it watches, or null if it was caught (or failed). */
   spy: (target: number) => Promise<{ caught: boolean; until: number | null } | null>;
+  /** Searches your own village for spies (Watchtower SPY.seeLevel+); costs coins. */
+  sweepSpies: () => Promise<boolean>;
   /** Marketplace: post an offer, buy one, or take yours back. */
   trade: {
     /** `guard`: hire guards for the goods coming back to you. */
@@ -539,6 +541,25 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
 
       return res?.spy ?? null;
+    },
+    sweepSpies: async () => {
+      const res = await send<PlayerView & { sweep: { caught: string[]; left: number } }>("war/sweep", {});
+
+      if (res?.sweep) {
+        const { caught, left } = res.sweep;
+
+        toast.dismiss();
+        if (caught.length)
+          toast.success(
+            <IconText
+              text={`🗼 Caught ${caught.length === 1 ? "a spy" : `${caught.length} spies`} sent by ${caught.join(", ")}!` +
+                (left ? ` ${left} still hiding.` : "")}
+            />
+          );
+        else toast.error(<IconText text="🗼 The search found nothing. The spies are still hiding." />);
+      }
+
+      return !!res;
     },
     trade: {
       post: (o) => act("trade/offer", o, "Offer posted on the market"),

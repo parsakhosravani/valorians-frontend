@@ -1581,8 +1581,10 @@ export const WarMap = ({
                 </span>
                 <span>
                   <GameIcon e="🕵️" /> With an Exploration Center you can plant a spy on a tribe for a day: the
-                  moment their army marches out, you hear about it, so you can strike while they&apos;re away. A
-                  Watchtower may catch spies.
+                  moment their army marches out, you hear about it, so you can strike while they&apos;re away. Their
+                  Watchtower may catch your spy as it creeps in, or later as it slips out with news; a higher
+                  Exploration Center helps your spies get past. From level {SPY.seeLevel} a Watchtower counts the
+                  spies inside and can search for them.
                 </span>
                 <span>
                   <GameIcon e="🧭" /> Tap one of your armies on the road to give it new orders: on its way out or

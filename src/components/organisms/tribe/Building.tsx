@@ -18,6 +18,7 @@ import {
 } from "@/lib/game/config";
 import { buildingUpgradeInfo, getRates } from "@/lib/game/engine";
 import { compact, formatDuration } from "@/lib/format";
+import { WatchtowerSpies } from "./WatchtowerSpies";
 
 interface BuildingProps {
   building: BuildingDef;
@@ -107,6 +108,8 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
           {label}
         </Button>
       )}
+
+      {building.id === "watchtower" && <WatchtowerSpies />}
     </div>
   );
 };

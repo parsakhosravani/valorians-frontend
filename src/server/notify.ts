@@ -117,11 +117,32 @@ export const notify = {
     );
   },
 
-  /** A Watchtower caught a spy being planted. */
-  spyCaught(targetId: number, watcher: string) {
+  /** A Watchtower caught a spy: as it was planted, slipping out with news, or in a sweep. */
+  spyCaught(targetId: number, watcher: string, when: "plant" | "report" | "sweep" = "plant") {
+    const how =
+      when === "report"
+        ? "slipping out to report that your army marched"
+        : when === "sweep"
+          ? "while searching the village"
+          : "as it crept in";
+
     return sendToPlayer(
       targetId,
-      `🗼 <b>Your Watchtower caught a spy</b> sent by <b>${esc(watcher)}</b>. They wanted to know when your army leaves.`,
+      `🗼 <b>Your Watchtower caught a spy</b> sent by <b>${esc(watcher)}</b> ${how}. They wanted to know when your army leaves.`,
+      "🗺️ Open the map",
+      "/battle?tab=map"
+    );
+  },
+
+  /** The sender's side: a spy already in place was caught. */
+  spyLost(watcherId: number, target: string, when: "report" | "sweep") {
+    return sendToPlayer(
+      watcherId,
+      `🕵️ <b>Your spy in ${esc(target)}'s village was caught</b> ` +
+        (when === "report"
+          ? "as it slipped out with news: their army has marched, but you got no report."
+          : "when their Watchtower searched the village.") +
+        ` They know you sent it.`,
       "🗺️ Open the map",
       "/battle?tab=map"
     );

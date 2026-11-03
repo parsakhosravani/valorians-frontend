@@ -6,6 +6,7 @@ import type { InStatement, Row } from "@libsql/client";
 import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
 import { unreadNotices } from "./notices";
+import { spiesInside } from "./spies";
 
 import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
@@ -257,11 +258,12 @@ async function marketOffers(id: number) {
 
 export async function playerView(p: Player, now: number) {
   // Independent lookups: run them together instead of one after another.
-  const [clan, rank, trades, notices] = await Promise.all([
+  const [clan, rank, trades, notices, spies] = await Promise.all([
     clanBadge(p.clanId),
     rankOf(p),
     marketOffers(p.id),
     unreadNotices(p.id).catch(() => 0),
+    spiesInside(p, now).catch(() => null),
   ]);
 
   return {
@@ -278,6 +280,8 @@ export async function playerView(p: Player, now: number) {
       marketOffers: trades,
       /** Unread messages in the in-game inbox (the bell in the header). */
       unreadNotices: notices,
+      /** Spies in this village now; null while the Watchtower is too low to count them (see SPY.seeLevel). */
+      spiesInside: spies,
       /** Monthly Valorians Plus price in Telegram Stars. */
       plusPrice: plusPrice(),
     },

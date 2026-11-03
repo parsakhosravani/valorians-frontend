@@ -268,12 +268,12 @@ export const BUILDINGS: BuildingDef[] = [
   def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 5 }, "+5% attack for all troops per level."),
   def("Armory", 250, { kind: "military", stat: "defense", perLevel: 5 }, "+5% defense for all troops per level."),
   def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 6 }, "+6% defense per level. Enemy rams can break it."),
-  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home."),
+  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home. Catches enemy spies; from level 5 it counts the spies inside and can sweep for them."),
   def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 0.5 }, "Traps catch 0.5% of attackers per level before the battle starts (up to 25%)."),
   def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
   def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Treats the wounded after a battle: saves 4% of them per level (max 50%). The killed can't be saved."),
   def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
-  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
+  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack and sends spies. Every level helps your spies slip past Watchtowers."),
   def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after."),
   def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
 ].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix }));
@@ -598,23 +598,43 @@ export const shownXY = (p: { x: number; y: number }) =>
 export const TRIBE_SPACING = 4;
 /** Shortest possible one-way march. */
 export const MIN_MARCH_SECONDS = 20;
-/** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
 /**
  * Spies (needs an Exploration Center): planted on a tribe for `durationMs`,
  * a spy sends word the moment that tribe's army marches out, so you can hit
  * the village while it's away. Costs `costFactor`× a scouting trip; up to
- * `maxActive` at once. The target's Watchtower may catch one as it's
- * planted (`catchPerLevel` a level, up to `catchMax`): the coins are lost
- * and the target learns who sent it.
+ * `maxActive` at once.
+ *
+ * Catching one is a contest between the target's Watchtower and the
+ * sender's Exploration Center (see spyCatchChance): `catchBase` when they're
+ * level with each other, `catchPerLevel` more (or less) per level of
+ * difference, kept within `catchMin`–`catchMax`. No Watchtower, no catching.
+ * (Was a flat 4% per Watchtower level up to 60%: a level-1 tower caught
+ * almost nothing and Exploration Center levels past 1 did nothing.)
+ *
+ * The tower rolls when the spy is planted, and again (at `reportFactor`× the
+ * odds) each time the spy sends word, because slipping out with news is
+ * when a spy is most exposed. A caught spy is gone, the target learns who
+ * sent it, and the sender hears it was lost.
+ *
+ * From Watchtower level `seeLevel` the tribe sees how many spies are inside
+ * (never whose) and can pay `sweepCost` coins to search the village: each
+ * spy faces one more full roll.
  */
 export const SPY = {
   durationMs: 24 * 3600 * 1000,
   costFactor: 3,
   maxActive: 3,
-  catchPerLevel: 0.04,
-  catchMax: 0.6,
+  catchBase: 0.2,
+  catchPerLevel: 0.05,
+  catchMin: 0.05,
+  catchMax: 0.75,
+  reportFactor: 0.5,
+  seeLevel: 5,
+  // About one short-range scouting trip × 3: a sweep shouldn't be cheaper than the spy it hunts.
+  sweepCost: 200,
 } as const;
 
+/** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
 export const SCOUT_COST_PER_TILE = 10;
 export const SCOUT_MIN_COST = 30;
 /** Anti-cavalry troops (Spearmen) defend this much better against the mounted share of an attack. */
