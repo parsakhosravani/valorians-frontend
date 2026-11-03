@@ -7,6 +7,7 @@ Players grow a tribe, build, train troops, raid players and barbarian camps, joi
 Read this file first. For depth, read only what the task needs:
 - `docs/ARCHITECTURE.md` — how a request flows, how state is saved, battles, bot, payments.
 - `docs/GAME_DESIGN.md` — the owner's design decisions. **Follow them; don't "fix" them.**
+- `docs/VERSION_2.md` — what Valorians 2 changed, and where each system lives.
 
 ## Commands
 
@@ -61,7 +62,8 @@ Add `?dev_user=2` to the URL to play as another test player.
 | Route wrapper (auth, errors, battle sweep) | `src/server/http.ts` |
 | DB + tables + `SCHEMA_VERSION` | `src/server/db.ts` |
 | Load/save players, `playerView` (what the client receives) | `src/server/players.ts` |
-| Server side of war, clans, trade, bandits, map | `src/server/war.ts`, `clans.ts`, `trade.ts`, `bandits.ts`, `map.ts` |
+| Server side of war, clans (+ seasons/World Wonder), trade, bandits, map, outposts | `src/server/war.ts`, `clans.ts`, `trade.ts`, `bandits.ts`, `map.ts`, `outposts.ts` |
+| Game physics (laws) and pacing tests | `src/lib/game/physics.test.ts`, `balance.test.ts` |
 | Telegram bot, announcements, notifications, payments | `src/server/bot.ts`, `announce.ts`, `notify.ts`, `plus.ts` |
 | API routes | `src/app/api/**/route.ts` |
 | Client fetch + sign-in header | `src/lib/api.ts` |
