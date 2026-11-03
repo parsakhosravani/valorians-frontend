@@ -11,7 +11,7 @@ import { maybeRefreshRanks } from "./ranks";
 import { spiesSeeMarch } from "./spies";
 
 import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp } from "@/lib/game/engine";
-import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
+import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, pointAlong, routeFor, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
@@ -47,6 +47,7 @@ import {
   releaseDefenders,
   returnHome,
   scoutEstimate,
+  raidTravelMs,
   takeJoining,
 } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
@@ -55,7 +56,7 @@ import type { Army } from "@/lib/game/engine";
 type MarchTarget = { target?: number; camp?: number; lair?: Point };
 
 /** Most armies one tribe can have out at once. */
-const MAX_MARCHES = 5;
+
 
 /** Attacks still under way: on the road, or fighting at the target. */
 const ACTIVE_ATTACK = "('marching','resolving','fighting')";
@@ -150,6 +151,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
 
     sent = d.sent;
     travel = routeMs(sent, home, dest, getRates(s).marchMultiplier);
+    // A player always gets time to react to an attack (camps and lairs don't need it).
+    if (defenderId) travel = raidTravelMs(travel);
 
     return d.state;
   });
@@ -865,7 +868,8 @@ export async function redirectMarch(
     go: seaRoute(ex.where, t.dest).naval || seaRoute(t.dest, home).naval,
     back: seaRoute(ex.where, home).naval,
   });
-  const legMs = routeMs(go, ex.where, t.dest, mult);
+  // A player being attacked always gets time to react, redirected army or not.
+  const legMs = t.defenderId ? raidTravelMs(routeMs(go, ex.where, t.dest, mult)) : routeMs(go, ex.where, t.dest, mult);
   const homeMs = routeMs(go, t.dest, home, mult);
   const backMs = routeMs(back, ex.where, home, mult);
   const share = splitSpoils(ex.loot ?? {}, ex.coins, go, back);

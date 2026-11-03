@@ -616,12 +616,39 @@ function starve(s: GameState, cropPerHour: number, cropBefore: number, hours: nu
   if (gone > 0) s.deserted = { at, count: (s.deserted && at - s.deserted.at < 3600e3 ? s.deserted.count : 0) + gone };
 }
 
+/**
+ * Crop eaten between `from` and `to` by the troops that finish training in
+ * that time, each from the moment it joins the army. Without it, troops that
+ * finished while the player was away ate nothing until the next sync, so a
+ * long absence fed them for free and one jump ended with more crop than many
+ * small steps over the same time.
+ */
+function recruitUpkeep(s: GameState, from: number, to: number) {
+  let cropHours = 0;
+
+  for (const t of s.training) {
+    // Unit k (1-based) joins at startsAt + k × perUnitMs.
+    const first = Math.max(t.done + 1, Math.floor((from - t.startsAt) / t.perUnitMs) + 1);
+    const last = Math.min(t.count, Math.floor((to - t.startsAt) / t.perUnitMs));
+
+    if (last < first) continue;
+    const n = last - first + 1;
+    const msEaten = n * (to - t.startsAt) - (t.perUnitMs * (first + last) * n) / 2;
+
+    cropHours += (UNIT_BY_ID[t.unit].upkeep * msEaten) / HOUR;
+  }
+
+  return cropHours;
+}
+
 /** Lets time pass with constant rates (no building finishes in between). */
 function flow(s: GameState, to: number) {
   const dtMs = to - s.updatedAt;
   if (dtMs <= 0) return;
   const r = getRates(s);
   const hours = dtMs / HOUR;
+  // Recruits joining on the way eat too: as an average over the step.
+  r.productionPerHour.crop -= recruitUpkeep(s, s.updatedAt, to) / hours;
 
   const cropBefore = s.resources.crop;
 
@@ -641,6 +668,8 @@ function flow(s: GameState, to: number) {
   s.population += r.growthPerHour * hours;
   s.energy = Math.min(r.energyCapacity, s.energy + (r.energyPerSecond * dtMs) / 1000);
   s.updatedAt = to;
+  // Whoever finished training by now has joined the army (and eats from here on).
+  finishTraining(s, to);
 }
 
 /**

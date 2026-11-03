@@ -47,6 +47,9 @@ ask before "fixing" either. Add new decisions here when they are made.
   Watchtower level, so a bigger wall needs more rams. The dragon's fire breaks half of both at
   any level.
 - **Militia** (free defense from population) stops at 2,000.
+- **Attacks on players take at least 5 minutes** to arrive (camps and lairs don't), so the
+  "under attack" message comes in time to react. Tribes settle 4 tiles apart; neighbours'
+  cavalry used to arrive in 40 s.
 - **Ranks come slowly.** Battle XP grows with the enemy's strength to the power 0.65, so
   big late battles don't hand out ranks: Legend comes around camps 25–30. A repeat raid on a
   beaten camp gives 30% of the XP.
@@ -76,6 +79,10 @@ ask before "fixing" either. Add new decisions here when they are made.
 
 - When **crop runs out, troops desert** (slowly, per hour of starving).
 - Producer buildings yield more per level, and build times grow gently.
+- **Game physics are tested** (`physics.test.ts`): time (one jump = many steps), nothing
+  negative or NaN, production never past the warehouse, training/cancel conserve resources and
+  people, battle losses bounded, loot bounded, more troops never worse, junk input refused,
+  and 6,000 random actions keep every law. A failure there is a bug, not a balance change.
 - **Pacing is tested** (`balance.test.ts`): a perfect builder reaches Town Hall 10 in about two
   weeks and finishes the village in about four months; an army comes from the resources that
   pile up while the village waits for others. Change the economy → those tests tell you the

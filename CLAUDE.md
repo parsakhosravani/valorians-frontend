@@ -42,6 +42,12 @@ Add `?dev_user=2` to the URL to play as another test player.
 9. **Secrets:** `.env` is committed defaults only. Real values go in `.env.local` or the host.
    Never commit a bot token. Never set `NEXT_PUBLIC_DEV_LOGIN` in production.
 10. Add or update a test in `src/lib/game/*.test.ts` for every rule or balance change.
+11. **`physics.test.ts` (laws) and `balance.test.ts` (pacing) must pass.** Physics failing = a bug
+    in your rule. Balance failing = your change moved the game's pace: change the numbers back,
+    or update the expectation and say why in the PR. New rules that move resources, people or
+    troops get a conservation/bounds check there.
+12. Lookup tables keyed by client input (`BUILDING_BY_ID`, `UNIT_BY_ID`, …) are built with
+    `table()` (no prototype), so ids like `__proto__` are refused, not crashes.
 
 ## Where things are
 

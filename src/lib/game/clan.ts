@@ -2,7 +2,7 @@
  * Clan rules shared by the server (authoritative) and the client (rendering).
  * No I/O here: flags, clan techs, their costs and the perks members get.
  */
-import { CLAN, RESOURCE_IDS, ResourceId } from "./config";
+import { CLAN, RESOURCE_IDS, ResourceId, table } from "./config";
 
 // ─── Flags ───────────────────────────────────────────────────────────────────
 //
@@ -199,7 +199,7 @@ export const CLAN_TECHS: TechDef[] = [
   },
 ];
 
-export const TECH_BY_ID = Object.fromEntries(CLAN_TECHS.map((t) => [t.id, t])) as Record<TechId, TechDef>;
+export const TECH_BY_ID = table(CLAN_TECHS.map((t) => [t.id, t])) as Record<TechId, TechDef>;
 
 
 /** Treasury cost to raise a tech from `level` to `level + 1`. */

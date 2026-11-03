@@ -25,6 +25,7 @@ import {
   ResourceId,
   ANTI_CAVALRY_BONUS,
   ANTI_INFANTRY_BONUS,
+  MIN_RAID_MARCH_SECONDS,
   UNITS,
   UNIT_BY_ID,
   UNIT_IDS,
@@ -512,6 +513,9 @@ const marchId = (now: number, rand: number) => `${now.toString(36)}${Math.floor(
 // ─── Raids on other players ──────────────────────────────────────────────────
 
 /** Step 1: troops leave home. Attacking ends your own shield, bought ones too. */
+/** One-way march time to another player's tribe: never under MIN_RAID_MARCH_SECONDS. */
+export const raidTravelMs = (ms: number) => Math.max(MIN_RAID_MARCH_SECONDS * 1000, ms);
+
 export function dispatchRaid(s0: GameState, units: Army, now: number) {
   const s = cloneState(s0);
   const sent = validateSend(s, units);

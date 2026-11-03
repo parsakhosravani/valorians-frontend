@@ -337,9 +337,15 @@ export const BUILDINGS: BuildingDef[] = [
 
 export type BuildingId = string;
 
-export const BUILDING_BY_ID: Record<BuildingId, BuildingDef> = Object.fromEntries(
-  BUILDINGS.map((b) => [b.id, b])
-);
+/**
+ * A lookup table with no prototype: ids come from clients, and on a plain
+ * object "__proto__", "toString" or "constructor" find something, which
+ * crashed the server with a TypeError instead of a GameError.
+ */
+export const table = <T,>(entries: [string, T][]): Record<string, T> =>
+  Object.assign(Object.create(null) as Record<string, T>, Object.fromEntries(entries));
+
+export const BUILDING_BY_ID: Record<BuildingId, BuildingDef> = table(BUILDINGS.map((b) => [b.id, b]));
 
 export const buildingImage = (b: BuildingDef) =>
   `/images/buildings/${encodeURIComponent(b.name)}.webp`;
@@ -378,7 +384,7 @@ export const QUESTS: QuestDef[] = [
   { id: "x", title: "Follow our X Account", reward: { coins: 1000, population: 10, growth: 4 }, waitSeconds: 10 },
 ];
 
-export const QUEST_BY_ID = Object.fromEntries(QUESTS.map((q) => [q.id, q])) as Record<QuestId, QuestDef>;
+export const QUEST_BY_ID = table(QUESTS.map((q) => [q.id, q])) as Record<QuestId, QuestDef>;
 
 /** Turns a handle or URL from env into a link for a quest. */
 export const questUrl = (id: QuestId, value: string | undefined) => {
@@ -629,7 +635,7 @@ export const UNITS: UnitDef[] = [
  */
 export const DRAGON = { perRoostLevel: 0.15, restMs: 12 * 3600 * 1000, archerBonus: 2 } as const;
 
-export const UNIT_BY_ID = Object.fromEntries(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
+export const UNIT_BY_ID = table(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
 
 /** A troop's name for many of them: Spearmen, Axemen, Light Cavalry, Archers. */
 export const unitPlural = (id: UnitId) => {
@@ -697,6 +703,15 @@ export const shownXY = (p: { x: number; y: number }) =>
 export const TRIBE_SPACING = 4;
 /** Shortest possible one-way march. */
 export const MIN_MARCH_SECONDS = 20;
+/**
+ * Shortest march on another player's tribe. Tribes settle TRIBE_SPACING tiles
+ * apart, so a neighbour's cavalry arrived in 40 s: the "under attack" message
+ * came too late to train, call troops home or ask the clan for help. Five
+ * minutes gives the defender a real chance; camps and lairs keep MIN_MARCH_SECONDS.
+ */
+export const MIN_RAID_MARCH_SECONDS = 300;
+/** Armies one tribe can have on the move at once. */
+export const MAX_MARCHES = 5;
 /** Scouting costs this many coins per tile of distance (needs an Exploration Center). */
 /**
  * Spies (needs an Exploration Center): planted on a tribe for `durationMs`,
