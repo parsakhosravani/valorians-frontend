@@ -23,6 +23,7 @@ import {
   RESOURCE_IDS,
   ResourceId,
   ANTI_CAVALRY_BONUS,
+  ANTI_INFANTRY_BONUS,
   UNITS,
   UNIT_BY_ID,
   UNIT_IDS,
@@ -171,22 +172,34 @@ export function attackPower(s: GameState, units: Army) {
   return raw * (1 + getRates(s).attackBonus);
 }
 
-/** How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking army breaks, 0–1. */
-function siegeBreak(sent: Army) {
-  let wall = 0;
-  let tower = 0;
+/**
+ * How much of the enemy's City Gate (wall) and Watchtower (tower) an attacking
+ * army breaks, 0–1: rams and catapults break levels (a gate of 20 needs twice
+ * the rams of a gate of 10), the dragon's fire a share whatever the level.
+ */
+function siegeBreak(sent: Army, gateLevel: number, towerLevel: number) {
+  let wallLevels = 0;
+  let towerLevels = 0;
+  let fire = 0;
   for (const u of UNITS) {
-    wall += (u.wallBreak ?? 0) * (sent[u.id] ?? 0);
-    tower += (u.towerBreak ?? 0) * (sent[u.id] ?? 0);
+    const n = sent[u.id] ?? 0;
+    wallLevels += (u.wallBreak ?? 0) * n;
+    towerLevels += (u.towerBreak ?? 0) * n;
+    fire += (u.fireBreak ?? 0) * n;
   }
-  return { wall: Math.min(1, wall), tower: Math.min(1, tower) };
+  const share = (levels: number, of: number) => (of > 0 ? levels / of : 1);
+
+  return {
+    wall: Math.min(1, share(wallLevels, gateLevel) + fire),
+    tower: Math.min(1, share(towerLevels, towerLevel) + fire),
+  };
 }
 
 /** Defense of a tribe against an attack by `sent` (its siege engines break walls and towers). */
 export function defensePower(s: GameState, sent?: Army) {
   const r = getRates(s);
   const troops = UNIT_IDS.reduce((sum, u) => sum + unitDefense(s, u) * s.army[u], 0);
-  const br = sent ? siegeBreak(sent) : { wall: 0, tower: 0 };
+  const br = sent ? siegeBreak(sent, s.buildings["city-gate"] ?? 0, s.buildings.watchtower ?? 0) : { wall: 0, tower: 0 };
   const wall = r.wallBonus * (1 - br.wall);
   const tower = r.flatDefense * (1 - br.tower);
   return (troops + tower + militiaDefense(s.population)) * (1 + r.defenseBonus) * (1 + wall);
@@ -197,7 +210,8 @@ export function defensePower(s: GameState, sent?: Army) {
  * - the defender's terrain adds defense (hills +20%, forest +10%)
  * - mounted troops (Light Cavalry, Paladins, Knights) fight 25% weaker in a forest
  * - anti-cavalry troops (Spearmen) defend 50% better against the mounted share of the attack
- * - rams break the City Gate, catapults break the Watchtower
+ * - anti-infantry troops (Archers) defend 50% better against the foot soldiers' share
+ * - rams break City Gate levels, catapults Watchtower levels, the dragon's fire half of both
  * - an army landing from the sea fights uphill: the defenders get +25%, and
  *   their Harbor adds more
  * `defender` is null for a barbarian camp, which uses `campDef`.
@@ -222,9 +236,17 @@ export function battleNumbers(
 
   if (defender) {
     const r = getRates(defender);
-    const spears =
-      UNITS.filter((u) => u.antiCavalry).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) *
-      (1 + r.defenseBonus);
+    const guard = (pick: (u: (typeof UNITS)[number]) => boolean | undefined) =>
+      UNITS.filter(pick).reduce((a, u) => a + unitDefense(defender, u.id) * defender.army[u.id], 0) * (1 + r.defenseBonus);
+    const spears = guard((u) => u.antiCavalry);
+    const bows = guard((u) => u.antiInfantry);
+    // Foot soldiers: everyone who isn't mounted, a siege engine or the dragon.
+    const foot =
+      UNITS.filter((u) => !u.mounted && !u.flying && !u.wallBreak && !u.towerBreak).reduce(
+        (a, u) => a + unitAttack(attacker, u.id) * (sent[u.id] ?? 0),
+        0
+      ) * bonus;
+    const footShare = attack > 0 ? foot / attack : 0;
 
     // Archers shoot the dragon down: they defend DRAGON.archerBonus better against its share of the attack.
     const dragon = (sent.dragon ?? 0) * unitAttack(attacker, "dragon") * bonus;
@@ -234,6 +256,7 @@ export function battleNumbers(
     defense =
       defensePower(defender, sent) * ground +
       spears * ANTI_CAVALRY_BONUS * cavShare +
+      bows * ANTI_INFANTRY_BONUS * footShare +
       archers * DRAGON.archerBonus * dragonShare;
     if (landing) defense *= landingFactor(defender);
   } else {
@@ -521,7 +544,7 @@ export type RaidReport = BattleOutcome & {
  * One at Gate 11 with no rams; three with rams breaking half of it.
  */
 export const gateDamage = (gate: number, sent: Army) =>
-  gate > 0 ? Math.min(gate, 1 + Math.floor(siegeBreak(sent).wall * gate * 0.5)) : 0;
+  gate > 0 ? Math.min(gate, 1 + Math.floor(siegeBreak(sent, gate, 0).wall * gate * 0.5)) : 0;
 
 /**
  * Step 2: the battle, applied to the defender. Returns the defender's new

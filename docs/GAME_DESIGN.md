@@ -37,6 +37,16 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Raid shield grows** when a player is raided again and again.
 - Attacking a **much weaker target gives half loot**.
 - Knight and Paladin are strong elite cavalry.
+- **Every troop has one job** (Nov 2026 rebalance, pinned by "each troop is the best at its own
+  job" in war.test.ts): Spearman cheapest defense and anti-cavalry, Archer anti-foot-soldier
+  and anti-dragon defender, Swordsman all-rounder, Axeman most attack per crop, Light Cavalry the
+  fast raider with the biggest carry, Paladin most defense per crop, Knight most attack per
+  resource and per training second. Spearmen defend +50% against horsemen, Archers +50%
+  against foot soldiers: attackers mix, defenders mix.
+- **Siege breaks levels, not shares:** 10 rams break one City Gate level, 8 catapults one
+  Watchtower level, so a bigger wall needs more rams. The dragon's fire breaks half of both at
+  any level.
+- **Militia** (free defense from population) stops at 2,000.
 - **Experience lives in the soldiers.** Each troop type keeps one rank (no split ranks). When
   troops die, the regiment loses that same share of its XP; if the whole regiment dies, its XP
   is gone. Survivors keep theirs, and new recruits join the regiment's current rank.
@@ -59,6 +69,10 @@ ask before "fixing" either. Add new decisions here when they are made.
 
 - When **crop runs out, troops desert** (slowly, per hour of starving).
 - Producer buildings yield more per level, and build times grow gently.
+- **Pacing is tested** (`balance.test.ts`): a perfect builder reaches Town Hall 10 in about two
+  weeks and finishes the village in about four months; an army comes from the resources that
+  pile up while the village waits for others. Change the economy → those tests tell you the
+  new pace.
 - **Market:** your own trade offers show on the **Buy** tab; **My trades** is a reports-only tab.
 - Valorians Plus sells **convenience, never power** (extra builder, extra training slots, crown).
 

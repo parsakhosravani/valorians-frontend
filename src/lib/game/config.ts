@@ -496,10 +496,18 @@ export type UnitDef = {
   mounted?: boolean;
   /** Defends better against the mounted share of an attack (see ANTI_CAVALRY_BONUS). */
   antiCavalry?: boolean;
-  /** Share of the enemy's City Gate bonus each one breaks. */
+  /** Defends better against the foot-soldier share of an attack (see ANTI_INFANTRY_BONUS). */
+  antiInfantry?: boolean;
+  /**
+   * City Gate levels each one breaks for the battle (see siegeBreak). Was a
+   * share of the gate per ram (2%), so 50 rams undid any gate, even a City
+   * Gate 20 that took months: now a bigger gate needs more rams.
+   */
   wallBreak?: number;
-  /** Share of the enemy's Watchtower defense each one breaks. */
+  /** Watchtower levels each one breaks for the battle (was a 3% share per catapult). */
   towerBreak?: number;
+  /** Share of the City Gate and the Watchtower it breaks whatever their level (the dragon's fire). */
+  fireBreak?: number;
   /**
    * A ship: carries this many troop slots across the sea (see unitSlots). Ships
    * never fight; they wait off the beach and sail the survivors home. For
@@ -512,66 +520,81 @@ export type UnitDef = {
   maxOwned?: number;
 };
 
+/**
+ * Troops (Nov 2026 rebalance). Every troop has one job, and higher tiers buy
+ * efficiency with a deeper unlock:
+ * - Spearman: the cheapest defense, best against horsemen.
+ * - Archer: defends best against foot soldiers (and the dragon).
+ * - Swordsman: the all-rounder.
+ * - Axeman: the most attack for its crop, but it can't defend.
+ * - Light Cavalry: the raider, fastest with the biggest carry.
+ * - Paladin: the fast defender, the most defense for its crop.
+ * - Knight: the elite, the most attack for its cost and training time.
+ * Before, Axemen (Barracks 5) beat Knights (Stable 10) at attack per resource
+ * (21 vs 16 per 100) and per crop (45 vs 25), Archers were a weaker Axeman,
+ * and Spearmen did a Paladin's job for a quarter of the crop.
+ */
 export const UNITS: UnitDef[] = [
   {
-    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 18, carry: 25,
-    cost: { iron: 25, wood: 45, clay: 20, crop: 15 }, time: 15, upkeep: 1, speed: 30,
+    id: "spearman", name: "Spearman", icon: "🔱", attack: 12, defense: 22, carry: 25,
+    cost: { iron: 24, wood: 43, clay: 19, crop: 14 }, time: 20, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 1 },
     description: "Cheap, sturdy defender. Strong against cavalry.",
     antiCavalry: true,
   },
   {
-    id: "swordsman", name: "Swordsman", icon: "🗡️", attack: 30, defense: 22, carry: 40,
-    cost: { iron: 70, wood: 40, clay: 45, crop: 25 }, time: 25, upkeep: 1, speed: 30,
+    id: "swordsman", name: "Swordsman", icon: "🗡️", attack: 30, defense: 25, carry: 40,
+    cost: { iron: 74, wood: 42, clay: 48, crop: 26 }, time: 30, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 2 },
     description: "Well-armored all-rounder. Good in attack and defense.",
   },
   {
-    id: "archer", name: "Archer", icon: "🏹", attack: 22, defense: 10, carry: 15,
-    cost: { iron: 35, wood: 55, clay: 15, crop: 20 }, time: 20, upkeep: 1, speed: 27,
+    id: "archer", name: "Archer", icon: "🏹", attack: 15, defense: 20, carry: 20,
+    cost: { iron: 32, wood: 51, clay: 14, crop: 18 }, time: 22, upkeep: 1, speed: 27,
     requires: { building: "barracks", level: 3 },
-    description: "Strong attack, weak in defense.",
+    description: "Defender from the walls. Strong against foot soldiers, and shoots down dragons.",
+    antiInfantry: true,
   },
   {
-    id: "axeman", name: "Axeman", icon: "🪓", attack: 45, defense: 12, carry: 45,
-    cost: { iron: 85, wood: 60, clay: 30, crop: 35 }, time: 35, upkeep: 1, speed: 30,
+    id: "axeman", name: "Axeman", icon: "🪓", attack: 45, defense: 10, carry: 45,
+    cost: { iron: 93, wood: 66, clay: 33, crop: 38 }, time: 40, upkeep: 1, speed: 30,
     requires: { building: "barracks", level: 5 },
-    description: "The strongest foot soldier in attack, but weak in defense.",
+    description: "The most attack for the crop it eats, but weak in defense.",
   },
   {
-    id: "cavalry", name: "Light Cavalry", icon: "🐎", attack: 45, defense: 25, carry: 70,
-    cost: { iron: 100, wood: 60, clay: 40, crop: 70 }, time: 45, upkeep: 3, speed: 12,
+    id: "cavalry", name: "Light Cavalry", icon: "🐎", attack: 40, defense: 20, carry: 100,
+    cost: { iron: 111, wood: 67, clay: 44, crop: 78 }, time: 50, upkeep: 2, speed: 10,
     requires: { building: "stable", level: 1 },
-    description: "Fast attack horsemen. Carry the most loot, but weak in forests and against spears.",
+    description: "The raider: the fastest troop, and carries the most loot. Weak in forests and against spears.",
     mounted: true,
   },
   {
-    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 75, carry: 60,
-    cost: { iron: 140, wood: 100, clay: 100, crop: 70 }, time: 60, upkeep: 2, speed: 15,
+    id: "paladin", name: "Paladin", icon: "🐴", attack: 30, defense: 60, carry: 60,
+    cost: { iron: 137, wood: 97, clay: 98, crop: 68 }, time: 60, upkeep: 2, speed: 14,
     requires: { building: "stable", level: 3 },
-    description: "Defensive horseman. The best defender, and rides fast to help.",
+    description: "Defensive horseman. The most defense for its crop, and rides fast to help.",
     mounted: true,
   },
   {
-    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 100, defense: 40, carry: 80,
-    cost: { iron: 220, wood: 160, clay: 150, crop: 90 }, time: 90, upkeep: 4, speed: 14,
+    id: "knight", name: "Knight", icon: "🛡️🗡️", attack: 120, defense: 45, carry: 80,
+    cost: { iron: 213, wood: 155, clay: 145, crop: 87 }, time: 90, upkeep: 3, speed: 14,
     requires: { building: "stable", level: 10 },
-    description: "Heavy armored knight. The strongest attacker in the game.",
+    description: "Heavy armored knight. The most attack for its cost and training time.",
     mounted: true,
   },
   {
     id: "ram", name: "Battering Ram", icon: "🪵", attack: 30, defense: 5, carry: 0,
-    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 4, speed: 45,
+    cost: { iron: 120, wood: 180, clay: 80, crop: 40 }, time: 90, upkeep: 3, speed: 45,
     requires: { building: "siege-workshop", level: 1 },
-    description: "Each ram breaks 2% of the enemy's City Gate bonus.",
-    wallBreak: 0.02,
+    description: "Every 10 rams break one level of the enemy's City Gate for the battle.",
+    wallBreak: 0.1,
   },
   {
     id: "catapult", name: "Catapult", icon: "☄️", attack: 75, defense: 4, carry: 0,
     cost: { iron: 250, wood: 300, clay: 150, crop: 60 }, time: 150, upkeep: 6, speed: 55,
     requires: { building: "siege-workshop", level: 5 },
-    description: "Huge attack but the slowest unit. Each catapult breaks 3% of the enemy's Watchtower defense.",
-    towerBreak: 0.03,
+    description: "Huge attack but the slowest unit. Every 8 catapults break one level of the enemy's Watchtower for the battle.",
+    towerBreak: 0.125,
   },
   {
     id: "longship", name: "Longship", icon: "⛵", attack: 0, defense: 0, carry: 300,
@@ -588,8 +611,7 @@ export const UNITS: UnitDef[] = [
       "One per tribe. Flies straight to any target, over seas and mountains, too fast for bandits. Its fire breaks half of a City Gate and a Watchtower. Carries no loot. Never dies: beaten, it comes home wounded and rests 12 hours. Archers hit it hard.",
     flying: true,
     maxOwned: 1,
-    wallBreak: 0.5,
-    towerBreak: 0.5,
+    fireBreak: 0.5,
   },
 ];
 
@@ -617,8 +639,13 @@ export const MAX_TRAIN_BATCHES = 5;
 /** Most units in one batch. */
 export const MAX_BATCH = 500;
 
-/** Every tribe has some militia even with no troops. */
-export const militiaDefense = (population: number) => Math.round(50 + population * 0.1);
+/**
+ * Every tribe has some militia even with no troops: 50, and 0.1 per person,
+ * up to MILITIA_MAX. Population never stops growing, so without a top the
+ * militia alone would one day hold off real armies.
+ */
+export const MILITIA_MAX = 2000;
+export const militiaDefense = (population: number) => Math.round(Math.min(MILITIA_MAX, 50 + population * 0.1));
 
 /** Resources of each type a Hideout keeps safe from raiders. */
 export const hiddenResources = (hideoutLevel: number) => Math.round(500 * Math.pow(1.4, hideoutLevel));
@@ -676,6 +703,12 @@ export const SCOUT_COST_PER_TILE = 10;
 export const SCOUT_MIN_COST = 30;
 /** Anti-cavalry troops (Spearmen) defend this much better against the mounted share of an attack. */
 export const ANTI_CAVALRY_BONUS = 0.5;
+/**
+ * Anti-infantry troops (Archers) defend this much better against the foot
+ * soldiers' share of an attack. With the Spearmen against horsemen it makes a
+ * rock-paper-scissors: an attacker mixes foot and horse, a defender spears and bows.
+ */
+export const ANTI_INFANTRY_BONUS = 0.5;
 /** Mounted troops lose this much attack when fighting in a forest. */
 export const FOREST_CAVALRY_PENALTY = 0.25;
 

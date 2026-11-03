@@ -37,12 +37,12 @@ test("longships go with whichever group crosses the sea; spares sail home", () =
 });
 
 test("supplies are a share of the training cost plus crop for the road", () => {
-  const units = army({ spearman: 100 }); // 25/45/20/15 each, eats 1 crop/h
+  const units = army({ spearman: 100 }); // 24/43/19/14 each, eats 1 crop/h
   const s = W.redirectSupply(units, 2 * 3_600_000);
 
-  expect(s.iron).toBe(Math.ceil(25 * 100 * REDIRECT.supplyShare));
-  expect(s.wood).toBe(Math.ceil(45 * 100 * REDIRECT.supplyShare));
-  expect(s.crop).toBe(Math.ceil(15 * 100 * REDIRECT.supplyShare + 100 * 2));
+  expect(s.iron).toBe(Math.ceil(24 * 100 * REDIRECT.supplyShare));
+  expect(s.wood).toBe(Math.ceil(43 * 100 * REDIRECT.supplyShare));
+  expect(s.crop).toBe(Math.ceil(14 * 100 * REDIRECT.supplyShare + 100 * 2));
 });
 
 test("supplies come out of the loot first, the rest is owed by home", () => {

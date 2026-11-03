@@ -31,7 +31,7 @@ test("camps sit further out as they get harder", () => {
 });
 
 test("an army marches at its slowest unit", () => {
-  expect(marchMs(army({ cavalry: 10 }), 10)).toBe(120_000);
+  expect(marchMs(army({ cavalry: 10 }), 10)).toBe(100_000);
   expect(marchMs(army({ cavalry: 10, ram: 1 }), 10)).toBe(450_000);
   expect(marchMs(army({ cavalry: 1 }), 0.5)).toBe(MIN_MARCH_SECONDS * 1000);
 });

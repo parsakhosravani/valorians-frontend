@@ -20,12 +20,12 @@ test("training needs the building, costs resources and finishes over time", () =
   expect(() => W.trainTroops(s0, "spearman", 5, T0)).toThrow("Needs Barracks level 1");
 
   let s = W.trainTroops(withBarracks(), "spearman", 10, T0);
-  expect(s.resources.wood).toBe(14000 - 450);
+  expect(s.resources.wood).toBe(14000 - 430);
   expect(() => W.trainTroops(s, "archer", 1, T0)).toThrow("Needs Barracks level 3");
 
-  s = E.advance(s, T0 + 15_000 * 4 + 500);
+  s = E.advance(s, T0 + 20_000 * 4 + 500);
   expect(s.army.spearman).toBe(4);
-  s = E.advance(s, T0 + 15_000 * 10);
+  s = E.advance(s, T0 + 20_000 * 10);
   expect(s.army.spearman).toBe(10);
   expect(s.training.length).toBe(0);
   // 10 spearmen eat 10 crop/h
@@ -35,7 +35,7 @@ test("training needs the building, costs resources and finishes over time", () =
 test("second batch waits for the first", () => {
   let s = W.trainTroops(withBarracks(), "spearman", 2, T0);
   s = W.trainTroops(s, "spearman", 2, T0);
-  expect(s.training[1].startsAt).toBe(T0 + 30_000);
+  expect(s.training[1].startsAt).toBe(T0 + 40_000);
 });
 
 test("camp: strong army wins, gets reward on return, unlocks next camp", () => {
@@ -141,9 +141,13 @@ test("defenders and walls can win", () => {
 test("rams weaken walls", () => {
   const d = withBarracks();
   d.buildings["city-gate"] = 20;
-  const rams = { ...E.emptyArmy(), ram: 50 };
-  // 50 rams × 2% = the whole 60% gate bonus (3% × 20) is gone
-  expect(W.defensePower(d, rams) * 1.6).toBeCloseTo(W.defensePower(d));
+  // 10 rams break a level: 200 take the whole 60% bonus of a City Gate 20, 100 half of it.
+  const rams = (n: number) => ({ ...E.emptyArmy(), ram: n });
+  expect(W.defensePower(d, rams(200)) * 1.6).toBeCloseTo(W.defensePower(d));
+  expect((W.defensePower(d, rams(100)) / 1.3) * 1.6).toBeCloseTo(W.defensePower(d));
+  // A small gate falls to few rams.
+  d.buildings["city-gate"] = 5;
+  expect(W.defensePower(d, rams(50)) * 1.15).toBeCloseTo(W.defensePower(d));
 });
 
 test("catapults break the Watchtower", () => {
@@ -152,8 +156,8 @@ test("catapults break the Watchtower", () => {
   const tower = E.getRates(d).flatDefense;
   expect(tower).toBeCloseTo(C.compoundAt(60, 10, 1.12)); // ~1,050: 60 at level 1, 12% more each level
   const full = W.defensePower(d);
-  const hit = W.defensePower(d, { ...E.emptyArmy(), catapult: 10 }); // −30% of the tower
-  expect(full - hit).toBeCloseTo(tower * 0.3 * (1 + E.getRates(d).defenseBonus));
+  const hit = W.defensePower(d, { ...E.emptyArmy(), catapult: 20 }); // 2.5 of its 10 levels: −25% of the tower
+  expect(full - hit).toBeCloseTo(tower * 0.25 * (1 + E.getRates(d).defenseBonus));
 });
 
 test("new troops unlock at higher building levels", () => {
@@ -169,8 +173,8 @@ test("knights are mounted: weaker in forests and countered by spearmen", () => {
   const atk = withBarracks();
   const def = withBarracks();
   def.army.spearman = 100;
-  const knights = { ...E.emptyArmy(), knight: 45 };
-  const axes = { ...E.emptyArmy(), axeman: 100 }; // same attack as the knights
+  const knights = { ...E.emptyArmy(), knight: 75 };
+  const axes = { ...E.emptyArmy(), axeman: 200 }; // same attack as the knights
   const vsKnights = W.battleNumbers(atk, knights, def, "plains");
   const vsAxes = W.battleNumbers(atk, axes, def, "plains");
   expect(vsKnights.attack).toBeCloseTo(vsAxes.attack);
@@ -215,9 +219,9 @@ test("XP is shared by contribution and a wiped-out regiment loses all of its XP"
   s.buildings.stable = 1;
   s.army = { spearman: 10, archer: 0, cavalry: 10, ram: 0 };
   const xp = W.battleXp(s, s.army, 1000, true, "attack");
-  // spears 12×10 vs cavalry 45×10 → 120:450 of 200 XP
-  expect(xp.spearman).toBe(42);
-  expect(xp.cavalry).toBe(158);
+  // spears 12×10 vs cavalry 40×10 → 120:400 of 200 XP
+  expect(xp.spearman).toBe(46);
+  expect(xp.cavalry).toBe(154);
 
   const t = withBarracks();
   t.army.spearman = 2;
@@ -274,16 +278,16 @@ test("old saves with Arsenal upgrades load without them", () => {
 });
 
 test("cancelling a running batch keeps trained units, refunds the rest and moves the queue up", () => {
-  let s = W.trainTroops(withBarracks(), "spearman", 10, T0); // 15s each
+  let s = W.trainTroops(withBarracks(), "spearman", 10, T0); // 20s each
   s = W.trainTroops(s, "spearman", 2, T0);
-  const now = T0 + 15_000 * 4 + 500;
+  const now = T0 + 20_000 * 4 + 500;
   s = E.advance(s, now);
   expect(s.army.spearman).toBe(4);
   const wood = s.resources.wood;
 
   s = W.cancelTraining(s, T0, now);
   expect(s.army.spearman).toBe(4);
-  expect(s.resources.wood).toBe(wood + 45 * 6);
+  expect(s.resources.wood).toBe(wood + 43 * 6);
   expect(s.training.length).toBe(1);
   expect(s.training[0].startsAt).toBe(now);
 });
@@ -292,15 +296,16 @@ test("cancelling a queued batch leaves the running one alone", () => {
   let s = W.trainTroops(withBarracks(), "spearman", 2, T0);
   s = W.trainTroops(s, "spearman", 2, T0);
   s = W.trainTroops(s, "spearman", 2, T0);
-  s = W.cancelTraining(s, T0 + 30_000, T0 + 1000);
-  expect(s.training.map((t) => t.startsAt)).toEqual([T0, T0 + 30_000]);
+  s = W.cancelTraining(s, T0 + 40_000, T0 + 1000);
+  expect(s.training.map((t) => t.startsAt)).toEqual([T0, T0 + 40_000]);
   expect(() => W.cancelTraining(s, 123, T0)).toThrow("already finished");
 });
 
 test("a won raid knocks the City Gate down: a level for an empty tribe, more with rams", () => {
   expect(W.gateDamage(0, E.emptyArmy())).toBe(0);
   expect(W.gateDamage(11, E.emptyArmy())).toBe(1);
-  expect(W.gateDamage(11, { ...E.emptyArmy(), ram: 25 })).toBe(3);
+  expect(W.gateDamage(11, { ...E.emptyArmy(), ram: 25 })).toBe(2);
+  expect(W.gateDamage(11, { ...E.emptyArmy(), ram: 55 })).toBe(3); // half the gate's levels broken
   expect(W.gateDamage(11, { ...E.emptyArmy(), ram: 500 })).toBe(6);
   expect(W.gateDamage(1, { ...E.emptyArmy(), ram: 500 })).toBe(1);
 
@@ -483,14 +488,14 @@ test("a beaten dragon isn't lost: it comes home wounded and rests", () => {
 
 test("archers defend far better against a dragon than against an army as strong", () => {
   const attacker = withRoost();
-  attacker.army.dragon = 1;
-  attacker.army.axeman = 89;
   const defender = withBarracks();
   defender.army.archer = 200;
   const vsDragon = W.battleNumbers(attacker, { ...E.emptyArmy(), dragon: 1 }, defender).defense;
+  const vsHorse = W.battleNumbers(attacker, { ...E.emptyArmy(), cavalry: 100 }, defender).defense; // same attack
   const vsAxes = W.battleNumbers(attacker, { ...E.emptyArmy(), axeman: 89 }, defender).defense;
 
-  expect(vsDragon).toBeGreaterThan(vsAxes * 2.5);
+  expect(vsDragon).toBeGreaterThan(vsHorse * 2.5);
+  expect(vsDragon).toBeGreaterThan(vsAxes * 1.6); // archers hold foot soldiers well too
 });
 
 test("the dead take their share of a regiment's experience", () => {
@@ -504,4 +509,52 @@ test("the dead take their share of a regiment's experience", () => {
   W.applyBattleXp(s, regiment, dead, earned);
   expect(s.troops.spearman.xp).toBe(610); // 40% died → 40% of XP lost, then +10
   expect(s.troops.archer.xp).toBe(0); // all died → all XP lost, nothing earned
+});
+
+// ─── Troop roles (Nov 2026 rebalance) ─────────────────────────────────────────
+
+const fighters = C.UNITS.filter((u) => !u.transport && !u.flying && !u.wallBreak && !u.towerBreak);
+const price = (u: C.UnitDef) => C.RESOURCE_IDS.reduce((a, r) => a + u.cost[r], 0);
+const best = (by: (u: C.UnitDef) => number) => [...fighters].sort((a, b) => by(b) - by(a))[0].id;
+
+test("each troop is the best at its own job", () => {
+  expect(best((u) => u.attack / price(u))).toBe("knight");
+  expect(best((u) => u.attack / u.time)).toBe("knight");
+  expect(best((u) => u.attack / u.upkeep)).toBe("axeman");
+  expect(best((u) => u.defense / price(u))).toBe("spearman");
+  expect(best((u) => u.defense / u.upkeep)).toBe("paladin");
+  expect(best((u) => u.carry)).toBe("cavalry");
+  expect(best((u) => -u.speed)).toBe("cavalry");
+  // Of the foot soldiers, the Swordsman is the one good at both.
+  const foot = fighters.filter((u) => !u.mounted);
+  expect([...foot].sort((a, b) => Math.min(b.attack, b.defense) - Math.min(a.attack, a.defense))[0].id).toBe("swordsman");
+});
+
+test("archers hold foot soldiers, spearmen hold horsemen", () => {
+  const atk = withBarracks();
+  const bows = withBarracks();
+  bows.army.archer = 200;
+  const spears = withBarracks();
+  spears.army.spearman = 182; // about the same plain defense as the archers
+  const foot = { ...E.emptyArmy(), axeman: 100 };
+  const horse = { ...E.emptyArmy(), cavalry: 112 }; // same attack as the axemen
+
+  expect(W.battleNumbers(atk, foot, bows).defense).toBeGreaterThan(W.battleNumbers(atk, foot, spears).defense * 1.3);
+  expect(W.battleNumbers(atk, horse, spears).defense).toBeGreaterThan(W.battleNumbers(atk, horse, bows).defense * 1.3);
+  // Siege engines aren't foot soldiers: archers get nothing extra against them.
+  const rams = { ...E.emptyArmy(), ram: 10 };
+  expect(W.battleNumbers(atk, rams, bows).defense).toBeCloseTo(W.defensePower(bows, rams));
+});
+
+test("the dragon's fire breaks half of any gate and tower, whatever their level", () => {
+  const d = withBarracks();
+  d.buildings["city-gate"] = 20;
+  const dragon = { ...E.emptyArmy(), dragon: 1 };
+  expect((W.defensePower(d, dragon) / 1.3) * 1.6).toBeCloseTo(W.defensePower(d));
+});
+
+test("the militia stops growing at MILITIA_MAX", () => {
+  expect(C.militiaDefense(0)).toBe(50);
+  expect(C.militiaDefense(1000)).toBe(150);
+  expect(C.militiaDefense(1e7)).toBe(C.MILITIA_MAX);
 });
