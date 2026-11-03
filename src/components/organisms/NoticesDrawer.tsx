@@ -65,7 +65,18 @@ export const NoticesBell = () => {
     load().then((list) => {
       const newest = list?.find((n) => !n.read);
 
-      if (newest) toast(noticePlain(newest.html), { duration: 6000 });
+      if (!newest) return;
+      // Tapping the toast follows the notice's button (e.g. a victory opens its report).
+      toast(
+        newest.path ? (
+          <span role="link" onClick={() => router.push(newest.path as Route)}>
+            {noticePlain(newest.html)}
+          </span>
+        ) : (
+          noticePlain(newest.html)
+        ),
+        { duration: 6000 }
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unread]);
