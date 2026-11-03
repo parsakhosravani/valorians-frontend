@@ -4,7 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
 import { homeOf, mapView } from "@/server/map";
-import { candidates, moveOutpostsOutOfWalls, settleOutpost } from "@/server/outposts";
+import { candidates, moveOutpostsOutOfWalls, offeredSpots, settleOutpost } from "@/server/outposts";
+import { outpostLand } from "@/lib/game/outpost";
 import { mutatePlayer } from "@/server/players";
 import { OUTPOST } from "@/lib/game/config";
 import { distance, terrainAt } from "@/lib/game/map";
@@ -100,4 +101,27 @@ describe("outposts (server)", () => {
     // Once only.
     expect(await moveOutpostsOutOfWalls()).toBe(0);
   });
+
+  test("the player picks the land: offered spots can be settled, others refused", async () => {
+    const T0 = Date.now();
+    const me = await newPlayer(T0, ready);
+    const home = await homeOf(me.id);
+    const spots = await offeredSpots(me);
+
+    expect(spots.length).toBeGreaterThan(0);
+    for (const p of spots) {
+      expect(p.land).toEqual(outpostLand(p.x, p.y));
+      expect(distance(home, p)).toBeGreaterThanOrEqual(OUTPOST.minDistance);
+    }
+    // Not a spot it could settle: refused, nothing paid, no tile claimed.
+    await expect(settleOutpost(me, T0, { x: home.x, y: home.y })).rejects.toThrow("can't be settled");
+    expect((await reload(me.id)).state.outposts.length).toBe(0);
+
+    const pick = spots[spots.length - 1];
+    const after = await settleOutpost(await reload(me.id), T0 + 1, pick);
+    expect(after.state.outposts[0]).toMatchObject({ x: pick.x, y: pick.y, land: pick.land });
+    // The spot is gone from the next offer.
+    expect((await offeredSpots(await reload(me.id))).some((p) => p.x === pick.x && p.y === pick.y)).toBe(false);
+  });
 });
+

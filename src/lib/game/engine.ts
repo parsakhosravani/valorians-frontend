@@ -70,6 +70,7 @@ import {
   unitPeople,
 } from "./config";
 import { ClanPerks, NO_PERKS } from "./clan";
+import { OutpostLand, outpostLand } from "./outpost";
 
 export type Army = Record<UnitId, number>;
 
@@ -108,6 +109,8 @@ export type Outpost = {
   y: number;
   foundedAt: number;
   fields: Record<ResourceId, number>;
+  /** What the land round it favours (see outpostLand); filled in from the tile for old saves. */
+  land: OutpostLand;
   /** The field being raised now, if any. */
   job?: { resource: ResourceId; toLevel: number; startedAt: number; endsAt: number };
 };
@@ -349,7 +352,7 @@ export function normalizeState(saved: GameState): GameState {
     fullEnergy: { ...fresh.fullEnergy, ...s.fullEnergy },
     buildings: { ...fresh.buildings, ...s.buildings },
     mastery: { ...s.mastery },
-    outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...emptyFields(), ...o.fields } })),
+    outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...emptyFields(), ...o.fields }, land: o.land ?? outpostLand(o.x, o.y) })),
     queue: s.queue ?? [],
     quests: s.quests ?? {},
     army: { ...fresh.army, ...s.army },
@@ -577,10 +580,11 @@ export function getRates(s: GameState): Rates {
 
   // Outposts' fields yield like the home producers and count as building levels (growth, upkeep).
   for (const o of s.outposts ?? []) {
+    const out = outpostOutput(o);
+
     for (const res of RESOURCE_IDS) {
-      const l = Math.min(o.fields[res] ?? 0, OUTPOST.fieldMaxLevel);
-      production[res] += productionAt(FIELD_YIELD, l);
-      totalLevels += l;
+      production[res] += out[res];
+      totalLevels += Math.min(o.fields[res] ?? 0, OUTPOST.fieldMaxLevel);
     }
   }
 
@@ -1087,7 +1091,17 @@ export function masterBuilding(s0: GameState, id: BuildingId, now: number): Game
 
 const emptyFields = (): Record<ResourceId, number> => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
 /** A field yields what the home producer of its resource does at the same level. */
-const FIELD_YIELD = 60;
+/** What an outpost's fields make per hour, with its land bonus (before clan perks and the crop upkeep). */
+export function outpostOutput(o: Pick<Outpost, "fields" | "land">): Record<ResourceId, number> {
+  return Object.fromEntries(
+    RESOURCE_IDS.map((res) => {
+      const base = productionAt(OUTPOST.fieldYield, Math.min(o.fields[res] ?? 0, OUTPOST.fieldMaxLevel));
+
+      return [res, o.land?.resource === res ? base * (1 + o.land.percent / 100) : base];
+    })
+  ) as Record<ResourceId, number>;
+}
+
 const FIELD_BUILDING: Record<ResourceId, BuildingId> = { iron: "iron-mine", wood: "sawmill", clay: "brickyard", crop: "windmill" };
 
 /** How many outposts the Town Hall allows now. */
@@ -1129,7 +1143,10 @@ export function foundOutpost(s0: GameState, at: { x: number; y: number }, now: n
 
   for (const r of RESOURCE_IDS) s.resources[r] -= cost.resources[r];
   s.population -= cost.people;
-  s.outposts = [...s.outposts, { x: Math.round(at.x), y: Math.round(at.y), foundedAt: now, fields: emptyFields() }];
+  const x = Math.round(at.x);
+  const y = Math.round(at.y);
+
+  s.outposts = [...s.outposts, { x, y, foundedAt: now, fields: emptyFields(), land: outpostLand(x, y) }];
 
   return s;
 }

@@ -567,6 +567,19 @@ export const OUTPOST = {
   maxDistance: 10,
   /** Kept this many tiles from every other tribe's village too, so an outpost never stands inside a neighbour's walls. */
   clearOfVillages: 5,
+  /** An outpost's field yields like a home producer of the same level (per-level base, see productionAt). */
+  fieldYield: 60,
+  /**
+   * Land bonus: the land round an outpost (its tile and the 8 next to it) favours one
+   * resource (see outpostLand), +landBonusPerTile% to that field for each tile of it, up to
+   * landBonusMax%. 40% on one field of each outpost keeps three full outposts under a top
+   * village even if all three pick the same resource (~0.83 of it), so where you settle is a
+   * real choice without making outposts a second village.
+   */
+  landBonusPerTile: 10,
+  landBonusMax: 40,
+  /** How many spots the player is offered when founding one (the best for each resource, nearest first). */
+  spotChoices: 4,
 } as const;
 
 // ─── Seasons and the World Wonder ─────────────────────────────────────────────

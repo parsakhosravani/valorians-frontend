@@ -28,12 +28,25 @@ test.describe("Valorians 2 late game", () => {
     await editState(id, lateGame);
     const noErrors = await open(page, id, "/tribe");
 
+    // Founding offers the land to choose from, each with its bonus.
     await page.getByRole("button", { name: "Found outpost" }).click();
+    await expect(page.getByText("Choose the land to settle")).toBeVisible();
+    if (process.env.SHOTS) {
+      await page.getByText("Choose the land to settle").evaluate((e) => e.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: `${process.env.SHOTS}/outpost-choose.png` });
+    }
+    await page.getByRole("button", { name: "Settle" }).first().click();
     await toast(page, "An outpost is founded!");
     await expect(page.getByText("Outpost 1")).toBeVisible();
-    await page.getByRole("button", { name: /raise/ }).first().click();
+    // Tapping a field shows its cost and time; Raise starts the outpost's builder.
+    await page.getByRole("button", { name: /Lv 0/ }).first().click();
+    await page.getByRole("button", { name: "Raise to 1" }).click();
     await toast(page, "The outpost's builder is at work");
-    await expect(page.getByText(/Raising \w+ to 1/)).toBeVisible();
+    await expect(page.getByText(/→ 1 ·/)).toBeVisible();
+    if (process.env.SHOTS) {
+      await page.getByText("Outpost 1").evaluate((e) => e.scrollIntoView({ block: "center" }));
+      await page.screenshot({ path: `${process.env.SHOTS}/outpost-card.png` });
+    }
 
     const rows = await sql("SELECT x, y FROM outposts WHERE user_id = ?", [id]);
     expect(rows.rows.length).toBe(1);
