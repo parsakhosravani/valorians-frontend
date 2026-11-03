@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
@@ -14,12 +14,8 @@ import type { AttackTarget } from "@/components/organisms/war/SendArmyDrawer";
 const ArmyTab = dynamic(() => import("@/components/organisms/war/ArmyTab").then((m) => m.ArmyTab));
 const ReportsTab = dynamic(() => import("@/components/organisms/war/ReportsTab").then((m) => m.ReportsTab));
 const SendArmyDrawer = dynamic(() => import("@/components/organisms/war/SendArmyDrawer").then((m) => m.SendArmyDrawer));
-const BattleResultDrawer = dynamic(() =>
-  import("@/components/organisms/war/BattleResultDrawer").then((m) => m.BattleResultDrawer)
-);
 import { Tabs } from "@/components/organisms/war/shared";
-import { BattleReport, useLive } from "@/context";
-import { armySize } from "@/lib/game/war";
+import { useLive } from "@/context";
 
 type Tab = "map" | "army" | "reports";
 
@@ -28,7 +24,6 @@ export const Battle = () => {
   const training = useLive((l) => l.state.training.length);
   const [tab, setTab] = useState<Tab>("map");
   const [target, setTarget] = useState<AttackTarget | null>(null);
-  const [result, setResult] = useState<BattleReport | null>(null);
   const [revenge, setRevenge] = useState<number | undefined>();
   const [camp, setCamp] = useState<number | undefined>();
 
@@ -69,15 +64,6 @@ export const Battle = () => {
       setTab("map");
     }
   }, [query]);
-  // A win already arrives as a 🏆 notice at the top (tap it for the report), so the
-  // sheet only opens when the news needs a closer look: a defeat, or a win that
-  // cost at least half the army.
-  const showResult = useCallback((r: BattleReport) => {
-    const sent = armySize(r.sent);
-    const heavy = sent > 0 && armySize(r.attackerLosses) * 2 >= sent;
-
-    if (!r.attackerWon || heavy) setResult(r);
-  }, []);
   // Back on the map after another tab: it opens on your own tribe, not the one you jumped to.
   const pickTab = (t: Tab) => {
     if (t !== tab) {
@@ -113,7 +99,6 @@ export const Battle = () => {
               focusCamp={camp}
               focusId={revenge}
               onAttack={setTarget}
-              onBattleDone={showResult}
             />
           )}
           {tab === "army" && <ArmyTab />}
@@ -133,7 +118,6 @@ export const Battle = () => {
         onClose={() => setTarget(null)}
         onSent={() => setTarget(null)}
       />
-      <BattleResultDrawer report={result} onClose={() => setResult(null)} />
 
       <Image
         priority
