@@ -228,6 +228,8 @@ export type GameState = {
    * last free weekly Plus shield was claimed at plusClaimedAt.
    */
   shield: { cooldownUntil: number; plusClaimedAt: number };
+  /** Seasons this tribe's clan won by finishing the World Wonder first (a badge). */
+  seasonWins?: number;
   /** Cards the player owns, by level. War Orders: more new orders per expedition. */
   cards: { orders: number };
   /**

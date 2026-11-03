@@ -545,6 +545,33 @@ export const CLAN = {
   logSize: 40,
 };
 
+// ─── Seasons and the World Wonder ─────────────────────────────────────────────
+
+/**
+ * The server-wide end goal. Clans raise a World Wonder from their treasury,
+ * one level at a time with a wait between levels; the first clan to reach
+ * `levels` wins the season. Then every Wonder falls back to nothing and a new
+ * season begins. Villages, armies and clans are kept: a season is a race,
+ * not a wipe.
+ *
+ * Numbers: the whole Wonder costs ~69M of each resource (and coins), about two
+ * weeks of everything a full clan of maxed villages makes, and at least
+ * levels × levelMs (10 days) however rich the clan is. A season lasts one to a
+ * few months.
+ */
+export const WONDER = {
+  levels: 20,
+  baseResources: 200_000,
+  baseCoins: 20_000,
+  growth: 1.25,
+  /** After a level is raised, the next can't be for this long. */
+  levelMs: 12 * 3600e3,
+  /** A clan needs this clan level before it can start a Wonder. */
+  minClanLevel: 2,
+  /** Each member of the winning clan gets this many coins. */
+  winnerCoins: 100_000,
+};
+
 // ─── Valorians Plus ──────────────────────────────────────────────────────────
 
 /**

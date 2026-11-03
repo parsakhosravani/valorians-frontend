@@ -148,6 +148,8 @@ interface GameContextType {
     ) => Promise<boolean>;
     donate: (key: TreasuryKey, amount: number) => Promise<boolean>;
     upgradeTech: (tech: TechId) => Promise<boolean>;
+    /** Raises the clan's World Wonder one level (officers). */
+    raiseWonder: () => Promise<boolean>;
     aid: (id: number, key: TreasuryKey, amount: number) => Promise<boolean>;
   };
   /** Valorians Plus: the one free trial, or a monthly Telegram Stars subscription. */
@@ -578,6 +580,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       update: (c, success = "Clan updated") => act("clan/update", c, success),
       donate: (key, amount) => act("clan/donate", { key, amount }, "Donated to the treasury"),
       upgradeTech: (tech) => act("clan/tech", { tech }, "Clan tech raised!"),
+      raiseWonder: () => act("clan/wonder", {}, "The Wonder rises!"),
       aid: (id, key, amount) => act("clan/aid", { id, key, amount }, "Aid sent"),
     },
     plus: {

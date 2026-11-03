@@ -450,6 +450,11 @@ export const Hall = () => {
               <span className="pill">Hall {state.buildings["town-hall"] ?? 0}</span>
               <span className="pill"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
               <span className="pill"><GameIcon e="👥" /> {compact(peopleOf(state))}</span>
+              {!!state.seasonWins && (
+                <span className="pill pill-gold" title="Seasons won by finishing the World Wonder">
+                  <GameIcon e="👑" /> {state.seasonWins > 1 ? `×${state.seasonWins}` : "Wonder"}
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap gap-1.5">
               <button

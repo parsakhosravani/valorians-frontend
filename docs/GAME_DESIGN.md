@@ -89,6 +89,16 @@ ask before "fixing" either. Add new decisions here when they are made.
   techs give no perks and can't be raised until a second chief joins (and stop again if it
   drops back to one).
 
+## Seasons and the World Wonder
+
+- **The server-wide end goal.** Clans (clan level 2+, at least 2 members) raise a World Wonder
+  from the treasury: 20 levels, each dearer than the last (~69M of each resource in all), with a
+  12-hour wait between levels, so at least 10 days for any clan. The first clan to finish wins
+  the season: each member gets 100,000 coins and a crown badge, then every Wonder falls and a
+  new season starts.
+- **A season is a race, not a wipe:** villages, armies, clans and techs are kept. Only Wonders reset.
+- Past winners and the leading Wonders show on the clan screen (`seasons` table).
+
 ## Economy
 
 - When **crop runs out, troops desert** (slowly, per hour of starving).

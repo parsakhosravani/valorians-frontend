@@ -2,7 +2,7 @@
  * Clan rules shared by the server (authoritative) and the client (rendering).
  * No I/O here: flags, clan techs, their costs and the perks members get.
  */
-import { CLAN, RESOURCE_IDS, ResourceId, table } from "./config";
+import { CLAN, RESOURCE_IDS, ResourceId, WONDER, table } from "./config";
 
 // ─── Flags ───────────────────────────────────────────────────────────────────
 //
@@ -278,3 +278,27 @@ export const aidTooSoon = (joinedAt: number | null, now: number) => joinedAt == 
 
 export const isResource = (k: string): k is ResourceId => (RESOURCE_IDS as readonly string[]).includes(k);
 export const isTreasuryKey = (k: string): k is TreasuryKey => (TREASURY_KEYS as readonly string[]).includes(k);
+
+// ─── World Wonder ────────────────────────────────────────────────────────────
+
+/** Treasury cost to raise the Wonder from `level` to `level + 1`. */
+export function wonderCost(level: number): Treasury {
+  const f = Math.pow(WONDER.growth, level);
+  const res = Math.round((WONDER.baseResources * f) / 1000) * 1000;
+
+  return { iron: res, wood: res, clay: res, crop: res, coins: Math.round((WONDER.baseCoins * f) / 100) * 100 };
+}
+
+/**
+ * Why the clan can't raise its Wonder now, or null. `nextAt` is when the wait
+ * after the last level ends.
+ */
+export function wonderBlocked(c: { techs: Techs; members: number; level: number; nextAt: number; treasury: Treasury }, now: number) {
+  if (!isFormed(c.members)) return `A clan needs at least ${CLAN.minMembers} members`;
+  if (clanLevel(c.techs) < WONDER.minClanLevel) return `Reach clan level ${WONDER.minClanLevel} to start a Wonder`;
+  if (c.level >= WONDER.levels) return "The Wonder stands complete";
+  if (now < c.nextAt) return "The builders are still at work on the last level";
+  if (!canAfford(c.treasury, wonderCost(c.level))) return "The treasury can't cover the next level yet";
+
+  return null;
+}
