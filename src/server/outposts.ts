@@ -7,6 +7,7 @@ import { Player, mutatePlayer } from "./players";
 import { OUTPOST } from "@/lib/game/config";
 import { GameError, foundOutpost, outpostBlocked } from "@/lib/game/engine";
 import { Point, distance, terrainAt } from "@/lib/game/map";
+import { outpostLand, outpostSpots } from "@/lib/game/outpost";
 
 /** Land an outpost can stand on: no sea, lakes or mountain peaks. */
 const buildable = (p: Point) => !["sea", "lake", "mountains"].includes(terrainAt(p.x, p.y));
@@ -58,11 +59,21 @@ async function around(home: Point) {
   return { villages, taken };
 }
 
+/** The spots this tribe is offered for its next outpost: the best land for each resource (see outpostSpots). */
+export async function offeredSpots(me: Player) {
+  const home = await homeOf(me.id);
+  const { villages, taken } = await around(home);
+
+  return outpostSpots(home, candidates(home, taken, villages));
+}
+
 /**
- * Founds the tribe's next outpost on the nearest free tile: the tile is
- * claimed first (UNIQUE x, y), then paid for; if paying fails, the tile is let go.
+ * Founds the tribe's next outpost: on `pick` if given (any free spot the
+ * tribe could settle, not only the offered ones), else on the nearest free
+ * tile. The tile is claimed first (UNIQUE x, y), then paid for; if paying
+ * fails, the tile is let go.
  */
-export async function settleOutpost(me: Player, now: number) {
+export async function settleOutpost(me: Player, now: number, pick?: Point) {
   const blocked = outpostBlocked(me.state);
 
   if (blocked) throw new GameError(blocked, "blocked");
@@ -70,8 +81,18 @@ export async function settleOutpost(me: Player, now: number) {
   const home = await homeOf(me.id);
   const { villages, taken } = await around(home);
   const idx = me.state.outposts.length;
+  const free = candidates(home, taken, villages);
+  let spots = free.slice(0, 8);
 
-  for (const spot of candidates(home, taken, villages).slice(0, 8)) {
+  if (pick) {
+    const p = { x: Math.round(Number(pick.x)), y: Math.round(Number(pick.y)) };
+    const ok = free.find((c) => c.x === p.x && c.y === p.y);
+
+    if (!ok) throw new GameError("That land can't be settled any more: pick another spot", "taken");
+    spots = [ok];
+  }
+
+  for (const spot of spots) {
     const claim = await db
       .execute({ sql: "INSERT INTO outposts (user_id, idx, x, y) VALUES (?, ?, ?, ?)", args: [me.id, idx, spot.x, spot.y] })
       .catch(() => null);
@@ -88,6 +109,7 @@ export async function settleOutpost(me: Player, now: number) {
       throw e;
     }
   }
+  if (pick) throw new GameError("That land was just taken: pick another spot", "taken");
   throw new GameError("No free land near your village for an outpost", "no_land");
 }
 
@@ -136,7 +158,7 @@ export async function moveOutpostsOutOfWalls() {
       await mutatePlayer(o.owner, Date.now(), (s) => {
         const mine = s.outposts[o.idx];
 
-        if (mine && mine.x === o.x && mine.y === o.y) s.outposts[o.idx] = { ...mine, x: spot.x, y: spot.y };
+        if (mine && mine.x === o.x && mine.y === o.y) s.outposts[o.idx] = { ...mine, x: spot.x, y: spot.y, land: outpostLand(spot.x, spot.y) };
 
         return s;
       });

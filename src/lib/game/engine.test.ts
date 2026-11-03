@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import crypto from "crypto";
 import * as E from "./engine";
 import * as C from "./config";
+import { outpostLand, outpostSpots } from "./outpost";
 import { verifyInitData } from "../../server/auth";
 
 const T0 = Date.UTC(2026, 9, 23, 10);
@@ -363,7 +364,10 @@ test("outposts: the Town Hall allows them, they cost resources and settlers, and
   s = E.advance(s, s.outposts[0].job!.endsAt + 1);
   expect(s.outposts[0].fields.iron).toBe(1);
   expect(s.outposts[0].job).toBeUndefined();
-  expect(E.getRates(s).productionPerHour.iron).toBeCloseTo(before + 60, 5); // a level-1 field, like a level-1 mine
+  // A level-1 field, like a level-1 mine, with the land's bonus if the land favours iron.
+  const land = s.outposts[0].land;
+  expect(land).toEqual(outpostLand(5, 5));
+  expect(E.getRates(s).productionPerHour.iron).toBeCloseTo(before + 60 * (land.resource === "iron" ? 1 + land.percent / 100 : 1), 5);
 
   s.outposts[0].fields.iron = C.OUTPOST.fieldMaxLevel;
   expect(() => E.upgradeField(s, 0, "iron", 0)).toThrow("Max level");
@@ -372,8 +376,53 @@ test("outposts: the Town Hall allows them, they cost resources and settlers, and
 });
 
 test("three full outposts add about half a top village's output, not a second village", () => {
-  const top = C.productionAt(60, 20);
-  const outposts = 3 * C.productionAt(60, C.OUTPOST.fieldMaxLevel);
+  const top = C.productionAt(C.OUTPOST.fieldYield, 20);
+  const outposts = 3 * C.productionAt(C.OUTPOST.fieldYield, C.OUTPOST.fieldMaxLevel);
   expect(outposts / top).toBeGreaterThan(0.4);
   expect(outposts / top).toBeLessThan(0.8);
 });
+
+test("an outpost's land favours one resource, and that field yields more", () => {
+  let s = rich();
+  s.buildings["resource-warehouse"] = 20;
+  s.buildings["town-hall"] = 10;
+  s.population = 5000;
+  s = E.foundOutpost(s, { x: 5, y: 5 }, 0);
+  s.outposts[0].land = { resource: "wood", percent: 30 };
+  s.outposts[0].fields = { iron: 4, wood: 4, clay: 4, crop: 4 };
+  const out = E.outpostOutput(s.outposts[0]);
+  expect(out.wood).toBeCloseTo(out.iron * 1.3, 5);
+  expect(out.clay).toBeCloseTo(out.iron, 5);
+
+  // Old saves get their land from their tile.
+  const { land: _land, ...old } = s.outposts[0];
+  const loaded = E.normalizeState({ ...s, outposts: [old as E.Outpost] });
+  expect(loaded.outposts[0].land).toEqual(outpostLand(5, 5));
+});
+
+test("land bonus: the most common land round the tile wins, capped", () => {
+  const woods = () => "forest" as const;
+  expect(outpostLand(0, 0, woods)).toEqual({ resource: "wood", percent: C.OUTPOST.landBonusMax });
+  // 3 hills, 3 forest, 3 plains, own tile hills: the own tile breaks the tie.
+  const mixed = (x: number) => (x === 0 ? "hills" : x === 1 ? "forest" : "plains") as "hills" | "forest" | "plains";
+  expect(outpostLand(0, 0, (x) => mixed(x))).toEqual({ resource: "clay", percent: 3 * C.OUTPOST.landBonusPerTile });
+  // Water by an outpost feeds it fish: crop.
+  expect(outpostLand(0, 0, (x, y) => (x === 0 && y === 0 ? "plains" : "lake")).resource).toBe("crop");
+});
+
+test("spots offered: the best land for each resource, nearest first", () => {
+  const at = (x: number) => (x < 3 ? "forest" : x < 6 ? "hills" : "plains") as "forest" | "hills" | "plains";
+  const cands = Array.from({ length: 9 }, (_, x) => ({ x, y: 0 }));
+  const spots = outpostSpots({ x: 0, y: 0 }, cands, (x) => at(x));
+  expect(new Set(spots.map((p) => p.land.resource)).size).toBe(spots.length); // one per resource
+  expect(spots.map((p) => p.land.resource).sort()).toEqual(["clay", "crop", "wood"]);
+  for (let i = 1; i < spots.length; i++) expect(spots[i].distance).toBeGreaterThanOrEqual(spots[i - 1].distance);
+  expect(spots.length).toBeLessThanOrEqual(C.OUTPOST.spotChoices);
+});
+
+test("three full outposts stay under a top village even if all favour the same resource", () => {
+  const top = C.productionAt(C.OUTPOST.fieldYield, 20);
+  const best = 3 * C.productionAt(C.OUTPOST.fieldYield, C.OUTPOST.fieldMaxLevel) * (1 + C.OUTPOST.landBonusMax / 100);
+  expect(best / top).toBeLessThan(0.9);
+});
+

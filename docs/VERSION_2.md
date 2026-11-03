@@ -39,7 +39,7 @@ Design decisions behind each change are in `GAME_DESIGN.md`; this file is the re
 
 ### Late game
 - **Outposts:** at Town Hall 10, 15 and 20, found a new place on the map with its own four
-  fields and builder, feeding home.
+  fields and builder, feeding home. You choose the land; it gives up to +40% to one resource.
 - **Seasons and the World Wonder:** clans race to finish a 20-level Wonder; the winners get
   100,000 coins each and a crown, then every Wonder falls and a new season starts.
 
@@ -54,7 +54,7 @@ Design decisions behind each change are in `GAME_DESIGN.md`; this file is the re
 | --- | --- |
 | Building tops, curves, unlock tree, Mastery, queue controls | `config.ts` (`BUILDINGS`, `BUILDING_REQUIRES`, `MASTERY`, `CANCEL_*`, `FREE_FINISH_*`), `engine.ts` |
 | Troop roles, siege, militia, XP, recruitment | `config.ts` (`UNITS`, `MILITIA_MAX`, `XP_*`, `unitPeople`), `war.ts` |
-| Outposts | `config.ts` (`OUTPOST`), `engine.ts` (`foundOutpost`, `upgradeField`), `server/outposts.ts`, `organisms/tribe/Outposts.tsx` |
+| Outposts | `config.ts` (`OUTPOST`), `engine.ts` (`foundOutpost`, `upgradeField`, `outpostOutput`), `outpost.ts` (land bonus, offered spots), `server/outposts.ts`, `api/outposts/spots`, `organisms/tribe/Outposts.tsx` |
 | Seasons / World Wonder | `config.ts` (`WONDER`), `clan.ts` (`wonderCost`, `wonderBlocked`), `server/clans.ts` (`raiseWonder`, `seasonView`) |
 | Merchant of the North | `config.ts` (`EXCHANGE_RATE`), `trade.ts` (`exchange`), `Market.tsx` (`ExchangeCard`) |
 | Clan aid limits | `config.ts` (`CLAN.aid*`), `clan.ts` (`aidRoom`, `aidTooSoon`), `server/clans.ts` (`sendAid`) |

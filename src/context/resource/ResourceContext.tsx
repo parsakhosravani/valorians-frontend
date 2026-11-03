@@ -97,8 +97,8 @@ interface GameContextType {
   finishBuilding: (id: string) => Promise<boolean>;
   /** Starts a maxed building's next Mastery star. */
   masterBuilding: (id: string) => Promise<boolean>;
-  /** Founds the next outpost on free land near home. */
-  foundOutpost: () => Promise<boolean>;
+  /** Founds the next outpost on the spot picked (see /api/outposts/spots), or on the nearest free land. */
+  foundOutpost: (spot?: { x: number; y: number }) => Promise<boolean>;
   /** Raises one field of an outpost. */
   upgradeField: (outpost: number, resource: ResourceId) => Promise<boolean>;
   startQuest: (id: QuestId) => Promise<boolean>;
@@ -512,7 +512,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     cancelBuilding: (building) => act("buildings/cancel", { building }, "Cancelled, resources returned"),
     finishBuilding: (building) => act("buildings/finish", { building }, "Done!"),
     masterBuilding: (building) => act("buildings/master", { building }, "Mastery work started"),
-    foundOutpost: () => act("outposts/found", {}, "An outpost is founded!"),
+    foundOutpost: (spot) => act("outposts/found", spot ? { x: spot.x, y: spot.y } : {}, "An outpost is founded!"),
     upgradeField: (outpost, resource) => act("outposts/upgrade", { outpost, resource }, "The outpost's builder is at work"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
