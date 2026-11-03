@@ -565,6 +565,8 @@ export const OUTPOST = {
   /** Settled between these many tiles from home, on free dry land: past the home village's own walls on the map. */
   minDistance: 5,
   maxDistance: 10,
+  /** Kept this many tiles from every other tribe's village too, so an outpost never stands inside a neighbour's walls. */
+  clearOfVillages: 5,
 } as const;
 
 // ─── Seasons and the World Wonder ─────────────────────────────────────────────

@@ -29,9 +29,12 @@ export async function homeOf(id: number): Promise<Point> {
 
   if (row && row.map_x != null) return { x: Number(row.map_x), y: Number(row.map_y) };
 
-  const taken = (await db.execute("SELECT map_x, map_y FROM users WHERE map_x IS NOT NULL")).rows.map((r) => ({
-    x: Number(r.map_x),
-    y: Number(r.map_y),
+  // Tribes and outposts both: a new village keeps clear of either, so nobody starts with someone else inside its walls.
+  const taken = (
+    await db.execute("SELECT map_x AS x, map_y AS y FROM users WHERE map_x IS NOT NULL UNION ALL SELECT x, y FROM outposts")
+  ).rows.map((r) => ({
+    x: Number(r.x),
+    y: Number(r.y),
   }));
 
   // A random spot, picked the way the Norse settled (see pickHomeSite); again if someone took it meanwhile.

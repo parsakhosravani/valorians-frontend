@@ -4,7 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
 import { homeOf, mapView } from "@/server/map";
-import { settleOutpost } from "@/server/outposts";
+import { candidates, moveOutpostsOutOfWalls, settleOutpost } from "@/server/outposts";
+import { mutatePlayer } from "@/server/players";
 import { OUTPOST } from "@/lib/game/config";
 import { distance, terrainAt } from "@/lib/game/map";
 
@@ -54,5 +55,49 @@ describe("outposts (server)", () => {
     const db = await getDb();
     const rows = await db.execute({ sql: "SELECT COUNT(*) AS n FROM outposts WHERE user_id = ?", args: [poor.id] });
     expect(Number(rows.rows[0].n)).toBe(0);
+  });
+
+  test("an outpost never stands inside another tribe's walls", async () => {
+    const home = await homeOf((await newPlayer(Date.now())).id);
+    // A neighbour just past the outpost ring's nearest edge, where the closest spots would be.
+    const near = candidates(home, new Set())[0];
+    const neighbour = { x: home.x + Math.sign(near.x - home.x) * 7, y: home.y + Math.sign(near.y - home.y) * 7 };
+    const spots = candidates(home, new Set(), [home, neighbour]);
+
+    expect(spots.length).toBeGreaterThan(0);
+    for (const p of spots) expect(distance(p, neighbour)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillages);
+    // Without the neighbour, the nearest spots would have been right by it.
+    expect(candidates(home, new Set()).some((p) => distance(p, neighbour) < OUTPOST.clearOfVillages)).toBe(true);
+  });
+
+  test("outposts already inside a neighbour's walls move out, keeping their fields", async () => {
+    const T0 = Date.now();
+    const me = await newPlayer(T0, ready);
+    const them = await newPlayer(T0);
+    const home = await homeOf(me.id);
+    const theirs = await homeOf(them.id);
+    const db = await getDb();
+    // As the old placement allowed: an outpost a tile from their village.
+    const bad = { x: theirs.x + 1, y: theirs.y };
+
+    await db.execute({ sql: "DELETE FROM outposts WHERE x = ? AND y = ?", args: [bad.x, bad.y] });
+    await db.execute({ sql: "INSERT INTO outposts (user_id, idx, x, y) VALUES (?, 0, ?, ?)", args: [me.id, bad.x, bad.y] });
+    await mutatePlayer(me.id, T0, (s) => {
+      s.outposts = [{ x: bad.x, y: bad.y, foundedAt: T0, fields: { iron: 3, wood: 2, clay: 1, crop: 4 } }];
+
+      return s;
+    });
+    await db.execute("DELETE FROM meta WHERE key = 'outposts_clear_v1'");
+
+    expect(await moveOutpostsOutOfWalls()).toBeGreaterThanOrEqual(1);
+    const o = (await reload(me.id)).state.outposts[0];
+    const row = (await db.execute({ sql: "SELECT x, y FROM outposts WHERE user_id = ? AND idx = 0", args: [me.id] })).rows[0];
+
+    expect({ x: Number(row.x), y: Number(row.y) }).toEqual({ x: o.x, y: o.y });
+    expect(distance(o, theirs)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillages);
+    expect(distance(o, home)).toBeLessThanOrEqual(OUTPOST.maxDistance);
+    expect(o.fields).toEqual({ iron: 3, wood: 2, clay: 1, crop: 4 });
+    // Once only.
+    expect(await moveOutpostsOutOfWalls()).toBe(0);
   });
 });
