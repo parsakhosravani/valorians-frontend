@@ -7,7 +7,7 @@ import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
 import { unreadNotices } from "./notices";
 
-import { GameState, advance, createInitialState, normalizeState } from "@/lib/game/engine";
+import { GameState, advance, createInitialState, normalizeState, peopleOf } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 import { storedFlag } from "@/lib/game/clan";
 import { plusPrice } from "./plus";
@@ -19,7 +19,7 @@ import { TRIBE_COLUMNS, tribeColumns } from "./tribeColumns";
  */
 const STATE_COLUMNS = ["population", "power", "wins", "shield_until", "plus_until", ...TRIBE_COLUMNS];
 const stateColumns = (s: GameState) => [
-  s.population,
+  peopleOf(s),
   powerScore(s),
   s.war.attacksWon + s.war.defensesWon,
   s.shieldUntil,
@@ -227,7 +227,7 @@ export async function rankOf(p: Pick<Player, "id" | "popRank" | "state">) {
   const db = await getDb();
   const rs = await db.execute({
     sql: "SELECT COUNT(*) + 1 AS rank FROM users WHERE population > ? OR (population = ? AND id < ?)",
-    args: [p.state.population, p.state.population, p.id],
+    args: [peopleOf(p.state), peopleOf(p.state), p.id],
   });
   return Number(rs.rows[0].rank);
 }

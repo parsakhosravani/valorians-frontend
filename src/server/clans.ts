@@ -36,7 +36,7 @@ import {
   techCost,
 } from "@/lib/game/clan";
 import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
-import { GameError, getRates } from "@/lib/game/engine";
+import { GameError, getRates, peopleOf } from "@/lib/game/engine";
 
 /**
  * Clans: players band together under a name, a tag and a flag.
@@ -554,7 +554,7 @@ export async function joinClan(player: Player, body: any, now: number): Promise<
   const minPop = Number(c.min_population ?? 0);
 
   if (mode === "closed") throw new GameError("This clan isn't taking new members", "closed");
-  if (player.state.population < minPop)
+  if (peopleOf(player.state) < minPop)
     throw new GameError(`This clan wants chiefs with at least ${minPop.toLocaleString("en-US")} people`, "too_small");
   const seats = maxMembers(techsOf(c));
   const db = await getDb();

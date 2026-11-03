@@ -200,8 +200,8 @@ test("winning at a camp gives XP; enough XP promotes the regiment and makes it s
   s.army.spearman = 50;
   const weak = W.attackPower(s, s.army);
   const { state, report } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 50 }, T0, 0.5);
-  // camp 1 defense 80 × 0.2 = 16 XP, all for the spearmen
-  expect(report.attackerXp?.spearman).toBe(16);
+  // camp 1 defense 80 ^ 0.65 ≈ 17 XP, all for the spearmen
+  expect(report.attackerXp?.spearman).toBe(17);
   expect(state.troops.spearman.xp).toBeGreaterThan(14);
   expect(E.unitRank(state, "spearman")).toBe(0);
 
@@ -219,9 +219,9 @@ test("XP is shared by contribution and a wiped-out regiment loses all of its XP"
   s.buildings.stable = 1;
   s.army = { spearman: 10, archer: 0, cavalry: 10, ram: 0 };
   const xp = W.battleXp(s, s.army, 1000, true, "attack");
-  // spears 12×10 vs cavalry 40×10 → 120:400 of 200 XP
-  expect(xp.spearman).toBe(46);
-  expect(xp.cavalry).toBe(154);
+  // spears 12×10 vs cavalry 40×10 → 120:400 of 1000 ^ 0.65 ≈ 89 XP
+  expect(xp.spearman).toBe(21);
+  expect(xp.cavalry).toBe(69);
 
   const t = withBarracks();
   t.army.spearman = 2;
@@ -574,4 +574,45 @@ test("farming beaten camps pays at most a few hours of your own production", () 
   // All the camps a tribe keeps, raided as often as they come back, at most double its income.
   const perDay = C.CAMPS_KEPT * (24 * 3600e3 / C.CAMP_REPEAT_COOLDOWN_MS) * C.CAMP_REPEAT_HOURS;
   expect(perDay).toBeLessThanOrEqual(24);
+});
+
+test("ranks come slowly: a big late battle is worth far less XP than its size", () => {
+  const s = withBarracks();
+  const fought = { ...E.emptyArmy(), axeman: 100 };
+  const xp = (enemy: number) => W.battleXp(s, fought, enemy, true, "attack").axeman;
+  // Camp 20 is 300× camp 1's strength but gives ~40× the XP.
+  expect(xp(C.campDefense(20)) / xp(C.campDefense(1))).toBeLessThan(50);
+  // Legend takes a dozen wins at camp 20, where it used to take two.
+  expect(C.RANKS[C.MAX_RANK].xp / xp(C.campDefense(20))).toBeGreaterThan(10);
+  // A camp beaten before teaches less than the first time.
+  const t = withBarracks(5);
+  t.army.axeman = 400;
+  t.camps.cleared = 10;
+  const repeat = W.raidCamp(t, 10, { ...E.emptyArmy(), axeman: 400 }, T0, 0.5).report.attackerXp!.axeman;
+  const first = W.raidCamp(t, 11, { ...E.emptyArmy(), axeman: 400 }, T0, 0.5).report.attackerXp!.axeman;
+  expect(repeat).toBeLessThan(first * 0.4);
+});
+
+test("soldiers are recruited from the tribe's people, and come back if training is cancelled", () => {
+  let s = withBarracks();
+  s.population = 30;
+  expect(() => W.trainTroops(s, "spearman", 31, T0)).toThrow("Not enough people");
+  const before = E.peopleOf(s);
+  s = W.trainTroops(s, "spearman", 20, T0);
+  expect(s.population).toBe(10);
+  // Training doesn't lower the tribe's total: they're soldiers now.
+  expect(E.peopleOf(s)).toBe(before);
+  s = W.cancelTraining(s, T0, T0);
+  expect(s.population).toBe(30);
+  // Bigger troops need more men: a knight takes 3.
+  expect(C.unitPeople(C.UNIT_BY_ID.knight)).toBe(3);
+  expect(C.unitPeople(C.UNIT_BY_ID.dragon)).toBe(0);
+});
+
+test("soldiers lost in battle are people lost from the tribe", () => {
+  const s = withBarracks();
+  s.army.spearman = 2;
+  const before = E.peopleOf(s);
+  const { state } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 2 }, T0, 0.5); // 24 attack vs 80: all fall
+  expect(E.peopleOf(state)).toBe(before - 2);
 });

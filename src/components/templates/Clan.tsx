@@ -21,6 +21,7 @@ import { RESOURCES, useGame, useGameStatus } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
 import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
+import { peopleOf } from "@/lib/game/engine";
 import {
   CLAN_TECHS,
   ClanFlag as Flag,
@@ -850,7 +851,7 @@ export const Clan: FunctionComponent = () => {
   const joinButton = (c: ClanView["clans"][number]) => {
     const requested = data?.requested.includes(c.id);
     const full = c.members >= c.maxMembers;
-    const small = state.population < c.minPopulation;
+    const small = peopleOf(state) < c.minPopulation;
 
     if (requested)
       return (

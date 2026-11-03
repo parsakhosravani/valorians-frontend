@@ -10,7 +10,7 @@ import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { maybeRefreshRanks } from "./ranks";
 import { spiesSeeMarch } from "./spies";
 
-import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
+import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceBattle, troopsOnField } from "@/lib/game/battle";
@@ -94,7 +94,7 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
       id: p.id,
       name: displayName(p),
       photoUrl: avatarUrl(p.id),
-      population: Math.floor(s.population),
+      population: Math.floor(peopleOf(s)),
       power: powerScore(s),
       defense: scoutEstimate(s, me.state),
     });

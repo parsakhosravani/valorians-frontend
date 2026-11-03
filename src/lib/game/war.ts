@@ -37,7 +37,10 @@ import {
   RANKS,
   XP_DEFEAT_SHARE,
   XP_LOSS_SHARE,
-  XP_PER_STRENGTH,
+  XP_SCALE,
+  XP_POWER,
+  XP_REPEAT_CAMP_SHARE,
+  unitPeople,
   LANDING_DEFENSE,
   REDIRECT,
   banditStrength,
@@ -107,7 +110,12 @@ export function trainTroops(s0: GameState, unit: UnitId, count: number, now: num
   for (const r of RESOURCE_IDS) {
     if (s.resources[r] < def.cost[r] * count) throw new GameError(`Not enough ${r}`, "not_enough_resources");
   }
+  // Soldiers are recruited from the tribe's people (see unitPeople).
+  const people = unitPeople(def) * count;
+  if (s.population < people)
+    throw new GameError(`Not enough people: ${count} ${count === 1 ? def.name : unitPlural(unit)} need ${people}`, "not_enough_people");
   for (const r of RESOURCE_IDS) s.resources[r] -= def.cost[r] * count;
+  s.population -= people;
 
   if (def.maxOwned != null) s.owned = { ...s.owned, [unit]: ownedOf(s0, unit) + count };
   const lastEnd = s.training.reduce((m, t) => Math.max(m, trainingEndsAt(t)), now);
@@ -147,6 +155,8 @@ export function cancelTraining(s0: GameState, startsAt: number, now: number): Ga
   for (const r of RESOURCE_IDS) {
     if (refund[r] > 0) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
   }
+  // The recruits not yet trained go back to the village.
+  s.population += unitPeople(UNIT_BY_ID[batch.unit]) * (batch.count - batch.done);
 
   // Batches that haven't started yet close the gap; ones already running keep their timing.
   let cursor = now;
@@ -312,12 +322,19 @@ export type Promotion = { unit: UnitId; rank: number };
  * XP from one battle, shared by the troop types that fought in proportion to
  * how much they contributed (attack when attacking, defense when defending).
  */
-export function battleXp(s: GameState, fought: Army, enemyStrength: number, won: boolean, as: "attack" | "defense"): Army {
+export function battleXp(
+  s: GameState,
+  fought: Army,
+  enemyStrength: number,
+  won: boolean,
+  as: "attack" | "defense",
+  share = 1
+): Army {
   const xp = emptyArmy();
   const weight = (u: UnitId) => (as === "attack" ? unitAttack(s, u) : unitDefense(s, u)) * (fought[u] ?? 0);
   const total = UNIT_IDS.reduce((a, u) => a + weight(u), 0);
   if (total <= 0) return xp;
-  const pool = enemyStrength * XP_PER_STRENGTH * (won ? 1 : XP_DEFEAT_SHARE);
+  const pool = XP_SCALE * Math.pow(Math.max(0, enemyStrength), XP_POWER) * (won ? 1 : XP_DEFEAT_SHARE) * share;
   for (const u of UNIT_IDS) xp[u] = Math.round((pool * weight(u)) / total);
   return xp;
 }
@@ -866,7 +883,7 @@ export function campBattle(s0: GameState, level: number, sent: Army, now: number
     // Camps that dropped off the map don't need their raid times kept.
     for (const l of Object.keys(s.camps.lastRaid)) if (campGone(s, Number(l))) delete s.camps.lastRaid[l];
     return reward;
-  });
+  }, level <= s0.camps.cleared ? XP_REPEAT_CAMP_SHARE : 1);
 }
 
 // ─── Bandit lairs ────────────────────────────────────────────────────────────
@@ -904,11 +921,12 @@ function pveBattle(
   opts: MapOpts,
   outcome: BattleOutcome,
   target: string,
-  onWin: (s: GameState) => { resources: number; coins: number }
+  onWin: (s: GameState) => { resources: number; coins: number },
+  xpShare = 1
 ) {
   const s = cloneState(s0);
   const r = getRates(s);
-  const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack");
+  const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack", xpShare);
   const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp);
   const home = survivorsOf(sent, outcome.attackerLosses);
   for (const u of UNIT_IDS) home[u] += outcome.attackerHealed[u];

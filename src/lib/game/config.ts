@@ -647,6 +647,14 @@ export const MAX_TRAIN_BATCHES = 5;
 export const MAX_BATCH = 500;
 
 /**
+ * People a troop takes from the population when it's trained: one per crop it
+ * eats (a Spearman 1, a Knight 3). Soldiers come from your people, so the
+ * population is spent on armies and lost in battle, instead of only being a
+ * score that grows by itself. The dragon is hatched, not recruited.
+ */
+export const unitPeople = (u: UnitDef) => (u.maxOwned ? 0 : u.upkeep);
+
+/**
  * Every tribe has some militia even with no troops: 50, and 0.1 per person,
  * up to MILITIA_MAX. Population never stops growing, so without a top the
  * militia alone would one day hold off real armies.
@@ -934,9 +942,19 @@ export const MAX_RANK = RANKS.length - 1;
 
 /** Each rank adds this much attack and defense to the regiment. */
 export const RANK_BONUS = 0.04;
-/** XP for a battle = enemy strength × this (×0.5 for a defeat), shared by the troop types that fought. */
-export const XP_PER_STRENGTH = 0.2;
+/**
+ * XP for a battle = XP_SCALE × enemy strength ^ XP_POWER (×XP_DEFEAT_SHARE for a
+ * defeat), shared by the troop types that fought. Was a straight 0.2 × strength:
+ * enemies grow ×1.35 a camp, so one late battle (camp 20: ~4,800 XP) carried a
+ * regiment half way to Legend and ranks were maxed weeks into the game. Grown
+ * by a power under 1, a camp 1 battle gives about the same as before (~17) and
+ * a camp 20 one ~700: Legend comes around camp 25–30, months in.
+ */
+export const XP_SCALE = 1;
+export const XP_POWER = 0.65;
 export const XP_DEFEAT_SHARE = 0.5;
+/** Barbarians already beaten teach less: a repeat camp raid gives this share of the XP. */
+export const XP_REPEAT_CAMP_SHARE = 0.3;
 /**
  * Experience lives in the soldiers: losing a share of a regiment costs that same
  * share of its XP, and a regiment that is wiped out loses all of it (owner's rule).

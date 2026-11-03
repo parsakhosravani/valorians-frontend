@@ -47,6 +47,13 @@ ask before "fixing" either. Add new decisions here when they are made.
   Watchtower level, so a bigger wall needs more rams. The dragon's fire breaks half of both at
   any level.
 - **Militia** (free defense from population) stops at 2,000.
+- **Ranks come slowly.** Battle XP grows with the enemy's strength to the power 0.65, so
+  big late battles don't hand out ranks: Legend comes around camps 25–30. A repeat raid on a
+  beaten camp gives 30% of the XP.
+- **Soldiers come from your people.** Training a troop takes one person per crop it eats
+  (Spearman 1, Knight 3; the dragon none); cancelling gives them back. The population shown and
+  ranked is everyone (people at home + soldiers), so training costs no rank but losing an army
+  does. Clan minimum population counts everyone too.
 - **Experience lives in the soldiers.** Each troop type keeps one rank (no split ranks). When
   troops die, the regiment loses that same share of its XP; if the whole regiment dies, its XP
   is gone. Survivors keep theirs, and new recruits join the regiment's current rank.

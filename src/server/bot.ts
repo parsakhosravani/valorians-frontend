@@ -27,7 +27,7 @@ import { displayName } from "./war";
 
 import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from "@/lib/game/clan";
 import { CLAN, PLUS, RESOURCE_IDS, RESOURCE_NAMES, START, questUrl } from "@/lib/game/config";
-import { advance, plusActive } from "@/lib/game/engine";
+import { advance, peopleOf, plusActive } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
 import { whole } from "@/lib/format";
 
@@ -165,7 +165,7 @@ async function myTribe(chatId: number, userId: number) {
   await send(
     chatId,
     `🏰 <b>${esc(displayName(p))}'s tribe</b>\n\n` +
-      `🏆 Rank <b>#${fmt(rank)}</b> · 👥 ${fmt(s.population)} people\n` +
+      `🏆 Rank <b>#${fmt(rank)}</b> · 👥 ${fmt(peopleOf(s))} people\n` +
       `💪 Power ${compact(powerScore(s))} · ⚔️ ${fmt(s.war.attacksWon + s.war.defensesWon)} victories\n` +
       `🪙 ${fmt(s.coins)} coins\n` +
       `📦 ${res}\n\n` +

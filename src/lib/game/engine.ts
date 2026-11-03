@@ -58,6 +58,7 @@ import {
   TRAP_MAX,
   DRAGON,
   productionAt,
+  unitPeople,
 } from "./config";
 import { ClanPerks, NO_PERKS } from "./clan";
 
@@ -368,6 +369,19 @@ export function capBuildingLevels(s: GameState): GameState {
   for (const r of RESOURCE_IDS) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
 
   return s;
+}
+
+/**
+ * Everyone in the tribe: the people at home and those serving as soldiers
+ * (home, away, in training or joining a battle). Shown as the tribe's
+ * population and ranked on the leaderboard, so training an army doesn't cost
+ * rank, but losing one does.
+ */
+export function peopleOf(s: GameState) {
+  const sum = (a: Partial<Army>) => UNITS.reduce((n, u) => n + unitPeople(u) * (a[u.id] ?? 0), 0);
+  const training = s.training.reduce((n, t) => n + unitPeople(UNIT_BY_ID[t.unit]) * (t.count - t.done), 0);
+
+  return s.population + sum(totalArmy(s)) + training + (s.joining ?? []).reduce((n, j) => n + sum(j.units), 0);
 }
 
 /** Units at home + away on raids. */
