@@ -18,6 +18,7 @@ import {
   startAnnounce,
   takeAdminPost,
 } from "./announce";
+import { appUrl } from "./appUrl";
 import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
@@ -65,7 +66,7 @@ export async function tg(method: string, body: object) {
 
 // ─── Links and buttons ───────────────────────────────────────────────────────
 
-export const appUrl = () => (process.env.APP_URL || "https://valorians-legend.vercel.app").replace(/\/$/, "");
+export { appUrl };
 
 type Button = { text: string; url?: string; callback_data?: string; web_app?: { url: string } };
 
