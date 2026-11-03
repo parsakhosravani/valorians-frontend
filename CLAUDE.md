@@ -91,7 +91,7 @@ Then call it from the client through `src/lib/api.ts` / `useGame()`.
 
 **New building** — add a `def(...)` entry to `BUILDINGS` in config.ts (id is the name in kebab-case),
 add its effect to `BuildingEffect` if new and handle it in `getRates`, add the image
-`public/images/buildings/<Name>.webp`. Buildings have **no max level**.
+`public/images/buildings/<Name>.webp`. Buildings have a top (`maxLevel`, default 20) and can't pass the Town Hall (see `buildingCap`).
 
 **New troop** — add the id to `UNIT_IDS` and a `UnitDef` to `UNITS`, image in `public/images/troops/`,
 check `war.ts` (unlocks, special bonuses) and `normalizeState` (troops map is built from `UNIT_IDS`).

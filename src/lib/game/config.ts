@@ -93,18 +93,24 @@ export const TAP_BURST = 40;
 
 // ─── Buildings ───────────────────────────────────────────────────────────────
 
-// Buildings have no top level: each upgrade costs more and takes longer
-// than the last (see buildingUpgradeCost, buildingUpgradeBaseSeconds).
+// Every building has a top level (maxLevel, usually 20) and can't be built
+// higher than the Town Hall (producers and the Warehouse may run
+// TOWN_HALL_LEAD ahead). Before Nov 2026 there was no top: costs grew ×1.45 a
+// level while effects grew by a fixed step, so levels past ~20 cost hundreds
+// of hours of production for almost nothing, and +5% attack a level had no
+// ceiling (Arsenal 20 = +100%). A top makes each level a visible goal and
+// keeps old tribes beatable; the last levels (see STEEP_FROM) are a long climb
+// so a tribe that plays every day still needs months to finish its village.
 
 export type BuildingEffect =
   | { kind: "production"; resource: ResourceId; perLevel: number }
   | { kind: "cropBoost"; percentPerLevel: number }
   | { kind: "warehouse"; multiplierPerLevel: number }
   | { kind: "townHall" }
-  | { kind: "coins"; perLevel: number }
+  | { kind: "coins"; perLevel: number; growth?: number }
   | { kind: "population"; perLevel: number }
   | { kind: "tapBoost"; percentPerLevel: number }
-  | { kind: "military"; stat: MilitaryStat; perLevel: number };
+  | { kind: "military"; stat: MilitaryStat; perLevel: number; growth?: number };
 
 /** What a military building improves, per level. */
 type MilitaryStat =
@@ -129,49 +135,80 @@ export type BuildingDef = {
   baseCost: number;
   /** How that cost splits over iron, wood, clay, crop (BUILDING_MIX). */
   mix: Record<ResourceId, number>;
-  /** Seconds for level 0 → 1. */
-  baseTime: number;
-  /** How much dearer each level is than the last (BUILDING_COST_GROWTH unless set). */
+  /** Build time relative to an ordinary building (1); see buildingUpgradeBaseSeconds. */
+  timeWeight: number;
+  /** How much dearer each level is than the last, up to STEEP_FROM (BUILDING_COST_GROWTH unless set). */
   costGrowth?: number;
+  /** The highest level it can reach. */
+  maxLevel: number;
+  /** May be built TOWN_HALL_LEAD levels above the Town Hall (producers and the Warehouse). */
+  leadsTownHall?: boolean;
   effect: BuildingEffect;
   description: string;
 };
 
 const EVEN_MIX: Record<ResourceId, number> = { iron: 1, wood: 1, clay: 1, crop: 1 };
 
+/** Most buildings stop at this level. */
+export const DEFAULT_MAX_LEVEL = 20;
+export const TOWN_HALL = "town-hall";
+/** Producers and the Warehouse may be this many levels above the Town Hall, so a new tribe can start its economy first. */
+export const TOWN_HALL_LEAD = 2;
+
 const def = (
   name: string,
   baseCost: number,
   effect: BuildingEffect,
   description: string,
-  baseTime = 10
+  extra: Partial<Pick<BuildingDef, "maxLevel" | "timeWeight" | "leadsTownHall">> = {}
 ): BuildingDef => ({
   id: name.toLowerCase().replace(/\s+/g, "-"),
   name,
   baseCost,
-  baseTime,
+  timeWeight: 1,
+  maxLevel: DEFAULT_MAX_LEVEL,
   mix: EVEN_MIX,
   effect,
   description,
+  ...extra,
 });
 
-/** Each building level costs this much more than the last (producers: PRODUCER_COST_GROWTH). */
-const BUILDING_COST_GROWTH = 1.45;
 /**
- * Mines, the Sawmill, Brickyard and Windmill get dearer more slowly, and each
- * of their levels yields PRODUCTION_GROWTH more than the last (see
- * productionAt), so an upgrade pays itself back in a day or two early on and
- * about five days by level 20, instead of never: the old +60 a level against
- * ×1.45 the cost took 17 days to pay back at level 10 and 110 at level 15.
+ * Each building level costs this much more than the last (producers:
+ * PRODUCER_COST_GROWTH), until STEEP_FROM. Was ×1.45 (×1.3 producers) with no
+ * top, which made level 20 cost 1,700× level 1; now level 15 costs ~55× level
+ * 1 and every level fits the Warehouse its Town Hall allows.
  */
-const PRODUCER_COST_GROWTH = 1.3;
+const BUILDING_COST_GROWTH = 1.33;
+const PRODUCER_COST_GROWTH = 1.28;
+/**
+ * Upgrades to level 16 and above get dearer by STEEP_GROWTH a level instead:
+ * the last five levels are the late game, ~90% of what a whole village costs.
+ * With the gentle curve all the way, a maxed village cost ~6M of each resource
+ * (~40 days of top production): an active tribe ran out of things to build in
+ * 2–3 months. Now it's ~45M (~75 days of top production; months more with the
+ * slow start and an army to feed).
+ */
+export const STEEP_FROM = 15;
+const STEEP_GROWTH = 1.8;
+/** Each level yields PRODUCTION_GROWTH more than the last (see productionAt). */
 const PRODUCTION_GROWTH = 1.15;
-/** Each level takes this much longer to build than the last (was 1.55: level 30 took 12 days at best). */
-const BUILD_TIME_GROWTH = 1.4;
+/**
+ * Seconds for level 0 → 1 of an ordinary building; each level takes
+ * BUILD_TIME_GROWTH longer than the last. Was 10 s × 1.4: the first ten levels
+ * finished in seconds (nothing to plan) and level 30 took 3 days. Now level 1
+ * is 40 s, level 10 ~20 min, level 15 ~2½ h, level 20 ~16 h, before the Town Hall.
+ */
+const BUILD_BASE_SECONDS = 40;
+const BUILD_TIME_GROWTH = 1.466;
+
+/** How much dearer level `level` → `level + 1` is than level 0 → 1. */
+const costFactor = (growth: number, level: number) =>
+  Math.pow(growth, Math.min(level, STEEP_FROM - 1)) * Math.pow(STEEP_GROWTH, Math.max(0, level - (STEEP_FROM - 1)));
 
 /** What each resource costs to go from `level` to `level + 1`, split by the building's mix. */
 export const buildingUpgradeCost = (b: BuildingDef, level: number): Record<ResourceId, number> => {
-  const avg = b.baseCost * Math.pow(b.costGrowth ?? BUILDING_COST_GROWTH, level);
+  const avg = b.baseCost * costFactor(b.costGrowth ?? BUILDING_COST_GROWTH, level);
 
   return Object.fromEntries(RESOURCE_IDS.map((r) => [r, Math.round(avg * b.mix[r])])) as Record<ResourceId, number>;
 };
@@ -181,11 +218,18 @@ export const costTotal = (cost: Record<ResourceId, number>) => RESOURCE_IDS.redu
 
 /** Raw seconds to go from `level` to `level + 1`, before Town Hall speedup. */
 export const buildingUpgradeBaseSeconds = (b: BuildingDef, level: number) =>
-  Math.round(b.baseTime * Math.pow(BUILD_TIME_GROWTH, level));
+  Math.round(BUILD_BASE_SECONDS * b.timeWeight * Math.pow(BUILD_TIME_GROWTH, level));
+
+/** perLevel at level 1, and each level `growth`× the step before it: the sum over `level` levels. */
+export const compoundAt = (perLevel: number, level: number, growth: number) =>
+  level > 0 ? (perLevel * (Math.pow(growth, level) - 1)) / (growth - 1) : 0;
 
 /** What a producer yields per hour at a level: `perLevel` at level 1, and each level PRODUCTION_GROWTH× the last. */
-export const productionAt = (perLevel: number, level: number) =>
-  level > 0 ? (perLevel * (Math.pow(PRODUCTION_GROWTH, level) - 1)) / (PRODUCTION_GROWTH - 1) : 0;
+export const productionAt = (perLevel: number, level: number) => compoundAt(perLevel, level, PRODUCTION_GROWTH);
+
+/** An effect at a level: a straight step a level, or a compounding one when it has a `growth`. */
+export const effectAt = (e: { perLevel: number; growth?: number }, level: number) =>
+  e.growth ? compoundAt(e.perLevel, level, e.growth) : e.perLevel * level;
 
 /** Most of a raid's attackers the Trapmaker's traps can catch. */
 export const TRAP_MAX = 0.25;
@@ -247,35 +291,41 @@ const BUILDING_MIX: Record<BuildingId, Record<ResourceId, number>> = Object.from
   ).map(([id, m]) => [id, Object.fromEntries(RESOURCE_IDS.map((r, i) => [r, m[i]])) as Record<ResourceId, number>])
 );
 
-const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH });
+const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH, leadsTownHall: true, timeWeight: 0.8 });
 
+// Effects are set so the top level gives a round, readable maximum:
+// Arsenal/Armory +40%, City Gate +60%, Military Command and War Hall 50%,
+// Hospital 50%, Trapmaker 25%. (They were +5%/+6% a level with no top.)
 export const BUILDINGS: BuildingDef[] = [
-  def("Town Hall", 300, { kind: "townHall" }, "Builds 4% faster per level (up to 80%). An extra builder every 5 levels."),
-  def("Resource Warehouse", 200, { kind: "warehouse", multiplierPerLevel: 1.3 }, "+30% storage for every resource per level."),
+  def("Town Hall", 300, { kind: "townHall" }, "Builds 2.5% faster per level (up to 50% at level 20). A second builder at level 10, a third at 20. No other building can be higher than it.", { timeWeight: 1.5 }),
+  def("Resource Warehouse", 200, { kind: "warehouse", multiplierPerLevel: 1.22 }, "+22% storage for every resource per level.", { leadsTownHall: true, timeWeight: 0.8 }),
   producer(def("Iron Mine", 150, { kind: "production", resource: "iron", perLevel: 60 }, "+60 iron per hour at level 1, and each level adds 15% more than the last.")),
   producer(def("Sawmill", 150, { kind: "production", resource: "wood", perLevel: 60 }, "+60 wood per hour at level 1, and each level adds 15% more than the last.")),
   producer(def("Brickyard", 150, { kind: "production", resource: "clay", perLevel: 60 }, "+60 clay per hour at level 1, and each level adds 15% more than the last.")),
   producer(def("Windmill", 150, { kind: "production", resource: "crop", perLevel: 60 }, "+60 crop per hour at level 1, and each level adds 15% more than the last.")),
-  def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 10 }, "+10% crop production per level."),
-  def("Treasury", 300, { kind: "coins", perLevel: 40 }, "+40 coins per hour per level."),
+  def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 5 }, "+5% crop production per level (up to +100%)."),
+  // Coins grow 10% a level like production, so a high Treasury is still worth building (was +40 flat).
+  def("Treasury", 300, { kind: "coins", perLevel: 40, growth: 1.1 }, "+40 coins per hour at level 1, and each level adds 10% more than the last."),
   def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
-  def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per tap per level."),
+  def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per strike per level (up to +50%).", { maxLevel: 10 }),
   def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
-  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5)."),
-  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10)."),
-  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break walls and Catapults (level 5) that break towers."),
-  def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 5 }, "Troops train 5% faster per level."),
-  def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 5 }, "+5% attack for all troops per level."),
-  def("Armory", 250, { kind: "military", stat: "defense", perLevel: 5 }, "+5% defense for all troops per level."),
-  def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 6 }, "+6% defense per level. Enemy rams can break it."),
-  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60 }, "+60 defense points per level, even with no troops home."),
-  def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 0.5 }, "Traps catch 0.5% of attackers per level before the battle starts (up to 25%)."),
+  // Unlock buildings stop at their last unlock: higher levels did nothing.
+  def("Barracks", 250, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Spearmen (level 1), Swordsmen (2), Archers (3) and Axemen (5).", { maxLevel: 5 }),
+  def("Stable", 300, { kind: "military", stat: "unlock", perLevel: 0 }, "Trains Light Cavalry (level 1), Paladins (3) and Knights (10).", { maxLevel: 10 }),
+  def("Siege Workshop", 350, { kind: "military", stat: "unlock", perLevel: 0 }, "Builds Battering Rams (level 1) that break walls and Catapults (level 5) that break towers.", { maxLevel: 5 }),
+  def("Military Command", 400, { kind: "military", stat: "trainSpeed", perLevel: 2.5 }, "Troops train 2.5% faster per level (up to 50%)."),
+  def("Arsenal", 300, { kind: "military", stat: "attack", perLevel: 2 }, "+2% attack for all troops per level (up to +40%)."),
+  def("Armory", 250, { kind: "military", stat: "defense", perLevel: 2 }, "+2% defense for all troops per level (up to +40%)."),
+  def("City Gate", 200, { kind: "military", stat: "wall", perLevel: 3 }, "+3% defense per level (up to +60%). Enemy rams can break it."),
+  // Grows 12% a level so it still counts against big late armies (was +60 flat: 1,200 at level 20, now ~4,300).
+  def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60, growth: 1.12 }, "+60 defense points at level 1, and each level adds 12% more, even with no troops home."),
+  def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 1.25 }, "Traps catch 1.25% of attackers per level before the battle starts (up to 25%)."),
   def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
-  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 4 }, "Treats the wounded after a battle: saves 4% of them per level (max 50%). The killed can't be saved."),
-  def("War hall", 350, { kind: "military", stat: "march", perLevel: 5 }, "Armies come home 5% faster per level."),
-  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Level 1 reveals enemies' exact defense before you attack."),
-  def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after."),
-  def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 4 }, "Builds Longships (level 1) to carry armies across the sea. +4% defense against landings from the sea per level."),
+  def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 2.5 }, "Treats the wounded after a battle: saves 2.5% of them per level (up to 50%). The killed can't be saved."),
+  def("War hall", 350, { kind: "military", stat: "march", perLevel: 2.5 }, "Armies come home 2.5% faster per level (up to 50%)."),
+  def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Reveals enemies' exact defense before you attack, and sends spies.", { maxLevel: 1 }),
+  def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after (up to level 10).", { maxLevel: 10, timeWeight: 3 }),
+  def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 3 }, "Builds Longships (level 1) to carry armies across the sea. +3% defense against landings from the sea per level (up to +60%)."),
 ].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix }));
 
 export type BuildingId = string;
@@ -294,7 +344,14 @@ export const CROP_UPKEEP_PER_BUILDING_LEVEL = 1;
 
 
 
-export const TOWN_HALL_SPEEDUP_PER_LEVEL = 0.04;
+/** Town Hall: 2.5% faster building a level, so 50% at level 20 (was 4% up to 80%). */
+export const TOWN_HALL_SPEEDUP_PER_LEVEL = 0.025;
+/**
+ * Town Hall levels that each bring one more builder. It was one every 5
+ * levels with no end (Town Hall 30 = 7 builders), which let old tribes build
+ * everything at once and made the Plus builder worthless to them.
+ */
+export const TOWN_HALL_BUILDER_LEVELS = [10, 20];
 
 // ─── Quests ──────────────────────────────────────────────────────────────────
 
@@ -538,7 +595,7 @@ export const UNITS: UnitDef[] = [
 
 /**
  * The dragon (see UNITS): stronger by `perRoostLevel` for every Dragon Roost
- * level past the first, without end; beaten, it rests `restMs` once home;
+ * level past the first, up to the Roost's top (level 10: +135%); beaten, it rests `restMs` once home;
  * Archers defend `archerBonus` better against the share of an attack it makes.
  */
 export const DRAGON = { perRoostLevel: 0.15, restMs: 12 * 3600 * 1000, archerBonus: 2 } as const;

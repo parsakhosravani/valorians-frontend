@@ -338,7 +338,7 @@ export const Hall = () => {
     tasks.push({
       key: "army",
       img: buildingImage(BUILDING_BY_ID["barracks"]),
-      title: "Build Barracks to train troops",
+      title: (state.buildings["town-hall"] ?? 0) ? "Build Barracks to train troops" : "Build your Town Hall, then Barracks",
       sub: "Troops raid camps and defend your tribe",
       state: "todo",
       action: { label: "Go", href: "/tribe" },

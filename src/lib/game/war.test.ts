@@ -4,6 +4,7 @@ import * as E from "./engine";
 import * as W from "./war";
 import * as M from "./map";
 import { campDefense, hiddenResources } from "./config";
+import * as C from "./config";
 
 const T0 = Date.UTC(2026, 9, 23, 10);
 
@@ -139,18 +140,20 @@ test("defenders and walls can win", () => {
 
 test("rams weaken walls", () => {
   const d = withBarracks();
-  d.buildings["city-gate"] = 10;
+  d.buildings["city-gate"] = 20;
   const rams = { ...E.emptyArmy(), ram: 50 };
-  // 50 rams × 2% = the whole 60% gate bonus is gone
+  // 50 rams × 2% = the whole 60% gate bonus (3% × 20) is gone
   expect(W.defensePower(d, rams) * 1.6).toBeCloseTo(W.defensePower(d));
 });
 
 test("catapults break the Watchtower", () => {
   const d = withBarracks();
-  d.buildings.watchtower = 10; // 600 flat defense
+  d.buildings.watchtower = 10;
+  const tower = E.getRates(d).flatDefense;
+  expect(tower).toBeCloseTo(C.compoundAt(60, 10, 1.12)); // ~1,050: 60 at level 1, 12% more each level
   const full = W.defensePower(d);
-  const hit = W.defensePower(d, { ...E.emptyArmy(), catapult: 10 }); // −30% of 600
-  expect(full - hit).toBeCloseTo(180 * (1 + E.getRates(d).defenseBonus));
+  const hit = W.defensePower(d, { ...E.emptyArmy(), catapult: 10 }); // −30% of the tower
+  expect(full - hit).toBeCloseTo(tower * 0.3 * (1 + E.getRates(d).defenseBonus));
 });
 
 test("new troops unlock at higher building levels", () => {
@@ -365,12 +368,12 @@ test("the Trapmaker's traps catch attackers before the battle, up to a quarter",
   attacker.army.cavalry = 1000;
   const defender = withBarracks();
   defender.shieldUntil = 0;
-  defender.buildings["trapmaker"] = 10; // 5%
+  defender.buildings["trapmaker"] = 4; // 5%
   const { outcome } = W.raidOutcome(defender, attacker, { ...E.emptyArmy(), cavalry: 1000 }, 0.5);
 
   expect(outcome.attackerTrapped?.cavalry).toBe(50);
   expect(outcome.attackerLosses.cavalry).toBeGreaterThanOrEqual(50);
-  defender.buildings["trapmaker"] = 200;
+  defender.buildings["trapmaker"] = 20;
   expect(E.getRates(defender).trapShare).toBe(0.25);
 });
 
@@ -442,9 +445,10 @@ test("one dragon per tribe, counted from the moment it's ordered", () => {
   expect(() => W.trainTroops(withBarracks(), "dragon", 1, T0)).toThrow("Dragon Roost");
 });
 
-test("the Roost makes the dragon stronger every level, without end", () => {
+test("the Roost makes the dragon stronger every level, up to its top", () => {
   expect(W.unitAttack(withRoost(1), "dragon")).toBe(4000);
-  expect(W.unitAttack(withRoost(11), "dragon")).toBeCloseTo(4000 * 2.5);
+  expect(W.unitAttack(withRoost(10), "dragon")).toBeCloseTo(4000 * 2.35);
+  expect(W.unitAttack(withRoost(15), "dragon")).toBeCloseTo(4000 * 2.35);
 });
 
 test("a dragon flies straight: no ships, no road, no bandits", () => {

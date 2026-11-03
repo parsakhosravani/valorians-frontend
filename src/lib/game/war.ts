@@ -248,10 +248,10 @@ const landingFactor = (defender: GameState) => 1 + LANDING_DEFENSE + getRates(de
 
 /** The same, from the Harbor level alone (it's visible on the map). */
 export const landingFactorFor = (harborLevel: number) => {
-  const e = BUILDINGS.find((b) => b.id === "harbor")!.effect;
-  const perLevel = e.kind === "military" ? e.perLevel : 0;
+  const b = BUILDINGS.find((x) => x.id === "harbor")!;
+  const perLevel = b.effect.kind === "military" ? b.effect.perLevel : 0;
 
-  return 1 + LANDING_DEFENSE + (perLevel * harborLevel) / 100;
+  return 1 + LANDING_DEFENSE + (perLevel * Math.min(harborLevel, b.maxLevel)) / 100;
 };
 
 export function powerScore(s: GameState) {

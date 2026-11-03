@@ -22,6 +22,11 @@ import {
   START,
   TAP_BURST,
   TOWN_HALL_SPEEDUP_PER_LEVEL,
+  TOWN_HALL_BUILDER_LEVELS,
+  TOWN_HALL,
+  TOWN_HALL_LEAD,
+  BuildingDef,
+  effectAt,
   buildingUpgradeBaseSeconds,
   buildingUpgradeCost,
   energyCapacityForLevel,
@@ -105,8 +110,10 @@ export const unitRank = (s: GameState, u: UnitId) => rankForXp(s.troops?.[u]?.xp
 /** Attack and defense multiplier a troop type gets from its rank. */
 export const unitMultiplier = (s: GameState, u: UnitId) =>
   (1 + unitRank(s, u) * RANK_BONUS) *
-  // The dragon grows with its Roost, without end.
-  (u === "dragon" ? 1 + DRAGON.perRoostLevel * Math.max(0, (s.buildings["dragon-roost"] ?? 0) - 1) : 1);
+  // The dragon grows with its Roost, up to the Roost's top level.
+  (u === "dragon"
+    ? 1 + DRAGON.perRoostLevel * Math.max(0, Math.min(s.buildings["dragon-roost"] ?? 0, BUILDING_BY_ID["dragon-roost"].maxLevel) - 1)
+    : 1);
 
 export type WarStats = {
   attacksWon: number;
@@ -303,7 +310,7 @@ export function normalizeState(saved: GameState): GameState {
   const fresh = createInitialState(saved.updatedAt);
   // Arsenal troop upgrades were removed; drop any upgrade left in old saves.
   const { forge: _forge, ...s } = saved as GameState & { forge?: unknown };
-  return {
+  return capBuildingLevels({
     ...fresh,
     ...s,
     resources: { ...fresh.resources, ...s.resources },
@@ -328,7 +335,39 @@ export function normalizeState(saved: GameState): GameState {
     troops: Object.fromEntries(
       UNIT_IDS.map((u) => [u, { xp: s.troops?.[u]?.xp ?? 0 }])
     ) as Record<UnitId, TroopRecord>,
-  };
+  });
+}
+
+/**
+ * Buildings got a top level in Nov 2026 (see DEFAULT_MAX_LEVEL). A save with
+ * a building above it (or an upgrade queued past it) comes down to the top,
+ * and the levels it loses are paid back at today's prices, filling the
+ * warehouse up to its capacity: refunding those levels in full would hand old
+ * tribes tens of millions of resources. Running it again changes nothing.
+ */
+export function capBuildingLevels(s: GameState): GameState {
+  const over = BUILDINGS.filter(
+    (b) => level(s, b.id) > b.maxLevel || s.queue.some((q) => q.building === b.id && q.toLevel > b.maxLevel)
+  );
+
+  if (!over.length) return s;
+  const refund = Object.fromEntries(RESOURCE_IDS.map((r) => [r, 0])) as Record<ResourceId, number>;
+
+  for (const b of over) {
+    const paid = Math.max(level(s, b.id), ...s.queue.filter((q) => q.building === b.id).map((q) => q.toLevel));
+
+    for (let l = b.maxLevel; l < paid; l++) {
+      const cost = buildingUpgradeCost(b, l);
+      for (const r of RESOURCE_IDS) refund[r] += cost[r];
+    }
+    s.buildings[b.id] = Math.min(level(s, b.id), b.maxLevel);
+  }
+  s.queue = s.queue.filter((q) => q.toLevel <= (BUILDING_BY_ID[q.building]?.maxLevel ?? Infinity));
+  const cap = getRates(s).capacity;
+
+  for (const r of RESOURCE_IDS) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
+
+  return s;
 }
 
 /** Units at home + away on raids. */
@@ -339,6 +378,13 @@ export function totalArmy(s: GameState): Army {
 }
 
 const level = (s: GameState, id: BuildingId) => s.buildings[id] ?? 0;
+
+/**
+ * The highest level a building may be raised to right now: its top, and no
+ * higher than the Town Hall (producers and the Warehouse TOWN_HALL_LEAD more).
+ */
+export const buildingCap = (s: GameState, b: BuildingDef) =>
+  b.id === TOWN_HALL ? b.maxLevel : Math.min(b.maxLevel, level(s, TOWN_HALL) + (b.leadsTownHall ? TOWN_HALL_LEAD : 0));
 
 // ─── Valorians Plus ──────────────────────────────────────────────────────────
 
@@ -444,7 +490,8 @@ export function getRates(s: GameState): Rates {
   };
 
   for (const b of BUILDINGS) {
-    const l = level(s, b.id);
+    // A level past the top (an old save not yet capped) gives nothing more.
+    const l = Math.min(level(s, b.id), b.maxLevel);
     if (!l) continue;
     totalLevels += l;
     const e = b.effect;
@@ -462,7 +509,7 @@ export function getRates(s: GameState): Rates {
         townHall = l;
         break;
       case "coins":
-        coins += e.perLevel * l;
+        coins += effectAt(e, l);
         break;
       case "population":
         growth += e.perLevel * l;
@@ -471,7 +518,7 @@ export function getRates(s: GameState): Rates {
         tapBoost += (e.percentPerLevel * l) / 100;
         break;
       case "military":
-        if (e.stat in mil) mil[e.stat as keyof typeof mil] += e.perLevel * l;
+        if (e.stat in mil) mil[e.stat as keyof typeof mil] += effectAt(e, l);
         break;
     }
   }
@@ -498,8 +545,8 @@ export function getRates(s: GameState): Rates {
     tapPower: Math.round(tapPowerForLevel(s.skills.tap) * (1 + tapBoost)),
     coinsPerHour: coins,
     growthPerHour: growth,
-    builders: 1 + Math.floor(townHall / 5) + (plusActive(s) ? PLUS.extraBuilders : 0),
-    buildSpeedMultiplier: Math.max(0.2, 1 - TOWN_HALL_SPEEDUP_PER_LEVEL * townHall),
+    builders: 1 + TOWN_HALL_BUILDER_LEVELS.filter((l) => townHall >= l).length + (plusActive(s) ? PLUS.extraBuilders : 0),
+    buildSpeedMultiplier: Math.max(0.5, 1 - TOWN_HALL_SPEEDUP_PER_LEVEL * townHall),
     troopUpkeep,
     trainSpeedMultiplier: Math.max(0.25, 1 - mil.trainSpeed / 100),
     attackBonus: (mil.attack + perks.attack) / 100,
@@ -598,7 +645,11 @@ export function advance(state: GameState, now: number): GameState {
     if (item.endsAt <= now) {
       events.push({
         at: item.endsAt,
-        run: () => (s.buildings[item.building] = Math.max(level(s, item.building), item.toLevel)),
+        run: () =>
+          (s.buildings[item.building] = Math.min(
+            BUILDING_BY_ID[item.building]?.maxLevel ?? Infinity,
+            Math.max(level(s, item.building), item.toLevel)
+          )),
       });
     }
   }
@@ -839,16 +890,33 @@ export function buildingUpgradeInfo(s: GameState, id: BuildingId) {
   if (!b) throw new GameError("Unknown building");
   const from = targetLevel(s, id);
   const r = getRates(s);
+  const cost = buildingUpgradeCost(b, from);
+  const maxed = from >= b.maxLevel;
+  const cap = buildingCap(s, b);
+  const overCapacity = RESOURCE_IDS.some((res) => cost[res] > r.capacity);
+  // Why it can't start, whatever the resources: shown instead of the cost.
+  const blocked = maxed
+    ? "Max level"
+    : from >= cap
+      ? `Needs Town Hall ${from + 1 - (b.leadsTownHall ? TOWN_HALL_LEAD : 0)}`
+      : overCapacity
+        ? "Needs a bigger Warehouse"
+        : null;
+
   return {
     from,
-    cost: buildingUpgradeCost(b, from),
+    cost,
     seconds: Math.max(1, Math.round(buildingUpgradeBaseSeconds(b, from) * r.buildSpeedMultiplier)),
+    maxed,
+    blocked,
   };
 }
 
 export function upgradeBuilding(s0: GameState, id: BuildingId, now: number): GameState {
   const s = structuredCloneState(s0);
   const info = buildingUpgradeInfo(s, id);
+  if (info.maxed) throw new GameError("This building is at its top level", "max_level");
+  if (info.blocked) throw new GameError(info.blocked, "blocked");
   if (s.queue.some((q) => q.building === id)) throw new GameError("This building is already being upgraded", "busy");
   if (s.queue.length >= getRates(s).builders) throw new GameError("All builders are busy", "no_builder");
   for (const res of RESOURCE_IDS) {

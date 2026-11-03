@@ -47,6 +47,7 @@ const BuildingThumb = ({ b, level, size = 52 }: { b: BuildingDef; level: number;
 const StatusLine = ({ o }: { o: UpgradeOption }) => {
   const short = Object.entries(o.missing) as [ResourceId, number][];
 
+  if (o.blocked) return <span className="text-xs text-muted truncate">{o.blocked}</span>;
   if (!short.length) {
     return (
       <span className="text-xs text-muted tabular-nums truncate">
@@ -227,7 +228,7 @@ export const Tribe: FunctionComponent = () => {
                 : ""}
           </span>
           <InfoDrawer
-            content="Each builder works on one building at a time. Upgrade your Town Hall to hire another builder every 5 levels, and to build faster."
+            content="Each builder works on one building at a time. Upgrade your Town Hall to build faster and to hire a second builder at level 10 and a third at 20. No building can be higher than the Town Hall (mines and the Warehouse may be 2 levels ahead)."
             title="Builders"
           />
         </div>

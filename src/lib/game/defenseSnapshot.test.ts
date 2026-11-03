@@ -10,6 +10,7 @@ const HOUR = 3600_000;
 const busy = () => {
   let s = E.createInitialState(T0);
 
+  s.buildings["town-hall"] = 5;
   s.buildings.barracks = 3;
   s.buildings.embassy = 4;
   s.buildings.armory = 2;

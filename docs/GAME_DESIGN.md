@@ -12,7 +12,9 @@ ask before "fixing" either. Add new decisions here when they are made.
 
 ## Buildings and village
 
-- Buildings have **no max level**.
+- Buildings have a **top level** (Nov 2026, owner's call; before that there was none): 20 for most, Barracks and Siege Workshop 5, Stable and Dragon Roost 10, Academy 10, Exploration Center 1. Saves above the top were brought down and refunded at today's prices, up to a full warehouse.
+- **No building can be higher than the Town Hall**; producers and the Warehouse may be 2 levels ahead. Town Hall gives a builder at 10 and 20 (max 3, +1 with Plus) and up to 50% faster building.
+- Cost grows gently to level 15, then steeply (×1.8 a level): levels 16–20 are the late game, so maxing a village takes months. Effects have readable tops (Arsenal/Armory +40%, City Gate +60%).
 - Each building costs a **different mix of resources** by what it is made of (City Gate: brick, then iron, then wood, a little crop; Harbor: mostly wood). The total per level is unchanged; only the split differs (`BUILDING_MIX` in config.ts).
 - The **Build page is the list only**. The village picture lives on the **War map**:
   zooming in on your own tribe shows its buildings.

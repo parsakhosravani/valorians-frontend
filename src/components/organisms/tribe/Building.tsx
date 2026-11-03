@@ -42,7 +42,8 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
   let label = "Upgrade";
   let disabled = busy;
 
-  if (!freeBuilder) [label, disabled] = ["No free builder", true];
+  if (info.blocked) [label, disabled] = [info.blocked, true];
+  else if (!freeBuilder) [label, disabled] = ["No free builder", true];
   else if (missing.length) [label, disabled] = [`Need more ${missing.map((m) => m.name).join(", ")}`, true];
 
   const progress = inQueue ? Math.min(1, (now - inQueue.startedAt) / (inQueue.endsAt - inQueue.startedAt)) : 0;
@@ -60,7 +61,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
           width={264}
         />
         <div className="relative flex items-center gap-2">
-          <Chip color="primary" label={String(level)} />
+          <Chip color="primary" label={`${level}/${building.maxLevel}`} />
           <h2 className="title-screen !text-[21px]">{building.name}</h2>
         </div>
         <p className="relative text-[13px] text-sub leading-snug max-w-[300px]">{building.description}</p>
@@ -74,7 +75,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
           </div>
           <div className="bar"><span className="bar-fill" style={{ width: `${progress * 100}%` }} /></div>
         </div>
-      ) : (
+      ) : info.maxed ? null : (
         <div className="flex flex-col gap-2">
           <SectionTitle right={<span className="flex items-center gap-1"><Image alt="" className="w-3.5 h-3.5 rounded-sm" src={time} />{formatDuration(info.seconds * 1000)}</span>}>
             Level {info.from} → {info.from + 1}
