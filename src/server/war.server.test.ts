@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
 import { marchTo, resolveDueAttacks } from "@/server/war";
+import { homeOf } from "@/server/map";
+import { seaRoute, terrainAt } from "@/lib/game/map";
 import { mutatePlayer } from "@/server/players";
 import { emptyArmy } from "@/lib/game/engine";
 import { RESOURCE_IDS } from "@/lib/game/config";
@@ -12,7 +14,33 @@ const HOUR = 3600e3;
 const total = (r: Record<string, number>) => RESOURCE_IDS.reduce((n, k) => n + r[k], 0);
 const axemen = (n: number) => ({ ...emptyArmy(), axeman: n });
 
-/** A strong attacker and an undefended target, both without shields. */
+/**
+ * Moves `def` next door to `atk`, on dry land: new tribes settle at random,
+ * and when two landed across the sea from each other an attack needed ships
+ * and the test failed now and then ("That's across the sea").
+ */
+async function nextDoor(atk: { id: number }, def: { id: number }) {
+  const db = await getDb();
+  const home = await homeOf(atk.id);
+
+  for (let r = 1; r <= 6; r++) {
+    for (const [dx, dy] of [[r, 0], [0, r], [-r, 0], [0, -r], [r, r], [-r, -r], [r, -r], [-r, r]]) {
+      const p = { x: home.x + dx, y: home.y + dy };
+
+      if (["sea", "lake", "mountains"].includes(terrainAt(p.x, p.y))) continue;
+      if (seaRoute(home, p, axemen(1)).naval) continue;
+      const up = await db.execute({
+        sql: "UPDATE users SET map_x = ?, map_y = ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE map_x = ? AND map_y = ?)",
+        args: [p.x, p.y, def.id, p.x, p.y],
+      });
+
+      if (up.rowsAffected === 1) return;
+    }
+  }
+  throw new Error("no dry land next door");
+}
+
+/** A strong attacker and an undefended target next door, both without shields. */
 async function attackerAndTarget(now: number) {
   const atk = await newPlayer(now, (s) => {
     s.army.axeman = 300;
@@ -22,7 +50,9 @@ async function attackerAndTarget(now: number) {
     s.shieldUntil = 0;
   });
 
-  return { atk, def };
+  await nextDoor(atk, def);
+
+  return { atk: await reload(atk.id), def: await reload(def.id) };
 }
 
 async function battlesFor(attackId: number) {
@@ -108,7 +138,8 @@ describe("raiding another player (server)", () => {
       s.shieldUntil = 0;
       s.army.spearman = 40;
     });
-    const { march } = await marchTo(atk, { target: def.id }, axemen(300), T0);
+    await nextDoor(atk, def);
+    const { march } = await marchTo(await reload(atk.id), { target: def.id }, axemen(300), T0);
     const home = { ...emptyArmy(), spearman: 3000 };
 
     // The defender's own army is on its way home and gets there just after the attack lands.
