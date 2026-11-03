@@ -5,6 +5,7 @@ import type { Army, BanditRaid, BanditRaidReport } from "@/lib/game/engine";
 import type { Promotion, RaidReport } from "@/lib/game/war";
 import type { Ambush } from "@/lib/game/bandits";
 import { whole } from "@/lib/format";
+import { appUrl } from "./appUrl";
 import { recordNotice } from "./notices";
 
 /**
@@ -18,9 +19,6 @@ import { recordNotice } from "./notices";
  */
 
 const token = () => process.env.TELEGRAM_BOT_TOKEN || process.env.NEXT_PUBLIC_TELEGRAM_BOT_TOKEN;
-
-/** The game's address (the Mini App URL registered with BotFather). */
-const appUrl = () => (process.env.APP_URL || "https://valorians-legend.vercel.app").replace(/\/$/, "");
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmt = whole;

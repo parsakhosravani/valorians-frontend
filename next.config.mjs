@@ -16,6 +16,19 @@ const nextConfig = {
   reactCompiler: true,
   // Database client uses native bindings for local files; keep it out of the bundle.
   serverExternalPackages: ["@libsql/client", "libsql"],
+  // The game moved from valorians-legend.vercel.app. Old Play buttons in players'
+  // chats still open the old address, so send them on to the new one. Browsers keep
+  // the #tgWebAppData fragment across the redirect, so sign-in still works.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "valorians-legend.vercel.app" }],
+        destination: "https://valorians-frontend.vercel.app/:path*",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

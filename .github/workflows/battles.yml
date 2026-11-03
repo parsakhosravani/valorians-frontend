@@ -23,7 +23,7 @@ jobs:
       - name: Call the battle resolver
         env:
           # Optional repository secrets; the defaults work for the live game.
-          APP_URL: ${{ secrets.APP_URL || 'https://valorians-legend.vercel.app' }}
+          APP_URL: ${{ secrets.APP_URL || 'https://valorians-frontend.vercel.app' }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           curl -fsS --max-time 60 ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} "$APP_URL/api/cron/battles"

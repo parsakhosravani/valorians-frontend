@@ -93,6 +93,6 @@ test player instead (`?dev_user=N` picks which one).
 
 ## Deploy and CI
 
-- Hosted on Vercel (live: `https://valorians-legend.vercel.app`), Node 24, bun 1.4.4.
+- Hosted on Vercel (live: `https://valorians-frontend.vercel.app`), Node 24, bun 1.4.4.
 - `.github/workflows/ci.yml` runs typecheck, lint, test and build on every PR and on `main`.
 - `NEXT_PUBLIC_*` values are baked in at build time — redeploy after changing them.
