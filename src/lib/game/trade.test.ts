@@ -98,3 +98,13 @@ test("guards cost coins for the load they escort, and the pay comes back on canc
   s0.coins = 5;
   expect(() => Tr.hireGuards(s0, 1000)).toThrow("Guards cost 40 coins");
 });
+
+test("merchant loads grow with the Trading Post so the late market can move real amounts", () => {
+  expect(Tr.merchantLoad(0)).toBe(0);
+  expect(Tr.merchantLoad(1)).toBe(Tr.MERCHANT_CARRY);
+  expect(Tr.merchantLoad(10)).toBeGreaterThan(10 * Tr.MERCHANT_CARRY);
+  expect(Tr.merchantLoad(20)).toBeGreaterThan(90_000);
+  const s = E.createInitialState(0);
+  s.buildings["trading-post"] = 20;
+  expect(Tr.tradeLimits(s)).toMatchObject({ maxOffers: 20, maxAmount: Tr.merchantLoad(20) });
+});

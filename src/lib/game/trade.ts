@@ -7,13 +7,23 @@
  * Pure functions shared by the server (authoritative) and the client (to show
  * limits and validate the form before sending).
  */
-import { RESOURCE_IDS, ResourceId, guardCost } from "./config";
+import { RESOURCE_IDS, ResourceId, compoundAt, guardCost } from "./config";
 import { GameError, GameState, cloneState, getRates } from "./engine";
 
 export const TRADING_POST = "trading-post";
 
-/** Each Trading Post level adds one merchant: one more open offer and this much more per load. */
+/**
+ * Each Trading Post level adds one merchant (one more open offer), and a load
+ * can hold MERCHANT_CARRY at level 1 and 15% more for each level after.
+ * Was +1,000 a level (20,000 at level 20) while late warehouses hold 800,000
+ * and buildings leave hundreds of thousands of one resource unused: the market
+ * couldn't move what the late game needs. Now ~100,000 at level 20.
+ */
 export const MERCHANT_CARRY = 1000;
+const MERCHANT_CARRY_GROWTH = 1.15;
+
+/** Most one merchant can carry at a Trading Post level. */
+export const merchantLoad = (level: number) => Math.round(compoundAt(MERCHANT_CARRY, level, MERCHANT_CARRY_GROWTH) / 100) * 100;
 /** Smallest amount worth sending a merchant for. */
 export const MIN_TRADE_AMOUNT = 50;
 /** Offers must ask between half and double what they give (stops gifting through the market). */
@@ -37,7 +47,7 @@ const tradingPostLevel = (s: GameState) =>
 export const tradeLimits = (s: GameState) => {
   const level = tradingPostLevel(s);
 
-  return { level, maxOffers: level, maxAmount: level * MERCHANT_CARRY };
+  return { level, maxOffers: level, maxAmount: merchantLoad(level) };
 };
 
 export const tradeTravelMs = (tiles: number) =>

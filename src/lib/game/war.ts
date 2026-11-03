@@ -7,6 +7,7 @@ import {
   BUILDINGS,
   CAMP_REPEAT_COOLDOWN_MS,
   CAMP_REPEAT_SHARE,
+  CAMP_REPEAT_HOURS,
   CAMPS_KEPT,
   CAMP_TRAVEL_SECONDS,
   FOREST_CAVALRY_PENALTY,
@@ -827,8 +828,18 @@ export function campStatus(s: GameState, level: number, now: number) {
 export function campReward(s: GameState, level: number) {
   const first = level > s.camps.cleared;
   const r = campFirstReward(level);
-  const share = first ? 1 : CAMP_REPEAT_SHARE;
-  return { resources: Math.round(r.resources * share), coins: Math.round(r.coins * share), first };
+
+  if (first) return { resources: r.resources, coins: r.coins, first };
+  // A repeat pays at most a few hours of the tribe's own iron, wood and clay
+  // output (crop is left out: troops eat into it).
+  const p = getRates(s).productionPerHour;
+  const hourly = (p.iron + p.wood + p.clay) / 3;
+
+  return {
+    resources: Math.round(Math.min(r.resources * CAMP_REPEAT_SHARE, hourly * CAMP_REPEAT_HOURS)),
+    coins: Math.round(r.coins * CAMP_REPEAT_SHARE),
+    first,
+  };
 }
 
 /** Troops leave for a barbarian camp. Checks the camp can be attacked now. */

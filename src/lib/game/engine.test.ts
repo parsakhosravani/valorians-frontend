@@ -251,3 +251,12 @@ test("old saves above the top come down to it and get the lost levels back, up t
   for (const r of C.RESOURCE_IDS) after.resources[r] = 7;
   expect(E.normalizeState(after).resources.iron).toBe(7);
 });
+
+test("the Daily Mine stays a boost: a maxed day is well under a top village's day", () => {
+  const day = (lvl: number) => (C.energyCapacityForLevel(lvl) / C.STAMINA_PER_TAP) * C.tapPowerForLevel(lvl);
+  const topDay = 24 * 4 * (C.BASE_PRODUCTION_PER_HOUR + C.productionAt(60, 20));
+  // Even with the best combo and a maxed Academy.
+  expect(day(C.MAX_SKILL_LEVEL) * C.MAX_COMBO_MULTIPLIER * 1.5).toBeLessThan(topDay * 0.5);
+  // On day one it's worth about half of what the whole new village makes in a day.
+  expect(day(1)).toBeGreaterThan(24 * 2 * C.BASE_PRODUCTION_PER_HOUR * 0.9);
+});

@@ -25,7 +25,7 @@ const TIPS = [
   "Upgrade your Hideout so raiders can't take everything.",
   "Claim your streak every day — day 7 opens a chest.",
   "Rams break enemy walls. Bring some to well-defended tribes.",
-  "Beaten barbarian camps can be raided again every hour.",
+  "Beaten barbarian camps can be raided again every 6 hours.",
   "Raided while away? The Hall has a Revenge button.",
   "Town Hall level 5 gives you a second builder.",
 ];

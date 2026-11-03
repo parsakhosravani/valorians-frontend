@@ -1833,7 +1833,7 @@ export const WarMap = ({
                   {fmt(c.reward.coins)}
                   {c.reward.first
                     ? " for the first win"
-                    : " (beaten camps give a smaller haul every hour)"}
+                    : " (beaten camps give a smaller haul every 6 hours)"}
                   .
                 </p>
                 {c.state === "locked" ? (

@@ -23,6 +23,7 @@ import {
 import {
   MAX_TRADE_RATIO,
   MERCHANT_CARRY,
+  merchantLoad,
   MIN_TRADE_AMOUNT,
   MIN_TRADE_RATIO,
   TRADING_POST,
@@ -395,7 +396,7 @@ export const Market = () => {
   }, [nextArrival, load, refresh]);
 
   const level = data?.limits.level ?? 0;
-  const maxAmount = level * MERCHANT_CARRY;
+  const maxAmount = merchantLoad(level);
   const freeMerchants = data
     ? data.limits.maxOffers - data.limits.openOffers
     : 0;
@@ -493,8 +494,8 @@ export const Market = () => {
                 Build a Trading Post to trade
               </p>
               <p className="text-xs text-sub">
-                Each level adds a merchant: one more offer and{" "}
-                {fmt(MERCHANT_CARRY)} more per load.
+                Each level adds a merchant: one more offer, and
+                bigger loads ({fmt(MERCHANT_CARRY)} at level 1, 15% more each level).
               </p>
             </div>
             <Link href="/tribe">

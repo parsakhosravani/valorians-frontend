@@ -38,13 +38,20 @@ export const BASE_POPULATION_GROWTH = 10;
 
 export const MAX_SKILL_LEVEL = 20;
 
-/** Base resource gained per tap at a given "Earn more" level. */
+/**
+ * Base resource gained per tap at a given "Earn more" level, and daily
+ * stamina at a given "Stamina" level. Were ×1.2 and ×1.15 a level: maxed, a
+ * day of mining brought ~3M resources, five times a top village's whole
+ * output, and already at level 15 it matched it, for a few weeks of coins.
+ * Now a maxed day is ~100–300k with combos (under half a day's top
+ * production): still the big early boost it's meant to be (level 1 mining is
+ * worth about half a new village's day), never the main income.
+ */
 export const tapPowerForLevel = (level: number) =>
-  Math.round(30 * Math.pow(1.2, level - 1));
+  Math.round(30 * Math.pow(1.1, level - 1));
 
-/** Daily stamina at a given "Stamina" level. */
 export const energyCapacityForLevel = (level: number) =>
-  Math.round(1500 * Math.pow(1.15, level - 1));
+  Math.round(1500 * Math.pow(1.07, level - 1));
 
 /** Stamina spent per normal tap (Frenzy taps are free). */
 export const STAMINA_PER_TAP = 10;
@@ -306,7 +313,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Fertilizer Workshop", 250, { kind: "cropBoost", percentPerLevel: 5 }, "+5% crop production per level (up to +100%)."),
   // Coins grow 10% a level like production, so a high Treasury is still worth building (was +40 flat).
   def("Treasury", 300, { kind: "coins", perLevel: 40, growth: 1.1 }, "+40 coins per hour at level 1, and each level adds 10% more than the last."),
-  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant: one more offer, +1,000 per load."),
+  def("Trading Post", 250, { kind: "coins", perLevel: 20 }, "+20 coins per hour. Each level adds a Market merchant (one more offer) and lets loads carry 15% more."),
   def("Academy", 300, { kind: "tapBoost", percentPerLevel: 5 }, "+5% resources per strike per level (up to +50%).", { maxLevel: 10 }),
   def("Embassy", 250, { kind: "population", perLevel: 3 }, "+3 extra population growth per hour per level."),
   // Unlock buildings stop at their last unlock: higher levels did nothing.
@@ -784,9 +791,17 @@ export function campName(level: number) {
   const word = words[(Math.floor(level / 2) * 5) % words.length];
   return level % 2 ? `${word} ${campTier(level)}` : `${word}'s ${campTier(level)}`;
 }
-/** Cleared camps can be raided again for a smaller haul after this cooldown. */
-export const CAMP_REPEAT_COOLDOWN_MS = 60 * 60 * 1000;
+/**
+ * Cleared camps can be raided again for a smaller haul after this cooldown:
+ * CAMP_REPEAT_SHARE of the first reward, but never more than
+ * CAMP_REPEAT_HOURS of the tribe's own production. Was every hour for 30%
+ * with no cap: three camps around level 30 farmed hourly paid ~40× a top
+ * village's production, so camps became the whole economy. Now farming all
+ * the camps you keep (CAMPS_KEPT) about doubles your income at most.
+ */
+export const CAMP_REPEAT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 export const CAMP_REPEAT_SHARE = 0.3;
+export const CAMP_REPEAT_HOURS = 2;
 /**
  * Only your newest beaten camps stay on the map to raid again; older ones are
  * gone (they still count as beaten). Keeps the map tidy and stops sweeping

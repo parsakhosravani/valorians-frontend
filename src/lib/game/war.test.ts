@@ -558,3 +558,20 @@ test("the militia stops growing at MILITIA_MAX", () => {
   expect(C.militiaDefense(1000)).toBe(150);
   expect(C.militiaDefense(1e7)).toBe(C.MILITIA_MAX);
 });
+
+// ─── Whole-game audit (Nov 2026) ──────────────────────────────────────────────
+
+test("farming beaten camps pays at most a few hours of your own production", () => {
+  const s = withBarracks();
+  s.camps.cleared = 30;
+  const first = C.campFirstReward(30).resources;
+  const repeat = W.campReward(s, 30).resources;
+  const p = E.getRates(s).productionPerHour;
+  expect(repeat).toBeLessThanOrEqual(((p.iron + p.wood + p.clay) / 3) * C.CAMP_REPEAT_HOURS + 1);
+  expect(repeat).toBeLessThan(first * C.CAMP_REPEAT_SHARE);
+  // A new camp still pays its full first reward.
+  expect(W.campReward(s, 31).resources).toBe(C.campFirstReward(31).resources);
+  // All the camps a tribe keeps, raided as often as they come back, at most double its income.
+  const perDay = C.CAMPS_KEPT * (24 * 3600e3 / C.CAMP_REPEAT_COOLDOWN_MS) * C.CAMP_REPEAT_HOURS;
+  expect(perDay).toBeLessThanOrEqual(24);
+});
