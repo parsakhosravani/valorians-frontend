@@ -9,14 +9,17 @@
 import {
   BATTLE_MAX_MS,
   BATTLE_MAX_ROUNDS,
+  BATTLE_MAX_ROUNDS_REINFORCED,
   BATTLE_MIN_MS,
   BATTLE_MIN_ROUNDS,
   BATTLE_MS_PER_SQRT_TROOP,
+  EMPTY_VILLAGE_DEFENSE_PER_TROOP,
   UNIT_BY_ID,
   UNIT_IDS,
 } from "./config";
-import { Army, emptyArmy } from "./engine";
-import type { BattleOutcome } from "./war";
+import { Army, GameState, cloneState, emptyArmy, getRates } from "./engine";
+import type { Terrain } from "./map";
+import { BattleOutcome, battleNumbers, fightersOf, resolve } from "./war";
 
 export type BattleRound = {
   /** 1-based round number. */
@@ -29,6 +32,8 @@ export type BattleRound = {
   /** Share of each side's strength still standing after this round, 0–1. */
   attackLeft: number;
   defenseLeft: number;
+  /** Defenders who came home and joined the fight at the start of this round. */
+  joined?: Army;
 };
 
 export type BattlePlan = {
@@ -116,9 +121,15 @@ function lossShares(outcome: Pick<BattleOutcome, "attackerWon" | "attack" | "def
  * Lays out a decided battle as rounds. `troops` is everyone on the field
  * (both sides), which sets how long it lasts. `seed` in [0,1).
  */
-export function planBattle(outcome: BattleOutcome, startedAt: number, troops: number, seed: number): BattlePlan {
+export function planBattle(
+  outcome: BattleOutcome,
+  startedAt: number,
+  troops: number,
+  seed: number,
+  maxRounds = BATTLE_MAX_ROUNDS
+): BattlePlan {
   const duration = battleDurationMs(troops);
-  const n = roundCount(duration);
+  const n = Math.max(1, Math.min(maxRounds, roundCount(duration)));
   const next = seeded(seed);
   const atkCurve = curve(n, outcome.attackerWon, next);
   const defCurve = curve(n, !outcome.attackerWon, next);
@@ -164,3 +175,161 @@ export const battleSize = (attackers: number, defenders: number) => 2 * Math.max
 /** Fighting troops in an army (ships wait offshore and don't count). */
 export const troopsOnField = (army: Army) =>
   UNIT_IDS.reduce((n, u) => n + (UNIT_BY_ID[u].transport ? 0 : (army[u] ?? 0)), 0);
+
+// ─── Armies coming home into a battle ───────────────────────────────────────
+
+/** A battle under way, as the server keeps it. `engaged` is null at a camp or lair. */
+export type FieldBattle = { plan: BattlePlan; outcome: BattleOutcome; engaged: Army | null };
+
+/**
+ * The last moment an army coming home can still join: before the last round
+ * begins. Later, it waits at home for the result.
+ */
+export const joinDeadline = (plan: BattlePlan) =>
+  plan.rounds.length >= 2 ? plan.startedAt + plan.rounds[plan.rounds.length - 2].at - 1 : plan.startedAt - 1;
+
+const plus = (a: Army, b: Army) => {
+  const out = emptyArmy();
+
+  for (const u of UNIT_IDS) out[u] = (a[u] ?? 0) + (b[u] ?? 0);
+
+  return out;
+};
+
+const minus = (a: Army, b: Army) => {
+  const out = emptyArmy();
+
+  for (const u of UNIT_IDS) out[u] = Math.max(0, (a[u] ?? 0) - (b[u] ?? 0));
+
+  return out;
+};
+
+/** Splits troops fallen so far into dead and wounded, in the battle's own proportion. */
+function splitFallen(fallen: Army, losses: Army, healed: Army) {
+  const dead = emptyArmy();
+  const hurt = emptyArmy();
+
+  for (const u of UNIT_IDS) {
+    const l = losses[u] ?? 0;
+    const total = l + (healed[u] ?? 0);
+
+    dead[u] = total > 0 ? Math.round(((fallen[u] ?? 0) * l) / total) : (fallen[u] ?? 0);
+    hurt[u] = (fallen[u] ?? 0) - dead[u];
+  }
+
+  return { dead, hurt };
+}
+
+/**
+ * An army came home at `join.at` while its village was fighting. The round
+ * under way is fought out as it was; the soldiers take the field at the
+ * start of the next one, and the rest of the battle is decided again: the
+ * attackers still standing against the defenders still standing plus the
+ * newcomers, with the same luck, walls and terrain. Rounds already fought
+ * never change. Returns null when it's too late to join (the last round has
+ * begun, or the battle has as many rounds as it may have).
+ */
+export function reinforceBattle(
+  defender: GameState,
+  attacker: GameState,
+  sent: Army,
+  battle: FieldBattle,
+  join: { at: number; units: Army },
+  seed: number,
+  opts: { terrain?: Terrain; landing?: boolean } = {}
+): FieldBattle | null {
+  const { plan, outcome } = battle;
+  const fresh = fightersOf(join.units);
+
+  if (troopsOnField(fresh) === 0) return null;
+  const ended = plan.rounds.filter((r) => plan.startedAt + r.at <= join.at).length;
+  const keep = ended + 1; // the round under way when they arrived
+
+  if (keep >= plan.rounds.length || keep + BATTLE_MIN_ROUNDS > BATTLE_MAX_ROUNDS_REINFORCED) return null;
+
+  const base = plan.rounds[keep - 1];
+  const engaged = battle.engaged ?? emptyArmy();
+  const trapped = outcome.attackerTrapped ?? emptyArmy();
+  // Who has fallen when the newcomers arrive (trapped attackers fell before the first round).
+  const atkFallen = emptyArmy();
+  const defFallen = emptyArmy();
+
+  for (const u of UNIT_IDS) {
+    atkFallen[u] = Math.min(sent[u] ?? 0, Math.max(base.attackerFallen[u] ?? 0, trapped[u] ?? 0));
+    defFallen[u] = Math.min(engaged[u] ?? 0, base.defenderFallen[u] ?? 0);
+  }
+  const atkSoFar = splitFallen(atkFallen, outcome.attackerLosses, outcome.attackerHealed);
+  const defSoFar = splitFallen(defFallen, outcome.defenderLosses, outcome.defenderHealed);
+  const atkLeft = minus(sent, atkFallen);
+  const defLeft = plus(minus(engaged, defFallen), fresh);
+
+  // The rest of the fight, from where it stands.
+  const field = cloneState(defender);
+
+  field.army = defLeft;
+  const nums = battleNumbers(attacker, atkLeft, field, opts.terrain, 0, opts.landing);
+  const rest = resolve(
+    nums.attack,
+    nums.defense,
+    outcome.luck,
+    atkLeft,
+    defLeft,
+    getRates(attacker).healShare,
+    getRates(defender).healShare
+  );
+  const merged: BattleOutcome = {
+    ...outcome,
+    attackerWon: rest.attackerWon,
+    attack: rest.attack,
+    defense: rest.defense,
+    attackerLosses: plus(atkSoFar.dead, rest.attackerLosses),
+    attackerHealed: plus(atkSoFar.hurt, rest.attackerHealed),
+    defenderLosses: plus(defSoFar.dead, rest.defenderLosses),
+    defenderHealed: plus(defSoFar.hurt, rest.defenderHealed),
+  };
+
+  const defenders = troopsOnField(defLeft);
+  const sub = planBattle(
+    rest,
+    0,
+    battleSize(troopsOnField(atkLeft), defenders > 0 ? defenders : Math.round(rest.defense / EMPTY_VILLAGE_DEFENSE_PER_TROOP)),
+    seed,
+    BATTLE_MAX_ROUNDS_REINFORCED - keep
+  );
+  // The defense bar fills back up by the newcomers' share of the defenders.
+  const before = troopsOnField(engaged);
+  const came = troopsOnField(fresh);
+  const lift = before + came > 0 ? (base.defenseLeft * before + came) / (before + came) : 1;
+  const rounds: BattleRound[] = [
+    ...plan.rounds.slice(0, keep),
+    ...sub.rounds.map((r, i) => ({
+      n: keep + i + 1,
+      at: base.at + r.at,
+      attackerFallen: plus(atkFallen, r.attackerFallen),
+      defenderFallen: plus(defFallen, r.defenderFallen),
+      attackLeft: round2(base.attackLeft * r.attackLeft),
+      defenseLeft: round2(lift * r.defenseLeft),
+      ...(i === 0 ? { joined: fresh } : {}),
+    })),
+  ];
+
+  return {
+    plan: { startedAt: plan.startedAt, endsAt: plan.startedAt + rounds[rounds.length - 1].at, rounds },
+    outcome: merged,
+    engaged: plus(engaged, fresh),
+  };
+}
+
+/** The defenders on the field by `now`: newcomers count once their round has begun. */
+export function defendersSoFar(plan: BattlePlan, engaged: Army | null, now: number): Army | null {
+  if (!engaged) return null;
+  let out = { ...engaged };
+
+  plan.rounds.forEach((r, i) => {
+    const from = plan.startedAt + (i > 0 ? plan.rounds[i - 1].at : 0);
+
+    if (r.joined && from > now) out = minus(out, r.joined);
+  });
+
+  return out;
+}

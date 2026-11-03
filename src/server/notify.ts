@@ -135,6 +135,16 @@ export const notify = {
     );
   },
 
+  reinforced(defenderId: number, attacker: string, units: Army) {
+    return sendToPlayer(
+      defenderId,
+      `🛡️ <b>Your army is back and joined the fight</b> against <b>${esc(attacker)}</b>!\n\n` +
+        `On the field from the next round: ${armyText(units)}`,
+      "🗺️ Watch the battle",
+      "/battle?tab=map"
+    );
+  },
+
   defended(defenderId: number, attacker: string, r: RaidReport) {
     return sendToPlayer(
       defenderId,

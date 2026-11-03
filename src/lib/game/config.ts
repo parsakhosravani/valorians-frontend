@@ -635,6 +635,13 @@ export const BATTLE_MAX_MS = 30 * 60_000;
 export const BATTLE_MS_PER_SQRT_TROOP = 20_000;
 export const BATTLE_MIN_ROUNDS = 3;
 export const BATTLE_MAX_ROUNDS = 10;
+/**
+ * An army coming home to a village under attack joins the fight, and the
+ * battle goes on with them. Each join can add rounds, but never past this.
+ */
+export const BATTLE_MAX_ROUNDS_REINFORCED = 20;
+/** An empty village's defense, in troops for how long the battle lasts: a village of 3,000 defense counts as 10. */
+export const EMPTY_VILLAGE_DEFENSE_PER_TROOP = 300;
 /** Barbarians in a camp, for the battle's length: about one per 20 defense. */
 export const CAMP_DEFENSE_PER_TROOP = 20;
 

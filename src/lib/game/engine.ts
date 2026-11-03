@@ -39,6 +39,7 @@ import {
   tapPowerForLevel,
   UNITS,
   UNIT_IDS,
+  UNIT_BY_ID,
   UnitId,
   NEW_PLAYER_SHIELD_MS,
   hiddenResources,
@@ -208,7 +209,23 @@ export type GameState = {
   shield: { cooldownUntil: number; plusClaimedAt: number };
   /** Cards the player owns, by level. War Orders: more new orders per expedition. */
   cards: { orders: number };
+  /**
+   * Battles being fought at this village right now. An army coming home
+   * before `joinBy` (the start of the last round) goes straight to the field
+   * instead of home (see reinforceBattle in battle.ts).
+   */
+  defending?: Fight[];
+  /** Troops that came home into a battle and wait to be put on the field. */
+  joining?: Joining[];
 };
+
+/** A battle at the village: the attack's id and the last moment an army coming home can still join. */
+export type Fight = { id: number; joinBy: number };
+/** An army that came home at `at` into the battle `id`. */
+export type Joining = { id: number; at: number; units: Army };
+
+/** A battle window left behind (it should be closed when the battle ends) is dropped after this. */
+const STALE_FIGHT_MS = 6 * 3600 * 1000;
 
 export type Rates = {
   productionPerHour: Record<ResourceId, number>;
@@ -595,6 +612,7 @@ export function advance(state: GameState, now: number): GameState {
   }
   s.queue = s.queue.filter((q) => q.endsAt > now);
   s.marches = s.marches.filter((m) => m.returnsAt > now);
+  dropStaleFights(s, now);
   flow(s, now);
   finishTraining(s, now);
 
@@ -609,7 +627,18 @@ export function advance(state: GameState, now: number): GameState {
 }
 
 function returnMarch(s: GameState, m: March) {
-  for (const u of UNIT_IDS) s.army[u] += m.units[u] ?? 0;
+  // The village is under attack: the soldiers go straight to the field (ships
+  // and the spoils still go home).
+  const fight = s.defending?.find((f) => m.returnsAt <= f.joinBy);
+  const soldiers = emptyArmy();
+
+  if (fight) for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport) soldiers[u] = m.units[u] ?? 0;
+  if (fight && UNIT_IDS.some((u) => soldiers[u] > 0)) {
+    s.joining = [...(s.joining ?? []), { id: fight.id, at: m.returnsAt, units: soldiers }];
+    for (const u of UNIT_IDS) s.army[u] += (m.units[u] ?? 0) - soldiers[u];
+  } else {
+    for (const u of UNIT_IDS) s.army[u] += m.units[u] ?? 0;
+  }
   // Loot always lands, even past the warehouse's capacity: the report already
   // promised it, and capping here silently threw the rest away. Over capacity,
   // production just waits until it's spent back down (see flow).
@@ -618,6 +647,23 @@ function returnMarch(s: GameState, m: March) {
     if (add > 0) s.resources[r] += add;
   }
   s.coins += m.coins;
+}
+
+/**
+ * A battle that was never closed (the server lost track of it) stops taking
+ * troops after a while, and any still waiting to join go home.
+ */
+function dropStaleFights(s: GameState, now: number) {
+  if (!s.defending?.length && !s.joining?.length) return;
+  const live = (s.defending ?? []).filter((f) => f.joinBy > now - STALE_FIGHT_MS);
+  const ids = new Set(live.map((f) => f.id));
+
+  for (const j of s.joining ?? []) {
+    if (ids.has(j.id)) continue;
+    for (const u of UNIT_IDS) s.army[u] += j.units[u] ?? 0;
+  }
+  s.joining = (s.joining ?? []).filter((j) => ids.has(j.id));
+  s.defending = live;
 }
 
 /** Moves every unit whose training has finished into the army. */
@@ -654,6 +700,8 @@ function structuredCloneState(s: GameState): GameState {
     ...(s.deserted ? { deserted: { ...s.deserted } } : {}),
     ...(s.banditRaid ? { banditRaid: { ...s.banditRaid } } : {}),
     ...(s.owned ? { owned: { ...s.owned } } : {}),
+    ...(s.defending ? { defending: s.defending.map((f) => ({ ...f })) } : {}),
+    ...(s.joining ? { joining: s.joining.map((j) => ({ ...j, units: { ...j.units } })) } : {}),
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
     troops: Object.fromEntries(

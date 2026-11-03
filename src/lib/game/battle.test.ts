@@ -126,3 +126,96 @@ test("a battle lasts by the smaller side: a big army on an empty village is over
   // Two big armies still fight it out.
   expect(B.roundCount(B.battleDurationMs(B.battleSize(4800, 4000)))).toBe(10);
 });
+
+// ─── Armies coming home into a battle ────────────────────────────────────────
+
+/** A raid on a weak village: the attackers win unless help comes. */
+const siege = () => {
+  const attacker = tribe();
+  const defender = tribe();
+  defender.army.spearman = 20;
+  const sent = { ...E.emptyArmy(), swordsman: 300 };
+  const { outcome, defenders } = W.raidOutcome(defender, attacker, sent, 0.5);
+  const plan = B.planBattle(outcome, T0, B.battleSize(B.troopsOnField(sent), B.troopsOnField(defenders)), 0.4);
+  return { attacker, defender, sent, battle: { plan, outcome, engaged: defenders } };
+};
+
+const sum = (a: E.Army, b: E.Army) => {
+  const out = E.emptyArmy();
+  for (const u of Object.keys(out) as (keyof E.Army)[]) out[u] = (a[u] ?? 0) + (b[u] ?? 0);
+  return out;
+};
+
+test("an army coming home mid-battle joins from the next round and can turn it", () => {
+  const { attacker, defender, sent, battle } = siege();
+  expect(battle.outcome.attackerWon).toBe(true);
+  const home = { ...E.emptyArmy(), spearman: 2000 };
+  const arrive = battle.plan.startedAt + battle.plan.rounds[0].at + 1; // during round 2
+
+  const next = B.reinforceBattle(defender, attacker, sent, battle, { at: arrive, units: home }, 0.2)!;
+  expect(next).not.toBeNull();
+  // Rounds 1–2 were already under way and don't change; they join in round 3.
+  expect(next.plan.rounds.slice(0, 2)).toEqual(battle.plan.rounds.slice(0, 2));
+  expect(next.plan.rounds[2].joined).toEqual(home);
+  expect(next.plan.rounds.every((r, i) => r.n === i + 1)).toBe(true);
+  expect(next.plan.endsAt).toBe(next.plan.startedAt + next.plan.rounds[next.plan.rounds.length - 1].at);
+  // With them, the village holds.
+  expect(next.outcome.attackerWon).toBe(false);
+  expect(next.engaged).toEqual(sum(battle.engaged, home));
+  // The last round adds up to the decided result, and nobody falls twice.
+  const last = next.plan.rounds[next.plan.rounds.length - 1];
+  expect(last.attackerFallen).toEqual(sum(next.outcome.attackerLosses, next.outcome.attackerHealed));
+  expect(last.defenderFallen).toEqual(sum(next.outcome.defenderLosses, next.outcome.defenderHealed));
+  for (const u of Object.keys(sent) as (keyof E.Army)[]) {
+    expect(last.attackerFallen[u]).toBeLessThanOrEqual(sent[u]);
+    expect(last.defenderFallen[u]).toBeLessThanOrEqual(next.engaged![u]);
+  }
+});
+
+test("an army coming home in the last round is too late to join", () => {
+  const { attacker, defender, sent, battle } = siege();
+  const n = battle.plan.rounds.length;
+  const deadline = B.joinDeadline(battle.plan);
+  expect(deadline).toBe(battle.plan.startedAt + battle.plan.rounds[n - 2].at - 1);
+  const units = { ...E.emptyArmy(), spearman: 50 };
+  expect(B.reinforceBattle(defender, attacker, sent, battle, { at: deadline + 1, units }, 0.2)).toBeNull();
+  expect(B.reinforceBattle(defender, attacker, sent, battle, { at: deadline, units }, 0.2)).not.toBeNull();
+});
+
+test("newcomers show on the field only once their round begins", () => {
+  const { attacker, defender, sent, battle } = siege();
+  const units = { ...E.emptyArmy(), spearman: 50 };
+  const next = B.reinforceBattle(defender, attacker, sent, battle, { at: battle.plan.startedAt + 1, units }, 0.2)!;
+  const joinsAt = next.plan.startedAt + next.plan.rounds[0].at;
+  expect(B.defendersSoFar(next.plan, next.engaged, joinsAt - 1)).toEqual(battle.engaged);
+  expect(B.defendersSoFar(next.plan, next.engaged, joinsAt)).toEqual(next.engaged);
+});
+
+test("a march home lands on the field while the village fights, and goes home after", () => {
+  const s0 = tribe();
+  s0.updatedAt = T0;
+  const units = { ...E.emptyArmy(), spearman: 30 };
+  const loot = { iron: 100, wood: 0, clay: 0, crop: 0 };
+  s0.marches = [
+    { id: "a", target: "x", units: { ...units }, loot: { ...loot }, coins: 5, returnsAt: T0 + 60_000 },
+    { id: "b", target: "y", units: { ...units }, loot: { iron: 0, wood: 0, clay: 0, crop: 0 }, coins: 0, returnsAt: T0 + 600_000 },
+  ];
+  const s1 = W.holdField(s0, 7, T0 + 120_000);
+  const iron = s1.resources.iron;
+  const s2 = E.advance(s1, T0 + 700_000);
+
+  // The first came home during the fight: on the field, spoils unloaded.
+  expect(s2.joining).toEqual([{ id: 7, at: T0 + 60_000, units }]);
+  expect(s2.resources.iron).toBeGreaterThanOrEqual(iron + 100);
+  // The second came after the last round began: home as usual.
+  expect(s2.army.spearman).toBe(30);
+
+  const { state, joins } = W.takeJoining(s2, 7);
+  expect(joins.length).toBe(1);
+  expect(state.joining).toEqual([]);
+
+  // A battle that ends sends anyone still waiting home.
+  const done = W.leaveField(s2, 7);
+  expect(done.army.spearman).toBe(60);
+  expect(done.defending).toEqual([]);
+});

@@ -281,6 +281,12 @@ export const LiveBattleDrawer = ({
               return (
                 <div key={r.n} className="inset rounded-lg px-2.5 py-1.5 text-xs flex flex-col gap-0.5">
                   <span className="font-bold text-goldtext">Round {r.n}</span>
+                  {r.joined && (
+                    <span className="text-parch">
+                      <GameIcon e="🛡️" /> {m.kind === "incoming" ? "Your army came home and joined the fight: " : "Reinforcements joined the defenders: "}
+                      <ArmyLine army={r.joined} />
+                    </span>
+                  )}
                   <span>
                     <span className="text-muted">{names.attacker} lost </span>
                     <ArmyLine army={minus(r.attackerFallen, prev?.attackerFallen ?? null)} />
@@ -296,8 +302,8 @@ export const LiveBattleDrawer = ({
             })}
           </div>
           <p className="text-xs text-muted text-center">
-            The fight can&apos;t be stopped once the armies meet. Wounded troops are counted as fallen until the
-            healers see to them.
+            The fight can&apos;t be stopped once the armies meet, but the village&apos;s armies coming home join it
+            from the next round. Wounded troops are counted as fallen until the healers see to them.
           </p>
         </div>
       )}

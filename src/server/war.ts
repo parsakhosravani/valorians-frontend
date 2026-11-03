@@ -11,9 +11,9 @@ import { maybeRefreshRanks } from "./ranks";
 import { spiesSeeMarch } from "./spies";
 
 import { GameError, advance, emptyArmy, getRates, rankForXp } from "@/lib/game/engine";
-import { CAMP_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
+import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
-import { BattlePlan, battleSize, planBattle, troopsOnField } from "@/lib/game/battle";
+import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, pointAlong, routeFor, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   BattleOutcome,
@@ -39,12 +39,15 @@ import {
   dispatchRaid,
   embark,
   engageDefenders,
+  holdField,
+  leaveField,
   powerScore,
   raidOutcome,
   receiveRaidReport,
   releaseDefenders,
   returnHome,
   scoutEstimate,
+  takeJoining,
 } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 
@@ -201,9 +204,6 @@ async function ambushOnRoad(me: Player, units: Army, from: Point, to: Point, sta
 
 type Target = { dest: Point; defenderId: number | null; campLevel: number | null; lairLevel: number | null; name: string };
 
-/** An empty village's defense, in troops for how long the battle lasts: a village of 3,000 defense counts as 10. */
-const EMPTY_VILLAGE_DEFENSE_PER_TROOP = 300;
-
 /** Where an attack on a tribe, one of your camps or a bandit lair goes, after checking it's allowed. */
 async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Point): Promise<Target> {
   const db = await getDb();
@@ -346,6 +346,7 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
   // The two sides, in troops: the battle lasts by the smaller (see battleSize).
   const attackers = troopsOnField(a.units);
   let defenders = 0;
+  let villagePlan: BattlePlan | null = null;
 
   if (a.campLevel) {
     outcome = campOutcome(attacker.state, a.campLevel, a.units, rand(), { terrain });
@@ -376,8 +377,15 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 
         outcome = r.outcome;
         engaged = r.defenders;
+        // Its soldiers; with none home, the village itself (villagers, Watchtower, walls) counts as only a
+        // few, so storming an empty village is over in about 3 rounds (see EMPTY_VILLAGE_DEFENSE_PER_TROOP).
+        const soldiers = troopsOnField(r.defenders);
 
-        return engageDefenders(s, r.defenders);
+        defenders = soldiers > 0 ? soldiers : Math.round(outcome.defense / EMPTY_VILLAGE_DEFENSE_PER_TROOP);
+        villagePlan = planBattle(outcome, at, battleSize(attackers, defenders), rand());
+
+        // Armies of this village coming home during the fight will join it (see joinReinforcements).
+        return holdField(engageDefenders(s, r.defenders), a.id, joinDeadline(villagePlan));
       });
     } catch (e) {
       if (!(e instanceof GameError)) throw e;
@@ -385,14 +393,9 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 
       return false;
     }
-    // Its soldiers; with none home, the village itself (villagers, Watchtower, walls) counts as only a
-    // few, so storming an empty village is over in about 3 rounds (see EMPTY_VILLAGE_DEFENSE_PER_TROOP).
-    const soldiers = troopsOnField(engaged!);
-
-    defenders = soldiers > 0 ? soldiers : Math.round(outcome.defense / EMPTY_VILLAGE_DEFENSE_PER_TROOP);
   }
 
-  const plan = planBattle(outcome, at, battleSize(attackers, defenders), rand());
+  const plan = villagePlan ?? planBattle(outcome, at, battleSize(attackers, defenders), rand());
   const battle: StoredBattle = { plan, outcome, engaged };
 
   try {
@@ -402,7 +405,7 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
     });
   } catch (e) {
     // The defenders already left home for the field: send them back.
-    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, engaged!)).catch(() => {});
+    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, engaged)).catch(() => {});
     throw e;
   }
   if (a.defenderId && plan.endsAt > now) {
@@ -424,7 +427,7 @@ async function finishBattle(a: AttackRow, now: number) {
   const attacker = await findById(a.attackerId);
 
   if (!attacker) {
-    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, engaged));
+    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, engaged));
 
     return;
   }
@@ -489,7 +492,7 @@ async function finishBattle(a: AttackRow, now: number) {
 
     report = r.report;
 
-    return r.state;
+    return leaveField(r.state, a.id);
   });
   const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: displayName(defender) };
   let promoted: Promotion[] = [];
@@ -518,7 +521,7 @@ async function abandon(a: AttackRow, now: number, e: unknown) {
     returnHome(s, a.units, "a failed march", now + 60_000, now, rand(), undefined, now, carriedOf(a))
   ).catch(() => {});
   if (a.defenderId && a.battle?.engaged) {
-    await mutatePlayer(a.defenderId, now, (s) => releaseDefenders(s, a.battle!.engaged!)).catch(() => {});
+    await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, a.battle!.engaged)).catch(() => {});
   }
 }
 
@@ -558,6 +561,9 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
     if (!fighting) await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
   }
 
+  // Armies that came home into a battle join it before anything is finished.
+  await joinReinforcements(now, playerId);
+
   const ended = await db.execute({
     sql: `SELECT * FROM attacks WHERE status = 'fighting' AND ends_at <= ?${mine} ORDER BY ends_at ASC LIMIT 20`,
     args: [now, ...who],
@@ -577,6 +583,84 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
       await abandon(a, now, e);
     }
     await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
+  }
+}
+
+/**
+ * Puts on the field the defenders' armies that came home while their village
+ * was fighting (the engine holds them in `joining`, see returnMarch). The rest
+ * of each battle is decided again with them; rounds already fought stay.
+ */
+async function joinReinforcements(now: number, playerId?: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT * FROM attacks WHERE status = 'fighting' AND defender_id IS NOT NULL${
+      playerId == null ? "" : " AND (attacker_id = ? OR defender_id = ?)"
+    } ORDER BY ends_at ASC LIMIT 20`,
+    args: playerId == null ? [] : [playerId, playerId],
+  });
+
+  for (const row of rs.rows) {
+    const a = toAttack(row as Record<string, unknown>);
+    const defender = a.defenderId ? await findById(a.defenderId) : null;
+
+    if (!defender || !a.battle) continue;
+    // Cheap look first: most battles have nobody coming home.
+    if (!(advance(defender.state, now).joining ?? []).some((j) => j.id === a.id)) continue;
+    const attacker = await findById(a.attackerId);
+
+    if (!attacker) continue; // finishBattle sends everyone home
+    const claim = await db.execute({
+      sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'fighting'",
+      args: [a.id],
+    });
+
+    if (claim.rowsAffected !== 1) continue;
+    const terrain = terrainAt(a.to.x, a.to.y);
+    const landing = seaRoute(a.from, a.to, a.units).naval;
+    let battle: StoredBattle = a.battle;
+    let joined = emptyArmy();
+    let saved = false;
+
+    try {
+      await mutatePlayer(defender.id, now, (s0) => {
+        const { state: s, joins } = takeJoining(s0, a.id);
+
+        battle = a.battle!;
+        joined = emptyArmy();
+        for (const j of joins) {
+          const next = reinforceBattle(s, attacker.state, a.units, battle, j, rand(), { terrain, landing });
+
+          if (next) {
+            battle = { ...battle, ...next };
+            for (const u of UNIT_IDS) joined[u] += j.units[u] ?? 0;
+          } else {
+            // Too late to join: they wait at home for the result.
+            for (const u of UNIT_IDS) s.army[u] += j.units[u] ?? 0;
+          }
+        }
+
+        return holdField(s, a.id, joinDeadline(battle.plan));
+      });
+      try {
+        await db.execute({
+          sql: "UPDATE attacks SET status = 'fighting', ends_at = ?, battle = ? WHERE id = ?",
+          args: [battle.plan.endsAt, JSON.stringify(battle), a.id],
+        });
+        saved = true;
+      } catch (e) {
+        // The battle couldn't take them: the newcomers go home rather than vanish.
+        console.error("reinforcements failed, sending them home", a.id, e);
+        await mutatePlayer(defender.id, now, (s) => releaseDefenders(s, joined)).catch(() => {});
+      }
+    } finally {
+      if (!saved) {
+        await db.execute({ sql: "UPDATE attacks SET status = 'fighting' WHERE id = ? AND status = 'resolving'", args: [a.id] });
+      }
+    }
+    if (saved && troopsOnField(joined) > 0) {
+      await notify.reinforced(defender.id, displayName(attacker), joined).catch(() => {});
+    }
   }
 }
 

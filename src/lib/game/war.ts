@@ -356,7 +356,7 @@ const regimentWith = (s: GameState, fighting: Army) => {
 export const WOUNDED_SHARE = { won: 0.6, lost: 0.3 };
 
 /** Losses for each side. The loser is wiped out; the winner loses (loser/winner)^1.5. */
-function resolve(
+export function resolve(
   attack: number,
   defense: number,
   luck: number,
@@ -550,7 +550,7 @@ type MapOpts = {
 };
 
 /** Only the troops that fight (ships stay out of it). */
-const fightersOf = (a: Army) => {
+export const fightersOf = (a: Army) => {
   const out = emptyArmy();
   for (const u of FIGHTERS) out[u] = a[u] ?? 0;
   return out;
@@ -609,6 +609,33 @@ export function engageDefenders(s0: GameState, engaged: Army): GameState {
 export function releaseDefenders(s0: GameState, engaged: Army): GameState {
   const s = cloneState(s0);
   for (const u of UNIT_IDS) s.army[u] += engaged[u] ?? 0;
+  return s;
+}
+
+/** The village is fighting battle `id`: armies coming home until `joinBy` join it. */
+export function holdField(s0: GameState, id: number, joinBy: number): GameState {
+  const s = cloneState(s0);
+  s.defending = [...(s.defending ?? []).filter((f) => f.id !== id), { id, joinBy }];
+  return s;
+}
+
+/** Takes the troops waiting to join battle `id` off the state (they go on the field). */
+export function takeJoining(s0: GameState, id: number) {
+  const s = cloneState(s0);
+  const joins = (s.joining ?? []).filter((j) => j.id === id).sort((a, b) => a.at - b.at);
+  s.joining = (s.joining ?? []).filter((j) => j.id !== id);
+  return { state: s, joins };
+}
+
+/**
+ * Battle `id` is over (or was called off): no more armies join it, and any
+ * still waiting go home. `engaged`, when given, also goes home untouched.
+ */
+export function leaveField(s0: GameState, id: number, engaged?: Army | null): GameState {
+  const s = engaged ? releaseDefenders(s0, engaged) : cloneState(s0);
+  for (const j of s.joining ?? []) if (j.id === id) for (const u of UNIT_IDS) s.army[u] += j.units[u] ?? 0;
+  s.joining = (s.joining ?? []).filter((j) => j.id !== id);
+  s.defending = (s.defending ?? []).filter((f) => f.id !== id);
   return s;
 }
 
