@@ -12,7 +12,7 @@ import { ACTIVE_QUESTS, QUEST_ICONS } from "@/components/organisms/quest/QuestDr
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
-import { BUILDING_BY_ID, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, buildingImage, campName, costTotal, unitPlural } from "@/lib/game/config";
+import { BUILDING_BY_ID, RESOURCE_NAMES, STAMINA_PER_TAP, STREAK_REWARDS, UNIT_BY_ID, UNIT_IDS, buildingImage, campName, costTotal, unitPlural } from "@/lib/game/config";
 import { questStatus, streakStatus, trainingEndsAt } from "@/lib/game/engine";
 import { campReward, campStatus, defensePower, powerScore } from "@/lib/game/war";
 import { recommendUpgrade, upgradeOptions } from "@/lib/game/advice";
@@ -108,7 +108,7 @@ const TaskRow = ({ t }: { t: Task }) => {
 };
 
 /** Work under way: a picture, what it is, how far along, and the time left. */
-const WorkRow = ({ img, title, from, to, now }: { img: string; title: string; from: number; to: number; now: number }) => (
+const WorkRow = ({ img, title, from, to, now }: { img: StaticImageData | string; title: string; from?: number; to: number; now: number }) => (
   <li className="flex items-center gap-2.5">
     <Image alt="" className="w-8 h-8 object-contain shrink-0" height={64} src={img} width={64} />
     <span className="flex-1 min-w-0 flex flex-col gap-1">
@@ -116,18 +116,11 @@ const WorkRow = ({ img, title, from, to, now }: { img: string; title: string; fr
         <span className="flex-1 min-w-0 truncate text-sm font-bold">{title}</span>
         <span className="shrink-0 text-xs font-extrabold text-goldtext tabular-nums">{formatDuration(to - now)}</span>
       </span>
-      <Bar className="h-1.5" max={Math.max(1, to - from)} value={Math.max(0, Math.min(to - from, now - from))} />
+      {/* Old armies on the road don't know when they set off: no bar for them, just the time. */}
+      {from != null && <Bar className="h-1.5" max={Math.max(1, to - from)} value={Math.max(0, Math.min(to - from, now - from))} />}
     </span>
   </li>
 );
-
-/** Where to go from here: the places a chief visits most. */
-const PLACES = [
-  { href: "/resources", label: "Mine", img: "/images/resources/rock-iron.webp" },
-  { href: "/battle?tab=army", label: "Army", img: "/images/buildings/Barracks.webp" },
-  { href: "/battle?tab=map", label: "Map", img: "/images/icons/compass.webp" },
-  { href: "/market", label: "Market", img: "/images/buildings/Trading%20Post.webp" },
-] as const;
 
 export const Hall = () => {
   const { telegram } = useTelegramContext();
@@ -402,6 +395,18 @@ export const Hall = () => {
     });
   }
 
+  // 9. A clan: perks, aid and the World Wonder all need one, and a new chief may not know it.
+  if (!me.clan) {
+    tasks.push({
+      key: "clan",
+      img: "/images/icons/banner.webp",
+      title: "Join a clan",
+      sub: "More production, aid from members and the World Wonder race",
+      state: "todo",
+      action: { label: "Clans", href: "/clan" },
+    });
+  }
+
   // To-dos first, then in progress, then done. The first three are the next steps; the rest fold away.
   const order = { todo: 0, wait: 1, done: 2 };
 
@@ -411,12 +416,16 @@ export const Hall = () => {
   const later = tasks.slice(3);
   const shielded = state.shieldUntil > now;
   const plusOn = plusActive(state);
-  const working = state.queue.length + state.training.length;
+  const outpostJobs = state.outposts.flatMap((o, i) => (o.job && o.job.endsAt > now ? [{ i, job: o.job }] : []));
+  const marching = state.marches.filter((m) => m.returnsAt > now);
+  const working = state.queue.length + state.training.length + marching.length + outpostJobs.length;
+  const hallLevel = state.buildings["town-hall"] ?? 0;
+  const homeUnits = UNIT_IDS.filter((u) => (state.army[u] ?? 0) > 0);
 
   return (
     <div className="flex flex-col gap-3 px-3 pt-2 pb-4">
-      {/* Your tribe, in its village: the one picture on the page. */}
-      <section className="relative overflow-hidden rounded-2xl border border-frame/80 shadow-card min-h-[188px] flex flex-col justify-end">
+      {/* Your tribe at a glance. Name and rank are in the top bar, so they aren't repeated here. */}
+      <section className="relative overflow-hidden rounded-2xl border border-frame/80 shadow-card">
         <Image
           fill
           priority
@@ -426,56 +435,89 @@ export const Hall = () => {
           sizes="(max-width: 448px) 100vw, 448px"
           src={hallBg}
         />
-        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-ground via-ground/70 to-ground/10" />
-        <Link
-          aria-label={`Rank ${me.rank}, open the leaderboard`}
-          className="absolute right-2.5 top-2.5 w-[58px] h-[58px] rounded-full flex flex-col items-center justify-center border-2 border-gold bg-ink/80 shadow-[inset_0_0_12px_rgba(227,169,72,0.25)] active:scale-95 transition-transform"
-          href="/leaderboard"
-        >
-          <span className="text-micro font-extrabold text-muted">Rank</span>
-          <span className="font-display font-black text-lg leading-none text-goldtext">#{compact(me.rank)}</span>
-        </Link>
-        <div className="relative flex items-end gap-2.5 px-3 pt-10 pb-3">
-          <Image
-            alt=""
-            className="w-[92px] h-[92px] -mb-1 -ml-1 object-contain shrink-0 drop-shadow-[0_6px_8px_rgba(0,0,0,0.7)]"
-            height={184}
-            priority
-            src={buildingImage(BUILDING_BY_ID["town-hall"])}
-            width={184}
-          />
+        <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-ground via-ground/80 to-ground/30" />
+        <div className="relative flex items-center gap-2.5 px-3 pt-3">
+          <Link aria-label="Town Hall, open Build" className="shrink-0 active:scale-95 transition-transform" href="/tribe">
+            <Image
+              alt=""
+              className="w-[68px] h-[68px] object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.7)]"
+              height={136}
+              priority
+              src={buildingImage(BUILDING_BY_ID["town-hall"])}
+              width={136}
+            />
+          </Link>
           <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-            <h1 className="title-screen truncate drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]">{me.firstName || "Your tribe"}</h1>
+            <h1 className="title-screen truncate">{hallLevel ? `Town Hall ${hallLevel}` : "Your new tribe"}</h1>
             <div className="flex flex-wrap gap-1">
-              <span className="pill">Hall {state.buildings["town-hall"] ?? 0}</span>
-              <span className="pill"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
-              <span className="pill"><GameIcon e="👥" /> {compact(peopleOf(state))}</span>
+              <span className="pill" title="Power"><GameIcon e="💪" /> {compact(powerScore(state))}</span>
+              <span className="pill" title="People"><GameIcon e="👥" /> {compact(peopleOf(state))}</span>
+              {me.clan ? (
+                <Link className="pill active:scale-95 transition-transform" href="/clan">
+                  <Image alt="" className="w-3.5 h-3.5 object-contain" height={28} src="/images/icons/banner.webp" width={28} />
+                  {me.clan.tag}
+                </Link>
+              ) : null}
               {!!state.seasonWins && (
                 <span className="pill pill-gold" title="Seasons won by finishing the World Wonder">
                   <GameIcon e="👑" /> {state.seasonWins > 1 ? `×${state.seasonWins}` : "Wonder"}
                 </span>
               )}
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                className={clsx(
-                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-extrabold active:scale-95 transition-transform",
-                  shielded ? "border-good/60 bg-ink/80 text-good" : "border-bad/70 bg-[rgba(84,30,18,0.9)] text-bad"
-                )}
-                onClick={() => setShieldOpen(true)}
-              >
-                <GameIcon e="🛡️" /> {shielded ? formatDuration(state.shieldUntil - now) : "Unprotected"}
-              </button>
-              <button
-                className={clsx(
-                  "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-extrabold active:scale-95 transition-transform",
-                  plusOn ? "border-good/60 bg-ink/80 text-good" : "border-gold/70 bg-ink/80 text-goldtext"
-                )}
-                onClick={() => setPlusOpen(true)}
-              >
-                <GameIcon e="👑" /> {plusOn ? `Plus, ${formatDuration(state.plus.until - now)} left` : state.plus.trialUsed ? "Get Plus" : "Try Plus free"}
-              </button>
-            </div>
+          </div>
+        </div>
+        <div className="relative flex flex-wrap gap-1.5 px-3 pt-2">
+          <button
+            className={clsx(
+              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-extrabold active:scale-95 transition-transform",
+              shielded ? "border-good/60 bg-ink/80 text-good" : "border-bad/70 bg-[rgba(84,30,18,0.9)] text-bad"
+            )}
+            onClick={() => setShieldOpen(true)}
+          >
+            <GameIcon e="🛡️" /> {shielded ? formatDuration(state.shieldUntil - now) : "Unprotected"}
+          </button>
+          <button
+            className={clsx(
+              "flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption font-extrabold active:scale-95 transition-transform",
+              plusOn ? "border-good/60 bg-ink/80 text-good" : "border-gold/70 bg-ink/80 text-goldtext"
+            )}
+            onClick={() => setPlusOpen(true)}
+          >
+            <GameIcon e="👑" /> {plusOn ? `Plus, ${formatDuration(state.plus.until - now)} left` : state.plus.trialUsed ? "Get Plus" : "Try Plus free"}
+          </button>
+        </div>
+        {/* Stores live in the banner: always in sight, without a card of their own. */}
+        <div className="relative m-2 mt-2.5 inset !bg-ink/75 px-1 pt-1.5 pb-1">
+          <div className="grid grid-cols-4 divide-x divide-line/50">
+            {RESOURCES.map((r) => {
+              const have = state.resources[r.id];
+              const perHour = rates.productionPerHour[r.id];
+              const full = have >= rates.capacity;
+
+              return (
+                <div key={r.id} className="px-1.5 flex flex-col gap-1">
+                  <span className="flex items-center gap-1.5">
+                    <Image alt={r.name} className="w-5 h-5 object-contain shrink-0" src={r.img} />
+                    <span className="flex flex-col leading-none min-w-0">
+                      <span className={clsx("text-xs font-extrabold tabular-nums", full && "text-bad")}>{compact(have)}</span>
+                      <span className={clsx("text-[10px] font-bold tabular-nums", perHour < 0 ? "text-bad" : "text-good")}>
+                        {perHour >= 0 ? "+" : ""}
+                        {compact(perHour)}/h
+                      </span>
+                    </span>
+                  </span>
+                  <div className="bar h-1 w-full">
+                    <span className={clsx("bar-fill", full && "!bg-none bg-bad")} style={{ width: `${Math.min(100, (have / rates.capacity) * 100)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-1 flex items-center justify-between px-1.5 text-micro font-bold text-muted">
+            <span>Each store holds {compact(rates.capacity)}</span>
+            <span className="flex items-center gap-1 text-goldtext font-extrabold">
+              <Image alt="" className="w-3.5 h-3.5" src={coinImg} />+{compact(rates.coinsPerHour)}/h
+            </span>
           </div>
         </div>
       </section>
@@ -519,7 +561,7 @@ export const Hall = () => {
         )}
       </section>
 
-      {/* Work under way: builders and training, with the time left. */}
+      {/* Everything with a clock on it: builders, training, armies coming home, outpost fields. */}
       {working > 0 && (
         <section className="card p-3 flex flex-col gap-2.5">
           <SectionTitle right={`${state.queue.length} of ${rates.builders} builders busy`}>Under way</SectionTitle>
@@ -546,58 +588,70 @@ export const Hall = () => {
                 to={trainingEndsAt(t)}
               />
             ))}
+            {marching
+              .sort((a, b) => a.returnsAt - b.returnsAt)
+              .map((m) => {
+                const n = Object.values(m.units).reduce((a, b) => a + (b ?? 0), 0);
+
+                return (
+                  <WorkRow
+                    key={`m-${m.id}`}
+                    from={m.leftAt}
+                    img="/images/icons/footprints.webp"
+                    now={now}
+                    title={`${compact(n)} troops coming home`}
+                    to={m.returnsAt}
+                  />
+                );
+              })}
+            {outpostJobs.map(({ i, job }) => (
+              <WorkRow
+                key={`o-${i}`}
+                from={job.startedAt}
+                img={RESOURCES.find((r) => r.id === job.resource)!.img}
+                now={now}
+                title={`Outpost ${i + 1}: ${RESOURCE_NAMES[job.resource].toLowerCase()} field to ${job.toLevel}`}
+                to={job.endsAt}
+              />
+            ))}
           </ul>
+          {freeBuilders > 0 && state.queue.length > 0 && (
+            <Link className="text-xs font-extrabold text-goldtext self-start" href="/tribe">
+              {freeBuilders} builder{freeBuilders > 1 ? "s" : ""} free: build more ›
+            </Link>
+          )}
         </section>
       )}
 
-      {/* Stores: how full, and how fast they fill. */}
-      <section className="card p-3 flex flex-col gap-2.5">
-        <SectionTitle
-          right={
-            <span className="flex items-center gap-1 text-goldtext font-extrabold">
-              <Image alt="" className="w-4 h-4" src={coinImg} />+{compact(rates.coinsPerHour)}/h
-            </span>
-          }
-        >
-          Stores
-        </SectionTitle>
-        <div className="grid grid-cols-4 gap-1.5">
-          {RESOURCES.map((r) => {
-            const have = state.resources[r.id];
-            const perHour = rates.productionPerHour[r.id];
-            const full = have >= rates.capacity;
-
-            return (
-              <div key={r.id} className="inset px-1.5 py-2 flex flex-col items-center gap-1">
-                <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
-                <span className={clsx("font-extrabold text-sm tabular-nums leading-none", full && "text-bad")}>{compact(have)}</span>
-                <div className="bar h-1 w-full">
-                  <span className={clsx("bar-fill", full && "!bg-none bg-bad")} style={{ width: `${Math.min(100, (have / rates.capacity) * 100)}%` }} />
-                </div>
-                <span className={clsx("text-micro font-extrabold tabular-nums", perHour < 0 ? "text-bad" : "text-good")}>
-                  {perHour >= 0 ? "+" : ""}
-                  {compact(perHour)}/h
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <span className="text-micro font-bold text-muted text-center">Each store holds up to {compact(rates.capacity)}</span>
-      </section>
-
-      {/* Where to go from here */}
-      <nav aria-label="Places" className="grid grid-cols-4 gap-2">
-        {PLACES.map((p) => (
-          <Link
-            key={p.href}
-            className="card py-2 flex flex-col items-center gap-1 active:scale-95 transition-transform"
-            href={p.href as any}
+      {/* Who is home to defend: shown once the tribe can train troops. */}
+      {(barracks > 0 || armyHome > 0) && (
+        <section className="card p-3 flex flex-col gap-2.5">
+          <SectionTitle
+            right={
+              <Link className="text-goldtext font-extrabold" href="/battle?tab=army">
+                Army ›
+              </Link>
+            }
           >
-            <Image alt="" className="w-9 h-9 object-contain" height={72} src={p.img} width={72} />
-            <span className="text-xs font-extrabold">{p.label}</span>
-          </Link>
-        ))}
-      </nav>
+            At home
+          </SectionTitle>
+          {homeUnits.length ? (
+            <>
+              <ul className="flex flex-wrap gap-1.5">
+                {homeUnits.map((u) => (
+                  <li key={u} className="inset flex items-center gap-1 pl-1 pr-2 py-0.5" title={UNIT_BY_ID[u].name}>
+                    <Image alt={UNIT_BY_ID[u].name} className="w-6 h-6 object-contain" height={48} src={`/images/troops/${u}.webp`} width={48} />
+                    <span className="text-xs font-extrabold tabular-nums">{compact(state.army[u] ?? 0)}</span>
+                  </li>
+                ))}
+              </ul>
+              <span className="text-micro font-bold text-muted">Defense {compact(Math.round(defensePower(state)))}, militia and walls included</span>
+            </>
+          ) : (
+            <span className="text-sm font-bold text-muted">No troops at home. Only the militia guards your tribe.</span>
+          )}
+        </section>
+      )}
     </div>
   );
 };
