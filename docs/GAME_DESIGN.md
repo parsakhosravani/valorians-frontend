@@ -13,6 +13,15 @@ ask before "fixing" either. Add new decisions here when they are made.
 ## Buildings and village
 
 - Buildings have a **top level** (Nov 2026, owner's call; before that there was none): 20 for most, Barracks and Siege Workshop 5, Stable and Dragon Roost 10, Academy 10, Exploration Center 1. Saves above the top were brought down and refunded at today's prices, up to a full warehouse.
+- **Unlock tree** (`BUILDING_REQUIRES`): buildings need others before their first level
+  (Stable: Barracks 3 + Town Hall 5; Dragon Roost: Town Hall 20, Stable 10, Siege Workshop 5…).
+  Only the first level checks it; buildings already standing keep growing.
+- **Mastery stars:** a building at its top can earn 5 stars, each costing its last level's
+  price and taking longer; a star is half a level of effect (Arsenal 40% → 45% at 5 stars).
+  Stars count only while the building stands at its top. Unlock buildings and the Town Hall
+  have none.
+- **Queue controls:** cancel any job (full refund in the first minute, 80% after); finish the
+  last 5 minutes for free (15 with Plus).
 - **No building can be higher than the Town Hall**; producers and the Warehouse may be 2 levels ahead. Town Hall gives a builder at 10 and 20 (max 3, +1 with Plus) and up to 50% faster building.
 - Cost grows gently to level 15, then steeply (×1.8 a level): levels 16–20 are the late game, so maxing a village takes months. Effects have readable tops (Arsenal/Armory +40%, City Gate +60%).
 - Each building costs a **different mix of resources** by what it is made of (City Gate: brick, then iron, then wood, a little crop; Harbor: mostly wood). The total per level is unchanged; only the split differs (`BUILDING_MIX` in config.ts).
@@ -74,6 +83,8 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Clan perks have a top** (Nov 2026): Shared Fields, War Banners and Shield Wall stop adding
   past tech level 15 (+45% production, +30% attack, +30% defense). Clan levels and the Great
   Hall still have no top.
+- **Clan aid limits** (against alt accounts): a member gets aid only after 3 days in the clan,
+  and at most one day of their own output of that resource (or coins) per day, from any clan.
 - **A clan needs at least 2 members.** A chief alone can found one, but it is *forming*: its
   techs give no perks and can't be raised until a second chief joins (and stop again if it
   drops back to one).

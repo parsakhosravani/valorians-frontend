@@ -12,20 +12,71 @@ import { Chip } from "@/components/atoms/Chip";
 import { RESOURCES, useGame } from "@/context";
 import {
   BuildingDef,
+  CANCEL_FULL_REFUND_MS,
+  CANCEL_REFUND_SHARE,
   CROP_UPKEEP_PER_BUILDING_LEVEL,
+  MASTERY,
+  canMaster,
   GROWTH_PER_BUILDING_LEVEL,
   buildingImage,
 } from "@/lib/game/config";
-import { buildingUpgradeInfo, getRates } from "@/lib/game/engine";
+import { buildingUpgradeInfo, freeFinishMs, getRates, masteryInfo } from "@/lib/game/engine";
 import { compact, formatDuration } from "@/lib/format";
 
 interface BuildingProps {
   building: BuildingDef;
 }
 
+/** A building at its top: its Mastery stars and the next one to earn. */
+const Mastery = ({ building, busy, onStart }: { building: BuildingDef; busy: boolean; onStart: () => void }) => {
+  const { state } = useGame();
+  const info = masteryInfo(state, building.id);
+  const have = state.mastery?.[building.id] ?? 0;
+  const freeBuilder = state.queue.length < getRates(state).builders;
+  const short = RESOURCES.filter((r) => state.resources[r.id] < info.cost[r.id]);
+
+  if (!canMaster(building)) return <p className="text-center text-sm text-sub">Top level reached.</p>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionTitle right={<span className="text-goldtext tracking-widest">{"★".repeat(have)}{"☆".repeat(MASTERY.stars - have)}</span>}>
+        Mastery
+      </SectionTitle>
+      <p className="text-xs text-sub">
+        Each star adds half a level of this building&apos;s effect, past its top.
+      </p>
+      {!info.blocked && (
+        <div className="inset grid grid-cols-4 divide-x divide-line/50 py-2">
+          {RESOURCES.map((r) => (
+            <span key={r.id} className="flex flex-col items-center gap-0.5">
+              <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
+              <span className={clsx("text-xs font-extrabold tabular-nums", state.resources[r.id] < info.cost[r.id] ? "text-bad" : "text-parch")}>
+                {compact(info.cost[r.id])}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+      <Button
+        isFull
+        disabled={busy || !!info.blocked || !freeBuilder || short.length > 0}
+        size="large"
+        onClick={onStart}
+      >
+        {info.blocked ?? (!freeBuilder ? "No free builder" : short.length ? `Need more ${short.map((m) => m.name).join(", ")}` : `Earn star ${info.star} · ${formatDuration(info.seconds * 1000)}`)}
+      </Button>
+    </div>
+  );
+};
+
 export const Building: React.FC<BuildingProps> = ({ building }) => {
-  const { state, now, upgradeBuilding } = useGame();
+  const { state, now, upgradeBuilding, cancelBuilding, finishBuilding, masterBuilding } = useGame();
   const [busy, setBusy] = useState(false);
+  const run = async (fn: (id: string) => Promise<boolean>) => {
+    setBusy(true);
+    await fn(building.id);
+    setBusy(false);
+  };
 
   const level = state.buildings[building.id] ?? 0;
   const inQueue = state.queue.find((q) => q.building === building.id);
@@ -70,12 +121,24 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
       {inQueue ? (
         <div className="inset p-3 flex flex-col gap-2">
           <div className="flex justify-between text-sm font-bold">
-            <span>Upgrading to level {inQueue.toLevel}</span>
+            <span>{inQueue.mastery ? `Mastery star ${inQueue.toLevel}` : `Upgrading to level ${inQueue.toLevel}`}</span>
             <span className="text-goldtext tabular-nums">{formatDuration(inQueue.endsAt - now)}</span>
           </div>
           <div className="bar"><span className="bar-fill" style={{ width: `${progress * 100}%` }} /></div>
+          <div className="flex gap-2">
+            {inQueue.endsAt - now <= freeFinishMs(state) && (
+              <Button className="flex-1" disabled={busy} size="small" onClick={() => run(finishBuilding)}>
+                Finish free
+              </Button>
+            )}
+            <Button className="flex-1" disabled={busy} variant="secondary" size="small" onClick={() => run(cancelBuilding)}>
+              Cancel ({now - inQueue.startedAt <= CANCEL_FULL_REFUND_MS ? "full refund" : `${CANCEL_REFUND_SHARE * 100}% back`})
+            </Button>
+          </div>
         </div>
-      ) : info.maxed ? null : (
+      ) : info.maxed ? (
+        <Mastery building={building} busy={busy} onStart={() => run(masterBuilding)} />
+      ) : (
         <div className="flex flex-col gap-2">
           <SectionTitle right={<span className="flex items-center gap-1"><Image alt="" className="w-3.5 h-3.5 rounded-sm" src={time} />{formatDuration(info.seconds * 1000)}</span>}>
             Level {info.from} → {info.from + 1}

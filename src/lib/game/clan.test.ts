@@ -106,3 +106,19 @@ test("clan perks stop at their top while clan levels go on", () => {
   // Below the top, every level still counts.
   expect(C.perksFor({ ...techs, banners: 10 }, 5).attack).toBe(10 * CLAN.bannersPercent);
 });
+
+test("aid is limited to a day of the member's own output, and not for brand-new members", () => {
+  const s = E.createInitialState(0);
+  const rates = E.getRates(s);
+  const day = Math.floor(rates.productionPerHour.iron * CLAN.aidDailyHours);
+  expect(C.aidRoom("iron", rates, 0)).toBe(day);
+  expect(C.aidRoom("iron", rates, day - 100)).toBe(100);
+  expect(C.aidRoom("iron", rates, day * 5)).toBe(0);
+  expect(C.aidRoom("coins", rates, 0)).toBe(Math.floor(rates.coinsPerHour * CLAN.aidDailyHours));
+  // Crop: at least the other resources' average, so an army's appetite doesn't block it.
+  const hungry = { ...rates, productionPerHour: { ...rates.productionPerHour, crop: -50 } };
+  expect(C.aidRoom("crop", hungry, 0)).toBeGreaterThan(0);
+  expect(C.aidTooSoon(null, 0)).toBe(true);
+  expect(C.aidTooSoon(0, CLAN.aidMinTenureMs - 1)).toBe(true);
+  expect(C.aidTooSoon(0, CLAN.aidMinTenureMs)).toBe(false);
+});

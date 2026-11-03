@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
-import { createClan, joinClan, leaveClan } from "@/server/clans";
+import { createClan, donate, joinClan, leaveClan, sendAid } from "@/server/clans";
 import { CLAN } from "@/lib/game/config";
 
 let n = 0;
@@ -58,5 +58,21 @@ describe("clans (server)", () => {
 
     await expect(createClan(poor, { name: uniqueName(), tag: "POOR" }, T0)).rejects.toThrow();
     expect((await reload(poor.id)).clanId).toBeNull();
+  });
+
+  test("aid waits for new members and is capped at a day of their own output", async () => {
+    const T0 = Date.now();
+    const leader = await createClan(await newPlayer(T0), { name: uniqueName(), tag: "AID" }, T0);
+    const id = leader.clanId!;
+    const alt = await newPlayer(T0);
+
+    await joinClan(alt, { id }, T0);
+    await donate(await reload(leader.id), { key: "iron", amount: 1500 }, T0);
+    // Brand new: no aid yet.
+    await expect(sendAid(await reload(leader.id), { id: alt.id, key: "iron", amount: 100 }, T0 + 1000)).rejects.toThrow("days in the clan");
+    // After the wait, up to a day of their own iron (100/h × 24 = 2,400 for a new tribe), not more.
+    const later = T0 + CLAN.aidMinTenureMs + 1000;
+    await sendAid(await reload(leader.id), { id: alt.id, key: "iron", amount: 1000 }, later);
+    await expect(sendAid(await reload(leader.id), { id: alt.id, key: "iron", amount: 1500 }, later + 2)).rejects.toThrow("1,400 more");
   });
 });

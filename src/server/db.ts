@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 6; // 5: spies, 6: in-game notices
+const SCHEMA_VERSION = 7; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits)
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -194,6 +194,8 @@ async function migrate(client: Client) {
       data          TEXT NOT NULL DEFAULT '{}'
     );
     CREATE INDEX IF NOT EXISTS clan_log_clan ON clan_log(clan_id, id DESC);
+    -- Aid a player received lately, from any clan (see CLAN.aidDailyHours).
+    CREATE INDEX IF NOT EXISTS clan_log_target ON clan_log(target_id, kind, at);
   `);
 
   // Clan flags, roles, join policy, treasury and techs (added after clans launched).

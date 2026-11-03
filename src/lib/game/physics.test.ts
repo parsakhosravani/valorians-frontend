@@ -156,6 +156,14 @@ describe("matter", () => {
     expect(E.peopleOf(later)).toBeGreaterThanOrEqual(before);
   });
 
+  test("cancelling a job never gives back more than it cost", () => {
+    const s = midGame();
+    for (const at of [T0, T0 + 30_000, T0 + 61_000, T0 + 10 * HOUR]) {
+      const back = E.cancelBuilding(s, "iron-mine", at);
+      for (const r of C.RESOURCE_IDS) expect(back.resources[r]).toBeLessThanOrEqual(s.resources[r] + C.buildingUpgradeCost(C.BUILDING_BY_ID["iron-mine"], s.queue[0].toLevel - 1)[r]);
+    }
+  });
+
   test("a building upgrade takes exactly its price", () => {
     const s = midGame();
     const info = E.buildingUpgradeInfo(s, "armory");
@@ -434,7 +442,7 @@ describe("chaos", () => {
         s = E.advance(s, now);
         const before = JSON.stringify(s);
         try {
-          switch (Math.floor(r() * 6)) {
+          switch (Math.floor(r() * 9)) {
             case 0:
               s = E.upgradeBuilding(s, pick(C.BUILDINGS).id, now);
               break;
@@ -455,6 +463,15 @@ describe("chaos", () => {
               if (W.fighterCount(s.army) > 0) s = W.raidCamp(s, level, s.army, now, r()).state;
               break;
             }
+            case 6:
+              if (s.queue.length) s = E.cancelBuilding(s, pick(s.queue).building, now);
+              break;
+            case 7:
+              if (s.queue.length) s = E.finishBuilding(s, pick(s.queue).building, now);
+              break;
+            case 8:
+              s = E.masterBuilding(s, pick(C.BUILDINGS).id, now);
+              break;
           }
         } catch (e) {
           // Refusing is fine; anything but a GameError is a bug, and a refusal changes nothing.

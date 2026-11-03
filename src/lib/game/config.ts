@@ -150,6 +150,8 @@ export type BuildingDef = {
   maxLevel: number;
   /** May be built TOWN_HALL_LEAD levels above the Town Hall (producers and the Warehouse). */
   leadsTownHall?: boolean;
+  /** Buildings (and levels) it needs before it can be built at all (see BUILDING_REQUIRES). */
+  requires: { building: BuildingId; level: number }[];
   effect: BuildingEffect;
   description: string;
 };
@@ -174,6 +176,7 @@ const def = (
   baseCost,
   timeWeight: 1,
   maxLevel: DEFAULT_MAX_LEVEL,
+  requires: [],
   mix: EVEN_MIX,
   effect,
   description,
@@ -298,6 +301,66 @@ const BUILDING_MIX: Record<BuildingId, Record<ResourceId, number>> = Object.from
   ).map(([id, m]) => [id, Object.fromEntries(RESOURCE_IDS.map((r, i) => [r, m[i]])) as Record<ResourceId, number>])
 );
 
+/**
+ * The unlock tree: what a building needs before its first level. Before, all
+ * 26 buildings were open on day one (the Dragon Roost too): a new player faced
+ * a wall of choices and had no "next unlock" to aim for. Now the village opens
+ * up step by step, economy first. Only the first level checks it: buildings
+ * already standing keep growing.
+ */
+const BUILDING_REQUIRES: Record<string, { building: BuildingId; level: number }[]> = Object.fromEntries(
+  (
+    [
+      ["barracks", [["town-hall", 1]]],
+      ["city-gate", [["town-hall", 1]]],
+      ["hideout", [["town-hall", 1]]],
+      ["academy", [["town-hall", 3]]],
+      ["embassy", [["town-hall", 3]]],
+      ["fertilizer-workshop", [["windmill", 5]]],
+      ["trading-post", [["resource-warehouse", 3]]],
+      ["treasury", [["town-hall", 5], ["resource-warehouse", 5]]],
+      ["armory", [["barracks", 1]]],
+      ["arsenal", [["barracks", 3]]],
+      ["hospital", [["barracks", 3], ["town-hall", 5]]],
+      ["military-command", [["barracks", 5]]],
+      ["watchtower", [["city-gate", 3]]],
+      ["trapmaker", [["city-gate", 5]]],
+      ["exploration-center", [["watchtower", 3]]],
+      ["stable", [["barracks", 3], ["town-hall", 5]]],
+      ["war-hall", [["barracks", 5], ["stable", 1]]],
+      ["harbor", [["sawmill", 5], ["town-hall", 5]]],
+      ["siege-workshop", [["stable", 1], ["arsenal", 3], ["town-hall", 8]]],
+      ["dragon-roost", [["town-hall", 20], ["stable", 10], ["siege-workshop", 5]]],
+    ] as [string, [string, number][]][]
+  ).map(([id, req]) => [id, req.map(([building, level]) => ({ building, level }))])
+);
+
+// ─── Mastery ─────────────────────────────────────────────────────────────────
+
+/**
+ * A building at its top level can earn up to MASTERY.stars Mastery stars:
+ * each costs what its last level cost and takes longer each time, and counts
+ * as `levelsPerStar` more levels of its effect. A maxed village always has a
+ * next goal, and five stars on an Arsenal add only +5% attack (40% → 45%), so
+ * veterans grow without running away from everyone else. Unlock-only
+ * buildings (Barracks, Stable, Siege Workshop, Exploration Center) and the
+ * Town Hall have nothing to master.
+ */
+export const MASTERY = {
+  stars: 5,
+  levelsPerStar: 0.5,
+  /** Star k takes the last level's build time × (1 + timePerStar × k). */
+  timePerStar: 0.5,
+} as const;
+
+export const canMaster = (b: BuildingDef) =>
+  b.id !== TOWN_HALL && !(b.effect.kind === "military" && (b.effect.stat === "unlock" || b.effect.stat === "scout"));
+
+/** Mastery star `star` (1-based): costs the top level's price. */
+export const masteryCost = (b: BuildingDef) => buildingUpgradeCost(b, b.maxLevel - 1);
+export const masteryBaseSeconds = (b: BuildingDef, star: number) =>
+  Math.round(buildingUpgradeBaseSeconds(b, b.maxLevel - 1) * (1 + MASTERY.timePerStar * star));
+
 const producer = (b: BuildingDef): BuildingDef => ({ ...b, costGrowth: PRODUCER_COST_GROWTH, leadsTownHall: true, timeWeight: 0.8 });
 
 // Effects are set so the top level gives a round, readable maximum:
@@ -333,7 +396,7 @@ export const BUILDINGS: BuildingDef[] = [
   def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Reveals enemies' exact defense before you attack, and sends spies.", { maxLevel: 1 }),
   def("Dragon Roost", 5000, { kind: "military", stat: "dragon", perLevel: 15 }, "Hatches your one dragon (level 1), and makes it 15% stronger every level after (up to level 10).", { maxLevel: 10, timeWeight: 3 }),
   def("Harbor", 300, { kind: "military", stat: "seaDefense", perLevel: 3 }, "Builds Longships (level 1) to carry armies across the sea. +3% defense against landings from the sea per level (up to +60%)."),
-].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix }));
+].map((b) => ({ ...b, mix: BUILDING_MIX[b.id] ?? b.mix, requires: BUILDING_REQUIRES[b.id] ?? [] }));
 
 export type BuildingId = string;
 
@@ -356,6 +419,18 @@ export const GROWTH_PER_BUILDING_LEVEL = 2;
 export const CROP_UPKEEP_PER_BUILDING_LEVEL = 1;
 
 
+
+/**
+ * Queue controls. A cancelled upgrade gives everything back within
+ * CANCEL_FULL_REFUND_MS (a mis-tap), CANCEL_REFUND_SHARE after. One with
+ * under FREE_FINISH_MS left can be finished at once for free (Plus: under
+ * FREE_FINISH_PLUS_MS), so the last minutes of a short job don't need a
+ * second visit. Convenience, not power: it only saves a wait of minutes.
+ */
+export const CANCEL_FULL_REFUND_MS = 60_000;
+export const CANCEL_REFUND_SHARE = 0.8;
+export const FREE_FINISH_MS = 5 * 60_000;
+export const FREE_FINISH_PLUS_MS = 15 * 60_000;
 
 /** Town Hall: 2.5% faster building a level, so 50% at level 20 (was 4% up to 80%). */
 export const TOWN_HALL_SPEEDUP_PER_LEVEL = 0.025;
@@ -455,6 +530,15 @@ export const CLAN = {
   techBaseResources: 4000,
   techBaseCoins: 500,
   techCostGrowth: 2.2,
+  /**
+   * Aid limits, against second accounts feeding a main one: a member gets
+   * aid only after aidMinTenureMs in the clan, and at most aidDailyHours of
+   * their own production of that resource (or coin income) in any day,
+   * whichever clan it comes from. A clan can still double a member's growth,
+   * but can't turn a dozen fake tribes into one giant.
+   */
+  aidMinTenureMs: 3 * 24 * 3600e3,
+  aidDailyHours: 24,
   /** A donated coin counts this much towards a member's contribution. */
   coinContributionWeight: 4,
   /** Entries kept in the clan chronicle shown to members. */

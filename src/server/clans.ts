@@ -22,6 +22,8 @@ import {
   can,
   canAfford,
   canKick,
+  aidRoom,
+  aidTooSoon,
   clanLevel,
   contributionValue,
   isFormed,
@@ -36,7 +38,7 @@ import {
   techCost,
 } from "@/lib/game/clan";
 import { CLAN, RESOURCE_NAMES } from "@/lib/game/config";
-import { GameError, getRates, peopleOf } from "@/lib/game/engine";
+import { GameError, advance, getRates, peopleOf } from "@/lib/game/engine";
 
 /**
  * Clans: players band together under a name, a tag and a flag.
@@ -932,6 +934,36 @@ export async function sendAid(player: Player, body: any, now: number) {
   if (!who || who.clanId !== clanId) throw new GameError("That player isn't in your clan", "not_member");
 
   const db = await getDb();
+  // Limits against second accounts feeding a main one (see CLAN.aidDailyHours).
+  const joined = await db.execute({ sql: "SELECT clan_joined_at FROM users WHERE id = ?", args: [target] });
+  const joinedAt = joined.rows[0]?.clan_joined_at == null ? null : Number(joined.rows[0].clan_joined_at);
+
+  if (aidTooSoon(joinedAt, now)) {
+    throw new GameError(`New members can get aid after ${CLAN.aidMinTenureMs / 86400e3} days in the clan`, "too_soon");
+  }
+  const recent = await db.execute({
+    sql: "SELECT data FROM clan_log WHERE target_id = ? AND kind = 'aid' AND at > ?",
+    args: [target, now - 24 * 3600e3],
+  });
+  const received = recent.rows.reduce((sum, r) => {
+    try {
+      const d = JSON.parse(String(r.data));
+
+      return d.key === key ? sum + Number(d.amount || 0) : sum;
+    } catch {
+      return sum;
+    }
+  }, 0);
+  const room = aidRoom(key, getRates(advance(who.state, now)), received);
+
+  if (amount > room) {
+    throw new GameError(
+      room > 0
+        ? `They can get ${room.toLocaleString("en-US")} more ${keyName(key)} today (a day of their own output)`
+        : `They've had all the ${keyName(key)} aid they can get today`,
+      "aid_limit",
+    );
+  }
   const col = TREASURY_COL[key];
   const rs = await db.execute({
     sql: `UPDATE clans SET ${col} = ${col} - ? WHERE id = ? AND ${col} >= ?`,

@@ -91,6 +91,12 @@ interface GameContextType {
   claimStreak: () => Promise<boolean>;
   upgradeSkill: (skill: SkillId) => Promise<boolean>;
   upgradeBuilding: (id: string) => Promise<boolean>;
+  /** Cancels the job on a building (full refund in the first minute, 80% after). */
+  cancelBuilding: (id: string) => Promise<boolean>;
+  /** Finishes a job with only a few minutes left, for free. */
+  finishBuilding: (id: string) => Promise<boolean>;
+  /** Starts a maxed building's next Mastery star. */
+  masterBuilding: (id: string) => Promise<boolean>;
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
   train: (unit: UnitId, count: number) => Promise<boolean>;
@@ -497,6 +503,9 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     upgradeSkill: (skill) => act("skills/upgrade", { skill }, "Upgraded!"),
     claimStreak: () => act("streak", {}, "Reward claimed!"),
     upgradeBuilding: (building) => act("buildings/upgrade", { building }, "Construction started"),
+    cancelBuilding: (building) => act("buildings/cancel", { building }, "Cancelled, resources returned"),
+    finishBuilding: (building) => act("buildings/finish", { building }, "Done!"),
+    masterBuilding: (building) => act("buildings/master", { building }, "Mastery work started"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),

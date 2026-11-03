@@ -26,6 +26,14 @@ import {
   TOWN_HALL,
   TOWN_HALL_LEAD,
   BuildingDef,
+  MASTERY,
+  canMaster,
+  masteryCost,
+  masteryBaseSeconds,
+  CANCEL_FULL_REFUND_MS,
+  CANCEL_REFUND_SHARE,
+  FREE_FINISH_MS,
+  FREE_FINISH_PLUS_MS,
   effectAt,
   buildingUpgradeBaseSeconds,
   buildingUpgradeCost,
@@ -146,7 +154,10 @@ export type BanditRaidReport = {
 
 export type QueueItem = {
   building: BuildingId;
+  /** The level it reaches, or for a Mastery star the star it earns. */
   toLevel: number;
+  /** A Mastery star rather than a level (see MASTERY). */
+  mastery?: boolean;
   startedAt: number;
   endsAt: number;
 };
@@ -164,6 +175,8 @@ export type GameState = {
   skills: { tap: number; energy: number };
   fullEnergy: { day: string; used: number; lastUsedAt: number };
   buildings: Record<BuildingId, number>;
+  /** Mastery stars earned on buildings at their top level (see MASTERY). */
+  mastery: Record<BuildingId, number>;
   queue: QueueItem[];
   quests: Partial<Record<QuestId, QuestProgress>>;
   /** Extra population growth per hour earned from quests. */
@@ -286,6 +299,7 @@ export function createInitialState(now: number): GameState {
     skills: { tap: 1, energy: 1 },
     fullEnergy: { day: utcDay(now), used: 0, lastUsedAt: 0 },
     buildings: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
+    mastery: {},
     queue: [],
     quests: {},
     bonusGrowth: 0,
@@ -318,6 +332,7 @@ export function normalizeState(saved: GameState): GameState {
     skills: { ...fresh.skills, ...s.skills },
     fullEnergy: { ...fresh.fullEnergy, ...s.fullEnergy },
     buildings: { ...fresh.buildings, ...s.buildings },
+    mastery: { ...s.mastery },
     queue: s.queue ?? [],
     quests: s.quests ?? {},
     army: { ...fresh.army, ...s.army },
@@ -348,14 +363,14 @@ export function normalizeState(saved: GameState): GameState {
  */
 export function capBuildingLevels(s: GameState): GameState {
   const over = BUILDINGS.filter(
-    (b) => level(s, b.id) > b.maxLevel || s.queue.some((q) => q.building === b.id && q.toLevel > b.maxLevel)
+    (b) => level(s, b.id) > b.maxLevel || s.queue.some((q) => q.building === b.id && !q.mastery && q.toLevel > b.maxLevel)
   );
 
   if (!over.length) return s;
   const refund = Object.fromEntries(RESOURCE_IDS.map((r) => [r, 0])) as Record<ResourceId, number>;
 
   for (const b of over) {
-    const paid = Math.max(level(s, b.id), ...s.queue.filter((q) => q.building === b.id).map((q) => q.toLevel));
+    const paid = Math.max(level(s, b.id), ...s.queue.filter((q) => q.building === b.id && !q.mastery).map((q) => q.toLevel));
 
     for (let l = b.maxLevel; l < paid; l++) {
       const cost = buildingUpgradeCost(b, l);
@@ -363,7 +378,7 @@ export function capBuildingLevels(s: GameState): GameState {
     }
     s.buildings[b.id] = Math.min(level(s, b.id), b.maxLevel);
   }
-  s.queue = s.queue.filter((q) => q.toLevel <= (BUILDING_BY_ID[q.building]?.maxLevel ?? Infinity));
+  s.queue = s.queue.filter((q) => q.mastery || q.toLevel <= (BUILDING_BY_ID[q.building]?.maxLevel ?? Infinity));
   const cap = getRates(s).capacity;
 
   for (const r of RESOURCE_IDS) s.resources[r] = Math.max(s.resources[r], Math.min(cap, s.resources[r] + refund[r]));
@@ -392,6 +407,11 @@ export function totalArmy(s: GameState): Army {
 }
 
 const level = (s: GameState, id: BuildingId) => s.buildings[id] ?? 0;
+const stars = (s: GameState, id: BuildingId) => s.mastery?.[id] ?? 0;
+
+/** Extra levels of effect a building's Mastery stars give (only while it stands at its top). */
+const masteryLevels = (s: GameState, b: BuildingDef) =>
+  canMaster(b) && level(s, b.id) >= b.maxLevel ? Math.min(MASTERY.stars, stars(s, b.id)) * MASTERY.levelsPerStar : 0;
 
 /**
  * The highest level a building may be raised to right now: its top, and no
@@ -504,8 +524,9 @@ export function getRates(s: GameState): Rates {
   };
 
   for (const b of BUILDINGS) {
-    // A level past the top (an old save not yet capped) gives nothing more.
-    const l = Math.min(level(s, b.id), b.maxLevel);
+    // A level past the top (an old save not yet capped) gives nothing more;
+    // Mastery stars count as part-levels on top (see MASTERY).
+    const l = Math.min(level(s, b.id), b.maxLevel) + masteryLevels(s, b);
     if (!l) continue;
     totalLevels += l;
     const e = b.effect;
@@ -520,7 +541,7 @@ export function getRates(s: GameState): Rates {
         warehouseMult *= Math.pow(e.multiplierPerLevel, l);
         break;
       case "townHall":
-        townHall = l;
+        townHall = Math.floor(l);
         break;
       case "coins":
         coins += effectAt(e, l);
@@ -688,11 +709,14 @@ export function advance(state: GameState, now: number): GameState {
     if (item.endsAt <= now) {
       events.push({
         at: item.endsAt,
-        run: () =>
-          (s.buildings[item.building] = Math.min(
-            BUILDING_BY_ID[item.building]?.maxLevel ?? Infinity,
-            Math.max(level(s, item.building), item.toLevel)
-          )),
+        run: () => {
+          if (item.mastery) s.mastery[item.building] = Math.min(MASTERY.stars, Math.max(stars(s, item.building), item.toLevel));
+          else
+            s.buildings[item.building] = Math.min(
+              BUILDING_BY_ID[item.building]?.maxLevel ?? Infinity,
+              Math.max(level(s, item.building), item.toLevel)
+            );
+        },
       });
     }
   }
@@ -781,6 +805,7 @@ function structuredCloneState(s: GameState): GameState {
     skills: { ...s.skills },
     fullEnergy: { ...s.fullEnergy },
     buildings: { ...s.buildings },
+    mastery: { ...s.mastery },
     queue: s.queue.map((q) => ({ ...q })),
     plus: { ...s.plus },
     shield: { ...s.shield },
@@ -926,7 +951,14 @@ export function upgradeSkill(s0: GameState, skill: SkillId): GameState {
 
 /** The level a building will have once everything queued for it finishes. */
 const targetLevel = (s: GameState, id: BuildingId) =>
-  Math.max(level(s, id), ...s.queue.filter((q) => q.building === id).map((q) => q.toLevel));
+  Math.max(level(s, id), ...s.queue.filter((q) => q.building === id && !q.mastery).map((q) => q.toLevel));
+
+/** What a building still needs before its first level (the unlock tree), or null. */
+export function missingRequirement(s: GameState, b: BuildingDef) {
+  const miss = b.requires.find((r) => level(s, r.building) < r.level);
+
+  return miss ? `Needs ${BUILDING_BY_ID[miss.building].name} ${miss.level}` : null;
+}
 
 export function buildingUpgradeInfo(s: GameState, id: BuildingId) {
   const b = BUILDING_BY_ID[id];
@@ -938,9 +970,12 @@ export function buildingUpgradeInfo(s: GameState, id: BuildingId) {
   const cap = buildingCap(s, b);
   const overCapacity = RESOURCE_IDS.some((res) => cost[res] > r.capacity);
   // Why it can't start, whatever the resources: shown instead of the cost.
+  const locked = from === 0 ? missingRequirement(s, b) : null;
   const blocked = maxed
     ? "Max level"
-    : from >= cap
+    : locked
+      ? locked
+      : from >= cap
       ? `Needs Town Hall ${from + 1 - (b.leadsTownHall ? TOWN_HALL_LEAD : 0)}`
       : overCapacity
         ? "Needs a bigger Warehouse"
@@ -967,6 +1002,90 @@ export function upgradeBuilding(s0: GameState, id: BuildingId, now: number): Gam
   }
   for (const res of RESOURCE_IDS) s.resources[res] -= info.cost[res];
   s.queue.push({ building: id, toLevel: info.from + 1, startedAt: now, endsAt: now + info.seconds * 1000 });
+  return s;
+}
+
+// ─── Mastery stars ───────────────────────────────────────────────────────────
+
+/** The next Mastery star of a building: whether it can be earned, its cost and time. */
+export function masteryInfo(s: GameState, id: BuildingId) {
+  const b = BUILDING_BY_ID[id];
+  if (!b) throw new GameError("Unknown building");
+  const star = stars(s, id) + 1;
+  const r = getRates(s);
+  const blocked = !canMaster(b)
+    ? "Nothing to master"
+    : level(s, id) < b.maxLevel
+      ? `Reach level ${b.maxLevel} first`
+      : star > MASTERY.stars
+        ? "Fully mastered"
+        : null;
+
+  return {
+    star,
+    cost: masteryCost(b),
+    seconds: Math.max(1, Math.round(masteryBaseSeconds(b, star) * r.buildSpeedMultiplier)),
+    blocked,
+  };
+}
+
+/** Starts a building's next Mastery star: a builder, the top level's price, and time. */
+export function masterBuilding(s0: GameState, id: BuildingId, now: number): GameState {
+  const info = masteryInfo(s0, id);
+  if (info.blocked) throw new GameError(info.blocked, "blocked");
+  if (s0.queue.some((q) => q.building === id)) throw new GameError("This building is already being worked on", "busy");
+  if (s0.queue.length >= getRates(s0).builders) throw new GameError("All builders are busy", "no_builder");
+  for (const res of RESOURCE_IDS) {
+    if (s0.resources[res] < info.cost[res]) throw new GameError(`Not enough ${res}`, "not_enough_resources");
+  }
+  const s = structuredCloneState(s0);
+  for (const res of RESOURCE_IDS) s.resources[res] -= info.cost[res];
+  s.queue.push({ building: id, toLevel: info.star, mastery: true, startedAt: now, endsAt: now + info.seconds * 1000 });
+  return s;
+}
+
+// ─── Queue controls ──────────────────────────────────────────────────────────
+
+/** What a queued job cost when it was started. */
+const jobCost = (q: QueueItem) => {
+  const b = BUILDING_BY_ID[q.building];
+  return q.mastery ? masteryCost(b) : buildingUpgradeCost(b, q.toLevel - 1);
+};
+
+/** What cancelling a job gives back now: all of it at first, CANCEL_REFUND_SHARE later. */
+export function cancelRefund(q: QueueItem, now: number) {
+  const share = now - q.startedAt <= CANCEL_FULL_REFUND_MS ? 1 : CANCEL_REFUND_SHARE;
+  const cost = jobCost(q);
+  return Object.fromEntries(RESOURCE_IDS.map((r) => [r, Math.floor(cost[r] * share)])) as Record<ResourceId, number>;
+}
+
+/** Cancels the job on a building and frees its builder. The refund may land above capacity: it was in storage a moment ago. */
+export function cancelBuilding(s0: GameState, id: BuildingId, now: number): GameState {
+  const q = s0.queue.find((x) => x.building === id);
+  if (!q) throw new GameError("Nothing is being built there", "not_found");
+  const s = structuredCloneState(s0);
+  const refund = cancelRefund(q, now);
+  for (const r of RESOURCE_IDS) s.resources[r] += refund[r];
+  s.queue = s.queue.filter((x) => x.building !== id);
+  return s;
+}
+
+/** How long before the end a job can be finished for free (longer with Plus). */
+export const freeFinishMs = (s: GameState) => (plusActive(s) ? FREE_FINISH_PLUS_MS : FREE_FINISH_MS);
+
+/** Finishes a job at once when little enough of it is left (see FREE_FINISH_MS). */
+export function finishBuilding(s0: GameState, id: BuildingId, now: number): GameState {
+  const q = s0.queue.find((x) => x.building === id);
+  if (!q) throw new GameError("Nothing is being built there", "not_found");
+  if (q.endsAt - now > freeFinishMs(s0)) {
+    throw new GameError(`Can be finished for free in the last ${Math.round(freeFinishMs(s0) / 60_000)} minutes`, "too_early");
+  }
+  // The state is already brought up to `now`: the job just lands here.
+  const s = structuredCloneState(s0);
+  const b = BUILDING_BY_ID[id];
+  if (q.mastery) s.mastery[id] = Math.min(MASTERY.stars, Math.max(stars(s, id), q.toLevel));
+  else s.buildings[id] = Math.min(b.maxLevel, Math.max(level(s, id), q.toLevel));
+  s.queue = s.queue.filter((x) => x.building !== id);
   return s;
 }
 

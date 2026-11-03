@@ -754,7 +754,7 @@ export function defendRaid(
       gate = { from, to: from - lost };
       d.buildings["city-gate"] = gate.to;
       // A rebuild under way carries on from what's left standing.
-      for (const q of d.queue) if (q.building === "city-gate") q.toLevel = gate.to + 1;
+      for (const q of d.queue) if (q.building === "city-gate" && !q.mastery) q.toLevel = gate.to + 1;
     }
   } else {
     d.war.defensesWon += 1;

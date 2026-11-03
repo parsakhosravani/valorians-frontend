@@ -252,5 +252,29 @@ export const samePerks = (a: ClanPerks | undefined, b: ClanPerks) =>
 export const contributionValue = (key: TreasuryKey, amount: number) =>
   key === "coins" ? amount * CLAN.coinContributionWeight : amount;
 
+/**
+ * How much more aid of `key` a member may receive today: CLAN.aidDailyHours of
+ * their own hourly output of it (for crop, at least the average of the other
+ * three, since troops eat into it), minus what they already got in the last 24 h.
+ */
+export function aidRoom(
+  key: TreasuryKey,
+  rates: { productionPerHour: Record<ResourceId, number>; coinsPerHour: number },
+  receivedToday: number
+) {
+  const p = rates.productionPerHour;
+  const hourly =
+    key === "coins"
+      ? rates.coinsPerHour
+      : key === "crop"
+        ? Math.max(p.crop, (p.iron + p.wood + p.clay) / 3)
+        : p[key];
+
+  return Math.max(0, Math.floor(CLAN.aidDailyHours * Math.max(0, hourly) - receivedToday));
+}
+
+/** A member who joined less than CLAN.aidMinTenureMs ago can't receive aid yet. */
+export const aidTooSoon = (joinedAt: number | null, now: number) => joinedAt == null || now - joinedAt < CLAN.aidMinTenureMs;
+
 export const isResource = (k: string): k is ResourceId => (RESOURCE_IDS as readonly string[]).includes(k);
 export const isTreasuryKey = (k: string): k is TreasuryKey => (TREASURY_KEYS as readonly string[]).includes(k);
