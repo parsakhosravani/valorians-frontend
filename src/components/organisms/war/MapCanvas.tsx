@@ -517,8 +517,8 @@ export class MapPainter {
 
     if (loaded(hall)) g.drawImage(hall, VX - half, foot - size + 3, size, size);
 
-    if (t.loud) {
-      // Town Hall level: a small gold coin at the village's foot.
+    if (t.loud && t.townHall > 0) {
+      // Town Hall level: a small gold coin at the village's foot (outposts have none).
       const cx = VX - half + 3;
       const cy = foot - 4;
       const coin = g.createLinearGradient(0, cy - 8, 0, cy + 8);

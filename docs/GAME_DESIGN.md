@@ -93,7 +93,7 @@ ask before "fixing" either. Add new decisions here when they are made.
 
 - **Outposts** are new places on the map: Town Hall 10, 15 and 20 each allow one. Founding
   costs resources (40k of each, doubling each time) and settlers from the population
-  (500, 1,000, 1,500). The server picks the nearest free dry tile 3–9 tiles from home.
+  (500, 1,000, 1,500). The server picks the nearest free dry tile 5–10 tiles from home.
 - Each outpost has **its own four resource fields (to level 10) and its own builder**, and sends
   everything home. Three full outposts add about half a top village's output.
 - **Not full villages, on purpose:** no buildings, army or storage of their own, and they

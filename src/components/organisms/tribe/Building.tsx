@@ -166,7 +166,7 @@ export const Building: React.FC<BuildingProps> = ({ building }) => {
         </div>
       )}
 
-      {!inQueue && (
+      {!inQueue && !info.maxed && (
         <Button isFull disabled={disabled} size="large" onClick={onUpgrade}>
           {label}
         </Button>

@@ -11,7 +11,7 @@ import { Outposts } from "@/components/organisms/tribe/Outposts";
 import { Drawer } from "@/components/molecules/Drawer";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
-import { BUILDING_BY_ID, BuildingDef, RESOURCE_NAMES, ResourceId, buildingImage, costTotal } from "@/lib/game/config";
+import { BUILDING_BY_ID, BuildingDef, MASTERY, RESOURCE_NAMES, ResourceId, buildingImage, canMaster, costTotal } from "@/lib/game/config";
 import {
   BuildingGroup,
   GROUP_LABEL,
@@ -48,6 +48,9 @@ const BuildingThumb = ({ b, level, size = 52 }: { b: BuildingDef; level: number;
 const StatusLine = ({ o }: { o: UpgradeOption }) => {
   const short = Object.entries(o.missing) as [ResourceId, number][];
 
+  if (o.blocked === "Max level" && canMaster(o.building)) {
+    return <span className="text-xs text-goldtext truncate">Mastery {o.stars}/{MASTERY.stars} ★</span>;
+  }
   if (o.blocked) return <span className="text-xs text-muted truncate">{o.blocked}</span>;
   if (!short.length) {
     return (

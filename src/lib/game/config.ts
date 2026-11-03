@@ -562,9 +562,9 @@ export const OUTPOST = {
   foundGrowth: 2,
   foundPeople: 500,
   fieldMaxLevel: 10,
-  /** Settled between these many tiles from home, on free dry land. */
-  minDistance: 3,
-  maxDistance: 9,
+  /** Settled between these many tiles from home, on free dry land: past the home village's own walls on the map. */
+  minDistance: 5,
+  maxDistance: 10,
 } as const;
 
 // ─── Seasons and the World Wonder ─────────────────────────────────────────────

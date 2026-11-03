@@ -83,6 +83,8 @@ export type UpgradeOption = {
   hoursToAfford: number | null;
   /** Why it can't be upgraded whatever the resources (top level, Town Hall too low…), or null. */
   blocked: string | null;
+  /** Mastery stars earned (see MASTERY). */
+  stars: number;
 };
 
 export function upgradeOptions(state: GameState): UpgradeOption[] {
@@ -115,6 +117,7 @@ export function upgradeOptions(state: GameState): UpgradeOption[] {
       affordable: Object.keys(missing).length === 0,
       hoursToAfford: Number.isFinite(hours) && !info.blocked ? hours : null,
       blocked: info.blocked,
+      stars: state.mastery?.[b.id] ?? 0,
     };
   });
 }

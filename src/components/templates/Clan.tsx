@@ -668,13 +668,14 @@ export const Clan: FunctionComponent = () => {
             Next level: {fmt(mine.wonder.cost.iron)} of each resource + {fmt(mine.wonder.cost.coins)} coins from the treasury
           </span>
         )}
+        {mine.wonder.blocked && <span className="text-xs text-bad">{mine.wonder.blocked}</span>}
         {can.manage(mine.myRole) && mine.wonder.level < (data?.season.levels ?? 0) && (
           <Button
             disabled={!!mine.wonder.blocked || busy != null}
             isFull
             onClick={() => run("wonder", () => clan.raiseWonder())}
           >
-            {busy === "wonder" ? "Raising…" : mine.wonder.blocked ?? `Raise to level ${mine.wonder.level + 1}`}
+            {busy === "wonder" ? "Raising…" : `Raise the Wonder to ${mine.wonder.level + 1}`}
           </Button>
         )}
         {!!data?.season.leaders.length && (
