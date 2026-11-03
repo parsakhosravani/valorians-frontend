@@ -545,6 +545,28 @@ export const CLAN = {
   logSize: 40,
 };
 
+// ─── Outposts ────────────────────────────────────────────────────────────────
+
+/**
+ * Outposts: new places on the map a tribe founds with resources and people,
+ * each with its own four resource fields and its own builder. They feed the
+ * home village's stores. The Town Hall allows one at each of `hallLevels`.
+ * Fields stop at `fieldMaxLevel`, so three outposts add about half a top
+ * village's output: a late-game step up for armies and the Wonder, not a
+ * second top village. Outposts can't be attacked (yet): raids still go home.
+ */
+export const OUTPOST = {
+  hallLevels: [10, 15, 20],
+  /** The n-th outpost (0-based) costs foundResources × foundGrowth^n of each resource, and foundPeople × (n + 1) people. */
+  foundResources: 40_000,
+  foundGrowth: 2,
+  foundPeople: 500,
+  fieldMaxLevel: 10,
+  /** Settled between these many tiles from home, on free dry land. */
+  minDistance: 3,
+  maxDistance: 9,
+} as const;
+
 // ─── Seasons and the World Wonder ─────────────────────────────────────────────
 
 /**

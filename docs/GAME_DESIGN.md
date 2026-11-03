@@ -89,6 +89,17 @@ ask before "fixing" either. Add new decisions here when they are made.
   techs give no perks and can't be raised until a second chief joins (and stop again if it
   drops back to one).
 
+## Outposts (lighter second villages)
+
+- **Outposts** are new places on the map: Town Hall 10, 15 and 20 each allow one. Founding
+  costs resources (40k of each, doubling each time) and settlers from the population
+  (500, 1,000, 1,500). The server picks the nearest free dry tile 3–9 tiles from home.
+- Each outpost has **its own four resource fields (to level 10) and its own builder**, and sends
+  everything home. Three full outposts add about half a top village's output.
+- **Not full villages, on purpose:** no buildings, army or storage of their own, and they
+  can't be attacked (yet). A whole second village would have meant a second copy of every
+  system; outposts give the late game its expansion without that risk.
+
 ## Seasons and the World Wonder
 
 - **The server-wide end goal.** Clans (clan level 2+, at least 2 members) raise a World Wonder

@@ -188,7 +188,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
 
   // Everything below only needs the view: ask for it all at once instead of
   // one query after another (each a round trip to the database).
-  const [rs, spots, mv, tr, lairsIn, spies] = await Promise.all([
+  const [rs, spots, mv, tr, lairsIn, spies, outs] = await Promise.all([
     // A village's state only comes along when its copied columns are stale (see tribeColumns).
     db.execute({
       sql: `SELECT u.id, u.username, u.first_name, u.photo_url, u.population, u.power, u.shield_until, u.map_x, u.map_y,
@@ -236,6 +236,13 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       console.error("mySpies", e);
 
       return new Map<number, number>();
+    }),
+    // Outposts in view, with their owner's name and clan tag.
+    db.execute({
+      sql: `SELECT o.user_id, o.x, o.y, u.first_name, u.username, c.tag AS clan_tag
+            FROM outposts o JOIN users u ON u.id = o.user_id LEFT JOIN clans c ON c.id = u.clan_id
+            WHERE o.x BETWEEN ? AND ? AND o.y BETWEEN ? AND ? LIMIT ${MAX_TRIBES}`,
+      args: [c.x - r, c.x + r, c.y - r, c.y + r],
     }),
   ]);
 
@@ -396,6 +403,14 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     lairs,
     movements,
     caravans,
+    outposts: outs.rows.map((o) => ({
+      ownerId: Number(o.user_id),
+      x: Number(o.x),
+      y: Number(o.y),
+      isMe: Number(o.user_id) === me.id,
+      name: String(o.first_name || (o.username ? `@${o.username}` : "Player")),
+      clanTag: o.clan_tag == null ? null : String(o.clan_tag),
+    })),
     myPower: powerScore(me.state),
   };
 }

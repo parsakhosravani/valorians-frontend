@@ -338,3 +338,42 @@ test("the last few minutes of a job can be finished for free (longer with Plus)"
   const plus = { ...started, plus: { until: Infinity, trialUsed: true, paid: true } };
   expect(E.finishBuilding(plus, "arsenal", end - 14 * 60_000).buildings.arsenal).toBe(13);
 });
+
+// ─── Outposts ─────────────────────────────────────────────────────────────────
+
+test("outposts: the Town Hall allows them, they cost resources and settlers, and their fields feed home", () => {
+  let s = rich();
+  s.buildings["resource-warehouse"] = 20;
+  s.population = 5000;
+  expect(E.outpostSlots(s)).toBe(0);
+  expect(E.outpostBlocked(s)).toContain("Town Hall 10");
+  s.buildings["town-hall"] = 10;
+  expect(E.outpostSlots(s)).toBe(1);
+  const before = E.getRates(s).productionPerHour.iron;
+  s = E.foundOutpost(s, { x: 5, y: 5 }, 0);
+  expect(s.outposts.length).toBe(1);
+  expect(s.population).toBe(5000 - C.OUTPOST.foundPeople);
+  expect(E.outpostBlocked(s)).toContain("Town Hall 15");
+  // The second costs more.
+  s.buildings["town-hall"] = 15;
+  expect(E.outpostCost(s).resources.iron).toBe(C.OUTPOST.foundResources * C.OUTPOST.foundGrowth);
+
+  s = E.upgradeField(s, 0, "iron", 0);
+  expect(() => E.upgradeField(s, 0, "wood", 0)).toThrow("builder is busy"); // one builder per outpost
+  s = E.advance(s, s.outposts[0].job!.endsAt + 1);
+  expect(s.outposts[0].fields.iron).toBe(1);
+  expect(s.outposts[0].job).toBeUndefined();
+  expect(E.getRates(s).productionPerHour.iron).toBeCloseTo(before + 60, 5); // a level-1 field, like a level-1 mine
+
+  s.outposts[0].fields.iron = C.OUTPOST.fieldMaxLevel;
+  expect(() => E.upgradeField(s, 0, "iron", 0)).toThrow("Max level");
+  expect(() => E.upgradeField(s, 3, "iron", 0)).toThrow(E.GameError);
+  expect(() => E.upgradeField(s, 0, "gold" as C.ResourceId, 0)).toThrow(E.GameError);
+});
+
+test("three full outposts add about half a top village's output, not a second village", () => {
+  const top = C.productionAt(60, 20);
+  const outposts = 3 * C.productionAt(60, C.OUTPOST.fieldMaxLevel);
+  expect(outposts / top).toBeGreaterThan(0.4);
+  expect(outposts / top).toBeLessThan(0.8);
+});

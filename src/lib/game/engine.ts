@@ -27,6 +27,7 @@ import {
   TOWN_HALL_LEAD,
   BuildingDef,
   MASTERY,
+  OUTPOST,
   canMaster,
   masteryCost,
   masteryBaseSeconds,
@@ -99,6 +100,16 @@ export type March = {
   from?: { x: number; y: number };
   /** New orders this expedition already took on the road (see REDIRECT). */
   hops?: number;
+};
+
+/** An outpost: a place on the map with four resource fields and one builder (see OUTPOST). */
+export type Outpost = {
+  x: number;
+  y: number;
+  foundedAt: number;
+  fields: Record<ResourceId, number>;
+  /** The field being raised now, if any. */
+  job?: { resource: ResourceId; toLevel: number; startedAt: number; endsAt: number };
 };
 
 /** A regiment's battle experience; it sets the regiment's rank. */
@@ -228,6 +239,8 @@ export type GameState = {
    * last free weekly Plus shield was claimed at plusClaimedAt.
    */
   shield: { cooldownUntil: number; plusClaimedAt: number };
+  /** Outposts the tribe founded (see OUTPOST). */
+  outposts: Outpost[];
   /** Seasons this tribe's clan won by finishing the World Wonder first (a badge). */
   seasonWins?: number;
   /** Cards the player owns, by level. War Orders: more new orders per expedition. */
@@ -302,6 +315,7 @@ export function createInitialState(now: number): GameState {
     fullEnergy: { day: utcDay(now), used: 0, lastUsedAt: 0 },
     buildings: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
     mastery: {},
+    outposts: [],
     queue: [],
     quests: {},
     bonusGrowth: 0,
@@ -335,6 +349,7 @@ export function normalizeState(saved: GameState): GameState {
     fullEnergy: { ...fresh.fullEnergy, ...s.fullEnergy },
     buildings: { ...fresh.buildings, ...s.buildings },
     mastery: { ...s.mastery },
+    outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...emptyFields(), ...o.fields } })),
     queue: s.queue ?? [],
     quests: s.quests ?? {},
     army: { ...fresh.army, ...s.army },
@@ -560,6 +575,15 @@ export function getRates(s: GameState): Rates {
     }
   }
 
+  // Outposts' fields yield like the home producers and count as building levels (growth, upkeep).
+  for (const o of s.outposts ?? []) {
+    for (const res of RESOURCE_IDS) {
+      const l = Math.min(o.fields[res] ?? 0, OUTPOST.fieldMaxLevel);
+      production[res] += productionAt(FIELD_YIELD, l);
+      totalLevels += l;
+    }
+  }
+
   const army = totalArmy(s);
   const troopUpkeep = UNITS.reduce((sum, u) => sum + u.upkeep * army[u.id], 0);
 
@@ -725,6 +749,18 @@ export function advance(state: GameState, now: number): GameState {
   for (const m of s.marches) {
     if (m.returnsAt <= now) events.push({ at: m.returnsAt, run: () => returnMarch(s, m) });
   }
+  for (const o of s.outposts ?? []) {
+    const job = o.job;
+    if (job && job.endsAt <= now) {
+      events.push({
+        at: job.endsAt,
+        run: () => {
+          o.fields[job.resource] = Math.min(OUTPOST.fieldMaxLevel, Math.max(o.fields[job.resource] ?? 0, job.toLevel));
+          delete o.job;
+        },
+      });
+    }
+  }
   events.sort((a, b) => a.at - b.at);
   for (const ev of events) {
     flow(s, Math.max(s.updatedAt, ev.at));
@@ -808,6 +844,7 @@ function structuredCloneState(s: GameState): GameState {
     fullEnergy: { ...s.fullEnergy },
     buildings: { ...s.buildings },
     mastery: { ...s.mastery },
+    outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...o.fields }, ...(o.job ? { job: { ...o.job } } : {}) })),
     queue: s.queue.map((q) => ({ ...q })),
     plus: { ...s.plus },
     shield: { ...s.shield },
@@ -1043,6 +1080,91 @@ export function masterBuilding(s0: GameState, id: BuildingId, now: number): Game
   const s = structuredCloneState(s0);
   for (const res of RESOURCE_IDS) s.resources[res] -= info.cost[res];
   s.queue.push({ building: id, toLevel: info.star, mastery: true, startedAt: now, endsAt: now + info.seconds * 1000 });
+  return s;
+}
+
+// ─── Outposts ────────────────────────────────────────────────────────────────
+
+const emptyFields = (): Record<ResourceId, number> => ({ iron: 0, wood: 0, clay: 0, crop: 0 });
+/** A field yields what the home producer of its resource does at the same level. */
+const FIELD_YIELD = 60;
+const FIELD_BUILDING: Record<ResourceId, BuildingId> = { iron: "iron-mine", wood: "sawmill", clay: "brickyard", crop: "windmill" };
+
+/** How many outposts the Town Hall allows now. */
+export const outpostSlots = (s: GameState) => OUTPOST.hallLevels.filter((l) => level(s, TOWN_HALL) >= l).length;
+
+/** What founding the next outpost costs. */
+export function outpostCost(s: GameState) {
+  const n = (s.outposts ?? []).length;
+  const each = OUTPOST.foundResources * Math.pow(OUTPOST.foundGrowth, n);
+
+  return {
+    resources: Object.fromEntries(RESOURCE_IDS.map((r) => [r, each])) as Record<ResourceId, number>,
+    people: OUTPOST.foundPeople * (n + 1),
+  };
+}
+
+/** Why the tribe can't found an outpost now, or null. */
+export function outpostBlocked(s: GameState) {
+  const slots = outpostSlots(s);
+  const next = OUTPOST.hallLevels.find((l) => level(s, TOWN_HALL) < l);
+
+  if ((s.outposts ?? []).length >= slots)
+    return next ? `Town Hall ${next} allows another outpost` : `A tribe can have ${OUTPOST.hallLevels.length} outposts`;
+  const cost = outpostCost(s);
+  const short = RESOURCE_IDS.find((r) => s.resources[r] < cost.resources[r]);
+
+  if (short) return `Not enough ${short}`;
+  if (s.population < cost.people) return `Needs ${cost.people} people to settle it`;
+
+  return null;
+}
+
+/** Founds an outpost on tile `at` (the server picks a free one). Settlers come from the tribe's people. */
+export function foundOutpost(s0: GameState, at: { x: number; y: number }, now: number): GameState {
+  const blocked = outpostBlocked(s0);
+  if (blocked) throw new GameError(blocked, "blocked");
+  const cost = outpostCost(s0);
+  const s = structuredCloneState(s0);
+
+  for (const r of RESOURCE_IDS) s.resources[r] -= cost.resources[r];
+  s.population -= cost.people;
+  s.outposts = [...s.outposts, { x: Math.round(at.x), y: Math.round(at.y), foundedAt: now, fields: emptyFields() }];
+
+  return s;
+}
+
+/** The next level of an outpost's field: cost, time, and why it can't start. */
+export function fieldUpgradeInfo(s: GameState, index: number, resource: ResourceId) {
+  const o = s.outposts?.[index];
+  if (!o) throw new GameError("No such outpost", "not_found");
+  if (!RESOURCE_IDS.includes(resource)) throw new GameError("Unknown field");
+  const from = o.fields[resource] ?? 0;
+  const b = BUILDING_BY_ID[FIELD_BUILDING[resource]];
+  const r = getRates(s);
+  const cost = buildingUpgradeCost(b, from);
+  const blocked =
+    from >= OUTPOST.fieldMaxLevel
+      ? "Max level"
+      : o.job
+        ? "The outpost's builder is busy"
+        : RESOURCE_IDS.some((res) => cost[res] > r.capacity)
+          ? "Needs a bigger Warehouse"
+          : null;
+
+  return { from, cost, seconds: Math.max(1, Math.round(buildingUpgradeBaseSeconds(b, from) * r.buildSpeedMultiplier)), blocked };
+}
+
+/** Raises one field of an outpost (each outpost has its own builder). */
+export function upgradeField(s0: GameState, index: number, resource: ResourceId, now: number): GameState {
+  const info = fieldUpgradeInfo(s0, Math.floor(Number(index)), resource);
+  if (info.blocked) throw new GameError(info.blocked, "blocked");
+  for (const res of RESOURCE_IDS) {
+    if (s0.resources[res] < info.cost[res]) throw new GameError(`Not enough ${res}`, "not_enough_resources");
+  }
+  const s = structuredCloneState(s0);
+  for (const res of RESOURCE_IDS) s.resources[res] -= info.cost[res];
+  s.outposts[Math.floor(Number(index))].job = { resource, toLevel: info.from + 1, startedAt: now, endsAt: now + info.seconds * 1000 };
   return s;
 }
 

@@ -7,6 +7,7 @@ import clsx from "clsx";
 import builderImg from "~/images/resources/builder.webp";
 
 import { Building } from "@/components/organisms/tribe/Building";
+import { Outposts } from "@/components/organisms/tribe/Outposts";
 import { Drawer } from "@/components/molecules/Drawer";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
@@ -263,6 +264,9 @@ export const Tribe: FunctionComponent = () => {
           {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
         </div>
       </section>
+
+      {/* Outposts open up at Town Hall 10; until then they'd only be a promise. */}
+      {(rates.builders > 1 || state.outposts.length > 0 || (state.buildings["town-hall"] ?? 0) >= 8) && <Outposts />}
 
       <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
         {open && (

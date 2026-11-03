@@ -84,6 +84,11 @@ function expectSane(s: E.GameState) {
   expect(new Set(s.queue.map((q) => q.building)).size).toBe(s.queue.length);
   expect(s.training.length).toBeLessThanOrEqual(E.maxTrainBatches(s));
   for (const t of s.training) expect(t.done).toBeLessThan(t.count);
+  for (const o of s.outposts) for (const res of C.RESOURCE_IDS) {
+    expect(o.fields[res]).toBeGreaterThanOrEqual(0);
+    expect(o.fields[res]).toBeLessThanOrEqual(C.OUTPOST.fieldMaxLevel);
+  }
+  expect(s.outposts.length).toBeLessThanOrEqual(E.outpostSlots(s));
   for (const k of Object.keys(r) as (keyof E.Rates)[]) {
     const v = r[k];
     if (typeof v === "number") expect(finite(v)).toBe(true);
@@ -442,7 +447,7 @@ describe("chaos", () => {
         s = E.advance(s, now);
         const before = JSON.stringify(s);
         try {
-          switch (Math.floor(r() * 9)) {
+          switch (Math.floor(r() * 11)) {
             case 0:
               s = E.upgradeBuilding(s, pick(C.BUILDINGS).id, now);
               break;
@@ -471,6 +476,12 @@ describe("chaos", () => {
               break;
             case 8:
               s = E.masterBuilding(s, pick(C.BUILDINGS).id, now);
+              break;
+            case 9:
+              s = E.foundOutpost(s, { x: Math.floor(r() * 50), y: Math.floor(r() * 50) }, now);
+              break;
+            case 10:
+              if (s.outposts.length) s = E.upgradeField(s, Math.floor(r() * s.outposts.length), pick(C.RESOURCE_IDS), now);
               break;
           }
         } catch (e) {
