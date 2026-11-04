@@ -58,6 +58,23 @@ describe("outposts (server)", () => {
     expect(Number(rows.rows[0].n)).toBe(0);
   });
 
+  test("a tribe hemmed in by neighbours still finds land for an outpost", async () => {
+    const home = await homeOf((await newPlayer(Date.now())).id);
+    // Neighbours packed all round, every few tiles across the whole outpost ring.
+    const crowd: { x: number; y: number }[] = [home];
+    const R = OUTPOST.maxDistance + OUTPOST.clearOfVillages;
+
+    for (let dy = -R; dy <= R; dy += 6)
+      for (let dx = -R; dx <= R; dx += 6) if (dx || dy) crowd.push({ x: home.x + dx, y: home.y + dy });
+    const spots = candidates(home, new Set(crowd.map((p) => `${p.x},${p.y}`)), crowd);
+
+    expect(spots.length).toBeGreaterThan(0);
+    for (const p of spots) {
+      expect(distance(p, home)).toBeLessThanOrEqual(OUTPOST.farthestDistance);
+      for (const v of crowd.slice(1)) expect(distance(p, v)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillages);
+    }
+  });
+
   test("an outpost never stands inside another tribe's walls", async () => {
     const home = await homeOf((await newPlayer(Date.now())).id);
     // A neighbour just past the outpost ring's nearest edge, where the closest spots would be.

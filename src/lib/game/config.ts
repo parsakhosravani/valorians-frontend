@@ -592,8 +592,17 @@ export const OUTPOST = {
   /** Settled between these many tiles from home, on free dry land: past the home village's own walls on the map. */
   minDistance: 5,
   maxDistance: 10,
-  /** Kept this many tiles from every other tribe's village too, so an outpost never stands inside a neighbour's walls. */
-  clearOfVillages: 5,
+  /**
+   * In a crowded corner with no free land within maxDistance, the search widens
+   * this far out, so a tribe that can pay always has somewhere to settle.
+   */
+  farthestDistance: 16,
+  /**
+   * Kept this many tiles from every other tribe's village too, so an outpost never
+   * stands inside a neighbour's walls (drawn about 2.6–3 tiles out, see claimEdge).
+   * Was 5: in busy parts of the map that left no land at all within maxDistance.
+   */
+  clearOfVillages: 4,
   /** An outpost's field yields like a home producer of the same level (per-level base, see productionAt). */
   fieldYield: 60,
   /**
