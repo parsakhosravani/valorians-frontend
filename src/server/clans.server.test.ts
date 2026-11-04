@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
-import { createClan, donate, joinClan, leaveClan, raiseWonder, seasonView, sendAid } from "@/server/clans";
+import { createClan, donate, joinClan, leaveClan, raiseWonder, seasonView, sendAid, setRole } from "@/server/clans";
 import { CLAN, WONDER } from "@/lib/game/config";
 
 let n = 0;
@@ -74,6 +74,30 @@ describe("clans (server)", () => {
     const later = T0 + CLAN.aidMinTenureMs + 1000;
     await sendAid(await reload(leader.id), { id: alt.id, key: "iron", amount: 1000 }, later);
     await expect(sendAid(await reload(leader.id), { id: alt.id, key: "iron", amount: 1500 }, later + 2)).rejects.toThrow("1,400 more");
+  });
+
+  test("the Jarl and a Huscarl can't drain the treasury by sending aid to each other", async () => {
+    const T0 = Date.now();
+    const leader = await createClan(await newPlayer(T0), { name: uniqueName(), tag: "LOOT" }, T0);
+    const id = leader.clanId!;
+    const huscarl = await newPlayer(T0);
+    const warrior = await newPlayer(T0);
+
+    await joinClan(huscarl, { id }, T0);
+    await joinClan(warrior, { id }, T0);
+    await donate(await reload(warrior.id), { key: "iron", amount: 1500 }, T0);
+    await setRole(await reload(leader.id), { id: huscarl.id, role: "officer" }, T0);
+    const later = T0 + CLAN.aidMinTenureMs + 1000;
+
+    await expect(sendAid(await reload(leader.id), { id: huscarl.id, key: "iron", amount: 500 }, later)).rejects.toThrow("can't get aid");
+    await expect(sendAid(await reload(huscarl.id), { id: leader.id, key: "iron", amount: 500 }, later)).rejects.toThrow("can't get aid");
+    // Demote, send, promote again: refused until the wait is over.
+    await setRole(await reload(leader.id), { id: huscarl.id, role: "member" }, later);
+    await expect(sendAid(await reload(leader.id), { id: huscarl.id, key: "iron", amount: 500 }, later + 1000)).rejects.toThrow("losing the rank");
+    expect(Number((await clan(id)).t_iron)).toBe(1500);
+    // Plain warriors still get aid as before.
+    await sendAid(await reload(leader.id), { id: warrior.id, key: "iron", amount: 500 }, later + 2000);
+    expect(Number((await clan(id)).t_iron)).toBe(1000);
   });
 
   test("the first clan to finish its Wonder wins the season, every Wonder falls, a new season starts", async () => {

@@ -273,6 +273,19 @@ export function aidRoom(
   return Math.max(0, Math.floor(CLAN.aidDailyHours * Math.max(0, hourly) - receivedToday));
 }
 
+/**
+ * Why `target` can't get aid from the treasury, or null if they can. The Jarl
+ * and Huscarls spend the treasury, so they never receive from it, and a former
+ * Huscarl waits CLAN.aidAfterRankMs after losing the rank (see config).
+ */
+export function aidRefusal(target: ClanRole, lostRankAt: number | null, now: number): string | null {
+  if (target !== "member") return `The ${ROLE_NAMES.leader} and ${ROLE_NAMES.officer}s spend the treasury, so they can't get aid from it`;
+  if (lostRankAt != null && now - lostRankAt < CLAN.aidAfterRankMs)
+    return `A former ${ROLE_NAMES.officer} can get aid ${CLAN.aidAfterRankMs / 86400e3} days after losing the rank`;
+
+  return null;
+}
+
 /** A member who joined less than CLAN.aidMinTenureMs ago can't receive aid yet. */
 export const aidTooSoon = (joinedAt: number | null, now: number) => joinedAt == null || now - joinedAt < CLAN.aidMinTenureMs;
 

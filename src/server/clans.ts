@@ -22,6 +22,7 @@ import {
   can,
   canAfford,
   canKick,
+  aidRefusal,
   aidRoom,
   aidTooSoon,
   wonderBlocked,
@@ -1060,7 +1061,7 @@ export async function sendAid(player: Player, body: any, now: number) {
 
   if (!isTreasuryKey(key)) throw new GameError("Pick what to send", "bad_request");
   const amount = parseAmount(body?.amount);
-  const { clanId } = await requireRole(player, can.manage, "Only the Jarl and Huscarls can send aid");
+  const { clan, clanId } = await requireRole(player, can.manage, "Only the Jarl and Huscarls can send aid");
 
   if (target === player.id) throw new GameError("Aid goes to other members", "bad_request");
   const who = await findById(target);
@@ -1069,8 +1070,17 @@ export async function sendAid(player: Player, body: any, now: number) {
 
   const db = await getDb();
   // Limits against second accounts feeding a main one (see CLAN.aidDailyHours).
-  const joined = await db.execute({ sql: "SELECT clan_joined_at FROM users WHERE id = ?", args: [target] });
+  const joined = await db.execute({ sql: "SELECT clan_joined_at, clan_role FROM users WHERE id = ?", args: [target] });
   const joinedAt = joined.rows[0]?.clan_joined_at == null ? null : Number(joined.rows[0].clan_joined_at);
+  // Those who hold the treasury key can't pay themselves through each other (CLAN.aidAfterRankMs).
+  const demoted = await db.execute({
+    sql: "SELECT MAX(at) AS at FROM clan_log WHERE target_id = ? AND kind = 'demoted' AND clan_id = ?",
+    args: [target, clanId],
+  });
+  const lostRankAt = demoted.rows[0]?.at == null ? null : Number(demoted.rows[0].at);
+  const refusal = aidRefusal(roleOf(clan, target, joined.rows[0]?.clan_role), lostRankAt, now);
+
+  if (refusal) throw new GameError(refusal, "not_allowed");
 
   if (aidTooSoon(joinedAt, now)) {
     throw new GameError(`New members can get aid after ${CLAN.aidMinTenureMs / 86400e3} days in the clan`, "too_soon");
@@ -1099,9 +1109,12 @@ export async function sendAid(player: Player, body: any, now: number) {
     );
   }
   const col = TREASURY_COL[key];
+  // Re-checks in the same statement that the target is still a plain member,
+  // so a promotion racing the aid can't slip through.
   const rs = await db.execute({
-    sql: `UPDATE clans SET ${col} = ${col} - ? WHERE id = ? AND ${col} >= ?`,
-    args: [amount, clanId, amount],
+    sql: `UPDATE clans SET ${col} = ${col} - ? WHERE id = ? AND ${col} >= ? AND leader_id != ?
+            AND EXISTS (SELECT 1 FROM users WHERE id = ? AND clan_id = ? AND clan_role IS NULL)`,
+    args: [amount, clanId, amount, target, target, clanId],
   });
 
   if (rs.rowsAffected !== 1) throw new GameError(`The treasury doesn't have ${amount.toLocaleString("en-US")} ${keyName(key)}`, "not_enough");

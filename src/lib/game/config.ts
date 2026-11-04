@@ -566,6 +566,14 @@ export const CLAN = {
    */
   aidMinTenureMs: 3 * 24 * 3600e3,
   aidDailyHours: 24,
+  /**
+   * The Jarl and Huscarls hold the treasury key, so they can't send aid to
+   * each other (Nov 2026): before, the Jarl sent a Huscarl a day of output and
+   * the Huscarl sent it straight back, and the two drained what the warriors
+   * had donated. A Huscarl who loses the rank waits this long before getting
+   * aid, so "demote, send, promote again" doesn't work either.
+   */
+  aidAfterRankMs: 3 * 24 * 3600e3,
   /** A donated coin counts this much towards a member's contribution. */
   coinContributionWeight: 4,
   /** Entries kept in the clan chronicle shown to members. */

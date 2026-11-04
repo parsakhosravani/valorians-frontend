@@ -142,3 +142,12 @@ test("the World Wonder: rising costs, a wait between levels, and a season's wort
   expect(C.wonderBlocked({ ...base, level: WONDER.levels }, 0)).toContain("complete");
   expect(C.wonderBlocked({ ...base, treasury: C.emptyTreasury() }, 0)).toContain("treasury");
 });
+
+test("the Jarl and Huscarls can't get aid from the treasury they spend, nor a Huscarl just demoted", () => {
+  expect(C.aidRefusal("leader", null, T0)).toContain("can't get aid");
+  expect(C.aidRefusal("officer", null, T0)).toContain("can't get aid");
+  expect(C.aidRefusal("member", null, T0)).toBeNull();
+  // Demote, send, promote again doesn't work: a former Huscarl waits.
+  expect(C.aidRefusal("member", T0, T0 + CLAN.aidAfterRankMs - 1)).toContain("losing the rank");
+  expect(C.aidRefusal("member", T0, T0 + CLAN.aidAfterRankMs)).toBeNull();
+});

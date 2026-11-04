@@ -489,20 +489,26 @@ export const Clan: FunctionComponent = () => {
           </div>
         )}
 
-        <div className="flex flex-col gap-2 inset p-2.5">
-          <span className="text-xs font-bold text-sub"><GameIcon e="📦" /> Send aid from the treasury</span>
-          <KeyPicker value={aidKey} onChange={setAidKey} />
-          <AmountInput max={mine.treasury[aidKey]} value={aidAmount} onChange={setAidAmount} />
-          <Button
-            disabled={busy != null || amount <= 0 || amount > mine.treasury[aidKey]}
-            size="small"
-            onClick={async () => {
-              if (await run(`aid-${m.id}`, () => clan.aid(m.id, aidKey, amount))) setAidAmount("");
-            }}
-          >
-            {busy === `aid-${m.id}` ? "Sending…" : `Send ${amount ? fmt(amount) : ""} ${keyName(aidKey)} to ${m.name}`}
-          </Button>
-        </div>
+        {m.role === "member" ? (
+          <div className="flex flex-col gap-2 inset p-2.5">
+            <span className="text-xs font-bold text-sub"><GameIcon e="📦" /> Send aid from the treasury</span>
+            <KeyPicker value={aidKey} onChange={setAidKey} />
+            <AmountInput max={mine.treasury[aidKey]} value={aidAmount} onChange={setAidAmount} />
+            <Button
+              disabled={busy != null || amount <= 0 || amount > mine.treasury[aidKey]}
+              size="small"
+              onClick={async () => {
+                if (await run(`aid-${m.id}`, () => clan.aid(m.id, aidKey, amount))) setAidAmount("");
+              }}
+            >
+              {busy === `aid-${m.id}` ? "Sending…" : `Send ${amount ? fmt(amount) : ""} ${keyName(aidKey)} to ${m.name}`}
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-sub">
+            The {ROLE_NAMES.leader} and {ROLE_NAMES.officer}s spend the treasury, so they can't get aid from it.
+          </p>
+        )}
       </div>
     );
   };

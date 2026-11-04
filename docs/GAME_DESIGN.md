@@ -94,6 +94,9 @@ ask before "fixing" either. Add new decisions here when they are made.
   Hall still have no top.
 - **Clan aid limits** (against alt accounts): a member gets aid only after 3 days in the clan,
   and at most one day of their own output of that resource (or coins) per day, from any clan.
+- **The Jarl and Huscarls can't get aid** (Nov 2026): they spend the treasury, so aid only goes to
+  Warriors. Before, the Jarl and a Huscarl sent aid back and forth and drained what the warriors
+  donated. A demoted Huscarl waits 3 days before getting aid, so "demote, send, promote" fails.
 - **A clan needs at least 2 members.** A chief alone can found one, but it is *forming*: its
   techs give no perks and can't be raised until a second chief joins (and stop again if it
   drops back to one).
