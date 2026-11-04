@@ -113,7 +113,7 @@ export const ShieldDrawer = ({
           <GameIcon e="⏳" /> After a shield ends, the next one needs {cooldownHours}h to recharge
           {recharging && !shielded ? ` (${formatDuration(state.shield.cooldownUntil - now)} left)` : ""}.
         </li>
-        <li><GameIcon e="🔥" /> Being raided always gives you a short free shield.</li>
+        <li><GameIcon e="🔥" /> A raid that really hurts gives you a short free shield: the harder the hit, the longer it lasts.</li>
       </ul>
     </Drawer>
   );

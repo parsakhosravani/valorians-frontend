@@ -382,21 +382,96 @@ test("the Trapmaker's traps catch attackers before the battle, up to a quarter",
   expect(E.getRates(defender).trapShare).toBe(0.25);
 });
 
-test("raided again within a day, the shield grows: 2 h, 6 h, 12 h", () => {
+test("raided hard again within a day, the shield grows: 2 h, 6 h, 12 h, then stops at a day's worth", () => {
   const attacker = withBarracks();
-  attacker.army.cavalry = 300;
+  attacker.army.cavalry = 1200;
   let defender = withBarracks();
   const shields: number[] = [];
 
   for (let i = 0; i < 4; i++) {
     defender.shieldUntil = 0;
-    const r = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 100 }, T0 + i * 3600e3, 0.5);
+    defender.resources = { iron: 14000, wood: 14000, clay: 14000, crop: 14000 };
+    // Each raid carries off half the stores: a heavy hit, worth the full step.
+    const r = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 300 }, T0 + i * 3600e3, 0.5);
 
     expect(r.report.attackerWon).toBe(true);
+    expect(r.report.damage).toBeGreaterThanOrEqual(C.RAID_SHIELD.fullDamage);
     shields.push(r.report.shieldMs! / 3600e3);
     defender = r.state;
   }
-  expect(shields).toEqual([2, 6, 12, 12]);
+  // 2 + 6 + 12 = 20 h already given today, so the fourth only gets the 4 h left of the day's 24 h.
+  expect(shields).toEqual([2, 6, 12, 4]);
+  // A day later the ladder starts again.
+  defender.shieldUntil = 0;
+  defender.resources = { iron: 14000, wood: 14000, clay: 14000, crop: 14000 };
+  const later = W.defendRaid(defender, attacker, { ...E.emptyArmy(), cavalry: 300 }, T0 + 30 * 3600e3, 0.5);
+  expect(later.report.shieldMs).toBe(2 * 3600e3);
+});
+
+test("attacking your own second account with a few troops gives it no shield", () => {
+  const main = withBarracks();
+  main.army.spearman = 10;
+  // The alt has full stores and some defenders.
+  const alt = withBarracks();
+  alt.shieldUntil = 0;
+  alt.army.spearman = 50;
+
+  // Lose on purpose: one spearman against fifty.
+  const lost = W.defendRaid(alt, main, { ...E.emptyArmy(), spearman: 1 }, T0, 0.5);
+  expect(lost.report.attackerWon).toBe(false);
+  expect(lost.report.shieldMs).toBe(0);
+  expect(lost.state.shieldUntil).toBe(0);
+  expect(lost.state.war.raidShields ?? []).toEqual([]);
+
+  // Or win against an undefended village and carry off a token amount (20 riders carry ~2,000 of 56,000).
+  main.army.cavalry = 20;
+  const open = withBarracks();
+  open.shieldUntil = 0;
+  const won = W.defendRaid(open, main, { ...E.emptyArmy(), cavalry: 20 }, T0, 0.5);
+  expect(won.report.attackerWon).toBe(true);
+  expect(won.report.shieldMs).toBe(0);
+  expect(won.state.shieldUntil).toBe(0);
+});
+
+test("the raid shield is scaled by how hard the raid hit", () => {
+  const attacker = withBarracks();
+  attacker.army.cavalry = 1000;
+  const hit = (cavalry: number) => {
+    const d = withBarracks();
+    d.shieldUntil = 0;
+    return W.defendRaid(d, attacker, { ...E.emptyArmy(), cavalry }, T0, 0.5).report;
+  };
+  const small = hit(56); // ~5,600 of 56,000: 10%
+  const big = hit(300); // half the stores
+
+  expect(small.damage!).toBeGreaterThan(C.RAID_SHIELD.minDamage);
+  expect(small.damage!).toBeLessThan(C.RAID_SHIELD.fullDamage);
+  expect(small.shieldMs!).toBeGreaterThan(0);
+  expect(small.shieldMs!).toBeLessThan(big.shieldMs!);
+  expect(small.shieldMs! % C.RAID_SHIELD.stepMs).toBe(0);
+  expect(big.shieldMs).toBe(C.RAIDED_SHIELDS_MS[0]);
+});
+
+test("an alt that empties its stores first can't earn a full shield by losing a handful", () => {
+  const main = withBarracks();
+  main.army.cavalry = 300;
+  const alt = withBarracks();
+  alt.shieldUntil = 0;
+  alt.resources = { iron: 30, wood: 30, clay: 30, crop: 30 };
+
+  const r = W.defendRaid(alt, main, { ...E.emptyArmy(), cavalry: 300 }, T0, 0.5);
+  // Half of almost nothing is taken: measured against half a day of its own production, that's no real hit.
+  expect(r.report.attackerWon).toBe(true);
+  expect(r.report.shieldMs!).toBeLessThan(C.RAIDED_SHIELDS_MS[0]);
+});
+
+test("old saves keep their raids on the shield ladder", () => {
+  const s0 = withBarracks();
+  const old = { ...s0, war: { ...s0.war, raidedAt: [T0 - 3600e3, T0 - 1800e3] } } as unknown as E.GameState;
+  const s = E.normalizeState(old);
+
+  expect(s.war.raidShields).toEqual([[T0 - 3600e3, 2 * 3600e3], [T0 - 1800e3, 6 * 3600e3]]);
+  expect("raidedAt" in s.war).toBe(false);
 });
 
 test("raiding a tribe under half your power takes half the loot", () => {
@@ -615,4 +690,23 @@ test("soldiers lost in battle are people lost from the tribe", () => {
   const before = E.peopleOf(s);
   const { state } = W.raidCamp(s, 1, { ...E.emptyArmy(), spearman: 2 }, T0, 0.5); // 24 attack vs 80: all fall
   expect(E.peopleOf(state)).toBe(before - 2);
+});
+
+test("raid shields stay inside the ladder and the day's cap, whatever the damage", () => {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let run = 0; run < 2000; run++) {
+    const recent: [number, number][] = [];
+    for (let i = 0; i < 6; i++) {
+      const damage = rnd();
+      const ms = W.raidShieldMs(damage, recent);
+      const step = C.RAIDED_SHIELDS_MS[Math.min(C.RAIDED_SHIELDS_MS.length - 1, recent.length)];
+
+      expect(ms).toBeGreaterThanOrEqual(0);
+      expect(ms).toBeLessThanOrEqual(step);
+      if (damage < C.RAID_SHIELD.minDamage) expect(ms).toBe(0);
+      if (ms > 0) recent.push([i, ms]);
+      expect(recent.reduce((a, [, x]) => a + x, 0)).toBeLessThanOrEqual(C.RAID_SHIELD.dailyMaxMs);
+    }
+  }
 });

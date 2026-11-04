@@ -38,6 +38,19 @@ const promotionText = (p: Promotion[] | undefined) =>
 
 const lootTotal = (r: RaidReport) => RESOURCE_IDS.reduce((s, k) => s + (r.loot[k] ?? 0), 0);
 
+/** The raid shield in a report, e.g. "1h 20m" (raid shields come in 10-minute steps). */
+const shieldText = (ms: number) => {
+  const m = Math.round(ms / 60e3);
+  const h = Math.floor(m / 60);
+  return h && m % 60 ? `${h}h ${m % 60}m` : h ? `${h}h` : `${m}m`;
+};
+
+/** A raid shield is earned by real damage, so a light hit says there's none. */
+const shieldLine = (r: RaidReport) =>
+  r.shieldMs
+    ? `🛡️ You're shielded for ${shieldText(r.shieldMs)}. `
+    : `No shield this time: the raid hit too lightly. `;
+
 const inMinutes = (ms: number) => {
   const m = Math.max(1, Math.round(ms / 60000));
 
@@ -161,6 +174,7 @@ export const notify = {
       `🛡️ <b>You held off ${esc(attacker)}!</b>\n\n` +
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
         `They lost: ${armyText(r.attackerLosses)}\nYou lost: ${armyText(r.defenderLosses)}` +
+        (r.shieldMs ? `\n${shieldLine(r)}` : "") +
         promotionText(r.defenderPromoted),
       "📜 See the report",
       "/battle?tab=reports"
@@ -179,7 +193,8 @@ export const notify = {
         `Their attack ${fmt(r.attack)} vs your defense ${fmt(r.defense)}.\n` +
         `You lost: ${armyText(r.defenderLosses)}\n` +
         (r.gate ? `🚪 Your City Gate was knocked down from level ${r.gate.from} to ${r.gate.to}.\n` : "") +
-        `You're shielded for ${Math.round((r.shieldMs ?? 2 * 3600e3) / 3600e3)} hours. Time for revenge?` +
+        shieldLine(r) +
+        `Time for revenge?` +
         promotionText(r.defenderPromoted),
       "⚔️ Take revenge",
       attackerId ? `/battle?revenge=${attackerId}` : "/battle?tab=reports"

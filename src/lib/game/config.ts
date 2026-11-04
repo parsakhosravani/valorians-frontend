@@ -246,8 +246,35 @@ export const TRAP_MAX = 0.25;
 /** Most of the warehouse a Hideout can keep hidden, however high it's built. */
 export const HIDEOUT_MAX_SHARE = 0.4;
 
-/** Shields after being raided, by how many times you were raided in the day before (2 h, then 6 h, then 12 h). */
+/**
+ * Shields after being raided, by how many raid shields you got in the day
+ * before (2 h, then 6 h, then 12 h). These are the most a raid can give: the
+ * shield is scaled by how hard the raid hit (RAID_SHIELD).
+ */
 export const RAIDED_SHIELDS_MS = [2, 6, 12].map((h) => h * 3600 * 1000);
+/**
+ * A raid shield is earned by real damage, not by being attacked (Nov 2026).
+ * Before, every raid gave at least 2 h, even one the attacker lost, so a
+ * player could hit their own second account with a few troops, lose on
+ * purpose, and hand it a free shield. Now:
+ * - damage = (loot + the cost of defenders killed) ÷ what the tribe had at
+ *   stake (lootable stores + the cost of its defenders), and never less than
+ *   `floorHours` of the tribe's own production, so an alt that empties its
+ *   stores first can't earn a long shield by losing a handful.
+ * - under `minDamage` there's no shield; from there it grows in a straight
+ *   line and reaches the full ladder step at `fullDamage`.
+ * - all raid shields in a day add up to at most `dailyMaxMs`, so small hits
+ *   can't be chained into a wall.
+ * A real victim of a heavy raid still gets the full 2/6/12 h ladder.
+ */
+export const RAID_SHIELD = {
+  minDamage: 0.05,
+  fullDamage: 0.25,
+  floorHours: 12,
+  /** Shields are rounded down to this step (so a report says "1h 20m", not "1h 23m 7s"). */
+  stepMs: 10 * 60 * 1000,
+  dailyMaxMs: 24 * 3600 * 1000,
+};
 /** Raiding a tribe under this share of your power takes only LOOT_WEAK_SHARE of the usual loot. */
 export const WEAK_TARGET_RATIO = 0.5;
 export const LOOT_WEAK_SHARE = 0.5;

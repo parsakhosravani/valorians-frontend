@@ -16,6 +16,7 @@ import {
   isCampLevel,
   MAX_LOOT_SHARE,
   RAIDED_SHIELDS_MS,
+  RAID_SHIELD,
   unitPlural,
   DRAGON,
   WEAK_TARGET_RATIO,
@@ -557,6 +558,8 @@ export type RaidReport = BattleOutcome & {
   weakTarget?: boolean;
   /** How long the defender is shielded after this raid (grows when raided again within a day). */
   shieldMs?: number;
+  /** Share of what the defender had at stake that this raid took (0–1), which sets the shield. */
+  damage?: number;
 };
 
 /**
@@ -690,6 +693,36 @@ export function campOutcome(s: GameState, level: number, sent: Army, rand: numbe
   return resolve(nums.attack, nums.defense, luckFrom(rand), sent, emptyArmy(), getRates(s).healShare, 0);
 }
 
+/** What troops cost to train, all four resources together. */
+const armyValue = (army: Partial<Army>) =>
+  UNIT_IDS.reduce((sum, u) => sum + (army[u] ?? 0) * RESOURCE_IDS.reduce((a, r) => a + (UNIT_BY_ID[u].cost?.[r] ?? 0), 0), 0);
+
+/**
+ * How hard a raid hit, 0–1: loot plus the cost of defenders killed, over what
+ * the tribe had at stake (lootable stores + its defenders), never counting
+ * less at stake than RAID_SHIELD.floorHours of its own production.
+ */
+export function raidDamage(before: GameState, defenders: Army, defenderLosses: Army, loot: Record<ResourceId, number>) {
+  const r = getRates(before);
+  const stores = RESOURCE_IDS.reduce((a, id) => a + Math.max(0, before.resources[id] - r.hidden), 0);
+  const hourly = RESOURCE_IDS.reduce((a, id) => a + Math.max(0, r.productionPerHour[id]), 0);
+  const atStake = Math.max(stores + armyValue(defenders), hourly * RAID_SHIELD.floorHours);
+  const lost = lootTotal(loot) + armyValue(defenderLosses);
+
+  return atStake > 0 ? Math.min(1, lost / atStake) : 0;
+}
+
+/** The shield a raid of `damage` earns, given the raid shields already given in the last day. */
+export function raidShieldMs(damage: number, recent: [number, number][]) {
+  if (damage < RAID_SHIELD.minDamage) return 0;
+  const step = RAIDED_SHIELDS_MS[Math.min(RAIDED_SHIELDS_MS.length - 1, recent.length)];
+  const scaled = step * Math.min(1, damage / RAID_SHIELD.fullDamage);
+  const left = RAID_SHIELD.dailyMaxMs - recent.reduce((a, [, ms]) => a + ms, 0);
+  const ms = Math.min(scaled, left);
+
+  return ms > 0 ? Math.floor(ms / RAID_SHIELD.stepMs) * RAID_SHIELD.stepMs : 0;
+}
+
 export function defendRaid(
   defender0: GameState,
   attacker: GameState,
@@ -759,12 +792,14 @@ export function defendRaid(
   } else {
     d.war.defensesWon += 1;
   }
-  // The shield grows when the same tribe keeps losing: 2 h, then 6 h, then 12 h within a day.
-  const recent = (d.war.raidedAt ?? []).filter((t) => now - t < 24 * 3600e3);
-  const shieldMs = RAIDED_SHIELDS_MS[Math.min(RAIDED_SHIELDS_MS.length - 1, outcome.attackerWon ? recent.length : 0)];
+  // The shield is earned by real damage (see RAID_SHIELD), and grows when the
+  // same tribe keeps getting hurt: up to 2 h, then 6 h, then 12 h within a day.
+  const damage = raidDamage(defender0, defenders, outcome.defenderLosses, loot);
+  const recent = (d.war.raidShields ?? []).filter(([t]) => now - t < 24 * 3600e3);
+  const shieldMs = raidShieldMs(damage, recent);
 
-  if (outcome.attackerWon) d.war.raidedAt = [...recent, now].slice(-RAIDED_SHIELDS_MS.length);
-  d.shieldUntil = now + shieldMs;
+  d.war.raidShields = shieldMs > 0 ? [...recent, [now, shieldMs] as [number, number]] : recent;
+  if (shieldMs > 0) d.shieldUntil = Math.max(d.shieldUntil, now + shieldMs);
 
   return {
     state: d,
@@ -781,6 +816,7 @@ export function defendRaid(
       ...(noLoot ? { noLoot } : {}),
       ...(weakTarget ? { weakTarget } : {}),
       shieldMs,
+      damage: Math.round(damage * 1000) / 1000,
       returnsAt: now + (opts.travelMs ?? Math.round(RAID_TRAVEL_SECONDS * 1000 * ar.marchMultiplier)),
       ...(lootTotal(opts.carried) > 0 || (opts.carriedCoins ?? 0) > 0
         ? { carried: { ...emptyLoot(), ...opts.carried }, carriedCoins: opts.carriedCoins ?? 0 }

@@ -1596,8 +1596,9 @@ export const WarMap = ({
                   you can train defenders in time.
                 </span>
                 <span>
-                  You can recall an army before it arrives. Raided tribes get a
-                  shield: 2h, growing to 6h and 12h if raided again within a day.
+                  You can recall an army before it arrives. A tribe that loses a real share of
+                  its stores or troops in a raid gets a shield: up to 2h, growing to 6h and 12h if hit hard
+                  again within a day. Small hits give little or nothing.
                   Raiding a tribe under half your power takes only half the loot.
                 </span>
                 <span>
