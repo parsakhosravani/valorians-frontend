@@ -170,6 +170,70 @@ describe("raiding another player (server)", () => {
     expect(after.state.defending ?? []).toEqual([]);
   });
 
+  test("a second wave that lands while the village is fighting waits and meets its defenders", async () => {
+    const T0 = Date.now();
+    const atk = await newPlayer(T0, (s) => {
+      s.army.axeman = 320;
+      s.shieldUntil = 0;
+    });
+    const def = await newPlayer(T0, (s) => {
+      s.shieldUntil = 0;
+      s.army.spearman = 2000;
+    });
+    await nextDoor(atk, def);
+    // A small wave first to pull the defenders onto the field, the main army right behind it.
+    const bait = (await marchTo(await reload(atk.id), { target: def.id }, axemen(20), T0)).march;
+    const main = (await marchTo(await reload(atk.id), { target: def.id }, axemen(300), T0 + 20_000)).march;
+    const db = await getDb();
+    const row = async (id: number) => (await db.execute({ sql: "SELECT * FROM attacks WHERE id = ?", args: [id] })).rows[0];
+
+    await resolveDueAttacks(bait.arrivesAt + 1); // the bait's battle starts: the spearmen take the field
+    expect(String((await row(bait.id)).status)).toBe("fighting");
+    const baitEnds = Number((await row(bait.id)).ends_at);
+
+    expect(main.arrivesAt).toBeLessThan(baitEnds); // the main army lands mid-battle…
+    await resolveDueAttacks(main.arrivesAt + 1);
+    expect(String((await row(main.id)).status)).toBe("marching"); // …and waits at the gates
+
+    await resolveDueAttacks(baitEnds + 1); // the bait is beaten, the spearmen go home
+    await resolveDueAttacks(baitEnds + 2); // now the main army attacks
+    const fight = await row(main.id);
+
+    expect(String(fight.status)).toBe("fighting");
+    const battle = JSON.parse(String(fight.battle));
+
+    expect(battle.plan.startedAt).toBe(baitEnds); // the fight starts when the field is clear
+    expect(battle.engaged.spearman).toBeGreaterThan(1900); // against the defenders, not an empty village
+
+    await resolveDueAttacks(baitEnds + 2 * HOUR);
+    const [report] = await battlesFor(main.id);
+
+    expect(Number(report.attacker_won)).toBe(0);
+  });
+
+  test("two waves landing together, resolved by many callers at once, still fight one at a time", async () => {
+    const T0 = Date.now();
+    const atk = await newPlayer(T0, (s) => {
+      s.army.axeman = 320;
+      s.shieldUntil = 0;
+    });
+    const def = await newPlayer(T0, (s) => {
+      s.shieldUntil = 0;
+      s.army.spearman = 2000;
+    });
+    await nextDoor(atk, def);
+    const bait = (await marchTo(await reload(atk.id), { target: def.id }, axemen(20), T0)).march;
+    const main = (await marchTo(await reload(atk.id), { target: def.id }, axemen(300), T0 + 1000)).march;
+    const at = main.arrivesAt + 1; // both are due in the same sweep
+    await Promise.all([resolveDueAttacks(at, atk.id), resolveDueAttacks(at, def.id), resolveDueAttacks(at), resolveDueAttacks(at)]);
+    const db = await getDb();
+    const status = async (id: number) =>
+      String((await db.execute({ sql: "SELECT status FROM attacks WHERE id = ?", args: [id] })).rows[0].status);
+
+    expect(await status(bait.id)).toBe("fighting");
+    expect(await status(main.id)).toBe("marching");
+  });
+
   test("a shielded tribe can't be raided and the troops stay home", async () => {
     const T0 = Date.now();
     const atk = await newPlayer(T0, (s) => {

@@ -1479,7 +1479,8 @@ export const WarMap = ({
                     </span>
                   </span>
                   <span className="font-display font-black text-[#FFB27A] shrink-0">
-                    <Countdown to={m.arrivesAt} />
+                    {/* Landed while the village is still fighting another army: it waits its turn. */}
+                    <WithNow>{(t) => (m.arrivesAt <= t ? "At the gates" : <Countdown to={m.arrivesAt} />)}</WithNow>
                   </span>
                 </div>
               ))}
@@ -1497,7 +1498,8 @@ export const WarMap = ({
                     </span>
                   </span>
                   <span className="font-display font-black text-goldtext shrink-0">
-                    <Countdown to={m.arrivesAt} />
+                    {/* Landed while the village is still fighting another army: it waits its turn. */}
+                    <WithNow>{(t) => (m.arrivesAt <= t ? "At the gates" : <Countdown to={m.arrivesAt} />)}</WithNow>
                   </span>
                   {ordersButton(outbound(m))}
                 </div>

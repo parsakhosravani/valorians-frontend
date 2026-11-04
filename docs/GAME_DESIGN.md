@@ -38,6 +38,9 @@ ask before "fixing" either. Add new decisions here when they are made.
 - A **won raid knocks the City Gate down some levels**, even when the tribe is empty.
 - The **Hospital saves only wounded troops, never the killed**.
 - **Trapmaker catches attackers** before the battle (it does not just add defense).
+- **A village fights one attacker at a time.** An army that arrives while it is fighting waits at
+  the gates and attacks when the field is clear, against all defenders home by then (so a small
+  bait wave can't pull the defenders out for the main army behind it).
 - **An army coming home to a village under attack joins the fight** from the next round (the
   round under way is fought out as it was). The rest of the battle is decided again with them;
   rounds already fought never change. Ships and carried loot go home. Arriving after the last

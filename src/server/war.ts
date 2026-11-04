@@ -320,8 +320,7 @@ const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, a
   }));
 
 /** Nobody to fight: the army turns round and walks home the way it came. */
-async function turnBack(a: AttackRow, attackerId: number, name: string | null, now: number) {
-  const at = a.arrivesAt;
+async function turnBack(a: AttackRow, attackerId: number, name: string | null, now: number, at = a.arrivesAt) {
 
   await mutatePlayer(attackerId, now, (s) =>
     returnHome(s, a.units, name ?? "Abandoned land", at + homeTripMs(a), now, rand(), a.to, at, carriedOf(a))
@@ -331,13 +330,40 @@ async function turnBack(a: AttackRow, attackerId: number, name: string | null, n
 }
 
 /**
+ * A village fights one battle at a time. While it is fighting, its soldiers
+ * are out on the field (engageDefenders), so a second army landing then
+ * would storm an empty village: send a few troops first to pull the
+ * defenders out, and the main army right behind loots everything in a minute.
+ * Instead the later army waits at the gates and attacks once the field is
+ * clear, against everyone home by then (survivors of the first battle too).
+ * Returns null while the village is busy, else when this army's battle starts.
+ */
+async function fieldClearAt(a: AttackRow): Promise<number | null> {
+  if (a.defenderId == null || a.campLevel || a.lairLevel) return a.arrivesAt;
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT
+            SUM(CASE WHEN status = 'fighting' THEN 1 ELSE 0 END) AS busy,
+            MAX(CASE WHEN status = 'done' THEN ends_at END) AS cleared
+          FROM attacks
+          WHERE defender_id = ? AND id <> ? AND ends_at IS NOT NULL AND ends_at > ?`,
+    args: [a.defenderId, a.id, a.arrivesAt],
+  });
+  const r = rs.rows[0] as Record<string, unknown> | undefined;
+
+  if (Number(r?.busy ?? 0) > 0) return null;
+
+  return Math.max(a.arrivesAt, Number(r?.cleared ?? 0));
+}
+
+/**
  * The armies meet. The fight is decided right away (from both sides as they
  * are now) but lasts a while: defenders leave home for the field, and the
  * result comes out when the last round ends (finishBattle).
- * Returns false when there was no battle and the army went home.
+ * Returns false when there was no battle and the army went home, "wait" when
+ * the village turned out to be fighting another army (it waits at the gates).
  */
-async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
-  const at = a.arrivesAt;
+async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise<boolean | "wait"> {
   const db = await getDb();
   const terrain = terrainAt(a.to.x, a.to.y);
   const attacker = await findById(a.attackerId);
@@ -375,6 +401,8 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
 
     try {
       await mutatePlayer(defender.id, now, (s) => {
+        // Checked again under the tribe's lock: two requests may have let two armies in at once.
+        if ((s.defending ?? []).some((f) => f.id !== a.id)) throw new GameError("The village is fighting", "field_busy");
         if (s.shieldUntil > at) throw new GameError("This tribe is protected by a shield right now", "shielded");
         const r = raidOutcome(s, attacker.state, a.units, rand(), { terrain, landing });
 
@@ -392,7 +420,8 @@ async function beginBattle(a: AttackRow, now: number): Promise<boolean> {
       });
     } catch (e) {
       if (!(e instanceof GameError)) throw e;
-      await turnBack(a, attacker.id, displayName(defender), now); // shielded by the time we got there
+      if (e.code === "field_busy") return "wait";
+      await turnBack(a, attacker.id, displayName(defender), now, at); // shielded by the time we got there
 
       return false;
     }
@@ -548,18 +577,26 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
 
   for (const row of arrived.rows) {
     const a = toAttack(row as Record<string, unknown>);
+    // The village is still fighting an earlier army: wait at the gates (see fieldClearAt).
+    const at = await fieldClearAt(a);
+
+    if (at == null) continue;
     const claim = await db.execute({
       sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'marching'",
       args: [a.id],
     });
 
     if (claim.rowsAffected !== 1) continue; // another request took it
-    let fighting = false;
+    let fighting: boolean | "wait" = false;
 
     try {
-      fighting = await beginBattle(a, now);
+      fighting = await beginBattle(a, now, at);
     } catch (e) {
       await abandon(a, now, e);
+    }
+    if (fighting === "wait") {
+      await db.execute({ sql: "UPDATE attacks SET status = 'marching' WHERE id = ? AND status = 'resolving'", args: [a.id] });
+      continue;
     }
     if (!fighting) await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
   }
