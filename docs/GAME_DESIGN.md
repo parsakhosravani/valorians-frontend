@@ -103,7 +103,9 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Outposts** are new places on the map: Town Hall 10, 15 and 20 each allow one. Founding
   costs resources (40k of each, doubling each time) and settlers from the population
   (500, 1,000, 1,500). The player **chooses the land**: free dry tiles 5–10 tiles from home and
-  at least 5 from any other village (outside its walls); the best land for each resource is offered.
+  at least 4 from any other village (outside its walls, which reach ~3 tiles); where a crowded
+  corner leaves nothing in that ring, the search widens up to 16 tiles, so a tribe that can pay
+  always has land. The best land for each resource is offered.
 - **Land bonus:** the land round an outpost (its tile and the 8 next to it) favours one resource:
   woods wood, hills clay, peaks iron, open fields and water crop. +10% to that field per tile of
   it, up to +40%. Even three outposts all on the same resource stay under a top village (~0.83).
