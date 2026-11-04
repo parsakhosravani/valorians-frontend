@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logEvent } from "./events";
 import { getDb } from "./db";
 import { mutatePlayer } from "./players";
 import { appUrl, tg } from "./bot";
@@ -118,6 +119,7 @@ export async function recordPayment(payerId: number, p: SuccessfulPayment, now =
     args: [p.telegram_payment_charge_id, userId, p.total_amount, p.is_recurring && !p.is_first_recurring ? 1 : 0, expiresAt, now],
   });
 
+  logEvent("pay.plus", { charge: p.telegram_payment_charge_id, stars: p.total_amount, recurring: p.is_recurring ?? false, duplicate: ins.rowsAffected !== 1 }, { playerId: userId, at: now });
   if (ins.rowsAffected !== 1) return false;
   await mutatePlayer(userId, now, (s) => grantPlus(s, now, expiresAt ?? undefined));
   const renewal = p.is_recurring && !p.is_first_recurring;
@@ -139,6 +141,7 @@ export async function recordPayment(payerId: number, p: SuccessfulPayment, now =
 
 /** A refunded payment (sent by Telegram when the bot refunds Stars) ends Plus, or drops the shield. */
 export async function recordRefund(payerId: number, r: RefundedPayment, now = Date.now()) {
+  logEvent("pay.refund", { charge: r.telegram_payment_charge_id, stars: r.total_amount }, { playerId: payerId, at: now, level: "warn" });
   const db = await getDb();
   const rs = await db.execute({
     sql: "UPDATE payments SET refunded_at = ? WHERE charge_id = ? AND refunded_at IS NULL",

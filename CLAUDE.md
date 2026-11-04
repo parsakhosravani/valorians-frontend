@@ -65,6 +65,7 @@ Add `?dev_user=2` to the URL to play as another test player.
 | Load/save players, `playerView` (what the client receives) | `src/server/players.ts` |
 | Server side of war, clans (+ seasons/World Wonder), trade, bandits, map, outposts | `src/server/war.ts`, `clans.ts`, `trade.ts`, `bandits.ts`, `map.ts`, `outposts.ts` |
 | Game physics (laws) and pacing tests | `src/lib/game/physics.test.ts`, `balance.test.ts` |
+| Event log (every call, save, battle, trade) and the nightly flow report | `src/server/events.ts`, `eventReport.ts`, `/api/admin/report` |
 | Telegram bot, announcements, notifications, payments | `src/server/bot.ts`, `announce.ts`, `notify.ts`, `plus.ts` |
 | API routes | `src/app/api/**/route.ts` |
 | Client fetch + sign-in header | `src/lib/api.ts` |

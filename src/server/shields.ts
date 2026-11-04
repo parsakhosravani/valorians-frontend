@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logEvent } from "./events";
 import { getDb } from "./db";
 import { findById, mutatePlayer } from "./players";
 import { appUrl, tg } from "./bot";
@@ -81,6 +82,7 @@ export async function recordShieldPayment(payerId: number, p: SuccessfulPayment,
     args: [p.telegram_payment_charge_id, userId, `shield:${parsed.option.id}`, p.total_amount, now],
   });
 
+  logEvent("pay.shield", { charge: p.telegram_payment_charge_id, stars: p.total_amount, option: parsed.option.id, duplicate: ins.rowsAffected !== 1 }, { playerId: userId, at: now });
   if (ins.rowsAffected !== 1) return false;
 
   try {
