@@ -67,6 +67,9 @@ test player instead (`?dev_user=N` picks which one).
   `advance()` sends soldiers of a march returning before `joinBy` to `joining` instead of home;
   `joinReinforcements` (run first in each sweep) takes them and re-plans the battle with
   `reinforceBattle` in `battle.ts`. `finishBattle` / `abandon` close the window with `leaveField`.
+- One battle per village at a time: an army that lands while the village is fighting stays
+  `marching` and waits at the gates (`fieldClearAt`, re-checked under the defender's lock via
+  `defending` → `field_busy`). Its battle starts when the earlier one ends, against everyone home.
 - Battles get resolved by: the player's own requests, the post-response sweep, and the cron
   `GET /api/cron/battles`, called every 5 minutes by `.github/workflows/battles.yml`
   (also right after each production deploy). `CRON_SECRET` can protect it.
