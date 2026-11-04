@@ -16,11 +16,20 @@ const buildable = (p: Point) => !["sea", "lake", "mountains"].includes(terrainAt
  * Free tiles between OUTPOST.minDistance and maxDistance from home, nearest
  * first, skipping tribes and other outposts, and never within
  * OUTPOST.clearOfVillages of another tribe's village (inside its walls on the
- * map). Deterministic: the same map always offers the same spots.
+ * map). When that ring has no free land (a crowded corner of the map), the
+ * search widens a few tiles at a time up to OUTPOST.farthestDistance.
+ * Deterministic: the same map always offers the same spots.
  */
 export function candidates(home: Point, taken: Set<string>, villages: Point[] = []) {
+  for (let r: number = OUTPOST.maxDistance; ; r = Math.min(OUTPOST.farthestDistance, r + 3)) {
+    const out = within(home, r, taken, villages);
+
+    if (out.length || r >= OUTPOST.farthestDistance) return out;
+  }
+}
+
+function within(home: Point, r: number, taken: Set<string>, villages: Point[]) {
   const out: Point[] = [];
-  const r = OUTPOST.maxDistance;
   const others = villages.filter((v) => v.x !== home.x || v.y !== home.y);
 
   for (let dx = -r; dx <= r; dx++) {
@@ -28,7 +37,7 @@ export function candidates(home: Point, taken: Set<string>, villages: Point[] = 
       const p = { x: home.x + dx, y: home.y + dy };
       const d = distance(home, p);
 
-      if (d < OUTPOST.minDistance || d > OUTPOST.maxDistance) continue;
+      if (d < OUTPOST.minDistance || d > r) continue;
       if (taken.has(`${p.x},${p.y}`) || !buildable(p)) continue;
       if (others.some((v) => distance(v, p) < OUTPOST.clearOfVillages)) continue;
       out.push(p);
@@ -41,7 +50,7 @@ export function candidates(home: Point, taken: Set<string>, villages: Point[] = 
 /** Villages and outposts round `home`, far enough out to check every candidate's neighbours. */
 async function around(home: Point) {
   const db = await getDb();
-  const r = OUTPOST.maxDistance + OUTPOST.clearOfVillages;
+  const r = OUTPOST.farthestDistance + OUTPOST.clearOfVillages;
   const [users, outs] = await db.batch(
     [
       {
