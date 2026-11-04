@@ -134,7 +134,8 @@ export const notify = {
         `Defense left at home: about <b>${fmt(defense)}</b>. They're away for about <b>${inMinutes(awayMs)}</b>.\n\n` +
         `Strike now, while the village is bare.`,
       "⚔️ Attack them",
-      `/battle?revenge=${targetId}`
+      // Straight to the send-army sheet: the village is bare only for a few minutes.
+      `/battle?attack=${targetId}`
     );
   },
 

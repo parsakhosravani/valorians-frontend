@@ -487,9 +487,12 @@ export const WarMap = ({
   onAttack,
   focusId,
   focusCamp,
+  attackFocus,
 }: {
   onAttack: (t: AttackTarget) => void;
   focusId?: number;
+  /** Open the send-army sheet on the focused tribe straight away (a spy saw its army leave). */
+  attackFocus?: boolean;
   /** Open on this barbarian camp (by level) with its card up. */
   focusCamp?: number;
 }) => {
@@ -773,7 +776,11 @@ export const WarMap = ({
     if (focusId) {
       const t = data.tribes.find((x) => x.id === focusId);
 
-      if (t) setSelected({ kind: "tribe", tribe: t });
+      if (!t) return;
+      // Ready to strike: the sheet straight away. Shielded or a clanmate: the
+      // card, which says why you can't.
+      if (attackFocus && !t.ally && t.shieldUntil <= Date.now()) attackTribe(t);
+      else setSelected({ kind: "tribe", tribe: t });
     }
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 

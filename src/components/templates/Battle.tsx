@@ -26,8 +26,14 @@ export const Battle = () => {
   const [target, setTarget] = useState<AttackTarget | null>(null);
   const [revenge, setRevenge] = useState<number | undefined>();
   const [camp, setCamp] = useState<number | undefined>();
+  // ?attack=<playerId> (a spy's "Attack them"): also open the send-army sheet on arrival.
+  const [strike, setStrike] = useState(false);
+  // Bumped by every jump, so the map starts over on the new spot even when it was
+  // already open (it only centres once, on its first load) or on the same tribe.
+  const [jump, setJump] = useState(0);
 
-  // /battle?revenge=<playerId> (Hall) or ?target=<playerId> (Leaderboard) opens the map on
+  // /battle?revenge=<playerId> (Hall), ?target=<playerId> (Leaderboard) or
+  // ?attack=<playerId> (a spy's report, sheet open) opens the map on
   // that tribe with its card up; ?camp=<level> (Hall) does the same for a barbarian camp;
   // /battle?tab=<tab> picks a tab. Each happens once: it's taken off the address (so the
   // same link tapped again later still works), and leaving the map forgets a jump (see pickTab).
@@ -39,14 +45,15 @@ export const Battle = () => {
   useEffect(() => {
     const url = new URL(window.location.href);
     const q = new URLSearchParams(query);
-    const id = Number(q.get("revenge") || q.get("target"));
+    const attack = Number(q.get("attack"));
+    const id = attack || Number(q.get("revenge") || q.get("target"));
     const t = q.get("tab");
     const c = Number(q.get("camp"));
 
-    if (["revenge", "target", "camp", "tab"].some((k) => q.has(k))) {
+    if (["revenge", "target", "attack", "camp", "tab"].some((k) => q.has(k))) {
       const rest = new URLSearchParams(query);
 
-      ["revenge", "target", "camp", "tab"].forEach((k) => rest.delete(k));
+      ["revenge", "target", "attack", "camp", "tab"].forEach((k) => rest.delete(k));
       const search = rest.toString();
 
       window.history.replaceState(null, "", url.pathname + (search ? `?${search}` : "") + url.hash);
@@ -54,9 +61,13 @@ export const Battle = () => {
 
     if (c) {
       setCamp(c);
+      setStrike(false);
+      setJump((j) => j + 1);
       setTab("map");
     } else if (id) {
       setRevenge(id);
+      setStrike(!!attack);
+      setJump((j) => j + 1);
       setTab("map");
     } else if (t === "map" || t === "army" || t === "reports") {
       setTab(t);
@@ -69,6 +80,7 @@ export const Battle = () => {
     if (t !== tab) {
       setRevenge(undefined);
       setCamp(undefined);
+      setStrike(false);
     }
     setTab(t);
   };
@@ -96,6 +108,8 @@ export const Battle = () => {
         >
           {tab === "map" && (
             <WarMap
+              key={jump}
+              attackFocus={strike}
               focusCamp={camp}
               focusId={revenge}
               onAttack={setTarget}
@@ -106,6 +120,8 @@ export const Battle = () => {
             <ReportsTab
               onShowOnMap={(id) => {
                 setRevenge(id);
+                setStrike(false);
+                setJump((j) => j + 1);
                 setTab("map");
               }}
             />
