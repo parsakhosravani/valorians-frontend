@@ -5,6 +5,7 @@ import type { Row } from "@libsql/client";
 import crypto from "crypto";
 
 import { exposureOn, lairManned, roadWatch } from "./bandits";
+import { errorData, logEvent, withEventContext } from "./events";
 import { getDb } from "./db";
 import { homeOf } from "./map";
 import { notify } from "./notify";
@@ -228,28 +229,36 @@ export async function resolveDueTrades(now: number, playerId?: number) {
     });
 
     if (claim.rowsAffected !== 1 || t.buyerId == null) continue;
+    const buyerId = t.buyerId;
     // Each side is paid once: if the buyer's delivery fails after the seller
     // was paid, the retry only delivers the buyer's (it used to pay the seller again).
     let sellerPaid = t.status === "seller-paid";
 
     try {
-      // What the bandits took doesn't arrive.
-      if (!sellerPaid) {
-        await mutatePlayer(t.sellerId, now, (s) =>
-          receiveGoods(s, t.want, t.wantAmount - stolenFrom(t.robB)),
+      await withEventContext(`trade:deliver #${t.id}`, async () => {
+        // What the bandits took doesn't arrive.
+        if (!sellerPaid) {
+          await mutatePlayer(t.sellerId, now, (s) =>
+            receiveGoods(s, t.want, t.wantAmount - stolenFrom(t.robB)),
+          );
+          sellerPaid = true;
+        }
+        await mutatePlayer(buyerId, now, (s) =>
+          receiveGoods(s, t.give, t.giveAmount - stolenFrom(t.robA)),
         );
-        sellerPaid = true;
-      }
-      await mutatePlayer(t.buyerId, now, (s) =>
-        receiveGoods(s, t.give, t.giveAmount - stolenFrom(t.robA)),
-      );
-      await db.execute({
-        sql: "UPDATE trades SET status = 'delivered' WHERE id = ?",
-        args: [t.id],
+        await db.execute({
+          sql: "UPDATE trades SET status = 'delivered' WHERE id = ?",
+          args: [t.id],
+        });
+        logEvent("trade.deliver", {
+          id: t.id, sellerId: t.sellerId, buyerId: t.buyerId, give: t.give, giveAmount: t.giveAmount, want: t.want, wantAmount: t.wantAmount,
+          stolenA: stolenFrom(t.robA), stolenB: stolenFrom(t.robB),
+        }, { playerId: t.sellerId, at: now });
       });
     } catch (e) {
       // Put it back so the next request retries what's left of the delivery.
       console.error("trade delivery failed", t.id, e);
+      logEvent("trade.deliver_failed", { id: t.id, sellerPaid, ...errorData(e) }, { playerId: t.sellerId, at: now, level: "error" });
       await db.execute({
         sql: "UPDATE trades SET status = ? WHERE id = ?",
         args: [sellerPaid ? "seller-paid" : "accepted", t.id],

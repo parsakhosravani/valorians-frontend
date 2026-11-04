@@ -84,9 +84,33 @@ test player instead (`?dev_user=N` picks which one).
 - `src/server/db.ts` creates every table on first use. A DB already at `SCHEMA_VERSION`
   skips setup (one query per cold start). **Bump `SCHEMA_VERSION` with every schema change.**
 - Main tables: `users`, `battles`, `attacks`, `clans`, `clan_requests`, `clan_log`, `trades`,
-  `bandit_lairs`, `announcements`, `payments`, `meta`.
+  `bandit_lairs`, `announcements`, `payments`, `meta`, `event_log` (today only, see Event log).
 - Turso when `TURSO_DATABASE_URL` is set (Vercel); otherwise a local SQLite file
   (Docker / own server — needs a persistent disk).
+
+## Event log
+
+- `src/server/events.ts`: `logEvent(kind, data)` queues a row for `event_log`; `flushEvents()`
+  writes the queue in one INSERT after the response (`after()`), so logging never slows a player
+  and a failed write is dropped, never thrown.
+- Logged by itself: every API call through `handler()` (`api`: route, body without secrets,
+  status, refusal code, ms), every save in `mutatePlayer()` (`save`: what changed — resources,
+  coins, people, building levels, troops, queue/training/march counts — and `bad` if a number
+  went negative or NaN, logged as an error), battles (`war.march`, `war.begin`, `war.finish`,
+  `war.turnback`, `war.abandon`), trades (`trade.deliver`, `trade.deliver_failed`), payments
+  (`pay.*`), clan log entries (`clan.*`), bot updates (`bot.update`, no message text) and cron
+  runs (`cron.run`). Saves carry the route or job that caused them in `ctx`
+  (`withEventContext`, e.g. `battle:finish #812`).
+- `src/server/eventReport.ts`: `buildReport(day)` checks a day's flows (500s, bad numbers,
+  save clashes, abandoned battles, battles begun and never finished, paid moves that cost
+  nothing, cron gaps, armies/battles/trades stuck in the live tables). The first cron run
+  after midnight Tehran (`dailyLogJobs`) reports on yesterday to the admins on Telegram, keeps
+  the report in `meta` (`event_log_last_report`) and **deletes every event before today**.
+- Read it with `EVENT_LOG_KEY` (or `CRON_SECRET`) as `Authorization: Bearer` or `?key=`:
+  `/api/admin/report?day=YYYY-MM-DD|last` and `/api/admin/events?kind=war.&player=…&level=error`.
+  No key set: both answer 401.
+- New server code that moves resources, troops or money: add a `logEvent` (or let a save
+  through `mutatePlayer` log it) so the nightly check can see it.
 
 ## Telegram bot
 

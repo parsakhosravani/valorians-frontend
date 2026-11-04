@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 9; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts
+const SCHEMA_VERSION = 10; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -396,6 +396,23 @@ async function migrate(client: Client) {
     CREATE INDEX IF NOT EXISTS users_power_rank ON users(power_rank);
     CREATE INDEX IF NOT EXISTS users_wins_rank ON users(wins_rank);
     CREATE INDEX IF NOT EXISTS clans_pop_rank ON clans(pop_rank);
+  `);
+
+  // Everything that happened today, to check the game's flows each night
+  // (see events.ts / eventReport.ts). The cron deletes each day after its report.
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS event_log (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      at            INTEGER NOT NULL,
+      level         TEXT NOT NULL,                 -- info | warn | error
+      kind          TEXT NOT NULL,                 -- api, save, war.begin, trade.deliver, cron.run, ...
+      player_id     INTEGER,
+      ctx           TEXT,                          -- what caused it: route or job
+      data          TEXT NOT NULL                  -- JSON
+    );
+    CREATE INDEX IF NOT EXISTS event_log_at ON event_log(at);
+    CREATE INDEX IF NOT EXISTS event_log_player ON event_log(player_id, at);
+    CREATE INDEX IF NOT EXISTS event_log_kind ON event_log(kind, at);
   `);
 }
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { InStatement } from "@libsql/client";
 
+import { logEvent } from "./events";
 import { getDb } from "./db";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
@@ -202,6 +203,8 @@ const logStmt = (clanId: number, now: number, kind: LogKind, actorId: number | n
 
 async function log(clanId: number, now: number, kind: LogKind, actorId: number | null, targetId: number | null = null, data: object = {}) {
   const db = await getDb();
+
+  logEvent(`clan.${kind}`, { clanId, targetId, ...data }, { playerId: actorId, at: now });
 
   await db.execute(logStmt(clanId, now, kind, actorId, targetId, data)).catch((e) => {
     console.error("clan log", e);

@@ -9,6 +9,8 @@ import { moveOutpostsOutOfWalls } from "@/server/outposts";
 import { resettleVillages } from "@/server/resettle";
 import { refreshTribeColumns } from "@/server/tribeColumns";
 import { maybeRefreshRanks } from "@/server/ranks";
+import { errorData, flushEvents, logEvent, withEventContext } from "@/server/events";
+import { dailyLogJobs } from "@/server/eventReport";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -36,6 +38,17 @@ export async function GET(req: NextRequest) {
   last = Date.now();
   const started = Date.now();
 
+  try {
+    return await withEventContext("cron", () => run(started));
+  } catch (e) {
+    logEvent("cron.run", { ms: Date.now() - started, ...errorData(e) }, { at: started, level: "error" });
+    throw e;
+  } finally {
+    await flushEvents();
+  }
+}
+
+async function run(started: number) {
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
   // New tribes get their tile on the map here (it used to slow every map request).
@@ -65,5 +78,15 @@ export async function GET(req: NextRequest) {
     console.error("announcements failed", e)
   );
 
-  return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}), ...(release ? { release } : {}) });
+  // Once a day after midnight (Tehran): yesterday's log is checked, sent to the admins and deleted.
+  const log = await dailyLogJobs(started).catch((e) => {
+    console.error("daily event log jobs failed", e);
+    logEvent("log.purge", errorData(e), { level: "error" });
+
+    return null;
+  });
+
+  logEvent("cron.run", { ms: Date.now() - started, ...(log ? { log } : {}) }, { at: started });
+
+  return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}), ...(release ? { release } : {}), ...(log ? { log } : {}) });
 }

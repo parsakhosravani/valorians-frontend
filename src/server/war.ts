@@ -9,6 +9,7 @@ import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { maybeRefreshRanks } from "./ranks";
 import { spiesSeeMarch } from "./spies";
+import { errorData, logEvent, withEventContext } from "./events";
 
 import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
@@ -190,6 +191,10 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
     }
     // Anyone with a spy in this village hears the army has gone.
     await spiesSeeMarch(after, sent, travel, now).catch((e) => console.error("spies", e));
+    logEvent("war.march", {
+      id: Number(ins.lastInsertRowid), defenderId, campLevel, lairLevel, units: sent, travelMs: travel, naval, ambush: !!ambush,
+      from: home, to: dest,
+    }, { playerId: me.id, at: now });
 
     return { player: after, march: { id: Number(ins.lastInsertRowid), arrivesAt: now + travel } };
   } catch (e) {
@@ -321,6 +326,7 @@ const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, a
 
 /** Nobody to fight: the army turns round and walks home the way it came. */
 async function turnBack(a: AttackRow, attackerId: number, name: string | null, now: number, at = a.arrivesAt) {
+  logEvent("war.turnback", { id: a.id, defenderId: a.defenderId, campLevel: a.campLevel, lairLevel: a.lairLevel, target: name, at }, { playerId: attackerId, at: now });
 
   await mutatePlayer(attackerId, now, (s) =>
     returnHome(s, a.units, name ?? "Abandoned land", at + homeTripMs(a), now, rand(), a.to, at, carriedOf(a))
@@ -440,11 +446,24 @@ async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise
     if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, engaged)).catch(() => {});
     throw e;
   }
+  logEvent("war.begin", {
+    id: a.id, defenderId: a.defenderId, campLevel: a.campLevel, lairLevel: a.lairLevel, startsAt: at, endsAt: plan.endsAt,
+    waitedMs: at - a.arrivesAt, attackers, defenders, attackerWins: outcome.attackerWon, engaged,
+  }, { playerId: attacker.id, at: now });
   if (a.defenderId && plan.endsAt > now) {
     await notify.battleBegun(a.defenderId, displayName(attacker), plan.endsAt - now).catch(() => {});
   }
 
   return true;
+}
+
+/** One "war.finish" event: who won, what each side lost and what was carried off. */
+function logFinish(a: AttackRow, attackerId: number, r: RaidReport, now: number) {
+  logEvent("war.finish", {
+    id: a.id, defenderId: a.defenderId, campLevel: a.campLevel, lairLevel: a.lairLevel, won: r.attackerWon,
+    sent: r.sent, attackerLosses: r.attackerLosses, defenderLosses: r.defenderLosses, loot: r.loot, coins: r.coins,
+    returnsAt: r.returnsAt, gate: r.gate ?? null, shieldMs: r.shieldMs ?? null, damage: r.damage ?? null, noLoot: r.noLoot ?? null,
+  }, { playerId: attackerId, at: now });
 }
 
 /** The last round is over: the decided result is applied to both tribes. Times use the battle's end. */
@@ -474,6 +493,7 @@ async function finishBattle(a: AttackRow, now: number) {
 
       return r.state;
     });
+    logFinish(a, attacker.id, report, now);
     const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: campName(a.campLevel) };
 
     await saveReport(attacker.id, null, a.campLevel, full, at, a.id);
@@ -492,6 +512,7 @@ async function finishBattle(a: AttackRow, now: number) {
 
       return r.state;
     });
+    logFinish(a, attacker.id, report, now);
     if (report.attackerWon) await clearLair(a.to, attacker.id, at);
     const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: `Bandit lair (level ${a.lairLevel})` };
 
@@ -526,6 +547,7 @@ async function finishBattle(a: AttackRow, now: number) {
 
     return leaveField(r.state, a.id);
   });
+  logFinish(a, attacker.id, report, now);
   const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: displayName(defender) };
   let promoted: Promotion[] = [];
 
@@ -549,6 +571,7 @@ async function finishBattle(a: AttackRow, now: number) {
 /** Something went wrong: everyone goes home with nothing, so no troops are lost to a bug. */
 async function abandon(a: AttackRow, now: number, e: unknown) {
   console.error("battle failed, sending the armies home", a.id, e);
+  logEvent("war.abandon", { id: a.id, defenderId: a.defenderId, battle: !!a.battle, ...errorData(e) }, { playerId: a.attackerId, at: now, level: "error" });
   await mutatePlayer(a.attackerId, now, (s) =>
     returnHome(s, a.units, "a failed march", now + 60_000, now, rand(), undefined, now, carriedOf(a))
   ).catch(() => {});
@@ -590,9 +613,9 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
     let fighting: boolean | "wait" = false;
 
     try {
-      fighting = await beginBattle(a, now, at);
+      fighting = await withEventContext(`battle:begin #${a.id}`, () => beginBattle(a, now, at));
     } catch (e) {
-      await abandon(a, now, e);
+      await withEventContext(`battle:abandon #${a.id}`, () => abandon(a, now, e));
     }
     if (fighting === "wait") {
       await db.execute({ sql: "UPDATE attacks SET status = 'marching' WHERE id = ? AND status = 'resolving'", args: [a.id] });
@@ -618,9 +641,9 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
 
     if (claim.rowsAffected !== 1) continue;
     try {
-      await finishBattle(a, now);
+      await withEventContext(`battle:finish #${a.id}`, () => finishBattle(a, now));
     } catch (e) {
-      await abandon(a, now, e);
+      await withEventContext(`battle:abandon #${a.id}`, () => abandon(a, now, e));
     }
     await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
   }

@@ -6,6 +6,7 @@ import type { InStatement, Row } from "@libsql/client";
 import { getDb } from "./db";
 import type { AuthResult, TelegramAuthUser } from "./auth";
 import { unreadNotices } from "./notices";
+import { logEvent, stateChange } from "./events";
 
 import { GameState, advance, createInitialState, normalizeState, peopleOf } from "@/lib/game/engine";
 import { powerScore } from "@/lib/game/war";
@@ -204,12 +205,23 @@ export async function mutatePlayer(
               version = version + 1 WHERE id = ? AND version = ?`,
       args: [JSON.stringify(next), ...stateColumns(next), id, player.version],
     });
-    if (rs.rowsAffected === 1) return { ...player, version: player.version + 1, state: next };
+    if (rs.rowsAffected === 1) {
+      // What this save did (time passing is left out: only the change itself).
+      // `fn` may change `current` in place, so compare with a fresh copy brought up to `now`.
+      const change = stateChange(advance(player.state, now), next);
+
+      if (Object.keys(change).length) {
+        logEvent("save", attempt ? { ...change, retries: attempt } : change, { playerId: id, at: now, level: change.bad ? "error" : "info" });
+      }
+
+      return { ...player, version: player.version + 1, state: next };
+    }
     // Someone saved first. Wait a short random moment before trying again, so
     // requests that clashed don't all retry together and clash again (without
     // this, ten parallel requests for one player already ran out of attempts).
     await new Promise((r) => setTimeout(r, Math.random() * 15 * (attempt + 1)));
   }
+  logEvent("save.clash", { attempts: 8 }, { playerId: id, at: now, level: "error" });
   throw new Error("Too many simultaneous updates, try again");
 }
 
