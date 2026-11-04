@@ -56,6 +56,7 @@ import {
   UNIT_BY_ID,
   UnitId,
   NEW_PLAYER_SHIELD_MS,
+  RAIDED_SHIELDS_MS,
   hiddenResources,
   RANKS,
   RANK_BONUS,
@@ -144,8 +145,8 @@ export type WarStats = {
   defensesWon: number;
   defensesLost: number;
   resourcesLooted: number;
-  /** When this tribe was raided in the last day (for the growing shield, see RAIDED_SHIELDS_MS). */
-  raidedAt?: number[];
+  /** Raid shields this tribe got in the last day: [when, how long] (for the ladder and daily cap, see RAID_SHIELD). */
+  raidShields?: [number, number][];
 };
 
 /** Bandits gathering at a lair to raid the village. */
@@ -339,6 +340,17 @@ export function createInitialState(now: number): GameState {
   };
 }
 
+/**
+ * Raids before Nov 2026 kept only when the tribe was raided (`raidedAt`).
+ * Each counts as a raid shield on the ladder; their length isn't known, so
+ * they count as the ladder step they got.
+ */
+function normalizeWar(w: WarStats & { raidedAt?: number[] }): WarStats {
+  const { raidedAt, ...war } = w;
+  if (!raidedAt || war.raidShields) return war;
+  return { ...war, raidShields: raidedAt.map((t, i) => [t, RAIDED_SHIELDS_MS[Math.min(i, RAIDED_SHIELDS_MS.length - 1)]]) };
+}
+
 /** Fills in anything missing from an older saved state. */
 export function normalizeState(saved: GameState): GameState {
   const fresh = createInitialState(saved.updatedAt);
@@ -361,7 +373,7 @@ export function normalizeState(saved: GameState): GameState {
     // Players who existed before war was added don't get a new-player shield.
     shieldUntil: s.shieldUntil ?? 0,
     camps: { ...fresh.camps, ...s.camps, lastRaid: { ...(s.camps?.lastRaid ?? {}) } },
-    war: { ...fresh.war, ...s.war },
+    war: normalizeWar({ ...fresh.war, ...s.war }),
     frenzy: { ...fresh.frenzy, ...s.frenzy },
     streak: { ...fresh.streak, ...s.streak },
     clanPerks: { ...fresh.clanPerks, ...s.clanPerks },
@@ -858,7 +870,7 @@ function structuredCloneState(s: GameState): GameState {
     training: s.training.map((t) => ({ ...t })),
     marches: s.marches.map((m) => ({ ...m, units: { ...m.units }, loot: { ...m.loot }, ...(m.from ? { from: { ...m.from } } : {}) })),
     camps: { ...s.camps, lastRaid: { ...s.camps.lastRaid } },
-    war: { ...s.war, ...(s.war.raidedAt ? { raidedAt: [...s.war.raidedAt] } : {}) },
+    war: { ...s.war, ...(s.war.raidShields ? { raidShields: s.war.raidShields.map(([t, ms]) => [t, ms] as [number, number]) } : {}) },
     ...(s.deserted ? { deserted: { ...s.deserted } } : {}),
     ...(s.banditRaid ? { banditRaid: { ...s.banditRaid } } : {}),
     ...(s.owned ? { owned: { ...s.owned } } : {}),

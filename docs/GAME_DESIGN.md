@@ -44,6 +44,12 @@ ask before "fixing" either. Add new decisions here when they are made.
   round has begun is too late: they wait at home for the result.
 - **Hideout** protection is capped.
 - **Raid shield grows** when a player is raided again and again.
+- **A raid shield is earned by real damage** (Nov 2026), not by being attacked: damage = loot +
+  cost of defenders killed, over lootable stores + cost of defenders (never less than 12 h of the
+  tribe's own production). Under 5% no shield; it scales up to the full 2/6/12 h ladder step at
+  25%; all raid shields in a day add up to at most 24 h. Stops a player attacking their own second
+  account with a few troops (and losing on purpose) to hand it a free shield. Pinned in
+  war.test.ts ("attacking your own second account…"). Numbers: `RAID_SHIELD` in config.ts.
 - Attacking a **much weaker target gives half loot**.
 - Knight and Paladin are strong elite cavalry.
 - **Every troop has one job** (Nov 2026 rebalance, pinned by "each troop is the best at its own
