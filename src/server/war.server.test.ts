@@ -170,7 +170,7 @@ describe("raiding another player (server)", () => {
     expect(after.state.defending ?? []).toEqual([]);
   });
 
-  test("a second wave that lands while the village is fighting waits and meets its defenders", async () => {
+  test("a second wave that lands while the village is fighting joins that battle, against its defenders", async () => {
     const T0 = Date.now();
     const atk = await newPlayer(T0, (s) => {
       s.army.axeman = 320;
@@ -193,25 +193,36 @@ describe("raiding another player (server)", () => {
 
     expect(main.arrivesAt).toBeLessThan(baitEnds); // the main army lands mid-battle…
     await resolveDueAttacks(main.arrivesAt + 1);
-    expect(String((await row(main.id)).status)).toBe("marching"); // …and waits at the gates
+    // …and joins it: no empty village to storm, it fights the defenders already on the field.
+    const host = await row(bait.id);
+    const battle = JSON.parse(String(host.battle));
 
-    await resolveDueAttacks(baitEnds + 1); // the bait is beaten, the spearmen go home
-    await resolveDueAttacks(baitEnds + 2); // now the main army attacks
-    const fight = await row(main.id);
+    expect(JSON.parse(String((await row(main.id)).battle))).toEqual({ allyOf: bait.id });
+    expect(String((await row(main.id)).status)).toBe("fighting");
+    expect(battle.allies.map((x: { id: number }) => x.id)).toEqual([main.id]);
+    expect(battle.engaged.spearman).toBeGreaterThan(1900);
+    expect(Number((await row(main.id)).ends_at)).toBe(Number(host.ends_at));
 
-    expect(String(fight.status)).toBe("fighting");
-    const battle = JSON.parse(String(fight.battle));
+    await resolveDueAttacks(Number(host.ends_at) + 1);
+    expect(String((await row(main.id)).status)).toBe("done");
+    const [shared] = await battlesFor(bait.id);
+    const [own] = await battlesFor(main.id);
 
-    expect(battle.plan.startedAt).toBe(baitEnds); // the fight starts when the field is clear
-    expect(battle.engaged.spearman).toBeGreaterThan(1900); // against the defenders, not an empty village
+    expect(Number(shared.attacker_won)).toBe(0);
+    expect(JSON.parse(String(shared.report)).sent.axeman).toBe(320); // the battle's report: both armies
+    const mine = JSON.parse(String(own.report));
 
-    await resolveDueAttacks(baitEnds + 2 * HOUR);
-    const [report] = await battlesFor(main.id);
+    expect(mine.sent.axeman).toBe(300); // the second army's share
+    expect(mine.allyOf).toBeTruthy();
+    // Troops are conserved: home + marching home + fallen = what was sent.
+    const back = await reload(atk.id);
+    const home = back.state.army.axeman + back.state.marches.reduce((n, m) => n + (m.units.axeman ?? 0), 0);
+    const fell = JSON.parse(String(shared.report)).attackerLosses.axeman;
 
-    expect(Number(report.attacker_won)).toBe(0);
+    expect(home + fell).toBe(320);
   });
 
-  test("two waves landing together, resolved by many callers at once, still fight one at a time", async () => {
+  test("two waves landing together, resolved by many callers at once, fight as one battle", async () => {
     const T0 = Date.now();
     const atk = await newPlayer(T0, (s) => {
       s.army.axeman = 320;
@@ -227,11 +238,40 @@ describe("raiding another player (server)", () => {
     const at = main.arrivesAt + 1; // both are due in the same sweep
     await Promise.all([resolveDueAttacks(at, atk.id), resolveDueAttacks(at, def.id), resolveDueAttacks(at), resolveDueAttacks(at)]);
     const db = await getDb();
-    const status = async (id: number) =>
-      String((await db.execute({ sql: "SELECT status FROM attacks WHERE id = ?", args: [id] })).rows[0].status);
+    const rows = (await db.execute({ sql: "SELECT id, status, battle FROM attacks WHERE id IN (?, ?) ORDER BY id", args: [bait.id, main.id] })).rows;
 
-    expect(await status(bait.id)).toBe("fighting");
-    expect(await status(main.id)).toBe("marching");
+    expect(rows.map((r) => String(r.status))).toEqual(["fighting", "fighting"]);
+    const [b, m] = rows.map((r) => JSON.parse(String(r.battle)));
+
+    expect(b.allies.map((x: { id: number }) => x.id)).toEqual([main.id]); // one battle, the second army in it once
+    expect(m).toEqual({ allyOf: bait.id });
+  });
+
+  test("an army of another clan still waits at the gates", async () => {
+    const T0 = Date.now();
+    const one = await newPlayer(T0, (s) => {
+      s.army.axeman = 50;
+      s.shieldUntil = 0;
+    });
+    const other = await newPlayer(T0, (s) => {
+      s.army.axeman = 50;
+      s.shieldUntil = 0;
+    });
+    const def = await newPlayer(T0, (s) => {
+      s.shieldUntil = 0;
+      s.army.spearman = 2000;
+    });
+    await nextDoor(one, def);
+    await nextDoor(def, other);
+    const first = (await marchTo(await reload(one.id), { target: def.id }, axemen(50), T0)).march;
+    const second = (await marchTo(await reload(other.id), { target: def.id }, axemen(50), T0)).march;
+    const db = await getDb();
+    const at = Math.max(first.arrivesAt, second.arrivesAt) + 1;
+
+    await resolveDueAttacks(at);
+    const rows = (await db.execute({ sql: "SELECT status FROM attacks WHERE id IN (?, ?)", args: [first.id, second.id] })).rows;
+
+    expect(rows.map((r) => String(r.status)).sort()).toEqual(["fighting", "marching"]);
   });
 
   test("a shielded tribe can't be raided and the troops stay home", async () => {

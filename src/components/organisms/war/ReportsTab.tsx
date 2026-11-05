@@ -74,8 +74,10 @@ export const ReportsTab = ({ onShowOnMap }: { onShowOnMap?: (playerId: number) =
                   {it.report.ambush
                     ? "Bandits ambushed your army"
                     : it.role === "attacker"
-                      ? `You attacked ${it.opponent}`
-                      : `${it.opponent} attacked you`}
+                      ? it.report.allyOf
+                        ? `You joined ${it.report.allyOf} against ${it.opponent}`
+                        : `You attacked ${it.opponent}`
+                      : `${it.opponent}${it.report.allies?.length ? ` and ${it.report.allies.length} more` : ""} attacked you`}
                 </div>
                 <div className="text-xs text-muted">
                   {it.opponentAt && !it.report.ambush && (
@@ -107,6 +109,13 @@ export const ReportsTab = ({ onShowOnMap }: { onShowOnMap?: (playerId: number) =
               >
                 <GameIcon e="📍" /> {open.opponent}&apos;s village at {shownXY(open.opponentAt)}: show on map
               </button>
+            )}
+            {(open.report.allies?.length || open.report.allyOf) && (
+              <p className="text-xs text-sub text-center">
+                {open.report.allyOf
+                  ? `Your army fought in ${open.report.allyOf}'s battle. These are your troops' losses and your share of the spoils.`
+                  : `Fought together: ${[open.report.attackerName, ...open.report.allies!.map((a) => a.name)].join(", ")}. Every army that took part is counted here.`}
+              </p>
             )}
             <BattleSummary asDefender={open.role === "defender"} report={open.report} />
           </div>

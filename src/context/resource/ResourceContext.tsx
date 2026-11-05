@@ -188,6 +188,10 @@ export type BattleReport = RaidReport & {
   defenderName: string;
   /** Bandits ambushed the attacker's army on the road. */
   ambush?: boolean;
+  /** Armies that fought alongside the leading one (the battle's report). */
+  allies?: { name: string; sent: Army }[];
+  /** Your army joined this tribe's battle: the report is your share of it. */
+  allyOf?: string;
 };
 
 export type ScoutReport = {

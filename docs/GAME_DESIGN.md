@@ -111,8 +111,13 @@ ask before "fixing" either. Add new decisions here when they are made.
     24 h ahead, never onto a shield). An army joining far ahead **waits at home** (still defending)
     and sets out just in time (`CLAN_WAR.musterLeadMs` early, slowing to land on the minute), so
     the target is warned only the usual travel time before (Nov 2026: setting out at once gave
-    hours to buy a shield). A late army lands when it can. Waves queue at the gates (one battle
-    at a time).
+    hours to buy a shield). A late army lands when it can.
+  - **Fighting together** (Nov 2026, owner's call): an army that lands on a village already
+    fighting an army of its side (the same tribe's, or a clanmate's) joins that battle at the next
+    round (`reinforceAttack`), under the leading army's banner, like guards fight under their
+    host's. One battle, one report for the defender; each army loses troops by what it brought,
+    carries loot by the room its survivors have and goes home with its own share (`splitRaid`).
+    Too late (the last round began) or another clan's army: it waits at the gates as before.
 - **Shields vs armies on the road** (Nov 2026, owner's call): a shield bought or claimed **after**
   an army set out (or after its clan strike was called) doesn't stop it; it stops attacks sent
   after it goes up (`shieldStops`). Shields already up (a new tribe's, an earlier one) and raid

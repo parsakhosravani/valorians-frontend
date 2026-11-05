@@ -313,13 +313,42 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   });
 
   const watch = (me.state.buildings["watchtower"] ?? 0) >= 1;
+  // An army that joined another's battle shows that battle (its row only points to it, see joinAlly).
+  const battleOf = new Map<number, StoredBattle>();
+  const wanted = new Set<number>();
+
+  for (const a of mv.rows) {
+    if (a.status !== "fighting" || a.battle == null) continue;
+    const v = JSON.parse(String(a.battle)) as StoredBattle | { allyOf: number };
+
+    if ("allyOf" in v) wanted.add(Number(v.allyOf));
+    else battleOf.set(Number(a.id), v);
+  }
+  const missing = [...wanted].filter((id) => !battleOf.has(id));
+
+  if (missing.length) {
+    const hs = await db.execute({
+      sql: `SELECT id, battle FROM attacks WHERE status = 'fighting' AND id IN (${missing.map(() => "?").join(",")})`,
+      args: missing,
+    });
+
+    for (const h of hs.rows) if (h.battle != null) battleOf.set(Number(h.id), JSON.parse(String(h.battle)) as StoredBattle);
+  }
+  const allyOf = (a: Record<string, unknown>) => {
+    if (a.status !== "fighting" || a.battle == null) return null;
+    const v = JSON.parse(String(a.battle)) as { allyOf?: number };
+
+    return v.allyOf == null ? null : Number(v.allyOf);
+  };
+
   const movements: Movement[] = mv.rows.map((a) => {
     const outgoing = Number(a.attacker_id) === me.id;
     const atMe = a.defender_id != null && Number(a.defender_id) === me.id;
     // Neither yours nor at you: a clanmate's army, or an army marching on a clanmate.
     const clanSide = !outgoing && !atMe ? (me.clanId != null && Number(a.a_clan) === me.clanId ? "clan-outgoing" : "clan-incoming") : null;
     const campLevel = a.camp_level == null ? null : Number(a.camp_level);
-    const stored = a.status === "fighting" && a.battle != null ? (JSON.parse(String(a.battle)) as StoredBattle) : null;
+    const joinedTo = allyOf(a);
+    const stored = battleOf.get(joinedTo ?? Number(a.id)) ?? null;
     const battle: LiveBattle | null = stored
       ? {
           startedAt: stored.plan.startedAt,
@@ -356,6 +385,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       campLevel,
       lairLevel: a.lair_level == null ? null : Number(a.lair_level),
       battle,
+      /** Fighting in another army's battle (that army's id): the battle is drawn once, for the leading army. */
+      ...(joinedTo != null ? { allyOf: joinedTo } : {}),
       // Your own army after new orders: the spoils it carries and how many orders it took.
       ...(outgoing
         ? {

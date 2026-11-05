@@ -884,6 +884,95 @@ export function receiveRaidReport(
   return s;
 }
 
+/**
+ * Shares `total` out in whole numbers by `weights` (largest remainder): the
+ * parts always add up to `total` exactly, and no part gets more than its
+ * fair share rounded up.
+ */
+export function shareOut(total: number, weights: number[]): number[] {
+  const n = weights.length;
+  const out = new Array<number>(n).fill(0);
+  const sum = weights.reduce((a, w) => a + Math.max(0, w), 0);
+
+  if (n === 0 || total <= 0) return out;
+  if (sum <= 0) {
+    out[0] = total;
+
+    return out;
+  }
+  const exact = weights.map((w) => (total * Math.max(0, w)) / sum);
+  let left = total;
+
+  exact.forEach((x, i) => {
+    out[i] = Math.floor(x);
+    left -= out[i];
+  });
+  const order = exact.map((x, i) => [x - Math.floor(x), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+
+  for (let k = 0; left > 0 && k < order.length; k++, left--) out[order[k][1]] += 1;
+
+  return out;
+}
+
+/** One army of a battle fought by several (see splitRaid). */
+export type RaidPart = { sent: Army; returnsAt: number; carried?: Loot; carriedCoins?: number };
+
+/**
+ * A battle that several armies of the same side fought together (the same
+ * tribe's, or clanmates'), split back into one report per army: each loses
+ * troops in proportion to how many of that kind it brought, each carries loot
+ * in proportion to the room its survivors have left, and each earns the XP of
+ * its own troops. The parts add up to the whole battle exactly.
+ * `parts[0]` is the leading army; it gets any coins.
+ */
+export function splitRaid(report: RaidReport, parts: RaidPart[]): RaidReport[] {
+  const out = parts.map<RaidReport>((p, i) => ({
+    ...report,
+    sent: { ...emptyArmy(), ...p.sent },
+    attackerLosses: emptyArmy(),
+    attackerHealed: emptyArmy(),
+    attackerXp: emptyArmy(),
+    loot: emptyLoot(),
+    coins: i === 0 ? report.coins : 0,
+    returnsAt: p.returnsAt,
+    carried: lootTotal(p.carried) > 0 || (p.carriedCoins ?? 0) > 0 ? { ...emptyLoot(), ...p.carried } : undefined,
+    carriedCoins: lootTotal(p.carried) > 0 || (p.carriedCoins ?? 0) > 0 ? (p.carriedCoins ?? 0) : undefined,
+  }));
+
+  for (const u of UNIT_IDS) {
+    const brought = parts.map((p) => p.sent[u] ?? 0);
+    const lost = shareOut(report.attackerLosses[u] ?? 0, brought);
+    // The wounded come from those still standing in each army.
+    const hurt = shareOut(report.attackerHealed[u] ?? 0, brought.map((b, i) => b - lost[i]));
+    const xp = shareOut(report.attackerXp?.[u] ?? 0, brought);
+
+    out.forEach((r, i) => {
+      r.attackerLosses[u] = lost[i];
+      r.attackerHealed[u] = hurt[i];
+      r.attackerXp![u] = xp[i];
+    });
+  }
+  // Room for new loot: what each army's survivors can carry, less the spoils already on their backs.
+  const room = out.map((r) => {
+    const carry = carryOf(survivorsOf(r.sent, r.attackerLosses));
+
+    return Math.max(0, carry - lootTotal(keptSpoils(r.carried, carry)));
+  });
+
+  for (const res of RESOURCE_IDS) {
+    shareOut(report.loot[res] ?? 0, room).forEach((v, i) => (out[i].loot[res] = v));
+  }
+
+  return out.map((r) => {
+    if (!r.carried) {
+      delete r.carried;
+      delete r.carriedCoins;
+    }
+
+    return r;
+  });
+}
+
 // ─── Barbarian camps ─────────────────────────────────────────────────────────
 
 /** A beaten camp too old to stay on the map (see CAMPS_KEPT). */

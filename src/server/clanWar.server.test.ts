@@ -207,6 +207,51 @@ describe("clans fighting together (server)", () => {
     expect((await standingWith(two.mate, one.clanId, T0))?.officer).toBe(false);
   });
 
+  test("clanmates landing on the same village fight one battle together and share what it takes", async () => {
+    const T0 = Date.now();
+    const crew = await band(T0, (s) => { s.army.axeman = 400; });
+    const target = await newPlayer(T0, (s) => { s.shieldUntil = 0; s.army.spearman = 60; s.resources.iron = 20_000; });
+
+    await nextDoor(crew.lead, target);
+    const db = await getDb();
+    const row = async (id: number) => (await db.execute({ sql: "SELECT * FROM attacks WHERE id = ?", args: [id] })).rows[0];
+    const first = (await marchTo(await reload(crew.lead.id), { target: target.id }, army({ axeman: 400 }), T0)).march;
+    const second = (await marchTo(await reload(crew.mate.id), { target: target.id }, army({ axeman: 400 }), T0)).march;
+
+    await resolveDueAttacks(Math.max(first.arrivesAt, second.arrivesAt) + 1);
+    const [a, b] = [await row(first.id), await row(second.id)];
+    const lead = JSON.parse(String(a.battle)).allyOf == null ? a : b;
+    const joined = lead === a ? b : a;
+
+    expect(JSON.parse(String(joined.battle)).allyOf).toBe(Number(lead.id));
+    await resolveDueAttacks(Number(lead.ends_at) + 1);
+    const reports = (await db.execute({ sql: "SELECT attacker_id, report FROM battles WHERE attack_id IN (?, ?)", args: [first.id, second.id] })).rows;
+
+    expect(reports.length).toBe(2);
+    const by = new Map(reports.map((r) => [Number(r.attacker_id), JSON.parse(String(r.report))]));
+    const whole = by.get(Number(lead.attacker_id))!;
+    const share = by.get(Number(joined.attacker_id))!;
+
+    expect(whole.attackerWon).toBe(true);
+    expect(whole.sent.axeman).toBe(800);
+    expect(whole.allies.length).toBe(1);
+    // The joining army's share is part of the whole battle, never more.
+    expect(share.attackerLosses.axeman).toBeLessThanOrEqual(whole.attackerLosses.axeman);
+    expect(share.loot.iron).toBeGreaterThan(0);
+    expect(share.loot.iron).toBeLessThan(whole.loot.iron);
+    // The target sees one battle, not two.
+    const theirs = (await db.execute({ sql: "SELECT COUNT(*) AS n FROM battles WHERE defender_id = ? AND json_extract(report, '$.allyOf') IS NULL", args: [target.id] })).rows[0];
+
+    expect(Number(theirs.n)).toBe(1);
+    // Both armies are on their way home with their own loot.
+    for (const p of [crew.lead, crew.mate]) {
+      const s = (await reload(p.id)).state;
+
+      expect(s.marches.length).toBe(1);
+      expect(s.marches[0].loot.iron).toBeGreaterThan(0);
+    }
+  });
+
   test("the weekly goal pays every member once", async () => {
     const T0 = Date.now();
     const week = weekOf(T0);

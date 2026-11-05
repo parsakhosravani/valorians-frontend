@@ -172,6 +172,31 @@ test("an army coming home mid-battle joins from the next round and can turn it",
   }
 });
 
+test("a second army of the attackers' side joins from the next round and can win it", () => {
+  const attacker = tribe();
+  const defender = tribe();
+  defender.army.spearman = 400;
+  const sent = { ...E.emptyArmy(), swordsman: 100 };
+  const { outcome, defenders } = W.raidOutcome(defender, attacker, sent, 0.5);
+  const plan = B.planBattle(outcome, T0, B.battleSize(B.troopsOnField(sent), B.troopsOnField(defenders)), 0.4);
+  const battle = { plan, outcome, engaged: defenders };
+  expect(outcome.attackerWon).toBe(false);
+  const help = { ...E.emptyArmy(), axeman: 3000 };
+  const next = B.reinforceAttack(defender, attacker, sent, battle, { at: plan.startedAt + 1, units: help }, 0.2)!;
+
+  expect(next.plan.rounds[0]).toEqual(plan.rounds[0]); // the round under way doesn't change
+  expect(next.plan.rounds[1].allied).toEqual(help);
+  expect(next.outcome.attackerWon).toBe(true);
+  expect(next.engaged).toEqual(battle.engaged); // the defenders on the field are the same
+  // Nobody falls twice, and no attacker falls who wasn't there.
+  const all = sum(sent, help);
+  const last = next.plan.rounds[next.plan.rounds.length - 1];
+  expect(last.attackerFallen).toEqual(sum(next.outcome.attackerLosses, next.outcome.attackerHealed));
+  for (const u of Object.keys(all) as (keyof E.Army)[]) expect(last.attackerFallen[u]).toBeLessThanOrEqual(all[u]);
+  // Too late: the last round has begun.
+  expect(B.reinforceAttack(defender, attacker, sent, battle, { at: B.joinDeadline(plan) + 1, units: help }, 0.2)).toBeNull();
+});
+
 test("an army coming home in the last round is too late to join", () => {
   const { attacker, defender, sent, battle } = siege();
   const n = battle.plan.rounds.length;

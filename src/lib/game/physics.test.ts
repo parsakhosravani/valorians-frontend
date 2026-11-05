@@ -233,6 +233,41 @@ describe("battle", () => {
     return a;
   };
 
+  test("a battle fought by several armies splits back exactly: troops, loot and XP add up, nobody loses more than they brought", () => {
+    const r = rng(7);
+    for (let i = 0; i < 400; i++) {
+      const atk = midGame(i);
+      const def = midGame(i + 500);
+      armyOf(def, r);
+      def.shieldUntil = 0;
+      const n = 1 + Math.floor(r() * 4);
+      const parts = Array.from({ length: n }, () => {
+        const a = E.emptyArmy();
+        for (const u of C.UNIT_IDS) if (!C.UNIT_BY_ID[u].maxOwned && !C.UNIT_BY_ID[u].transport && r() < 0.6) a[u] = Math.floor(r() * 200);
+        const carried = r() < 0.3 ? { iron: Math.floor(r() * 500), wood: 0, clay: 0, crop: 0 } : undefined;
+        return { sent: a, returnsAt: 1000 + i, carried };
+      });
+      const sent = parts.reduce((t, p) => { for (const u of C.UNIT_IDS) t[u] += p.sent[u]; return t; }, E.emptyArmy());
+      atk.army = { ...sent };
+      const { report } = W.defendRaid(def, atk, sent, 0, r(), {});
+      const pieces = W.splitRaid(report, parts);
+      for (const u of C.UNIT_IDS) {
+        expect(pieces.reduce((t, p) => t + p.attackerLosses[u], 0)).toBe(report.attackerLosses[u]);
+        expect(pieces.reduce((t, p) => t + p.attackerHealed[u], 0)).toBe(report.attackerHealed[u]);
+        expect(pieces.reduce((t, p) => t + (p.attackerXp?.[u] ?? 0), 0)).toBe(report.attackerXp?.[u] ?? 0);
+        pieces.forEach((p, k) => {
+          expect(p.attackerLosses[u]).toBeGreaterThanOrEqual(0);
+          expect(p.attackerLosses[u] + p.attackerHealed[u]).toBeLessThanOrEqual(parts[k].sent[u]);
+        });
+      }
+      for (const res of C.RESOURCE_IDS) {
+        expect(pieces.reduce((t, p) => t + p.loot[res], 0)).toBe(report.loot[res]);
+        for (const p of pieces) expect(p.loot[res]).toBeGreaterThanOrEqual(0);
+      }
+      expect(pieces.reduce((t, p) => t + p.coins, 0)).toBe(report.coins);
+    }
+  });
+
   test("losses never exceed who fought; the stronger side wins; luck stays within its bounds", () => {
     const r = rng(42);
     for (let i = 0; i < 500; i++) {

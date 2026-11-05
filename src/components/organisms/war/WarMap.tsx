@@ -145,6 +145,8 @@ type Movement = {
   campLevel: number | null;
   /** Arrived: the battle is being fought (older servers don't send it). */
   battle?: LiveBattleData | null;
+  /** Fighting in another army's battle (same side): that army's id. */
+  allyOf?: number;
   /** Your armies: spoils carried from an earlier battle and new orders taken (older servers don't send them). */
   loot?: Partial<Record<ResourceId, number>> | null;
   coins?: number;
@@ -424,7 +426,17 @@ const Travellers = ({
   const spot = (from: Pt, to: Pt, units: Army | null, f: number) =>
     spotOnRoad({ x: px(from.x), y: py(from.y) }, { x: px(to.x), y: py(to.y) }, roadOf(from, to, units, f).road, f);
 
-  for (const m of marching) place(`t${m.id}`, spot(m.from, m.to, m.units, progress(now, m.sentAt, m.arrivesAt)));
+  // Where a marching army is drawn along its road: one waiting at the gates of a village that is
+  // fighting stands about a tile short of it, so it doesn't sit on the battle and hide the village's name.
+  const along = (m: Movement) => {
+    const f = progress(now, m.sentAt, m.arrivesAt);
+
+    if (m.arrivesAt > now || !battles.some((b) => b.to.x === m.to.x && b.to.y === m.to.y)) return f;
+
+    return Math.min(f, Math.max(0.5, 1 - GATES_TILES / Math.max(1, Math.hypot(m.to.x - m.from.x, m.to.y - m.from.y))));
+  };
+
+  for (const m of marching) place(`t${m.id}`, spot(m.from, m.to, m.units, along(m)));
   for (const m of home) place(`b${m.id}`, spot(m.from, data.home, m.units, progress(now, m.leftAt, m.returnsAt)));
   for (const c of caravans) place(`c${c.id}`, spot(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)));
 
@@ -464,11 +476,13 @@ const Travellers = ({
           />
         );
       })}
-      {battles.map((m) => (
-        <BattleToken key={`f${m.id}`} at={{ x: px(m.to.x), y: py(m.to.y) }} m={m} now={now} onClick={() => onWatch(m.id)} />
-      ))}
+      {battles
+        .filter((m) => m.allyOf == null || !battles.some((h) => h.id === m.allyOf))
+        .map((m) => (
+          <BattleToken key={`f${m.id}`} at={{ x: px(m.to.x), y: py(m.to.y) }} m={m} now={now} onClick={() => onWatch(m.id)} />
+        ))}
       {marching.map((m) => {
-        const f = progress(now, m.sentAt, m.arrivesAt);
+        const f = along(m);
         const { road, atSea } = roadOf(m.from, m.to, m.units, f);
 
         return (
@@ -491,6 +505,9 @@ const Travellers = ({
     </>
   );
 };
+
+/** How far short of a fighting village an army waiting at its gates is drawn, in tiles. */
+const GATES_TILES = 1.3;
 
 // ─── The map ─────────────────────────────────────────────────────────────────
 
@@ -958,7 +975,10 @@ export const WarMap = ({
     : [];
   // Armies still on the road, and the ones fighting where they arrived.
   const marching = data?.movements.filter((m) => !m.battle) ?? [];
-  const battles = (data?.movements.filter((m) => m.battle) ?? []) as BattleMovement[];
+  const fights = (data?.movements.filter((m) => m.battle) ?? []) as BattleMovement[];
+  // Armies that joined a battle (allyOf) share it: one row per battle, except your own army's,
+  // which you can follow on its own. On the map each battle is drawn once (see Travellers).
+  const battles = fights.filter((m) => m.allyOf == null || m.kind === "outgoing" || !fights.some((h) => h.id === m.allyOf));
   const incoming = marching.filter((m) => m.kind === "incoming");
   const mine = marching.filter((m) => m.kind === "outgoing");
   // The clan's: armies marching on clanmates first (they may need guards), then clanmates' armies.
