@@ -75,14 +75,19 @@ const toTrade = (r: Row): TradeRow => ({
   robB: json<Robbery>(r.rob_b),
 });
 
-async function openCount(sellerId: number) {
+/** A player's merchants out right now: waiting on the market, and carrying loads on the road (see requireMerchant). */
+async function merchantsOut(id: number) {
   const db = await getDb();
   const rs = await db.execute({
-    sql: "SELECT COUNT(*) AS n FROM trades WHERE seller_id = ? AND status = 'open'",
-    args: [sellerId],
+    sql: `SELECT COALESCE(SUM(status = 'open' AND seller_id = ?), 0) AS waiting,
+                 COALESCE(SUM(status IN ('accepted', 'delivering', 'seller-paid')), 0) AS road
+          FROM trades WHERE (seller_id = ? OR buyer_id = ?) AND status IN ('open', 'accepted', 'delivering', 'seller-paid')`,
+    args: [id, id, id],
   });
+  const waiting = Number(rs.rows[0]?.waiting ?? 0);
+  const onRoad = Number(rs.rows[0]?.road ?? 0);
 
-  return Number(rs.rows[0].n);
+  return { waiting, onRoad, busy: waiting + onRoad };
 }
 
 async function getTrade(id: number) {
@@ -106,9 +111,9 @@ export async function postTrade(
   const o = parseOffer(raw);
   // Guards escort the goods the seller gets back, whoever the buyer turns out to be.
   const guard = raw.guard === true;
-  const open = await openCount(me.id);
+  const { busy } = await merchantsOut(me.id);
   const p = await mutatePlayer(me.id, now, (s) => {
-    const posted = postOffer(s, o, open);
+    const posted = postOffer(s, o, busy);
 
     return guard ? hireGuards(posted, o.wantAmount) : posted;
   });
@@ -162,10 +167,11 @@ export async function acceptTrade(me: Player, id: number, now: number, guard = f
     throw new GameError("Someone else took that offer first", "taken");
   if (t.sellerId === me.id) throw new GameError("That's your own offer");
 
-  // Pay first (this checks the Trading Post and the goods), then claim the
-  // offer; if someone beat us to it, give the payment back.
+  // Pay first (this checks the Trading Post, a free merchant and the goods), then
+  // claim the offer; if someone beat us to it, give the payment back.
+  const { busy } = await merchantsOut(me.id);
   let p = await mutatePlayer(me.id, now, (s) => {
-    const paid = payForOffer(s, t);
+    const paid = payForOffer(s, t, busy);
 
     return guard ? hireGuards(paid, t.giveAmount) : paid;
   });
@@ -352,9 +358,7 @@ export async function marketView(me: Player, now: number) {
     serverTime: now,
     limits: {
       ...tradeLimits(state),
-      openOffers: mineRows.filter(
-        (t) => t.status === "open" && t.sellerId === me.id,
-      ).length,
+      ...(await merchantsOut(me.id).then((m) => ({ openOffers: m.waiting, onRoad: m.onRoad }))),
     },
     market: market.rows.map((r) => {
       const t = toTrade(r);

@@ -131,3 +131,17 @@ test("the Merchant of the North swaps at once, always at a loss, and never overf
   const total = (x: typeof s) => C.RESOURCE_IDS.reduce((a, r) => a + x.resources[r], 0);
   expect(total(t)).toBeLessThan(total(s));
 });
+
+test("each Trading Post level is one merchant, busy on the market or on the road", () => {
+  const s = E.createInitialState(Date.now());
+
+  s.buildings["trading-post"] = 2;
+  for (const r of ["iron", "wood", "clay", "crop"] as const) s.resources[r] = 10_000;
+  const o = { give: "iron" as const, giveAmount: 500, want: "clay" as const, wantAmount: 500 };
+
+  // Two merchants: with one out, one more offer or purchase; with both out, none.
+  expect(() => Tr.postOffer(s, o, 1)).not.toThrow();
+  expect(() => Tr.payForOffer(s, o, 1)).not.toThrow();
+  expect(() => Tr.postOffer(s, o, 2)).toThrow(/merchants are busy/);
+  expect(() => Tr.payForOffer(s, o, 2)).toThrow(/merchants are busy/);
+});

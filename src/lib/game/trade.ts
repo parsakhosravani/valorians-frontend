@@ -97,30 +97,43 @@ function take(s: GameState, r: ResourceId, amount: number) {
   s.resources[r] -= amount;
 }
 
-/** Posting an offer locks the goods. `openOffers` is how many the player already has open. */
+/**
+ * Each Trading Post level is one merchant. A merchant is busy while its offer
+ * waits on the market, and while it carries a load on the road (the seller's
+ * goods one way, the buyer's payment the other), until the load arrives.
+ * Before Nov 2026 only waiting offers counted: buying used no merchant at all
+ * and a sale freed it at once, so "13 of 13 free" never moved.
+ */
+export function requireMerchant(s: GameState, busy: number) {
+  if (busy >= tradeLimits(s).maxOffers) {
+    throw new GameError(
+      "All your merchants are busy (on the market or on the road). They're free again when their loads arrive, or upgrade the Trading Post",
+      "no_merchant",
+    );
+  }
+}
+
+/** Posting an offer locks the goods. `busy` is how many of the player's merchants are already out. */
 export function postOffer(
   s0: GameState,
   o: Offer,
-  openOffers: number,
+  busy: number,
 ): GameState {
   const s = cloneState(s0);
 
   requirePost(s, o.giveAmount);
-  if (openOffers >= tradeLimits(s).maxOffers) {
-    throw new GameError(
-      "All your merchants are busy. Upgrade the Trading Post for more offers",
-    );
-  }
+  requireMerchant(s, busy);
   take(s, o.give, o.giveAmount);
 
   return s;
 }
 
-/** Accepting an offer: the buyer pays what the seller wants. */
-export function payForOffer(s0: GameState, o: Offer): GameState {
+/** Accepting an offer: the buyer pays what the seller wants, carried by one of the buyer's merchants. */
+export function payForOffer(s0: GameState, o: Offer, busy = 0): GameState {
   const s = cloneState(s0);
 
   requirePost(s, o.wantAmount);
+  requireMerchant(s, busy);
   take(s, o.want, o.wantAmount);
 
   return s;
