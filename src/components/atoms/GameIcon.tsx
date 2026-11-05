@@ -42,6 +42,8 @@ const ICON_BY_EMOJI: Record<string, string> = {
   "🚶": "footprints",
   "🚪": "door",
   "⚙️": "gears",
+  // Quill and brush: edit the clan banner and settings.
+  "✏️": "edit",
   "🏚️": "ruin",
   "🥇": "gold",
   "🥈": "silver",

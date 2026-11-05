@@ -1111,7 +1111,7 @@ export const Clan: FunctionComponent = () => {
                   type="button"
                   onClick={() => setSettingsOpen(true)}
                 >
-                  <GameIcon e="✏️" />
+                  <GameIcon className="!w-6 !h-6" e="✏️" />
                 </button>
               )}
             </div>
