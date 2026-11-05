@@ -170,9 +170,10 @@ const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onTog
           {/* Your own at home; clanmates' guards in the village are shown apart (they aren't yours to send). */}
           <div className="font-bold text-lg leading-none">{fmt(ownArmy(state)[unit.id])}</div>
           <div className="text-[10px] text-muted mt-0.5">
-            {guarding ? `+${fmt(guarding)} guards · ` : ""}
             {away ? `+${fmt(away)} away` : training ? `+${fmt(training)} training` : "at home"}
           </div>
+          {/* On its own line: next to "at home" it squeezed the troop's stats into a column. */}
+          {guarding > 0 && <div className="text-[10px] text-[#A9D3EA]">+{fmt(guarding)} guards</div>}
         </div>
         <span className={clsx("text-muted text-xs transition-transform", open && "rotate-180")}>▼</span>
       </button>

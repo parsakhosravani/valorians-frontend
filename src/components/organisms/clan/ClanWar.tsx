@@ -422,7 +422,7 @@ const STRIKE_DELAYS = [30, 60, 120, 240, 480].map((m) => m * 60e3);
  * On a tribe's card on the War map: an officer calls a clan strike on it.
  * Every clanmate is told, and armies sent to it land at the same moment.
  */
-export const RallyButton = ({ targetId, targetName }: { targetId: number; targetName: string }) => {
+export const RallyButton = ({ targetId, targetName, shieldUntil = 0 }: { targetId: number; targetName: string; shieldUntil?: number }) => {
   const { clan } = useGameActions();
   const [open, setOpen] = useState(false);
   const [delay, setDelay] = useState(STRIKE_DELAYS[1]);
@@ -430,6 +430,11 @@ export const RallyButton = ({ targetId, targetName }: { targetId: number; target
   const [busy, setBusy] = useState(false);
   // Picked when opened, so the time shown doesn't drift while the sheet is up.
   const [base, setBase] = useState(0);
+  // A strike can't land on a shield: only the times after it drops.
+  const [opened] = useState(() => Date.now());
+  const delays = STRIKE_DELAYS.filter((d) => opened + d > shieldUntil);
+
+  if (!delays.length) return null;
 
   return (
     <>
@@ -438,6 +443,7 @@ export const RallyButton = ({ targetId, targetName }: { targetId: number; target
         variant="outline"
         onClick={() => {
           setBase(Date.now());
+          if (!delays.includes(delay)) setDelay(delays[0]);
           setOpen(true);
         }}
       >
@@ -450,7 +456,7 @@ export const RallyButton = ({ targetId, targetName }: { targetId: number; target
             at the gates. Only the Jarl and Huscarls can call one.
           </p>
           <div className="seg">
-            {STRIKE_DELAYS.map((d) => (
+            {delays.map((d) => (
               <button
                 key={d}
                 className={clsx("flex-1 h-8 rounded-[9px] text-xs font-extrabold", delay === d ? "bg-gold text-[#1A120B]" : "text-muted")}

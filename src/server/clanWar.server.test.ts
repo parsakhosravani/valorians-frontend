@@ -156,6 +156,9 @@ describe("clans fighting together (server)", () => {
     // Members can't call strikes, and a strike needs time to gather.
     await expect(createRally(await reload(mate.id), { target: target.id, landAt }, T0)).rejects.toThrow(/Jarl and Huscarls/);
     await expect(createRally(lead, { target: target.id, landAt: T0 + 60_000 }, T0)).rejects.toThrow(/landing time/);
+    // Not onto a shield: a new tribe's protection outlasts any strike.
+    const fresh = await newPlayer(T0, (s) => { s.shieldUntil = T0 + 72 * HOUR; });
+    await expect(createRally(lead, { target: fresh.id, landAt }, T0)).rejects.toThrow(/shielded/);
   });
 
   test("treaties stop raids; a war scores raid wins", async () => {
