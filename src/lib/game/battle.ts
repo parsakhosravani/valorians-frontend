@@ -34,6 +34,8 @@ export type BattleRound = {
   defenseLeft: number;
   /** Defenders who came home and joined the fight at the start of this round. */
   joined?: Army;
+  /** Attackers who arrived (your own second army, or a clanmate's) and joined at the start of this round. */
+  allied?: Army;
 };
 
 export type BattlePlan = {
@@ -238,6 +240,39 @@ export function reinforceBattle(
   seed: number,
   opts: { terrain?: Terrain; landing?: boolean } = {}
 ): FieldBattle | null {
+  return regroup("defense", defender, attacker, sent, battle, join, seed, opts);
+}
+
+/**
+ * The other side: an army of the attackers' side (the same tribe's second
+ * army, or a clanmate's) reached a village that is fighting them. Instead of
+ * waiting at the gates for its own battle, it joins this one at the start of
+ * the next round, under the leading army's banner (its bonuses, like guards
+ * fight under their host's). `sent` is every attacker who has taken the field
+ * so far. Same rules as reinforceBattle; null when it's too late to join.
+ */
+export function reinforceAttack(
+  defender: GameState,
+  attacker: GameState,
+  sent: Army,
+  battle: FieldBattle,
+  join: { at: number; units: Army },
+  seed: number,
+  opts: { terrain?: Terrain; landing?: boolean } = {}
+): FieldBattle | null {
+  return regroup("attack", defender, attacker, sent, battle, join, seed, opts);
+}
+
+function regroup(
+  side: "attack" | "defense",
+  defender: GameState,
+  attacker: GameState,
+  sent: Army,
+  battle: FieldBattle,
+  join: { at: number; units: Army },
+  seed: number,
+  opts: { terrain?: Terrain; landing?: boolean }
+): FieldBattle | null {
   const { plan, outcome } = battle;
   const fresh = fightersOf(join.units);
 
@@ -260,8 +295,9 @@ export function reinforceBattle(
   }
   const atkSoFar = splitFallen(atkFallen, outcome.attackerLosses, outcome.attackerHealed);
   const defSoFar = splitFallen(defFallen, outcome.defenderLosses, outcome.defenderHealed);
-  const atkLeft = minus(sent, atkFallen);
-  const defLeft = plus(minus(engaged, defFallen), fresh);
+  const attacking = side === "attack";
+  const atkLeft = attacking ? plus(minus(sent, atkFallen), fresh) : minus(sent, atkFallen);
+  const defLeft = attacking ? minus(engaged, defFallen) : plus(minus(engaged, defFallen), fresh);
 
   // The rest of the fight, from where it stands.
   const field = cloneState(defender);
@@ -296,10 +332,11 @@ export function reinforceBattle(
     seed,
     BATTLE_MAX_ROUNDS_REINFORCED - keep
   );
-  // The defense bar fills back up by the newcomers' share of the defenders.
-  const before = troopsOnField(engaged);
+  // The joining side's bar fills back up by the newcomers' share of that side.
+  const before = troopsOnField(attacking ? minus(sent, atkFallen) : minus(engaged, defFallen));
   const came = troopsOnField(fresh);
-  const lift = before + came > 0 ? (base.defenseLeft * before + came) / (before + came) : 1;
+  const was = attacking ? base.attackLeft : base.defenseLeft;
+  const lift = before + came > 0 ? (was * before + came) / (before + came) : 1;
   const rounds: BattleRound[] = [
     ...plan.rounds.slice(0, keep),
     ...sub.rounds.map((r, i) => ({
@@ -307,16 +344,16 @@ export function reinforceBattle(
       at: base.at + r.at,
       attackerFallen: plus(atkFallen, r.attackerFallen),
       defenderFallen: plus(defFallen, r.defenderFallen),
-      attackLeft: round2(base.attackLeft * r.attackLeft),
-      defenseLeft: round2(lift * r.defenseLeft),
-      ...(i === 0 ? { joined: fresh } : {}),
+      attackLeft: round2((attacking ? lift : base.attackLeft) * r.attackLeft),
+      defenseLeft: round2((attacking ? base.defenseLeft : lift) * r.defenseLeft),
+      ...(i === 0 ? (attacking ? { allied: fresh } : { joined: fresh }) : {}),
     })),
   ];
 
   return {
     plan: { startedAt: plan.startedAt, endsAt: plan.startedAt + rounds[rounds.length - 1].at, rounds },
     outcome: merged,
-    engaged: plus(engaged, fresh),
+    engaged: attacking ? engaged : plus(engaged, fresh),
   };
 }
 

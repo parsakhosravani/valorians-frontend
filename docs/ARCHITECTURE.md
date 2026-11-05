@@ -70,6 +70,10 @@ test player instead (`?dev_user=N` picks which one).
 - One battle per village at a time: an army that lands while the village is fighting stays
   `marching` and waits at the gates (`fieldClearAt`, re-checked under the defender's lock via
   `defending` → `field_busy`). Its battle starts when the earlier one ends, against everyone home.
+  Exception: an army of the same tribe or clan as the one fighting joins that battle instead
+  (`joinAlly` → `reinforceAttack`). The leading row's `battle` lists `allies`; each ally's row keeps
+  `status = 'fighting'` with `battle = {"allyOf": <leading id>}` and the same `ends_at`, and is
+  finished by the leading row (`finishBattle` → `splitRaid`, one report per army).
 - Battles get resolved by: the player's own requests, the post-response sweep, and the cron
   `GET /api/cron/battles`, called every 5 minutes by `.github/workflows/battles.yml`
   (also right after each production deploy). `CRON_SECRET` can protect it.

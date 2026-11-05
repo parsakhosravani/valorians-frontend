@@ -16,7 +16,7 @@ import { blocksRaids } from "@/lib/game/clanWar";
 import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp, shieldStops } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
-import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceBattle, troopsOnField } from "@/lib/game/battle";
+import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceAttack, reinforceBattle, troopsOnField } from "@/lib/game/battle";
 import { Point, distance, pointAlong, routeFor, routeMs, routeTimeline, scoutCost, seaRoute, terrainAt } from "@/lib/game/map";
 import {
   BattleOutcome,
@@ -52,6 +52,7 @@ import {
   scoutEstimate,
   raidTravelMs,
   takeJoining,
+  splitRaid,
 } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 
@@ -116,6 +117,10 @@ type StoredReport = RaidReport & {
   defenderName: string;
   /** Bandits ambushed the attacker's army on the road (not a battle the attacker chose). */
   ambush?: boolean;
+  /** The armies that fought alongside the leading one (the battle's shared report). */
+  allies?: { name: string; sent: Army }[];
+  /** This army joined someone else's battle: their name (its own share of the battle). */
+  allyOf?: string;
 };
 
 async function saveReport(
@@ -297,6 +302,8 @@ type AttackRow = {
   arrivesAt: number;
   endsAt: number | null;
   battle: StoredBattle | null;
+  /** This army joined the battle of attack `allyOf` (that row holds the battle). */
+  allyOf: number | null;
   /** Spoils carried from an earlier battle of this expedition (after new orders). */
   loot: Loot | null;
   coins: number;
@@ -314,7 +321,22 @@ export type StoredBattle = {
   outcome: BattleOutcome;
   /** Defenders on the field (null at a barbarian camp). */
   engaged: Army | null;
+  /** Armies of the attackers' side that joined (see joinAlly): each keeps its own row, marked `allyOf`. */
+  allies?: Ally[];
 };
+
+type Ally = { id: number; attackerId: number; units: Army };
+
+const addArmy = (a: Army, b: Army) => {
+  const out = emptyArmy();
+
+  for (const u of UNIT_IDS) out[u] = (a[u] ?? 0) + (b[u] ?? 0);
+
+  return out;
+};
+
+/** Every attacker on the field of this battle: the leading army and those that joined it. */
+const onField = (a: AttackRow) => (a.battle?.allies ?? []).reduce((t, x) => addArmy(t, x.units), a.units);
 
 const toAttack = (r: Record<string, unknown>): AttackRow => ({
   id: Number(r.id),
@@ -329,13 +351,21 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   committedAt: Number(r.committed_at ?? r.sent_at),
   arrivesAt: Number(r.arrives_at),
   endsAt: r.ends_at == null ? null : Number(r.ends_at),
-  battle: r.battle == null ? null : (JSON.parse(String(r.battle)) as StoredBattle),
+  ...stored(r.battle),
   loot: r.loot == null ? null : (JSON.parse(String(r.loot)) as Loot),
   coins: Number(r.coins ?? 0),
   hops: Number(r.hops ?? 0),
   homeMs: r.home_ms == null ? null : Number(r.home_ms),
   ambush: r.ambush == null ? null : (JSON.parse(String(r.ambush)) as Ambush),
 });
+
+/** The battle column: a battle, or (for an army that joined one) which row holds it. */
+function stored(raw: unknown): { battle: StoredBattle | null; allyOf: number | null } {
+  if (raw == null) return { battle: null, allyOf: null };
+  const v = JSON.parse(String(raw)) as StoredBattle | { allyOf: number };
+
+  return "allyOf" in v ? { battle: null, allyOf: Number(v.allyOf) } : { battle: v, allyOf: null };
+}
 
 /** Spoils and order count an army keeps on its way home. */
 const carriedOf = (a: AttackRow) => ({ loot: a.loot ?? undefined, coins: a.coins, hops: a.hops });
@@ -495,6 +525,7 @@ function logFinish(a: AttackRow, attackerId: number, r: RaidReport, now: number)
 
 /** The last round is over: the decided result is applied to both tribes. Times use the battle's end. */
 async function finishBattle(a: AttackRow, now: number) {
+  const db = await getDb();
   const { plan, outcome, engaged } = a.battle!;
   const at = plan.endsAt;
   const travelMs = homeTripMs(a);
@@ -506,6 +537,7 @@ async function finishBattle(a: AttackRow, now: number) {
 
   if (!attacker) {
     if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, engaged));
+    await releaseAllies(a, now);
 
     return;
   }
@@ -555,34 +587,62 @@ async function finishBattle(a: AttackRow, now: number) {
 
   if (!defender) {
     await turnBack(a, attacker.id, null, now);
+    await releaseAllies(a, now);
 
     return;
   }
-  let report!: RaidReport;
+  // Armies that joined this one (see joinAlly): they fight as one, then each takes its own share home.
+  const allyRows = await allyRowsOf(a);
+  const allyPlayers = await Promise.all(allyRows.map((r) => findById(r.attackerId)));
+  const sent = onField(a);
+  const spoils = [a, ...allyRows].reduce(
+    (t, r) => {
+      for (const res of RESOURCE_IDS) t.loot[res] += r.loot?.[res] ?? 0;
+      t.coins += r.coins;
+
+      return t;
+    },
+    { loot: { iron: 0, wood: 0, clay: 0, crop: 0 } as Loot, coins: 0 }
+  );
+  let whole!: RaidReport;
 
   await mutatePlayer(defender.id, now, (s) => {
-    const r = defendRaid(s, attacker.state, a.units, at, rand(), {
+    const r = defendRaid(s, attacker.state, sent, at, rand(), {
       terrain,
       travelMs,
       from: a.to,
       landing,
       outcome,
       engaged: engaged ?? undefined,
-      carried: carried.carried,
-      carriedCoins: carried.carriedCoins,
+      carried: allyRows.length ? spoils.loot : carried.carried,
+      carriedCoins: allyRows.length ? spoils.coins : carried.carriedCoins,
     });
 
-    report = r.report;
+    whole = r.report;
 
     return leaveField(r.state, a.id);
   });
-  logFinish(a, attacker.id, report, now);
+  const parts = allyRows.length
+    ? splitRaid(whole, [a, ...allyRows].map((r) => ({ sent: r.units, returnsAt: at + homeTripMs(r), carried: r.loot ?? undefined, carriedCoins: r.coins })))
+    : [whole];
+  const report = parts[0];
+
+  logFinish(a, attacker.id, whole, now);
   // Clans: war points, the weekly goal, and the guards who fought in the village.
   await scoreWar(attacker.clanId, defender.clanId, report.attackerWon, now).catch((e) => console.error("war score", e));
   if (report.attackerWon) await recordForClan(attacker.id, attacker.clanId, "wins", 1, now).catch((e) => console.error("clan week", e));
   else await recordForClan(defender.id, defender.clanId, "wins", 1, now).catch((e) => console.error("clan week", e));
   await reconcileSupport(now, defender.id).catch((e) => console.error("guards after battle", e));
-  const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: displayName(defender) };
+  // The battle's own report (the defender's too) is the whole battle; the leader's march home is its share.
+  const full: StoredReport = {
+    ...whole,
+    ...story,
+    attackerName: displayName(attacker),
+    defenderName: displayName(defender),
+    ...(allyRows.length
+      ? { allies: allyRows.map((r, i) => ({ name: allyPlayers[i] ? displayName(allyPlayers[i]!) : "A tribe", sent: r.units })) }
+      : {}),
+  };
   let promoted: Promotion[] = [];
 
   await mutatePlayer(attacker.id, now, (s) => {
@@ -594,12 +654,56 @@ async function finishBattle(a: AttackRow, now: number) {
   });
   full.attackerPromoted = promoted;
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
+  // Each army that joined: its share home, and its own report.
+  for (const [i, r] of allyRows.entries()) {
+    const p = allyPlayers[i];
+
+    if (p) {
+      const mine: StoredReport = { ...parts[i + 1], ...story, attackerName: displayName(p), defenderName: full.defenderName, allyOf: full.attackerName };
+      let up: Promotion[] = [];
+
+      await mutatePlayer(p.id, now, (s) => {
+        const next = receiveRaidReport(s, parts[i + 1], full.defenderName, at, rand(), a.to, r.hops);
+
+        up = promotionsBetween(s, next);
+
+        return next;
+      });
+      mine.attackerPromoted = up;
+      await saveReport(p.id, defender.id, null, mine, at, r.id);
+      await notify.attackResult(p.id, full.defenderName, mine, now).catch(() => {});
+    }
+    await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [r.id] });
+  }
   await Promise.all([
     notify.attackResult(attacker.id, full.defenderName, full, now),
-    report.attackerWon
-      ? notify.raided(defender.id, full.attackerName, report, attacker.id)
-      : notify.defended(defender.id, full.attackerName, report),
+    whole.attackerWon
+      ? notify.raided(defender.id, full.attackerName, whole, attacker.id)
+      : notify.defended(defender.id, full.attackerName, whole),
   ]);
+}
+
+/** The rows of the armies that joined battle `a`. */
+async function allyRowsOf(a: AttackRow): Promise<AttackRow[]> {
+  const ids = (a.battle?.allies ?? []).map((x) => x.id);
+
+  if (!ids.length) return [];
+  const db = await getDb();
+  const rs = await db.execute({ sql: `SELECT * FROM attacks WHERE id IN (${ids.map(() => "?").join(",")})`, args: ids });
+
+  return rs.rows.map((r) => toAttack(r as Record<string, unknown>));
+}
+
+/** The battle couldn't be fought: the armies that joined it go home with what they carried, nothing lost. */
+async function releaseAllies(a: AttackRow, now: number) {
+  const db = await getDb();
+
+  for (const r of await allyRowsOf(a)) {
+    await mutatePlayer(r.attackerId, now, (s) =>
+      returnHome(s, r.units, "a battle that didn't happen", now + homeTripMs(r), now, rand(), r.to, now, carriedOf(r))
+    ).catch((e) => console.error("ally home", r.id, e));
+    await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [r.id] });
+  }
 }
 
 /** Something went wrong: everyone goes home with nothing, so no troops are lost to a bug. */
@@ -612,6 +716,7 @@ async function abandon(a: AttackRow, now: number, e: unknown) {
   if (a.defenderId && a.battle?.engaged) {
     await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, a.battle!.engaged)).catch(() => {});
   }
+  await releaseAllies(a, now).catch(() => {});
 }
 
 /**
@@ -637,7 +742,11 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
     // The village is still fighting an earlier army: wait at the gates (see fieldClearAt).
     const at = await fieldClearAt(a);
 
-    if (at == null) continue;
+    // Busy fighting your own army or a clanmate's: join that battle instead of waiting.
+    if (at == null) {
+      await withEventContext(`battle:join #${a.id}`, () => joinAlly(a, now)).catch((e) => console.error("joinAlly", a.id, e));
+      continue;
+    }
     const claim = await db.execute({
       sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'marching'",
       args: [a.id],
@@ -662,7 +771,9 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
   await joinReinforcements(now, playerId);
 
   const ended = await db.execute({
-    sql: `SELECT * FROM attacks WHERE status = 'fighting' AND ends_at <= ?${mine} ORDER BY ends_at ASC LIMIT 20`,
+    // Armies that joined another's battle (allyOf) are finished with it, by the leading army's row.
+    sql: `SELECT * FROM attacks WHERE status = 'fighting' AND ends_at <= ?${mine}
+            AND (battle IS NULL OR json_extract(battle, '$.allyOf') IS NULL) ORDER BY ends_at ASC LIMIT 20`,
     args: [now, ...who],
   });
 
@@ -681,6 +792,87 @@ export async function resolveDueAttacks(now: number, playerId?: number) {
     }
     await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [a.id] });
   }
+}
+
+/** The armies that joined battle `hostId` end when it does. */
+const syncAllies = (hostId: number, endsAt: number) => ({
+  sql: "UPDATE attacks SET ends_at = ? WHERE status = 'fighting' AND json_extract(battle, '$.allyOf') = ?",
+  args: [endsAt, hostId],
+});
+
+/**
+ * An army reached a village that is fighting another army of its side: the
+ * same tribe's, or a clanmate's. Rather than wait at the gates for its own
+ * battle (see fieldClearAt), it joins that one at the next round, and the
+ * rest of the battle is decided again with it (reinforceAttack). Too late to
+ * join (the last round has begun): it keeps waiting, as before.
+ * Returns whether it joined.
+ */
+async function joinAlly(a: AttackRow, now: number): Promise<boolean> {
+  if (a.defenderId == null || a.campLevel || a.lairLevel) return false;
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT h.* FROM attacks h
+            JOIN users hu ON hu.id = h.attacker_id
+            JOIN users au ON au.id = ?
+          WHERE h.defender_id = ? AND h.id <> ? AND h.status = 'fighting' AND h.battle IS NOT NULL
+            AND json_extract(h.battle, '$.allyOf') IS NULL
+            AND (h.attacker_id = au.id OR (au.clan_id IS NOT NULL AND hu.clan_id = au.clan_id))
+          ORDER BY h.ends_at ASC LIMIT 1`,
+    args: [a.attackerId, a.defenderId, a.id],
+  });
+  const row = rs.rows[0];
+
+  if (!row) return false;
+  const h = toAttack(row as Record<string, unknown>);
+  const [defender, leader] = await Promise.all([findById(a.defenderId), findById(h.attackerId)]);
+
+  if (!defender || !leader || !h.battle) return false;
+  const mine = await db.execute({ sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'marching'", args: [a.id] });
+
+  if (mine.rowsAffected !== 1) return false; // another request took it
+  const theirs = await db.execute({ sql: "UPDATE attacks SET status = 'resolving' WHERE id = ? AND status = 'fighting'", args: [h.id] });
+  let joined = false;
+
+  try {
+    if (theirs.rowsAffected !== 1) return false;
+    const next = reinforceAttack(defender.state, leader.state, onField(h), h.battle, { at: a.arrivesAt, units: a.units }, rand(), {
+      terrain: terrainAt(h.to.x, h.to.y),
+      landing: seaRoute(h.from, h.to, h.units).naval,
+    });
+
+    if (!next) return false;
+    const battle: StoredBattle = {
+      ...h.battle,
+      ...next,
+      allies: [...(h.battle.allies ?? []), { id: a.id, attackerId: a.attackerId, units: a.units }],
+    };
+
+    // Returning defenders can join until the new last round.
+    await mutatePlayer(defender.id, now, (s) => holdField(s, h.id, joinDeadline(battle.plan)));
+    await db.batch(
+      [
+        { sql: "UPDATE attacks SET status = 'fighting', ends_at = ?, battle = ? WHERE id = ?", args: [battle.plan.endsAt, JSON.stringify(battle), h.id] },
+        { sql: "UPDATE attacks SET status = 'fighting', ends_at = ?, battle = ? WHERE id = ?", args: [battle.plan.endsAt, JSON.stringify({ allyOf: h.id }), a.id] },
+        syncAllies(h.id, battle.plan.endsAt),
+      ],
+      "write"
+    );
+    joined = true;
+    logEvent("war.ally", { id: a.id, joined: h.id, defenderId: a.defenderId, units: a.units, endsAt: battle.plan.endsAt, attackerWins: battle.outcome.attackerWon }, { playerId: a.attackerId, at: now });
+  } finally {
+    if (!joined) {
+      await db.batch(
+        [
+          { sql: "UPDATE attacks SET status = 'marching' WHERE id = ? AND status = 'resolving'", args: [a.id] },
+          ...(theirs.rowsAffected === 1 ? [{ sql: "UPDATE attacks SET status = 'fighting' WHERE id = ? AND status = 'resolving'", args: [h.id] }] : []),
+        ],
+        "write"
+      );
+    }
+  }
+
+  return joined;
 }
 
 /**
@@ -726,7 +918,7 @@ async function joinReinforcements(now: number, playerId?: number) {
         battle = a.battle!;
         joined = emptyArmy();
         for (const j of joins) {
-          const next = reinforceBattle(s, attacker.state, a.units, battle, j, rand(), { terrain, landing });
+          const next = reinforceBattle(s, attacker.state, onField({ ...a, battle }), battle, j, rand(), { terrain, landing });
 
           if (next) {
             battle = { ...battle, ...next };
@@ -740,10 +932,13 @@ async function joinReinforcements(now: number, playerId?: number) {
         return holdField(s, a.id, joinDeadline(battle.plan));
       });
       try {
-        await db.execute({
-          sql: "UPDATE attacks SET status = 'fighting', ends_at = ?, battle = ? WHERE id = ?",
-          args: [battle.plan.endsAt, JSON.stringify(battle), a.id],
-        });
+        await db.batch(
+          [
+            { sql: "UPDATE attacks SET status = 'fighting', ends_at = ?, battle = ? WHERE id = ?", args: [battle.plan.endsAt, JSON.stringify(battle), a.id] },
+            syncAllies(a.id, battle.plan.endsAt),
+          ],
+          "write"
+        );
         saved = true;
       } catch (e) {
         // The battle couldn't take them: the newcomers go home rather than vanish.
@@ -1100,7 +1295,7 @@ export async function listReports(me: Player) {
   const db = await getDb();
   const rs = await db.execute({
     sql: `SELECT id, attacker_id, defender_id, camp_level, attacker_won, report, created_at, attack_id FROM battles
-          WHERE attacker_id = ? OR defender_id = ?
+          WHERE attacker_id = ? OR (defender_id = ? AND json_extract(report, '$.allyOf') IS NULL)
           ORDER BY created_at DESC LIMIT 30`,
     args: [me.id, me.id],
   });

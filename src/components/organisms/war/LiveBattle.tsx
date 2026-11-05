@@ -25,6 +25,8 @@ export type LiveBattleData = {
 
 export type BattleMovement = {
   id: number;
+  /** This army joined the battle of army `allyOf` (its own, or a clanmate's). */
+  allyOf?: number;
   kind: "outgoing" | "incoming";
   from: { x: number; y: number; name: string };
   to: { x: number; y: number; name: string };
@@ -136,7 +138,7 @@ export const BattleRow = ({ m, now, onWatch }: { m: BattleMovement; now: number;
           </>
         ) : (
           <>
-            Battle at <b>{m.to.name}</b>
+            {m.allyOf != null ? "Joined the battle at" : "Battle at"} <b>{m.to.name}</b>
           </>
         )}
         <span className={clsx("block text-xs", incoming ? "text-[#FFB27A]" : "text-muted")}>
