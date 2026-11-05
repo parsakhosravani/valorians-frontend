@@ -37,14 +37,17 @@ test.describe("Valorians 2 late game", () => {
     }
     await page.getByRole("button", { name: "Settle" }).first().click();
     await toast(page, "An outpost is founded!");
-    await expect(page.getByText("Outpost 1")).toBeVisible();
+    // Each outpost is named after its land ("Farmland outpost").
+    const card = page.getByText(/(Woodland|Hill land|Rocky land|Farmland) outpost/).first();
+
+    await expect(card).toBeVisible();
     // Tapping a field shows its cost and time; Raise starts the outpost's builder.
     await page.getByRole("button", { name: /Lv 0/ }).first().click();
     await page.getByRole("button", { name: "Raise to 1" }).click();
     await toast(page, "The outpost's builder is at work");
     await expect(page.getByText(/→ 1 ·/)).toBeVisible();
     if (process.env.SHOTS) {
-      await page.getByText("Outpost 1").evaluate((e) => e.scrollIntoView({ block: "center" }));
+      await card.evaluate((e) => e.scrollIntoView({ block: "center" }));
       await page.screenshot({ path: `${process.env.SHOTS}/outpost-card.png` });
     }
 
