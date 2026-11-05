@@ -825,7 +825,7 @@ export const UNITS: UnitDef[] = [
     cost: { iron: 60000, wood: 60000, clay: 60000, crop: 60000 }, time: 24 * 3600, upkeep: 40, speed: 4,
     requires: { building: "dragon-roost", level: 1 },
     description:
-      "One per tribe. Flies straight to any target, over seas and mountains, too fast for bandits. Its fire breaks half of a City Gate and a Watchtower. Carries no loot. Never dies: beaten, it comes home wounded and rests 12 hours. Archers hit it hard.",
+      "One per tribe. Flies straight to any target, over seas and mountains, too fast for bandits. Its fire breaks half of a City Gate and a Watchtower. Carries no loot. Never dies: beaten, it comes home wounded, rests 12 hours and loses a fifth of its experience. Archers hit it hard.",
     flying: true,
     maxOwned: 1,
     fireBreak: 0.5,
@@ -837,7 +837,13 @@ export const UNITS: UnitDef[] = [
  * level past the first, up to the Roost's top (level 10: +135%); beaten, it rests `restMs` once home;
  * Archers defend `archerBonus` better against the share of an attack it makes.
  */
-export const DRAGON = { perRoostLevel: 0.15, restMs: 12 * 3600 * 1000, archerBonus: 2 } as const;
+/**
+ * defeatXpLoss: the dragon never dies, so the rule "the dead take their XP with
+ * them" never touched it and its rank could only go up. Each lost battle now costs
+ * it this share of its XP (owner's call, Nov 2026), and it learns nothing from a
+ * defeat: a beaten dragon can drop a rank, and throwing it at anything has a price.
+ */
+export const DRAGON = { perRoostLevel: 0.15, restMs: 12 * 3600 * 1000, archerBonus: 2, defeatXpLoss: 0.2 } as const;
 
 export const UNIT_BY_ID = table(UNITS.map((u) => [u.id, u])) as Record<UnitId, UnitDef>;
 

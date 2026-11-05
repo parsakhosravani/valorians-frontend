@@ -79,6 +79,8 @@ ask before "fixing" either. Add new decisions here when they are made.
   troops die, the regiment loses that same share of its XP; if the whole regiment dies, its XP
   is gone. Survivors keep theirs, and new recruits join the regiment's current rank.
 - **Dragon:** one per player, very expensive, flies straight to the target, **carries no loot**.
+  It **never dies**, so losses never cost it XP: instead each **lost battle costs it 20% of its XP**
+  and it earns none from a defeat (owner's call, Nov 2026), so its rank can drop (`DRAGON.defeatXpLoss`).
 - **Bandit raids** hit villages from nearby lairs, with an **advance warning** and a chance to
   clear the lair first.
 - **Barbarian camps are endless** (no level-30 cap) and have **names, not numbers**.
