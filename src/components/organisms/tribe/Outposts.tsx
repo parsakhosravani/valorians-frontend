@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import clsx from "clsx";
 
 import { RESOURCES, useGame, useGameStatus } from "@/context";
@@ -16,6 +17,20 @@ import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 /** What players call the land that favours each resource. */
 const LAND_NAME: Record<ResourceId, string> = { wood: "Woodland", clay: "Hill land", iron: "Rocky land", crop: "Farmland" };
 const res = (id: ResourceId) => RESOURCES.find((r) => r.id === id)!;
+/** Its own picture (the tower icon reads better this small than the wide map camp), with what its land favours on a badge. */
+const OUTPOST_IMG = "/images/icons/outpost.webp";
+
+const OutpostPicture = ({ land, dim }: { land?: OutpostLand; dim?: boolean }) => (
+  <span className="relative shrink-0 w-14 h-14">
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img alt="Outpost" className={clsx("w-14 h-14 object-contain drop-shadow-[0_3px_4px_rgba(0,0,0,0.6)]", dim && "grayscale opacity-50")} src={OUTPOST_IMG} />
+    {land && (
+      <span className="absolute -bottom-0.5 -left-0.5 w-6 h-6 rounded-full bg-ink border border-gold/70 flex items-center justify-center">
+        <Image alt={res(land.resource).name} className="w-4 h-4 object-contain" src={res(land.resource).img} />
+      </span>
+    )}
+  </span>
+);
 
 /** "+30% wood · Woodland", with the resource's icon. */
 const LandChip = ({ land }: { land: OutpostLand }) => (
@@ -42,6 +57,12 @@ export const Outposts = () => {
   const slots = outpostSlots(state);
   const blocked = outpostBlocked(state);
   const cost = outpostCost(state);
+  // Everything the outposts send home each hour.
+  const total = state.outposts.reduce((n, o) => {
+    const out = outpostOutput(o);
+
+    return n + RESOURCES.reduce((m, r) => m + out[r.id], 0);
+  }, 0);
   const run = async (key: string, fn: () => Promise<boolean>) => {
     setBusy(key);
     const ok = await fn();
@@ -67,6 +88,7 @@ export const Outposts = () => {
       <div className="flex items-center gap-2">
         <GameIcon e="🏕️" />
         <h2 className="title-section flex-1">Outposts</h2>
+        {total > 0 && <span className="text-xs font-bold text-good tabular-nums">+{compact(total)}/h home</span>}
         <span className="text-xs font-bold text-muted tabular-nums">
           {state.outposts.length} of {slots}
         </span>
@@ -85,15 +107,31 @@ export const Outposts = () => {
 
         return (
           <div key={`${o.x},${o.y}`} className="card-flat rounded-xl p-2.5 flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2 text-sm">
-              <span className="font-bold">Outpost {i + 1}</span>
-              <span className="text-xs text-sub tabular-nums">+{compact(perHour)}/h</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              {o.land && <LandChip land={o.land} />}
-              <span className="text-xs text-muted text-right">
-                {o.job ? `${res(o.job.resource).name} → ${o.job.toLevel} · ${formatDuration(o.job.endsAt - now)}` : "Builder free"}
-              </span>
+            <div className="flex items-center gap-2.5">
+              <OutpostPicture land={o.land} />
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <span className="font-display font-bold text-sm text-parch truncate">
+                  {o.land ? `${LAND_NAME[o.land.resource]} outpost` : `Outpost ${i + 1}`}
+                </span>
+                {o.land && <LandChip land={o.land} />}
+                <span className="text-[11px] text-muted">
+                  {o.job ? (
+                    <>
+                      <GameIcon e="🔨" /> {res(o.job.resource).name} field → {o.job.toLevel} · {formatDuration(o.job.endsAt - now)}
+                    </>
+                  ) : (
+                    "Builder free: tap a field to raise it"
+                  )}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <span className={clsx("text-sm font-extrabold tabular-nums", perHour > 0 ? "text-good" : "text-muted")}>
+                  {perHour > 0 ? `+${compact(perHour)}/h` : o.job ? "First field soon" : "No fields yet"}
+                </span>
+                <Link aria-label="Show on the map" className="btn btn-wood btn-sm !px-2 text-xs" href="/battle?tab=map">
+                  <GameIcon e="📍" /> Map
+                </Link>
+              </div>
             </div>
             {o.job && <Bar className="!h-1.5" max={o.job.endsAt - o.job.startedAt} value={now - o.job.startedAt} />}
             <div className="grid grid-cols-4 gap-1.5">
@@ -155,14 +193,18 @@ export const Outposts = () => {
       })}
 
       {state.outposts.length < OUTPOST.hallLevels.length && (
-        <div className="card-flat rounded-xl p-2.5 flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 min-w-0 text-xs text-sub">
-              {blocked ?? (
-                <>
-                  Costs {compact(cost.resources.iron)} of each resource and {compact(cost.people)} people.
-                </>
-              )}
+        <div className={clsx("rounded-xl p-2.5 flex flex-col gap-2 border border-dashed", blocked ? "border-line" : "border-gold/50")}>
+          <div className="flex items-center gap-2.5">
+            <OutpostPicture dim={!!blocked} />
+            <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+              <span className="font-display font-bold text-sm text-parch">New outpost</span>
+              <span className="text-xs text-sub">
+                {blocked ?? (
+                  <>
+                    Costs {compact(cost.resources.iron)} of each resource and {compact(cost.people)} people.
+                  </>
+                )}
+              </span>
             </div>
             {spots == null && (
               <button className="btn btn-sm btn-gold shrink-0" disabled={!!blocked || busy != null} onClick={chooseSpot}>

@@ -61,6 +61,8 @@ export type CanvasTribe = {
   flag: Flag | null;
   /** Name plate text. */
   name: string;
+  /** An outpost, not a village: the resource its land favours (shown as a badge at its foot). */
+  outpost?: "iron" | "wood" | "clay" | "crop";
 };
 
 export type CanvasCamp = {
@@ -102,6 +104,9 @@ const picture = (src: string, onLoad: () => void) => {
 const loaded = (img: HTMLImageElement) => img.complete && img.naturalWidth > 0;
 
 const TOWN_HALL = buildingImage(BUILDING_BY_ID["town-hall"]);
+/** Outposts have their own picture, so they never pass for a small village. */
+const OUTPOST_IMG = "/images/buildings/Outpost.webp";
+const resourceImg = (r: string) => `/images/resources/${r}.webp`;
 const BARRACKS = buildingImage(BUILDING_BY_ID["barracks"]);
 const SHIELD = "/images/icons/shield.webp";
 const LOCK = "/images/icons/lock.webp";
@@ -468,9 +473,38 @@ export class MapPainter {
     const near = (mx: number, my: number) => mx > vx0 - margin && mx < vx1 + margin && my > vy0 - margin && my < vy1 + margin;
     const redraw = this.request;
 
+    this.supplyRoads(z);
     for (const c of this.camps) if (!c.picked && near(c.x, c.y)) this.camp(c, pin, redraw);
     for (const t of this.order(this.tribes)) if (near(t.x, t.y)) this.village(t, pin, redraw);
     for (const c of this.camps) if (c.picked && near(c.x, c.y)) this.camp(c, pin, redraw);
+  }
+
+  /**
+   * Your outposts send everything home: a dotted cart track from your village
+   * to each one shows which are yours and that they feed you.
+   */
+  private supplyRoads(z: number) {
+    const home = this.tribes.find((t) => t.isMe && !t.outpost);
+
+    if (!home) return;
+    const { g } = this;
+
+    g.save();
+    g.lineCap = "round";
+    g.setLineDash([5 / z, 7 / z]);
+    for (const t of this.tribes) {
+      if (!t.isMe || !t.outpost) continue;
+      g.beginPath();
+      g.moveTo(home.x, home.y);
+      g.lineTo(t.x, t.y);
+      g.lineWidth = 4 / z;
+      g.strokeStyle = "rgba(26,18,11,0.45)";
+      g.stroke();
+      g.lineWidth = 2 / z;
+      g.strokeStyle = "rgba(242,198,109,0.85)";
+      g.stroke();
+    }
+    g.restore();
   }
 
   /** A village (box origin at the tile's centre minus (VX, VY)). */
@@ -516,9 +550,25 @@ export class MapPainter {
     g.strokeStyle = ring.stroke;
     g.stroke();
 
-    const hall = picture(TOWN_HALL, redraw);
+    const hall = picture(t.outpost ? OUTPOST_IMG : TOWN_HALL, redraw);
 
     if (loaded(hall)) g.drawImage(hall, VX - half, foot - size + 3, size, size);
+
+    if (t.outpost) {
+      // What its land favours: a small resource badge at the outpost's foot.
+      const cx = VX - half + 2;
+      const cy = foot - 4;
+      const icon = picture(resourceImg(t.outpost), redraw);
+
+      g.beginPath();
+      g.arc(cx, cy, 7.5, 0, Math.PI * 2);
+      g.fillStyle = "#1A120B";
+      g.fill();
+      g.lineWidth = 1.5;
+      g.strokeStyle = ring.stroke;
+      g.stroke();
+      if (loaded(icon)) g.drawImage(icon, cx - 6, cy - 6, 12, 12);
+    }
 
     if (t.loud && t.townHall > 0) {
       // Town Hall level: a small gold coin at the village's foot (outposts have none).
