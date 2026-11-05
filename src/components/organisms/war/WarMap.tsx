@@ -133,7 +133,10 @@ type Camp = {
 
 type Movement = {
   id: number;
-  kind: "outgoing" | "incoming";
+  /** clan-outgoing: a clanmate's army; clan-incoming: an army marching on a clanmate (older servers send neither). */
+  kind: "outgoing" | "incoming" | "clan-outgoing" | "clan-incoming";
+  /** Clan armies: the clanmate it belongs to, or marches on. */
+  clanmate?: number;
   from: { x: number; y: number; name: string };
   to: { x: number; y: number; name: string };
   sentAt: number;
@@ -382,6 +385,7 @@ const Travellers = ({
   restZoom,
   onHomeOrders,
   onOutOrders,
+  onClanArmy,
   onWatch,
 }: {
   data: MapData;
@@ -394,6 +398,8 @@ const Travellers = ({
   restZoom: number;
   onHomeOrders: (m: Homeward) => void;
   onOutOrders: (m: Movement) => void;
+  /** A clan army tapped: open the clanmate's card. */
+  onClanArmy: (m: Movement) => void;
   onWatch: (id: number) => void;
 }) => {
   const now = useLive((l) => l.now);
@@ -470,6 +476,7 @@ const Travellers = ({
             key={`m${m.id}`}
             atSea={atSea}
             from={{ x: px(m.from.x), y: py(m.from.y) }}
+            clan={m.kind === "clan-outgoing" ? "ally" : m.kind === "clan-incoming" ? "threat" : undefined}
             incoming={m.kind === "incoming"}
             left={Math.max(0, m.arrivesAt - now)}
             p={f}
@@ -477,7 +484,7 @@ const Travellers = ({
             road={road}
             to={{ x: px(m.to.x), y: py(m.to.y) }}
             units={m.units}
-            onClick={m.kind === "outgoing" ? () => onOutOrders(m) : undefined}
+            onClick={m.kind === "outgoing" ? () => onOutOrders(m) : m.clanmate ? () => onClanArmy(m) : undefined}
           />
         );
       })}
@@ -954,6 +961,9 @@ export const WarMap = ({
   const battles = (data?.movements.filter((m) => m.battle) ?? []) as BattleMovement[];
   const incoming = marching.filter((m) => m.kind === "incoming");
   const mine = marching.filter((m) => m.kind === "outgoing");
+  // The clan's: armies marching on clanmates first (they may need guards), then clanmates' armies.
+  const clanThreats = marching.filter((m) => m.kind === "clan-incoming");
+  const clanArmies = marching.filter((m) => m.kind === "clan-outgoing");
   const watched = battles.find((m) => m.id === watching) ?? null;
   // Every second only while a battle is being watched (its rounds play out live); 0 otherwise.
   const battleNow = useLive((l) => (watching != null ? l.now : 0));
@@ -1117,7 +1127,7 @@ export const WarMap = ({
       : [],
   );
 
-  const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length;
+  const onTheMove = battles.length + incoming.length + mine.length + returning.length + merchants.length + clanThreats.length + clanArmies.length;
 
   // ─── The villages and camps the canvas draws ───
   const canvasTribes: CanvasTribe[] =
@@ -1222,7 +1232,7 @@ export const WarMap = ({
         ...homeward.map((m) => ({ key: `b${m.id}`, kind: "homeward" as PathKind, runs: tripOf(m.from, data.home, m.units).runs })),
         ...marching.map((m) => ({
           key: `t${m.id}`,
-          kind: (m.kind === "incoming" ? "incoming" : "army") as PathKind,
+          kind: (m.kind === "incoming" ? "incoming" : m.kind === "clan-outgoing" ? "clan" : m.kind === "clan-incoming" ? "clan-threat" : "army") as PathKind,
           runs: tripOf(m.from, m.to, m.units).runs,
         })),
         // Merchants last: their thin dashed trail stays visible where it shares a road with an army.
@@ -1350,6 +1360,11 @@ export const WarMap = ({
                 roadOf={roadOf}
                 onHomeOrders={(m) => setOrdersFor(homebound(m))}
                 onOutOrders={(m) => setOrdersFor(outbound(m))}
+                onClanArmy={(m) => {
+                  const t = data.tribes.find((x) => x.id === m.clanmate);
+
+                  if (t) setSelected({ kind: "tribe", tribe: t });
+                }}
                 onWatch={setWatching}
               />
             </div>
@@ -1468,6 +1483,11 @@ export const WarMap = ({
               {mine.length + returning.length > 0 && (
                 <span className="text-parch"><GameIcon e="🚩" /> {mine.length + returning.length} on the road</span>
               )}
+              {clanThreats.length + clanArmies.length > 0 && (
+                <span className={clanThreats.length ? "text-[#F0B08A]" : "text-[#A9D3EA]"}>
+                  <GameIcon e="🛡️" /> {clanThreats.length + clanArmies.length} clan
+                </span>
+              )}
               {trades.length > 0 && <span className="text-sub"><GameIcon e="🐪" /> {trades.length}</span>}
               <span className={clsx("ml-auto text-sub transition-transform", movesOpen && "rotate-180")}>▾</span>
             </button>
@@ -1516,6 +1536,36 @@ export const WarMap = ({
                     <WithNow>{(t) => (m.arrivesAt <= t ? "At the gates" : <Countdown to={m.arrivesAt} />)}</WithNow>
                   </span>
                   {ordersButton(outbound(m))}
+                </div>
+              ))}
+              {/* The clan's armies: who's marching on a clanmate (send guards), and where clanmates' armies are going. */}
+              {clanThreats.map((m) => (
+                <div key={m.id} className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 bg-[#24140E] border border-[#7A4128] text-sm">
+                  <span className="text-base"><GameIcon e="🚨" /></span>
+                  <span className="flex-1 min-w-0 truncate">
+                    <b>{m.from.name}</b> → clanmate <b>{m.to.name}</b>
+                    <span className="block text-xs text-[#F0B08A]">{m.units ? <ArmyLine army={m.units} /> : "Their army is hidden"}</span>
+                  </span>
+                  <span className="font-display font-black text-[#F0B08A] shrink-0">
+                    <WithNow>{(t) => (m.arrivesAt <= t ? "At the gates" : <Countdown to={m.arrivesAt} />)}</WithNow>
+                  </span>
+                  {m.clanmate && (
+                    <Link aria-label={`Send guards to ${m.to.name}`} className="btn btn-wood btn-sm shrink-0 !px-2" href={`/clan?tab=war&help=${m.clanmate}`}>
+                      🛡️
+                    </Link>
+                  )}
+                </div>
+              ))}
+              {clanArmies.map((m) => (
+                <div key={m.id} className="flex items-center gap-2 rounded-xl px-2.5 py-1.5 bg-[#121C22] border border-[#3E6577] text-sm">
+                  <span className="text-base"><GameIcon e="🚩" /></span>
+                  <span className="flex-1 min-w-0 truncate">
+                    <b>{m.from.name}</b> → {m.to.name}
+                    <span className="block text-xs text-[#A9D3EA]">{m.units && <ArmyLine army={m.units} />}</span>
+                  </span>
+                  <span className="font-display font-black text-[#A9D3EA] shrink-0">
+                    <WithNow>{(t) => (m.arrivesAt <= t ? "At the gates" : <Countdown to={m.arrivesAt} />)}</WithNow>
+                  </span>
                 </div>
               ))}
               {returning.map((m) => (

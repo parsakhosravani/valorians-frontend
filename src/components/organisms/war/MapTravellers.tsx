@@ -47,7 +47,8 @@ const along = (road: Road, p: number) => {
 // ─── Paths on the map ────────────────────────────────────────────────────────
 
 /** Who is on a path: it picks the colour, like the token walking it. */
-export type PathKind = "army" | "homeward" | "incoming" | "goods-coming" | "goods-going";
+/** clan: a clanmate's army; clan-threat: an army marching on a clanmate. */
+export type PathKind = "army" | "homeward" | "incoming" | "clan" | "clan-threat" | "goods-coming" | "goods-going";
 
 /** A stretch of a path, all on land or all on the water (px). */
 export type PathRun = { wet: boolean; points: Pt[] };
@@ -58,6 +59,8 @@ const PATH_COLOR: Record<PathKind, string> = {
   army: "#F2C66D",
   homeward: "#D9B56A",
   incoming: "#F06A44",
+  clan: "#7FB3D0",
+  "clan-threat": "#E08A5A",
   "goods-coming": "#9DD07F",
   "goods-going": "#E6D3A0",
 };
@@ -171,6 +174,7 @@ export const ArmyToken = ({
   p,
   units,
   incoming,
+  clan,
   left,
   atSea = false,
   quiet = false,
@@ -183,6 +187,8 @@ export const ArmyToken = ({
   p: number;
   units: Army | null;
   incoming: boolean;
+  /** A clanmate's army (ally), or an army marching on a clanmate (threat). */
+  clan?: "ally" | "threat";
   left: number;
   /** Out on the water right now: the army shows as a Longship. */
   atSea?: boolean;
@@ -209,7 +215,11 @@ export const ArmyToken = ({
             "relative w-9 h-9 rounded-full flex items-center justify-center text-lg border-[3px] shadow-[0_3px_6px_rgba(0,0,0,0.6)]",
             incoming
               ? "bg-gradient-to-b from-[#5A1E12] to-[#2A140E] border-[#F06A44]"
-              : "bg-gradient-to-b from-[#3A2A1B] to-[#1E1610] border-gold",
+              : clan === "ally"
+                ? "bg-gradient-to-b from-[#1C2E38] to-[#121C22] border-[#7FB3D0] scale-90"
+                : clan === "threat"
+                  ? "bg-gradient-to-b from-[#3E2016] to-[#24140E] border-[#E08A5A] scale-90"
+                  : "bg-gradient-to-b from-[#3A2A1B] to-[#1E1610] border-gold",
           )}
         >
           <span className={atSea ? "animate-sail" : "animate-trot"}>
@@ -219,7 +229,7 @@ export const ArmyToken = ({
             <span
               className={clsx(
                 "absolute -bottom-1.5 -right-2 min-w-[18px] h-[16px] px-1 rounded-full text-[9px] font-black flex items-center justify-center",
-                incoming ? "bg-[#F06A44] text-[#FFF4EA]" : "bg-gold text-[#1A120B]",
+                incoming ? "bg-[#F06A44] text-[#FFF4EA]" : clan === "ally" ? "bg-[#7FB3D0] text-[#0E1A20]" : clan === "threat" ? "bg-[#E08A5A] text-[#1A0E08]" : "bg-gold text-[#1A120B]",
               )}
             >
               {n >= 1000 ? `${Math.floor(n / 1000)}k` : n}
@@ -233,7 +243,11 @@ export const ArmyToken = ({
             "mt-1 px-1.5 rounded-full text-[9px] font-black whitespace-nowrap border",
             incoming
               ? "bg-[#2A140E] text-[#FFB27A] border-[#8A3B23]"
-              : "bg-panel/90 text-goldtext border-line",
+              : clan === "ally"
+                ? "bg-[#121C22] text-[#A9D3EA] border-[#3E6577]"
+                : clan === "threat"
+                  ? "bg-[#24140E] text-[#F0B08A] border-[#7A4128]"
+                  : "bg-panel/90 text-goldtext border-line",
           )}
         >
           {formatDuration(left)}
