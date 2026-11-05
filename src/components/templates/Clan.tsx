@@ -41,6 +41,8 @@ import {
   defaultFlag,
 } from "@/lib/game/clan";
 import type { ClanPublic, ClanView } from "@/server/clans";
+import type { Standing } from "@/server/clanWar";
+import { DiplomacyButtons } from "@/components/organisms/clan/ClanWar";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 type Mine = NonNullable<ClanView["mine"]>;
@@ -220,8 +222,9 @@ const TechChips = ({ techs }: { techs: { id: TechId; level: number }[] }) => (
  */
 const ClanSheet = ({ id, meId, onClose }: { id: number | null; meId: number; onClose: () => void }) => {
   const { authHeader } = useGameStatus();
-  const [c, setC] = useState<ClanPublic | null>(null);
+  const [c, setC] = useState<(ClanPublic & { standing?: Standing | null }) | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (id == null || !authHeader) return;
@@ -229,14 +232,15 @@ const ClanSheet = ({ id, meId, onClose }: { id: number | null; meId: number; onC
 
     setC(null);
     setError(null);
-    apiRequest<ClanPublic>(authHeader, `clan/view?id=${id}`)
+    apiRequest<ClanPublic & { standing?: Standing | null }>(authHeader, `clan/view?id=${id}`)
       .then((v) => live && setC(v))
       .catch((e) => live && setError((e as Error).message));
 
     return () => {
       live = false;
     };
-  }, [id, authHeader]);
+  }, [id, authHeader, tick]);
+  const rel = c?.standing?.relation ?? null;
 
   return (
     <Drawer isOpen={id != null} position="bottom" title={c ? c.name : "Clan"} onClose={onClose}>
@@ -275,6 +279,21 @@ const ClanSheet = ({ id, meId, onClose }: { id: number | null; meId: number; onC
           </div>
 
           <TechChips techs={c.techs} />
+
+          {c.standing && (rel || c.standing.officer) && (
+            <div className="card-flat flex flex-col gap-2 px-2.5 py-2">
+              <span className="text-sm font-bold">
+                {rel ? (
+                  <span className={rel.kind === "war" ? "text-bad" : "text-[#8FD1B8]"}>
+                    <IconText text={`${RELATION_TEXT[rel.kind].icon} ${rel.status === "proposed" ? `${RELATION_TEXT[rel.kind].name} proposed` : RELATION_TEXT[rel.kind].name}`} />
+                  </span>
+                ) : (
+                  <span className="text-sub">No treaty with your clan</span>
+                )}
+              </span>
+              {c.standing.officer && <DiplomacyButtons clanId={c.id} relation={rel} onDone={() => setTick((t) => t + 1)} />}
+            </div>
+          )}
 
           <SectionTitle>Members</SectionTitle>
           <div className="flex flex-col gap-1.5">

@@ -9,6 +9,7 @@ import {
   clanWarView,
   createRally,
   diplomacy,
+  standingWith,
   recallSupport,
   reconcileSupport,
   resolveSupport,
@@ -189,6 +190,21 @@ describe("clans fighting together (server)", () => {
     // Peace takes both sides.
     expect((await diplomacy(two.lead, { clan: one.clanId, action: "peace" }, T0 + 5)).status).toBe("peace");
     expect((await diplomacy(one.lead, { clan: two.clanId, action: "peace" }, T0 + 6)).status).toBe("none");
+  });
+
+  test("a clan's page shows how your clan stands with it, and who may act", async () => {
+    const T0 = Date.now();
+    const one = await band(T0);
+    const two = await band(T0);
+
+    expect(await standingWith(one.lead, one.clanId, T0)).toBeNull();
+    expect(await standingWith(one.lead, two.clanId, T0)).toEqual({ relation: null, officer: true });
+    await diplomacy(one.lead, { clan: two.clanId, action: "ally" }, T0);
+    const lead = await standingWith(await reload(two.lead.id), one.clanId, T0);
+    expect(lead?.officer).toBe(true);
+    expect(lead?.relation).toMatchObject({ kind: "ally", status: "proposed", byUs: false });
+    // A plain member sees the standing but can't sign for the clan.
+    expect((await standingWith(two.mate, one.clanId, T0))?.officer).toBe(false);
   });
 
   test("the weekly goal pays every member once", async () => {
