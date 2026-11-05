@@ -37,6 +37,7 @@ import { pinScale, useMapCamera } from "./useMapCamera";
 import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, Ring, PARCHMENT_FULL, VILLAGE_GROW, VILLAGE_MIN, parchmentShare } from "./MapCanvas";
 import { parchmentImage } from "./parchmentImage";
 import { WorldMap } from "./WorldMap";
+import { MapKey } from "./MapKey";
 import { roadShape, timeAt } from "./roadShape";
 
 import { useFillHeight } from "@/hooks/useFillHeight";
@@ -1641,94 +1642,79 @@ export const WarMap = ({
             )}
           </div>
         )}
-        <div
-          className={clsx(
-            "absolute left-2 bottom-2 z-10 flex items-center gap-2 rounded-xl border border-frame/80 bg-ink/80 pl-2.5 pr-1 py-1 shadow-card",
-            picking && "hidden",
-          )}
-        >
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 max-w-[250px] text-[11px] font-bold text-sub">
-            <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-good bg-good/30" />weaker</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-goldtext bg-goldtext/20" />even</span>
-            <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-bad bg-bad/30" />stronger</span>
-            {/* Clan colours, only when they can show up for you. */}
-            {data?.tribes.some((t) => t.ally && !t.isMe) && (
-              <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-[#7FB3D0] bg-[#7FB3D0]/30" />clan</span>
-            )}
-            {data?.tribes.some((t) => t.relation === "ally" || t.relation === "nap") && (
-              <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-[#8FD1B8] bg-[#8FD1B8]/30" />treaty</span>
-            )}
-            {data?.tribes.some((t) => t.relation === "war") && (
-              <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-[#E0442A] bg-[#E0442A]/30" />war</span>
-            )}
-          </span>
-
-          <InfoDrawer
-            content={
-              <span className="flex flex-col gap-1.5 text-left text-sm">
-                <span>
-                  Armies march across the map; farther targets take longer. An
-                  army moves at the speed of its slowest unit (light cavalry fastest,
-                  catapults slowest). The battle happens when it arrives.
-                </span>
-                <span>
-                  <GameIcon e="⛰️" /> Armies follow roads, not straight lines: they march around
-                  mountains and lakes, and forests and hills slow them down. When
-                  the way round is too long, they sail.
-                </span>
-                <span>
-                  <GameIcon e="🚩" /> The road each army is on is drawn on the map: gold for yours, red for one
-                  coming for you, dotted where they sail. Your merchants' trails are dashed, green when goods
-                  are coming home.
-                </span>
-                <span>
-                  <GameIcon e="⛰️" /> Hills give the defender +20% defense, <GameIcon e="🌲" /> forests +10%, and
-                  horsemen (light cavalry, paladins, knights) fight 25% weaker in forests.
-                </span>
-                <span>
-                  <GameIcon e="🛡️" /> Spearmen defend 50% better against horsemen. Rams
-                  break the City Gate, catapults the Watchtower. Mix your army
-                  to match the target.
-                </span>
-                <span>
-                  <GameIcon e="🔭" /> With an Exploration Center you can scout a tribe for coins:
-                  exact defense, troops at home and what you could loot.
-                </span>
-                <span>
-                  <GameIcon e="🗼" /> A Watchtower shows you which troops are marching on you, so
-                  you can train defenders in time.
-                </span>
-                <span>
-                  You can recall an army before it arrives. A tribe that loses a real share of
-                  its stores or troops in a raid gets a shield: up to 2h, growing to 6h and 12h if hit hard
-                  again within a day. Small hits give little or nothing.
-                  Raiding a tribe under half your power takes only half the loot.
-                </span>
-                <span>
-                  <GameIcon e="🕵️" /> With an Exploration Center you can plant a spy on a tribe for a day: the
-                  moment their army marches out, you hear about it, so you can strike while they&apos;re away. A
-                  Watchtower may catch spies.
-                </span>
-                <span>
-                  <GameIcon e="🧭" /> Tap one of your armies on the road to give it new orders: on its way out or
-                  on its way home with the spoils, it can march on another tribe or camp from where it stands.
-                  It can leave troops behind but never take on more. Supplies for the new road come out of the
-                  spoils first. One new order per expedition; the War Orders card adds more.
-                </span>
-                <span>
-                  <GameIcon e="⚔️" /> When armies meet, the battle lasts from 1 minute up to 30,
-                  longer the more troops fight. Tap the crossed swords to watch it
-                  round by round; the defenders are on the field until it ends.
-                </span>
-                <span>
-                  Drag to move around: more of the world loads as you go. Pinch, scroll or double-tap to zoom.
-                  The compass opens the whole world: tap a spot or type its x|y to go there.
-                </span>
-              </span>
-            }
-            title="War on the map"
-          />
-        </div>
+        <MapKey
+          clan={!!data?.tribes.some((t) => t.ally && !t.isMe)}
+          help={
+                <InfoDrawer
+                  content={
+                    <span className="flex flex-col gap-1.5 text-left text-sm">
+                      <span>
+                        Armies march across the map; farther targets take longer. An
+                        army moves at the speed of its slowest unit (light cavalry fastest,
+                        catapults slowest). The battle happens when it arrives.
+                      </span>
+                      <span>
+                        <GameIcon e="⛰️" /> Armies follow roads, not straight lines: they march around
+                        mountains and lakes, and forests and hills slow them down. When
+                        the way round is too long, they sail.
+                      </span>
+                      <span>
+                        <GameIcon e="🚩" /> The road each army is on is drawn on the map: gold for yours, red for one
+                        coming for you, dotted where they sail. Your merchants' trails are dashed, green when goods
+                        are coming home.
+                      </span>
+                      <span>
+                        <GameIcon e="⛰️" /> Hills give the defender +20% defense, <GameIcon e="🌲" /> forests +10%, and
+                        horsemen (light cavalry, paladins, knights) fight 25% weaker in forests.
+                      </span>
+                      <span>
+                        <GameIcon e="🛡️" /> Spearmen defend 50% better against horsemen. Rams
+                        break the City Gate, catapults the Watchtower. Mix your army
+                        to match the target.
+                      </span>
+                      <span>
+                        <GameIcon e="🔭" /> With an Exploration Center you can scout a tribe for coins:
+                        exact defense, troops at home and what you could loot.
+                      </span>
+                      <span>
+                        <GameIcon e="🗼" /> A Watchtower shows you which troops are marching on you, so
+                        you can train defenders in time.
+                      </span>
+                      <span>
+                        You can recall an army before it arrives. A tribe that loses a real share of
+                        its stores or troops in a raid gets a shield: up to 2h, growing to 6h and 12h if hit hard
+                        again within a day. Small hits give little or nothing.
+                        Raiding a tribe under half your power takes only half the loot.
+                      </span>
+                      <span>
+                        <GameIcon e="🕵️" /> With an Exploration Center you can plant a spy on a tribe for a day: the
+                        moment their army marches out, you hear about it, so you can strike while they&apos;re away. A
+                        Watchtower may catch spies.
+                      </span>
+                      <span>
+                        <GameIcon e="🧭" /> Tap one of your armies on the road to give it new orders: on its way out or
+                        on its way home with the spoils, it can march on another tribe or camp from where it stands.
+                        It can leave troops behind but never take on more. Supplies for the new road come out of the
+                        spoils first. One new order per expedition; the War Orders card adds more.
+                      </span>
+                      <span>
+                        <GameIcon e="⚔️" /> When armies meet, the battle lasts from 1 minute up to 30,
+                        longer the more troops fight. Tap the crossed swords to watch it
+                        round by round; the defenders are on the field until it ends.
+                      </span>
+                      <span>
+                        Drag to move around: more of the world loads as you go. Pinch, scroll or double-tap to zoom.
+                        The compass opens the whole world: tap a spot or type its x|y to go there.
+                      </span>
+                    </span>
+                  }
+                  title="War on the map"
+                />
+          }
+          hidden={!!picking}
+          treaty={!!data?.tribes.some((t) => t.relation === "ally" || t.relation === "nap")}
+          war={!!data?.tribes.some((t) => t.relation === "war")}
+        />
       </div>
 
       {data && (

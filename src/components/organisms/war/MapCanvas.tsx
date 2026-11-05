@@ -138,7 +138,7 @@ const greyed = (hut: HTMLImageElement) => {
 
 // ─── Ground rings ────────────────────────────────────────────────────────────
 
-const RINGS: Record<Ring, { stroke: string; fill: string; glow?: [number, string] }> = {
+export const RINGS: Record<Ring, { stroke: string; fill: string; glow?: [number, string] }> = {
   me: { stroke: "#E3A948", fill: "rgba(227,169,72,0.3)", glow: [18, "rgba(227,169,72,0.85)"] },
   ally: { stroke: "#7FB3D0", fill: "rgba(127,179,208,0.25)", glow: [10, "rgba(127,179,208,0.6)"] },
   friend: { stroke: "#8FD1B8", fill: "rgba(143,209,184,0.2)", glow: [8, "rgba(143,209,184,0.5)"] },
