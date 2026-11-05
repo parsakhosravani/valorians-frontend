@@ -113,4 +113,34 @@ test.describe("Valorians 2 late game", () => {
     await expect(page.getByText(new RegExp(`\\[${tag}\\]`)).first()).toBeVisible();
     noErrors();
   });
+
+  test("the clan screen has four tabs; banner and other clans open from the header", async ({ page }) => {
+    const leader = newId();
+    const member = newId();
+
+    await open(page, member, "/hall");
+    await open(page, leader, "/hall");
+    const now = Date.now();
+    const tag = `T${leader % 10000}`;
+
+    await sql("INSERT INTO clans (name, tag, leader_id, created_at) VALUES (?, ?, ?, ?)", [`Four Tabs ${leader}`, tag, leader, now]);
+    const clan = await sql("SELECT id FROM clans WHERE tag = ?", [tag]);
+
+    await sql("UPDATE users SET clan_id = ?, clan_joined_at = ? WHERE id IN (?, ?)", [Number(clan.rows[0].id), now, leader, member]);
+    const noErrors = await open(page, leader, "/clan");
+
+    await expect(page.getByRole("tab")).toHaveText(["Members", "War", "Treasury", "Log"]);
+    await page.screenshot({ path: "test-results/clan-tabs.png" });
+
+    await page.getByRole("button", { name: "Banner & settings" }).click();
+    await expect(page.getByRole("button", { name: "Save banner" })).toBeVisible();
+    await page.screenshot({ path: "test-results/clan-settings.png" });
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: /RANK/i }).click();
+    await expect(page.getByPlaceholder("Search by name or tag")).toBeVisible();
+    await expect(page.getByText("YOURS")).toBeVisible();
+    await page.screenshot({ path: "test-results/clan-explore.png" });
+    noErrors();
+  });
 });
