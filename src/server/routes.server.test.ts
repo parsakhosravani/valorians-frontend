@@ -13,6 +13,9 @@ import { POST as found } from "@/app/api/outposts/found/route";
 import { POST as raiseField } from "@/app/api/outposts/upgrade/route";
 import { POST as wonder } from "@/app/api/clan/wonder/route";
 import { GET as leaderboard } from "@/app/api/leaderboard/route";
+import { leaderboard as board } from "@/server/war";
+import { mutatePlayer } from "@/server/players";
+import { maybeRefreshRanks } from "@/server/ranks";
 import { proxy } from "@/proxy";
 import { webAppUrl } from "@/server/appUrl";
 import type { GameState } from "@/lib/game/engine";
@@ -123,5 +126,25 @@ describe("API routes (server)", () => {
     process.env.LAUNCHER_URL = "https://example.github.io/valorians/";
     expect(webAppUrl()).toBe("https://example.github.io/valorians/");
     expect(webAppUrl("/clan")).toBe("https://example.github.io/valorians/?to=%2Fclan");
+  });
+
+  test("the leaderboard is in the order of the power it shows, even between rank passes", async () => {
+    const T0 = Date.now();
+    const a = await newPlayer(T0);
+    await maybeRefreshRanks(T0 + 10 * 60_000);
+    // A big jump in power right after a rank pass: the stored rank is now behind.
+    await mutatePlayer(a.id, T0, (s) => {
+      lateGame(s);
+      s.army.knight = 5_000;
+
+      return s;
+    });
+    const b = await board(await reload(a.id), "power");
+    const values = b.top.map((r) => r.value);
+
+    expect(values).toEqual([...values].sort((x, y) => y - x));
+    expect(b.top.map((r) => r.rank)).toEqual(b.top.map((_, i) => i + 1));
+    const me = b.top.find((r) => r.isMe);
+    if (me) expect(b.me.rank).toBe(me.rank);
   });
 });

@@ -1163,11 +1163,24 @@ export async function leaderboard(me: Player, metric: LeaderboardMetric) {
     plus: Number(r.plus_until ?? 0) > now,
   });
 
+  // The ranks are up to a minute old but the values are live: a tribe that just
+  // trained an army showed 195k power at #9 under four tribes with less. Within
+  // each shown list, order by the value shown and number from the list's first place.
+  const ordered = (rows: typeof top.rows) => {
+    const first = rows.reduce((m, r) => Math.min(m, Number(r.rk)), Infinity);
+    const sorted = [...rows].sort((a, b) => Number(b[col]) - Number(a[col]) || Number(a.id) - Number(b.id));
+
+    return sorted.map((r, i) => row(r, first + i));
+  };
+  const list = ordered(top.rows);
+  const near = around ? ordered(around.rows) : [];
+  const shown = [...list, ...near].find((r) => r.isMe);
+
   return {
     metric,
-    me: { rank: myRank, value: Math.floor(myValue) },
-    top: top.rows.map((r) => row(r, Number(r.rk))),
-    around: around?.rows.map((r) => row(r, Number(r.rk))) ?? [],
+    me: { rank: shown?.rank ?? myRank, value: Math.floor(myValue) },
+    top: list,
+    around: near,
   };
 }
 
