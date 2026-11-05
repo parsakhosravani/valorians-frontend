@@ -59,6 +59,10 @@ import {
   getRates,
   maxTrainBatches,
   totalArmy,
+  ownArmy,
+  ownedArmy,
+  applyGuestLosses,
+  clampGuests,
   trainingEndsAt,
   rankForXp,
   unitMultiplier,
@@ -291,7 +295,8 @@ export const landingFactorFor = (harborLevel: number) => {
 };
 
 export function powerScore(s: GameState) {
-  const army = totalArmy(s);
+  // Guests guarding the village count for their owner, not for it.
+  const army = ownedArmy(s);
   const troops = UNIT_IDS.reduce((sum, u) => sum + ((unitAttack(s, u) + unitDefense(s, u)) / 2) * army[u], 0);
   const buildings = Object.values(s.buildings).reduce((a, b) => a + b, 0);
   return Math.round(troops + buildings * 10);
@@ -458,12 +463,14 @@ export function resolve(
 /** `rand` in [0,1) → luck multiplier in [1-LUCK, 1+LUCK]. */
 export const luckFrom = (rand: number) => 1 - LUCK + rand * 2 * LUCK;
 
-function validateSend(s: GameState, units: Army): Army {
+export function validateSend(s: GameState, units: Army): Army {
   const clean = emptyArmy();
+  // Clanmates' troops guarding the village aren't the tribe's to send.
+  const own = ownArmy(s);
   for (const u of UNIT_IDS) {
     const n = Math.floor(Number(units?.[u] ?? 0));
     if (n < 0 || !Number.isFinite(n)) throw new GameError("Bad troop count");
-    if (n > s.army[u]) throw new GameError(`You only have ${s.army[u]} ${UNIT_BY_ID[u].name} at home`, "not_enough_troops");
+    if (n > own[u]) throw new GameError(`You only have ${own[u]} ${UNIT_BY_ID[u].name} of your own at home`, "not_enough_troops");
     clean[u] = n;
   }
   if (fighterCount(clean) === 0) throw new GameError("Choose some troops to send", "no_troops");
@@ -689,6 +696,7 @@ export function leaveField(s0: GameState, id: number, engaged?: Army | null): Ga
   for (const j of s.joining ?? []) if (j.id === id) for (const u of UNIT_IDS) s.army[u] += j.units[u] ?? 0;
   s.joining = (s.joining ?? []).filter((j) => j.id !== id);
   s.defending = (s.defending ?? []).filter((f) => f.id !== id);
+  clampGuests(s);
   return s;
 }
 
@@ -761,6 +769,8 @@ export function defendRaid(
     if (engaged) d.army[u] += (engaged[u] ?? 0) - outcome.defenderLosses[u];
     else d.army[u] -= outcome.defenderLosses[u];
   }
+  // Clanmates' troops on guard lose their share (see applyGuestLosses).
+  applyGuestLosses(d, defenders, outcome.defenderLosses);
 
   const loot = emptyLoot();
   let gate: RaidReport["gate"];

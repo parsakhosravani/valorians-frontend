@@ -257,7 +257,76 @@ export type GameState = {
   defending?: Fight[];
   /** Troops that came home into a battle and wait to be put on the field. */
   joining?: Joining[];
+  /**
+   * Clanmates' troops guarding this village (see support.ts). They stand in
+   * `army` with the tribe's own, so every battle counts them, and the village
+   * feeds them; this ledger says whose they are. Never sent out, never in power.
+   */
+  guests?: Guest[];
+  /** This tribe's troops guarding clanmates (or on the way): counted in its power and people, fed by the host. */
+  abroad?: Abroad[];
 };
+
+/** A clanmate's troops at this village. `id` is the row in the support table. */
+export type Guest = { id: number; ownerId: number; ownerName: string; units: Army; since: number };
+/** This tribe's troops at a clanmate's village, or on the way there. */
+export type Abroad = { id: number; hostId: number; hostName: string; units: Army; status: "marching" | "stationed"; arrivesAt: number };
+
+/** Every guest's troops at the village, added up. */
+export function guestArmy(s: GameState): Army {
+  const a = emptyArmy();
+  for (const g of s.guests ?? []) for (const u of UNIT_IDS) a[u] += g.units[u] ?? 0;
+  return a;
+}
+
+/** The tribe's own troops at home: what it can send out (guests stay). */
+export function ownArmy(s: GameState): Army {
+  const g = guestArmy(s);
+  const a = emptyArmy();
+  for (const u of UNIT_IDS) a[u] = Math.max(0, (s.army[u] ?? 0) - g[u]);
+  return a;
+}
+
+/** Every troop the tribe owns: home (without guests), on the way home, and guarding clanmates. */
+export function ownedArmy(s: GameState): Army {
+  const a = totalArmy(s);
+  const g = guestArmy(s);
+  for (const u of UNIT_IDS) a[u] = Math.max(0, a[u] - g[u]);
+  for (const x of s.abroad ?? []) for (const u of UNIT_IDS) a[u] += x.units[u] ?? 0;
+  return a;
+}
+
+/**
+ * The guests never number more than the troops there: if the village lost some
+ * (deserters, a battle), the guests lose their share. Only while no battle is on,
+ * since fighting troops are out on the field and not in `army`.
+ */
+export function clampGuests(s: GameState) {
+  if (!s.guests?.length || s.defending?.length) return;
+  const total = guestArmy(s);
+  for (const u of UNIT_IDS) {
+    if (total[u] <= s.army[u]) continue;
+    const keep = s.army[u] / total[u];
+    for (const g of s.guests) g.units[u] = Math.floor((g.units[u] ?? 0) * keep);
+  }
+  s.guests = s.guests.filter((g) => UNIT_IDS.some((u) => (g.units[u] ?? 0) > 0));
+}
+
+/**
+ * A battle at the village is over: each guest loses the same share of each
+ * troop type as fell on the field (`fielded` fought, `losses` died). Guests
+ * fight under the village's banner: its walls, ranks and bonuses.
+ */
+export function applyGuestLosses(s: GameState, fielded: Army, losses: Army) {
+  if (!s.guests?.length) return;
+  for (const g of s.guests)
+    for (const u of UNIT_IDS) {
+      const ratio = fielded[u] > 0 ? Math.min(1, (losses[u] ?? 0) / fielded[u]) : 0;
+      g.units[u] = Math.max(0, (g.units[u] ?? 0) - Math.round((g.units[u] ?? 0) * ratio));
+    }
+  s.guests = s.guests.filter((g) => UNIT_IDS.some((u) => (g.units[u] ?? 0) > 0));
+  clampGuests(s);
+}
 
 /** A battle at the village: the attack's id and the last moment an army coming home can still join. */
 export type Fight = { id: number; joinBy: number };
@@ -320,6 +389,8 @@ export function createInitialState(now: number): GameState {
     buildings: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
     mastery: {},
     outposts: [],
+    guests: [],
+    abroad: [],
     queue: [],
     quests: {},
     bonusGrowth: 0,
@@ -364,6 +435,8 @@ export function normalizeState(saved: GameState): GameState {
     fullEnergy: { ...fresh.fullEnergy, ...s.fullEnergy },
     buildings: { ...fresh.buildings, ...s.buildings },
     mastery: { ...s.mastery },
+    guests: Array.isArray(s.guests) ? s.guests.map((g) => ({ ...g, units: { ...emptyArmy(), ...g.units } })) : [],
+    abroad: Array.isArray(s.abroad) ? s.abroad.map((a) => ({ ...a, units: { ...emptyArmy(), ...a.units } })) : [],
     outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...emptyFields(), ...o.fields }, land: o.land ?? outpostLand(o.x, o.y) })),
     queue: s.queue ?? [],
     quests: s.quests ?? {},
@@ -428,7 +501,7 @@ export function peopleOf(s: GameState) {
   const sum = (a: Partial<Army>) => UNITS.reduce((n, u) => n + unitPeople(u) * (a[u.id] ?? 0), 0);
   const training = s.training.reduce((n, t) => n + unitPeople(UNIT_BY_ID[t.unit]) * (t.count - t.done), 0);
 
-  return s.population + sum(totalArmy(s)) + training + (s.joining ?? []).reduce((n, j) => n + sum(j.units), 0);
+  return s.population + sum(ownedArmy(s)) + training + (s.joining ?? []).reduce((n, j) => n + sum(j.units), 0);
 }
 
 /** Units at home + away on raids. */
@@ -677,6 +750,8 @@ function starve(s: GameState, cropPerHour: number, cropBefore: number, hours: nu
     if (!home.length) break;
   }
   if (gone > 0) s.deserted = { at, count: (s.deserted && at - s.deserted.at < 3600e3 ? s.deserted.count : 0) + gone };
+  // Guests starve with the village that feeds them.
+  if (gone > 0) clampGuests(s);
 }
 
 /**
@@ -876,6 +951,8 @@ function structuredCloneState(s: GameState): GameState {
     ...(s.owned ? { owned: { ...s.owned } } : {}),
     ...(s.defending ? { defending: s.defending.map((f) => ({ ...f })) } : {}),
     ...(s.joining ? { joining: s.joining.map((j) => ({ ...j, units: { ...j.units } })) } : {}),
+    ...(s.guests ? { guests: s.guests.map((g) => ({ ...g, units: { ...g.units } })) } : {}),
+    ...(s.abroad ? { abroad: s.abroad.map((a) => ({ ...a, units: { ...a.units } })) } : {}),
     frenzy: { ...s.frenzy },
     streak: { ...s.streak },
     troops: Object.fromEntries(

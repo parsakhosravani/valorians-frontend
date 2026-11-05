@@ -84,7 +84,12 @@ test player instead (`?dev_user=N` picks which one).
 - `src/server/db.ts` creates every table on first use. A DB already at `SCHEMA_VERSION`
   skips setup (one query per cold start). **Bump `SCHEMA_VERSION` with every schema change.**
 - Main tables: `users`, `battles`, `attacks`, `clans`, `clan_requests`, `clan_log`, `trades`,
-  `bandit_lairs`, `announcements`, `payments`, `meta`, `event_log` (today only, see Event log).
+  `bandit_lairs`, `announcements`, `payments`, `meta`, `event_log` (today only, see Event log),
+  and for clans fighting together `support` (guard duties), `clan_rallies`, `clan_relations`, `clan_week`, `clan_week_done`.
+- Guard duties live in three places kept in step by `src/server/clanWar.ts`: the `support` row (truth for the
+  cron), the host's `state.guests` (the troops stand in its `army`, so battles count them) and the owner's
+  `state.abroad` (its power/people). `reconcileSupport` (cron, and right after the host fights) pushes losses
+  to owners and ends duties between tribes no longer in the same clan.
 - Turso when `TURSO_DATABASE_URL` is set (Vercel); otherwise a local SQLite file
   (Docker / own server — needs a persistent disk).
 

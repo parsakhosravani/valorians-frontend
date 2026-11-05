@@ -8,7 +8,7 @@ import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
 import { useGameActions, useLiveWhile, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
-import { Army, GameState, emptyArmy } from "@/lib/game/engine";
+import { Army, GameState, emptyArmy, ownArmy } from "@/lib/game/engine";
 import { Point, TERRAIN, Terrain, armySpeed, routeFor, routeMs, shipsNeeded } from "@/lib/game/map";
 import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
 import { formatDuration } from "@/lib/format";
@@ -30,6 +30,8 @@ export type AttackTarget = {
   note?: string;
   /** Bandit lairs around, to warn about ambushes on the road. */
   bandits?: MapLair[];
+  /** Sent to a clan strike: the army slows down to land with the others at `landAt`. */
+  rally?: { id: number; landAt: number };
 };
 
 /** Attack must beat the top of the defense by this much to count as "enough". */
@@ -47,7 +49,7 @@ const scaled = (home: Army, f: number): Army => {
 /** Smallest share (in 5% steps) whose attack clears the defense with a margin, or null if even everything can't. */
 function enoughShare(s: GameState, terrain: Terrain, defMax: number): number | null {
   for (let f = 0.05; f < 1.0001; f += 0.05) {
-    if (battleNumbers(s, scaled(s.army, f), null, terrain, 0).attack >= defMax * SAFETY) return Math.min(1, f);
+    if (battleNumbers(s, scaled(ownArmy(s), f), null, terrain, 0).attack >= defMax * SAFETY) return Math.min(1, f);
   }
 
   return null;
@@ -78,6 +80,8 @@ export const SendArmyDrawer = ({
   const { state, rates, now } = useLiveWhile(!!target);
   const { attack } = useGameActions();
   const { telegram } = useTelegramContext();
+  // Clanmates' guards stand in the village too, but only your own troops march.
+  const own = ownArmy(state);
   const [units, setUnits] = useState<Army>(emptyArmy());
   const [busy, setBusy] = useState(false);
   // The quick pick last tapped. Small armies round several picks to the same troops,
@@ -107,7 +111,7 @@ export const SendArmyDrawer = ({
   useEffect(() => {
     if (target) {
       const f = Math.max(0.5, enough ?? 0);
-      setUnits(scaled(state.army, f));
+      setUnits(scaled(own, f));
       setPicked(f);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,11 +124,14 @@ export const SendArmyDrawer = ({
   const shipsHome = state.army.longship;
   const shortOfShips = naval && ships > shipsHome;
   const carry = UNITS.reduce((s, u) => s + u.carry * units[u.id], 0) + (naval ? ships * UNIT_BY_ID.longship.carry : 0);
-  const travel = target ? routeMs(units, target.from, target.at, rates.marchMultiplier) : 0;
+  const walk = target ? routeMs(units, target.from, target.at, rates.marchMultiplier) : 0;
+  // A clan strike: the army slows down to land with the others (late if it can't make it).
+  const travel = target?.rally ? Math.max(walk, target.rally.landAt - now) : walk;
+  const late = !!target?.rally && walk > target.rally.landAt - now;
   const slowest = UNITS.find((u) => !u.transport && units[u.id] > 0 && u.speed === armySpeed(units));
   const hasCavalry = UNITS.some((u) => u.mounted && units[u.id] > 0);
   const size = fighterCount(units);
-  const home = UNITS.filter((u) => !u.transport && state.army[u.id] > 0);
+  const home = UNITS.filter((u) => !u.transport && own[u.id] > 0);
   // Attack's share of attack + defense, for the balance bar.
   const balance = power + defMax > 0 ? power / (power + (defMin + defMax) / 2) : 0;
 
@@ -135,7 +142,7 @@ export const SendArmyDrawer = ({
   const send = async () => {
     if (!target) return;
     setBusy(true);
-    const march = await attack(target.to, units);
+    const march = await attack({ ...target.to, ...(target.rally ? { rally: target.rally.id } : {}) }, units);
 
     setBusy(false);
     if (march) {
@@ -145,13 +152,20 @@ export const SendArmyDrawer = ({
   };
 
   const setOne = (id: keyof Army, n: number) =>
-    setUnits((a) => ({ ...a, [id]: Math.max(0, Math.min(state.army[id], Math.floor(n || 0))) }));
+    setUnits((a) => ({ ...a, [id]: Math.max(0, Math.min(own[id], Math.floor(n || 0))) }));
 
   return (
     <Drawer isOpen={!!target} position="bottom" title={target?.title} onClose={onClose}>
       {target && d && (
         <div className="flex flex-col gap-3 pt-2">
           {target.note && <p className="text-xs text-gold">{target.note}</p>}
+          {target.rally && (
+            <p className={clsx("text-xs font-bold", late ? "text-bad" : "text-goldtext")}>
+              <GameIcon e="📯" /> Clan strike: lands with your clan at{" "}
+              {new Date(target.rally.landAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {late ? `. Too far to make it: lands ${formatDuration(walk - (target.rally.landAt - now))} late.` : "."}
+            </p>
+          )}
 
           {/* Where the fight will be */}
           <div className="flex flex-wrap gap-2 text-xs font-bold">
@@ -185,7 +199,7 @@ export const SendArmyDrawer = ({
               const active =
                 p.f === 0
                   ? size === 0 && picked === 0
-                  : size > 0 && picked != null && Math.abs(picked - p.f) < 0.01 && sameArmy(units, scaled(state.army, p.f));
+                  : size > 0 && picked != null && Math.abs(picked - p.f) < 0.01 && sameArmy(units, scaled(own, p.f));
               const disabled = home.length === 0;
 
               return (
@@ -198,7 +212,7 @@ export const SendArmyDrawer = ({
                     p.label === "Enough" && !active && "text-good"
                   )}
                   onClick={() => {
-                    setUnits(scaled(state.army, p.f));
+                    setUnits(scaled(own, p.f));
                     setPicked(p.f);
                   }}
                 >
@@ -211,7 +225,7 @@ export const SendArmyDrawer = ({
           {/* Only troop types you have at home. */}
           <div className="flex flex-col gap-2">
             {home.map((u) => {
-              const max = state.army[u.id];
+              const max = own[u.id];
               const n = units[u.id];
 
               return (
@@ -343,7 +357,7 @@ export const SendArmyDrawer = ({
             <p className="text-[11px] text-center text-muted -mt-1">
               Luck can swing it ±10%.
               {slowest && size > units[slowest.id] ? ` ${UNIT_BY_ID[slowest.id].name} set the pace.` : ""} Back home in{" "}
-              {formatDuration(travel * 2)}.
+              {formatDuration(travel + walk)}.
               {!d.exact && " Defense is a guess; scout first to know."}
             </p>
           )}

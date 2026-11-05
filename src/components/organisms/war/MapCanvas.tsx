@@ -40,7 +40,8 @@ const VY = 34;
 const SAND = "#C8B27A";
 
 /** How strong a village is next to you: the colour of its ground ring. */
-export type Ring = "me" | "ally" | "weaker" | "stronger" | "even";
+/** friend: a clan your clan has a treaty with; enemy: a clan you are at war with. */
+export type Ring = "me" | "ally" | "friend" | "enemy" | "weaker" | "stronger" | "even";
 
 export type CanvasTribe = {
   id: number;
@@ -140,6 +141,8 @@ const greyed = (hut: HTMLImageElement) => {
 const RINGS: Record<Ring, { stroke: string; fill: string; glow?: [number, string] }> = {
   me: { stroke: "#E3A948", fill: "rgba(227,169,72,0.3)", glow: [18, "rgba(227,169,72,0.85)"] },
   ally: { stroke: "#7FB3D0", fill: "rgba(127,179,208,0.25)", glow: [10, "rgba(127,179,208,0.6)"] },
+  friend: { stroke: "#8FD1B8", fill: "rgba(143,209,184,0.2)", glow: [8, "rgba(143,209,184,0.5)"] },
+  enemy: { stroke: "#E0442A", fill: "rgba(224,68,42,0.25)", glow: [12, "rgba(224,68,42,0.7)"] },
   weaker: { stroke: "#9DD07F", fill: "rgba(157,208,127,0.2)" },
   stronger: { stroke: "#F08A6C", fill: "rgba(240,138,108,0.2)" },
   even: { stroke: "rgba(242,198,109,0.8)", fill: "rgba(242,198,109,0.15)" },

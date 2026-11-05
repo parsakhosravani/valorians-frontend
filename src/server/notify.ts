@@ -110,6 +110,16 @@ export const notify = {
     );
   },
 
+  seasonPlace(userId: number, winnerTag: string, season: number, place: number, coins: number) {
+    return sendToPlayer(
+      userId,
+      `🏛️ <b>Season ${season} is over: [${esc(winnerTag)}] finished the World Wonder first.</b>\n\n` +
+        `Your clan's Wonder came ${place === 2 ? "2nd" : "3rd"}: +${coins.toLocaleString("en-US")} coins. A new season begins.`,
+      "🏛️ Open clan",
+      "/clan"
+    );
+  },
+
   clanAccepted(userId: number, clan: string) {
     return sendToPlayer(userId, `🎉 You were accepted into <b>${esc(clan)}</b>! Your clan's perks now apply.`, "🛡️ Open clan", "/clan");
   },

@@ -12,6 +12,7 @@ import { maybeRefreshRanks } from "@/server/ranks";
 import { errorData, flushEvents, logEvent, withEventContext } from "@/server/events";
 import { dailyLogJobs } from "@/server/eventReport";
 import { watchdog } from "@/server/alerts";
+import { reconcileSupport, resolveSupport } from "@/server/clanWar";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -52,6 +53,9 @@ export async function GET(req: NextRequest) {
 async function run(started: number) {
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
+  // Guards reaching clanmates, and guards' losses (battles, hunger) reaching their owners.
+  await resolveSupport(started).catch((e) => console.error("resolving guards failed", e));
+  await reconcileSupport(started).catch((e) => console.error("reconciling guards failed", e));
   // New tribes get their tile on the map here (it used to slow every map request).
   await settleAll().catch((e) =>
     console.error("settling new tribes failed", e)

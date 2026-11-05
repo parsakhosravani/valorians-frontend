@@ -11,6 +11,8 @@ import coinImg from "~/images/resources/coin.webp";
 
 import { Card, Tabs, fmt } from "@/components/organisms/war/shared";
 import { FlagDesigner } from "@/components/organisms/clan/FlagDesigner";
+import { ClanWar } from "@/components/organisms/clan/ClanWar";
+import { RELATION_TEXT } from "@/lib/game/clanWar";
 import { Avatar } from "@/components/molecules/Avatar";
 import { Drawer } from "@/components/molecules/Drawer";
 import { Button } from "@/components/atoms/Button";
@@ -44,7 +46,7 @@ import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 type Mine = NonNullable<ClanView["mine"]>;
 type Member = Mine["members"][number];
 type BrowseTab = "browse" | "found";
-type ClanTab = "members" | "treasury" | "banner" | "chronicle" | "explore";
+type ClanTab = "members" | "war" | "treasury" | "banner" | "chronicle" | "explore";
 
 const inputCls = "inset w-full h-10 px-3 text-sm font-bold text-parch placeholder:text-muted/70 outline-none focus:border-gold";
 
@@ -124,6 +126,23 @@ function logText(e: Mine["log"][number]) {
       return { icon: "⚙️", text: `${a} changed the clan's ${e.data.what}` };
     case "wonder":
       return { icon: "🏛️", text: `${a} raised the World Wonder to level ${e.data.level}` };
+    case "rally":
+      return { icon: "📯", text: `${a} called a clan strike on ${t}` };
+    case "rally_off":
+      return { icon: "📯", text: `${a} called off a clan strike` };
+    case "treaty": {
+      const k = RELATION_TEXT[String(e.data.kind) as "ally" | "nap"];
+
+      return { icon: k?.icon ?? "🤝", text: `${k?.name ?? "A treaty"} with [${e.data.tag}] is in force` };
+    }
+    case "treaty_end":
+      return { icon: "💔", text: `${a} broke the treaty with [${e.data.tag}]` };
+    case "war":
+      return { icon: "🔥", text: e.data.against ? `[${e.data.tag}] declared war on the clan!` : `${a} declared war on [${e.data.tag}]` };
+    case "peace":
+      return { icon: "🕊️", text: `Peace with [${e.data.tag}]: the war is over` };
+    case "goal":
+      return { icon: "🏆", text: `The clan met the weekly goal: +${fmt(Number(e.data.coins ?? 0))} coins for everyone` };
     default:
       return { icon: "•", text: "Something happened" };
   }
@@ -326,7 +345,13 @@ export const Clan: FunctionComponent = () => {
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [browseTab, setBrowseTab] = useState<BrowseTab>("browse");
-  const [tab, setTab] = useState<ClanTab>("members");
+  // ?tab=war (bot alerts) opens the War tab; ?help=<id> also opens the guard sheet for that member.
+  const [tab, setTab] = useState<ClanTab>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "war" ? "war" : "members"
+  );
+  const [helpId] = useState<number | null>(() =>
+    typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("help")) || null : null
+  );
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -352,6 +377,7 @@ export const Clan: FunctionComponent = () => {
   const [flagDraft, setFlagDraft] = useState<Flag | null>(null);
   const [mottoDraft, setMottoDraft] = useState<string | null>(null);
   const [minPopDraft, setMinPopDraft] = useState<string | null>(null);
+  const [chatDraft, setChatDraft] = useState<string | null>(null);
 
   const load = useCallback(
     async (q = query) => {
@@ -843,6 +869,30 @@ export const Clan: FunctionComponent = () => {
         </Card>
       )}
 
+      {manager && (
+        <Card className="flex flex-col gap-1.5">
+          <span className="text-xs font-bold text-sub">Clan chat (your Telegram group&apos;s t.me link)</span>
+          <div className="flex gap-2">
+            <input
+              className={inputCls}
+              placeholder="https://t.me/+AbC123"
+              value={chatDraft ?? mine.chatUrl ?? ""}
+              onChange={(e) => setChatDraft(e.target.value.trim())}
+            />
+            <Button
+              disabled={busy != null || chatDraft == null || chatDraft === (mine.chatUrl ?? "")}
+              variant="secondary"
+              onClick={async () => {
+                if (await run("chat", () => clan.update({ chatUrl: chatDraft ?? "" }, chatDraft ? "Clan chat linked" : "Clan chat removed"))) setChatDraft(null);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+          <span className="text-[11px] text-muted">Members see a 💬 button to join it. Only t.me links.</span>
+        </Card>
+      )}
+
       {can.settings(role) && (
         <Card className="flex flex-col gap-3">
           <span className="text-sm font-bold text-parch">Who can join</span>
@@ -1036,6 +1086,11 @@ export const Clan: FunctionComponent = () => {
                   Level {mine.level} · {ROLE_ICON[role] && <GameIcon e={ROLE_ICON[role]} />} You are {role === "member" ? "a" : "the"} {ROLE_NAMES[role]}
                 </div>
                 <div className="text-sub text-xs">{mine.description || "Stand together, raid together, rise together."}</div>
+                {mine.chatUrl && (
+                  <a className="self-start pill h-7 px-2.5 mt-0.5 text-xs font-bold text-goldtext" href={mine.chatUrl} rel="noreferrer" target="_blank">
+                    <GameIcon e="💬" /> Clan chat
+                  </a>
+                )}
               </>
             ) : (
               <>
@@ -1091,6 +1146,7 @@ export const Clan: FunctionComponent = () => {
             <Tabs
               tabs={[
                 { id: "members", label: "Members", badge: manager ? mine.requests.length : 0 },
+                { id: "war", label: "War" },
                 { id: "treasury", label: "Treasury" },
                 { id: "banner", label: "Banner" },
                 { id: "chronicle", label: "Log" },
@@ -1101,6 +1157,14 @@ export const Clan: FunctionComponent = () => {
             />
 
             {tab === "members" && membersTab}
+            {tab === "war" && (
+              <ClanWar
+                clanId={mine.id}
+                helpId={helpId}
+                members={mine.members.map((m) => ({ id: m.id, name: m.name }))}
+                officer={manager}
+              />
+            )}
             {tab === "treasury" && treasuryTab}
             {tab === "banner" && bannerTab}
             {tab === "chronicle" && chronicleTab}

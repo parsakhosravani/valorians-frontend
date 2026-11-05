@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 11; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at
+const SCHEMA_VERSION = 12; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at, 12: clans fighting together
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -401,6 +401,76 @@ async function migrate(client: Client) {
   // When a tile was claimed for an outpost being founded, so a claim left behind by a
   // crashed request can be told from one in progress (see settleOutpost). 0 = before this column.
   await client.execute("ALTER TABLE outposts ADD COLUMN claimed_at INTEGER NOT NULL DEFAULT 0").catch(() => {});
+
+  // Clans fighting together (see src/server/clanWar.ts).
+  await client.executeMultiple(`
+    -- Troops guarding a clanmate's village: on the way (marching), there (stationed), or done.
+    CREATE TABLE IF NOT EXISTS support (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_id      INTEGER NOT NULL,
+      host_id       INTEGER NOT NULL,
+      units         TEXT NOT NULL,                 -- JSON Army, kept up to date with losses
+      status        TEXT NOT NULL,                 -- marching | stationed | done
+      sent_at       INTEGER NOT NULL,
+      arrives_at    INTEGER NOT NULL,
+      from_x        INTEGER NOT NULL,
+      from_y        INTEGER NOT NULL,
+      to_x          INTEGER NOT NULL,
+      to_y          INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS support_due ON support(status, arrives_at);
+    CREATE INDEX IF NOT EXISTS support_owner ON support(owner_id, status);
+    CREATE INDEX IF NOT EXISTS support_host ON support(host_id, status);
+
+    -- A clan strike: armies sent to it land on the target at land_at, together.
+    CREATE TABLE IF NOT EXISTS clan_rallies (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      clan_id       INTEGER NOT NULL,
+      target_id     INTEGER NOT NULL,
+      land_at       INTEGER NOT NULL,
+      created_by    INTEGER NOT NULL,
+      created_at    INTEGER NOT NULL,
+      note          TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS clan_rallies_clan ON clan_rallies(clan_id, land_at);
+
+    -- Treaties and wars between two clans: a < b, so one row per pair.
+    CREATE TABLE IF NOT EXISTS clan_relations (
+      a             INTEGER NOT NULL,
+      b             INTEGER NOT NULL,
+      kind          TEXT NOT NULL,                 -- ally | nap | war
+      status        TEXT NOT NULL,                 -- proposed | active
+      proposed_by   INTEGER NOT NULL,              -- the clan that asked (or declared war)
+      created_at    INTEGER NOT NULL,
+      ends_at       INTEGER,                       -- wars end by themselves
+      score_a       INTEGER NOT NULL DEFAULT 0,    -- war: raid wins of clan a over clan b
+      score_b       INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (a, b)
+    );
+    CREATE INDEX IF NOT EXISTS clan_relations_b ON clan_relations(b);
+
+    -- What each member did for the clan this week (the weekly goal and the contribution board).
+    CREATE TABLE IF NOT EXISTS clan_week (
+      clan_id       INTEGER NOT NULL,
+      week          INTEGER NOT NULL,
+      user_id       INTEGER NOT NULL,
+      camps         INTEGER NOT NULL DEFAULT 0,
+      wins          INTEGER NOT NULL DEFAULT 0,
+      donated       REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (clan_id, week, user_id)
+    );
+    -- Weekly goals already paid out (once per clan per week).
+    CREATE TABLE IF NOT EXISTS clan_week_done (
+      clan_id       INTEGER NOT NULL,
+      week          INTEGER NOT NULL,
+      at            INTEGER NOT NULL,
+      PRIMARY KEY (clan_id, week)
+    );
+  `);
+  await client.execute("ALTER TABLE attacks ADD COLUMN rally_id INTEGER").catch(() => {});
+  await client.execute("CREATE INDEX IF NOT EXISTS attacks_rally ON attacks(rally_id)");
+  // The clan's Telegram group, shown on the Clan screen (a t.me link).
+  await client.execute("ALTER TABLE clans ADD COLUMN chat_url TEXT").catch(() => {});
 
   // Everything that happened today, to check the game's flows each night
   // (see events.ts / eventReport.ts). The cron deletes each day after its report.

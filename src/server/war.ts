@@ -10,6 +10,8 @@ import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { maybeRefreshRanks } from "./ranks";
 import { spiesSeeMarch } from "./spies";
 import { errorData, logEvent, withEventContext } from "./events";
+import { alertClan, rallyLanding, recordForClan, reconcileSupport, relationBetween, scoreWar } from "./clanWar";
+import { blocksRaids } from "@/lib/game/clanWar";
 
 import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
@@ -54,7 +56,8 @@ import {
 import type { Army } from "@/lib/game/engine";
 
 /** Where an army can be sent: a tribe, one of your barbarian camps, or a bandit lair (its tile). */
-type MarchTarget = { target?: number; camp?: number; lair?: Point };
+/** `rally`: an army sent to a clan strike lands with the others (see rallyLanding). */
+type MarchTarget = { target?: number; camp?: number; lair?: Point; rally?: number };
 
 /** Most armies one tribe can have out at once. */
 
@@ -67,6 +70,10 @@ const rand = () => crypto.randomInt(0, 1_000_000) / 1_000_000;
 export const displayName = (p: { username: string | null; firstName: string }) =>
   p.firstName || (p.username ? `@${p.username}` : "Player");
 
+/** Not in a clan your clan has a treaty with (args: your clan id three times). */
+const NOT_TREATY = `(clan_id IS NULL OR clan_id NOT IN (
+  SELECT CASE WHEN a = ? THEN b ELSE a END FROM clan_relations WHERE (a = ? OR b = ?) AND kind IN ('ally', 'nap') AND status = 'active'))`;
+
 /** Up to 6 tribes the player can attack right now, near their own strength. */
 export async function findTargets(me: Player, now: number, includeId?: number) {
   const db = await getDb();
@@ -74,17 +81,17 @@ export async function findTargets(me: Player, now: number, includeId?: number) {
   const ids: number[] = [];
   if (includeId && includeId !== me.id) {
     const r = await db.execute({
-      sql: "SELECT id FROM users WHERE id = ? AND shield_until <= ? AND (clan_id IS NULL OR clan_id IS NOT ?)",
-      args: [includeId, now, me.clanId],
+      sql: `SELECT id FROM users WHERE id = ? AND shield_until <= ? AND (clan_id IS NULL OR clan_id IS NOT ?) AND ${NOT_TREATY}`,
+      args: [includeId, now, me.clanId, me.clanId, me.clanId, me.clanId],
     });
     if (r.rows[0]) ids.push(includeId);
   }
   const rs = await db.execute({
     sql: `SELECT id FROM users
-          WHERE id != ? AND shield_until <= ? AND (clan_id IS NULL OR clan_id IS NOT ?)
+          WHERE id != ? AND shield_until <= ? AND (clan_id IS NULL OR clan_id IS NOT ?) AND ${NOT_TREATY}
           ORDER BY ABS(power - ?) ASC, RANDOM()
           LIMIT 6`,
-    args: [me.id, now, me.clanId, myPower],
+    args: [me.id, now, me.clanId, me.clanId, me.clanId, me.clanId, myPower],
   });
   for (const row of rs.rows) if (!ids.includes(Number(row.id))) ids.push(Number(row.id));
   const targets = [];
@@ -144,6 +151,7 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
 
   // Across the sea the army sails, and takes the Longships it needs along.
   const naval = seaRoute(home, dest, units).naval;
+  const landAt = to.rally ? await rallyLanding(me, Math.floor(Number(to.rally)), defenderId, now) : null;
   let sent!: Army;
   let travel = 0;
   const after = await mutatePlayer(me.id, now, (s) => {
@@ -154,6 +162,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
     travel = routeMs(sent, home, dest, getRates(s).marchMultiplier);
     // A player always gets time to react to an attack (camps and lairs don't need it).
     if (defenderId) travel = raidTravelMs(travel);
+    // A clan strike: slow down to land with the others (a late army just lands when it can).
+    if (landAt) travel = Math.max(travel, landAt - now);
 
     return d.state;
   });
@@ -163,8 +173,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
     const ambush = await ambushOnRoad(me, sent, home, dest, now, now + travel);
     const ins = await db.execute({
       sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, lair_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
-                                 ambush, ambush_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                 ambush, ambush_at, rally_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         me.id,
         defenderId,
@@ -179,6 +189,7 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
         now + travel,
         ambush ? JSON.stringify(ambush) : null,
         ambush?.at ?? null,
+        landAt ? Math.floor(Number(to.rally)) : null,
       ],
     });
 
@@ -188,6 +199,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
       const watch = (def?.state.buildings["watchtower"] ?? 0) >= 1;
 
       await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel, home);
+      // The whole clan hears it, and can send guards (see alertClan).
+      await alertClan(defenderId, displayName(me), travel, now).catch((e) => console.error("clan alert", e));
     }
     // Anyone with a spy in this village hears the army has gone.
     await spiesSeeMarch(after, sent, travel, now).catch((e) => console.error("spies", e));
@@ -253,6 +266,11 @@ async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Poi
 
   if (!target) throw new GameError("That tribe doesn't exist");
   if (me.clanId != null && target.clanId === me.clanId) throw new GameError("That tribe is in your clan. Clanmates don't raid each other.", "same_clan");
+  if (me.clanId != null && target.clanId != null) {
+    const r = await relationBetween(me.clanId, target.clanId, now);
+
+    if (blocksRaids(r?.kind)) throw new GameError("Your clan has a treaty with theirs: no raids between you", "treaty");
+  }
   if (target.state.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
 
   return { dest: await homeOf(defenderId), defenderId, campLevel: null, lairLevel: null, name: displayName(target) };
@@ -494,6 +512,7 @@ async function finishBattle(a: AttackRow, now: number) {
       return r.state;
     });
     logFinish(a, attacker.id, report, now);
+    if (report.attackerWon) await recordForClan(attacker.id, attacker.clanId, "camps", 1, now).catch((e) => console.error("clan week", e));
     const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: campName(a.campLevel) };
 
     await saveReport(attacker.id, null, a.campLevel, full, at, a.id);
@@ -513,6 +532,7 @@ async function finishBattle(a: AttackRow, now: number) {
       return r.state;
     });
     logFinish(a, attacker.id, report, now);
+    if (report.attackerWon) await recordForClan(attacker.id, attacker.clanId, "camps", 1, now).catch((e) => console.error("clan week", e));
     if (report.attackerWon) await clearLair(a.to, attacker.id, at);
     const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: `Bandit lair (level ${a.lairLevel})` };
 
@@ -548,6 +568,11 @@ async function finishBattle(a: AttackRow, now: number) {
     return leaveField(r.state, a.id);
   });
   logFinish(a, attacker.id, report, now);
+  // Clans: war points, the weekly goal, and the guards who fought in the village.
+  await scoreWar(attacker.clanId, defender.clanId, report.attackerWon, now).catch((e) => console.error("war score", e));
+  if (report.attackerWon) await recordForClan(attacker.id, attacker.clanId, "wins", 1, now).catch((e) => console.error("clan week", e));
+  else await recordForClan(defender.id, defender.clanId, "wins", 1, now).catch((e) => console.error("clan week", e));
+  await reconcileSupport(now, defender.id).catch((e) => console.error("guards after battle", e));
   const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: displayName(defender) };
   let promoted: Promotion[] = [];
 

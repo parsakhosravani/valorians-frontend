@@ -9,6 +9,7 @@ import {
 } from "react";
 import Image from "next/image";
 import clsx from "clsx";
+import Link from "next/link";
 
 import {
   ArmyToken,
@@ -86,6 +87,7 @@ import type { Army } from "@/lib/game/engine";
 import type { ClanFlag as ClanFlagData } from "@/lib/game/clan";
 import { ClanFlag } from "@/components/molecules/ClanFlag";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
+import { RallyButton } from "@/components/organisms/clan/ClanWar";
 import { formatDuration } from "@/lib/format";
 import { Countdown, Since } from "@/components/atoms/Countdown";
 
@@ -111,6 +113,8 @@ type Tribe = {
   clan: { id: number; tag: string; flag: ClanFlagData } | null;
   /** In your clan: can't be attacked. */
   ally: boolean;
+  /** Your clan's treaty (ally, nap: can't be attacked) or war with this tribe's clan. */
+  relation?: "ally" | "nap" | "war" | null;
   /** Until when you have a spy in this village (older servers don't send it). */
   spiedUntil?: number | null;
 };
@@ -496,7 +500,7 @@ export const WarMap = ({
   /** Open on this barbarian camp (by level) with its card up. */
   focusCamp?: number;
 }) => {
-  const { authHeader } = useGameStatus();
+  const { authHeader, me } = useGameStatus();
   const { recall, scout, spy, refresh } = useGameActions();
   // The map follows the clock in 5-second steps (has a shield run out, has a
   // caravan arrived). What moves or counts down every second does so on its
@@ -1126,7 +1130,7 @@ export const WarMap = ({
             x: px(t.x),
             y: py(t.y),
             size: Math.round(VILLAGE_MIN + Math.min(VILLAGE_GROW, t.townHall * 0.6)),
-            ring: t.isMe ? "me" : t.ally ? "ally" : strength(t.power),
+            ring: t.isMe ? "me" : t.ally ? "ally" : t.relation === "war" ? "enemy" : t.relation ? "friend" : strength(t.power),
             island: t.terrain === "sea",
             picked,
             loud: labelsAll || t.isMe || t.ally || picked || atWar.has(`${t.x},${t.y}`),
@@ -1146,7 +1150,17 @@ export const WarMap = ({
               x: px(o.x),
               y: py(o.y),
               size: Math.round(VILLAGE_MIN * 0.7),
-              ring: (o.isMe ? "me" : owner?.ally ? "ally" : owner ? strength(owner.power) : "even") as Ring,
+              ring: (o.isMe
+                ? "me"
+                : owner?.ally
+                  ? "ally"
+                  : owner?.relation === "war"
+                    ? "enemy"
+                    : owner?.relation
+                      ? "friend"
+                      : owner
+                        ? strength(owner.power)
+                        : "even") as Ring,
               island: false,
               picked: false,
               loud: labelsAll || o.isMe,
@@ -1686,6 +1700,12 @@ export const WarMap = ({
                       <ClanFlag flag={t.clan.flag} size={20} />[{t.clan.tag}]{t.ally && !t.isMe ? " · your clan" : ""}
                     </span>
                   )}
+                  {t.relation && !t.ally && (
+                    <span className={clsx("pill h-7 px-2", t.relation === "war" ? "pill-bad" : "")}>
+                      <GameIcon e={t.relation === "war" ? "🔥" : t.relation === "ally" ? "🤝" : "🕊️"} />{" "}
+                      {t.relation === "war" ? "At war with your clan" : t.relation === "ally" ? "Allied clan" : "Pact with your clan"}
+                    </span>
+                  )}
                   <span className="pill h-7 px-2">
                     <GameIcon e={TERRAIN_ICON[t.terrain]} /> {ground.name}
                     {ground.defense > 0 &&
@@ -1794,8 +1814,19 @@ export const WarMap = ({
                         buttons past the screen edge and the whole sheet scrolled sideways. */}
                     <div className="flex flex-col gap-2">
                       {t.ally ? (
-                        <p className="text-xs font-bold text-[#A9D3EA]">
-                          <GameIcon e="🤝" /> Clanmate. You fight side by side, not against each other.
+                        <>
+                          <p className="text-xs font-bold text-[#A9D3EA]">
+                            <GameIcon e="🤝" /> Clanmate. You fight side by side, not against each other.
+                          </p>
+                          {!t.isMe && (
+                            <Link className="btn btn-wood w-full" href={`/clan?tab=war&help=${t.id}`}>
+                              <IconText text="🛡️ Send guards" />
+                            </Link>
+                          )}
+                        </>
+                      ) : t.relation === "ally" || t.relation === "nap" ? (
+                        <p className="text-xs font-bold text-[#8FD1B8]">
+                          <GameIcon e="🕊️" /> Your clans have a treaty: no raids between you.
                         </p>
                       ) : picking ? (
                         <Button
@@ -1806,9 +1837,12 @@ export const WarMap = ({
                           <GameIcon e="🧭" /> Send army here
                         </Button>
                       ) : (
-                        <Button isFull disabled={shielded} onClick={() => attackTribe(t)}>
-                          <GameIcon e="⚔️" /> Attack
-                        </Button>
+                        <>
+                          <Button isFull disabled={shielded} onClick={() => attackTribe(t)}>
+                            <GameIcon e="⚔️" /> Attack
+                          </Button>
+                          {me?.clan && !t.isMe && <RallyButton targetId={t.id} targetName={t.name} />}
+                        </>
                       )}
                       {canScout ? (
                         <>

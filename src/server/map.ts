@@ -5,6 +5,8 @@ import { getDb } from "./db";
 import { Player, avatarUrl } from "./players";
 import { TRIBE_FRESH, TRIBE_SELECT, tribeLook } from "./tribeColumns";
 
+import { relationsOf } from "./clanWar";
+import type { RelationKind } from "@/lib/game/clanWar";
 import { storedFlag } from "@/lib/game/clan";
 import { banditStrength, campDefense, campName, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
@@ -191,6 +193,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
 
   // Everything below only needs the view: ask for it all at once instead of
   // one query after another (each a round trip to the database).
+  // The viewer's clan's treaties and wars, to colour the other clans' villages.
+  const relations = await relationsOf(me.clanId, now).catch(() => new Map<number, RelationKind>());
   const [rs, spots, mv, tr, lairsIn, spies, outs] = await Promise.all([
     // A village's state only comes along when its copied columns are stale (see tribeColumns).
     db.execute({
@@ -278,6 +282,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           : { id: Number(row.clan_id), tag: String(row.clan_tag ?? ""), flag: storedFlag(row.clan_flag, Number(row.clan_id)) },
       /** In the viewer's clan: can't be attacked. */
       ally: id !== me.id && me.clanId != null && Number(row.clan_id) === me.clanId,
+      /** The viewer's clan's treaty (ally, nap: can't be attacked) or war with this tribe's clan. */
+      relation: row.clan_id == null ? null : (relations.get(Number(row.clan_id)) ?? null),
       /** Until when the viewer has a spy in this village (none: null). */
       spiedUntil: spies.get(id) ?? null,
     };

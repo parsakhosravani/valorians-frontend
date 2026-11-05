@@ -108,7 +108,8 @@ interface GameContextType {
   cancelTraining: (startsAt: number) => Promise<boolean>;
   /** Attack a player (target = id) or a barbarian camp (camp = level). */
   /** Sends an army across the map; resolves to its arrival time, or null if it couldn't leave. */
-  attack: (to: { target?: number; camp?: number; lair?: { x: number; y: number } }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
+  /** `rally`: send to a clan strike, landing with the others. */
+  attack: (to: { target?: number; camp?: number; lair?: { x: number; y: number }; rally?: number }, units: Army) => Promise<{ id: number; arrivesAt: number } | null>;
   recall: (marchId: number) => Promise<boolean>;
   /**
    * New orders for an army on the road (marching out: `attack`; walking home:
@@ -147,7 +148,7 @@ interface GameContextType {
     setRole: (id: number, role: "officer" | "member") => Promise<boolean>;
     transfer: (id: number) => Promise<boolean>;
     update: (
-      c: Partial<{ flag: ClanFlag; description: string; name: string; joinMode: JoinMode; minPopulation: number }>,
+      c: Partial<{ flag: ClanFlag; description: string; name: string; joinMode: JoinMode; minPopulation: number; chatUrl: string }>,
       success?: string
     ) => Promise<boolean>;
     donate: (key: TreasuryKey, amount: number) => Promise<boolean>;
@@ -155,6 +156,15 @@ interface GameContextType {
     /** Raises the clan's World Wonder one level (officers). */
     raiseWonder: () => Promise<boolean>;
     aid: (id: number, key: TreasuryKey, amount: number) => Promise<boolean>;
+    /** Sends troops to guard a clanmate's village. */
+    guard: (to: number, units: Army) => Promise<boolean>;
+    /** Calls your guards home, or sends a clanmate's guards away from your village. */
+    endGuard: (id: number, mine: boolean) => Promise<boolean>;
+    /** Officers: a clan strike on a tribe, all armies landing at `landAt`. */
+    rally: (target: number, landAt: number, note?: string) => Promise<boolean>;
+    cancelRally: (id: number) => Promise<boolean>;
+    /** Officers: treaties and wars with another clan (by id or tag). */
+    diplomacy: (clan: number | string, action: "ally" | "nap" | "accept" | "decline" | "war" | "peace" | "end") => Promise<boolean>;
   };
   /** Valorians Plus: the one free trial, or a monthly Telegram Stars subscription. */
   plus: {
@@ -190,6 +200,16 @@ export type ScoutReport = {
   shieldUntil: number;
   power: number;
 };
+
+const DIPLOMACY_DONE = {
+  ally: "🤝 Alliance proposed",
+  nap: "🕊️ Pact proposed",
+  accept: "Treaty in force",
+  decline: "Proposal declined",
+  war: "🔥 War declared!",
+  peace: "🕊️ Peace offered (or made)",
+  end: "Treaty ended",
+} as const;
 
 /**
  * The game context is split three ways so a component only re-renders when
@@ -455,6 +475,24 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     [authHeader, flush, accept]
   );
   const act = async (path: string, body: object, success?: string) => !!(await send(path, body, success));
+  /** A call that answers with something other than the player (clan strikes, diplomacy). */
+  const sendRaw = async (path: string, body: object, success?: string) => {
+    if (!authHeader) return null;
+    try {
+      const res = await apiRequest<object>(authHeader, path, body);
+
+      if (success) {
+        toast.dismiss();
+        toast.success(<IconText text={success} />);
+      }
+
+      return res;
+    } catch (e) {
+      showError(e);
+
+      return null;
+    }
+  };
 
   const now = serverNow();
   const state = useMemo(() => (base ? advance(base, now) : null), [base, tick]);
@@ -588,6 +626,11 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       upgradeTech: (tech) => act("clan/tech", { tech }, "Clan tech raised!"),
       raiseWonder: () => act("clan/wonder", {}, "The Wonder rises!"),
       aid: (id, key, amount) => act("clan/aid", { id, key, amount }, "Aid sent"),
+      guard: (to, units) => act("clan/support", { to, units }, "Guards on the march"),
+      endGuard: (id, mine) => act("clan/support/recall", { id }, mine ? "Guards called home" : "Guards sent home"),
+      rally: async (target, landAt, note) => !!(await sendRaw("clan/rally", { target, landAt, note }, "Clan strike called! Your clan has been told.")),
+      cancelRally: async (id) => !!(await sendRaw("clan/rally/cancel", { id }, "Strike called off")),
+      diplomacy: async (clan, action) => !!(await sendRaw("clan/diplomacy", { clan, action }, DIPLOMACY_DONE[action])),
     },
     plus: {
       trial: () => act("plus/trial", {}, "👑 Plus is on! Enjoy your free days"),

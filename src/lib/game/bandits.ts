@@ -7,7 +7,7 @@
  * is occupied right now, and every roll of the dice, is the server's business.
  */
 import { BANDIT, BANDIT_RAID, RESOURCE_IDS, UNIT_BY_ID, UNIT_IDS, banditStrength, banditTheft, lairBounty } from "./config";
-import { Army, BanditRaidReport, GameState, cloneState, emptyArmy, getRates, totalArmy } from "./engine";
+import { Army, BanditRaidReport, GameState, applyGuestLosses, cloneState, emptyArmy, getRates, totalArmy } from "./engine";
 import { MarchRoute, Point, TERRAIN, distance, hash, inMap, isFlight, routeTimeline, terrainAt } from "./map";
 import { Loot, applyBattleXp, attackPower, battleXp, defensePower, luckFrom } from "./war";
 
@@ -323,6 +323,7 @@ export function resolveBanditRaid(s0: GameState, manned: boolean, rand: () => nu
 
   applyBattleXp(s, totalArmy(s), lost, xp, !won);
   for (const u of UNIT_IDS) s.army[u] -= lost[u];
+  applyGuestLosses(s, defenders, lost);
 
   if (won) {
     const bounty = lairBounty(raid.level);

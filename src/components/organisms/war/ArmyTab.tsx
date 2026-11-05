@@ -8,7 +8,7 @@ import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
 import { Button } from "@/components/atoms/Button";
 import { RESOURCES, useGame } from "@/context";
 import { BUILDING_BY_ID, MAX_BATCH, RANK_BONUS, RESOURCE_IDS, UNITS, UnitDef, unitPeople } from "@/lib/game/config";
-import { TrainItem, maxTrainBatches, trainingEndsAt } from "@/lib/game/engine";
+import { TrainItem, guestArmy, maxTrainBatches, ownArmy, trainingEndsAt } from "@/lib/game/engine";
 import {
   attackPower,
   defensePower,
@@ -138,6 +138,8 @@ const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onTog
   const away = state.marches.reduce((n, m) => n + (m.units[unit.id] ?? 0), 0);
   const training = state.training.filter((x) => x.unit === unit.id).reduce((n, x) => n + x.count - x.done, 0);
 
+  const guarding = guestArmy(state)[unit.id];
+
   return (
     <Card className={clsx("!p-0 overflow-hidden transition-colors", open && "border-gold/60")}>
       <button className="w-full flex items-center gap-3 p-3 text-left" onClick={onToggle}>
@@ -165,8 +167,10 @@ const UnitRow = ({ unit, open, onToggle }: { unit: UnitDef; open: boolean; onTog
           )}
         </div>
         <div className="text-right shrink-0">
-          <div className="font-bold text-lg leading-none">{fmt(state.army[unit.id])}</div>
+          {/* Your own at home; clanmates' guards in the village are shown apart (they aren't yours to send). */}
+          <div className="font-bold text-lg leading-none">{fmt(ownArmy(state)[unit.id])}</div>
           <div className="text-[10px] text-muted mt-0.5">
+            {guarding ? `+${fmt(guarding)} guards · ` : ""}
             {away ? `+${fmt(away)} away` : training ? `+${fmt(training)} training` : "at home"}
           </div>
         </div>

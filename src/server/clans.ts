@@ -7,6 +7,7 @@ import { getDb } from "./db";
 import { notify } from "./notify";
 import { Player, avatarUrl, findById, mutatePlayer } from "./players";
 import { maybeRefreshRanks } from "./ranks";
+import { endSupportOf, recordForClan } from "./clanWar";
 
 import {
   CLAN_TECHS,
@@ -40,7 +41,7 @@ import {
   techCap,
   techCost,
 } from "@/lib/game/clan";
-import { CLAN, RESOURCE_NAMES, WONDER } from "@/lib/game/config";
+import { CLAN, CLAN_WAR, RESOURCE_NAMES, WONDER } from "@/lib/game/config";
 import { GameError, advance, getRates, peopleOf } from "@/lib/game/engine";
 
 /**
@@ -194,7 +195,14 @@ type LogKind =
   | "aid"
   | "flag"
   | "settings"
-  | "wonder";
+  | "wonder"
+  | "rally"
+  | "rally_off"
+  | "treaty"
+  | "treaty_end"
+  | "war"
+  | "peace"
+  | "goal";
 
 const logStmt = (clanId: number, now: number, kind: LogKind, actorId: number | null, targetId: number | null = null, data: object = {}): InStatement => ({
   sql: "INSERT INTO clan_log (clan_id, at, actor_id, target_id, kind, data) VALUES (?, ?, ?, ?, ?, ?)",
@@ -376,6 +384,8 @@ export async function clanView(player: Player, search?: string) {
           ),
         },
         formed: isFormed(mapped.length),
+        /** The clan's Telegram group (members only). */
+        chatUrl: row.chat_url == null ? null : String(row.chat_url),
         perks: perksFor(techs, mapped.length),
         // Only officers see who's waiting at the gate.
         requests: can.manage(myRole)
@@ -506,6 +516,23 @@ async function winSeason(clanId: number, now: number) {
   });
 
   if (claim.rowsAffected !== 1) return; // another clan got there first
+  // The next two Wonders in the race are rewarded too (before every Wonder falls).
+  const runners = await db.execute({
+    sql: "SELECT id, tag FROM clans WHERE id != ? AND wonder_level > 0 ORDER BY wonder_level DESC, wonder_next_at ASC, id ASC LIMIT ?",
+    args: [clanId, CLAN_WAR.runnerUpCoins.length],
+  });
+
+  for (const [i, r] of runners.rows.entries()) {
+    const coins = CLAN_WAR.runnerUpCoins[i];
+    const ms = await db.execute({ sql: "SELECT id FROM users WHERE clan_id = ?", args: [Number(r.id)] });
+
+    for (const m of ms.rows) {
+      const id = Number(m.id);
+
+      await mutatePlayer(id, now, (s) => ({ ...s, coins: s.coins + coins })).catch((e) => console.error("season runner-up", id, e));
+      await notify.seasonPlace(id, String(clan.tag), season.id, i + 2, coins).catch(() => undefined);
+    }
+  }
   await db.batch(
     [
       "UPDATE clans SET wonder_level = 0, wonder_next_at = 0",
@@ -774,6 +801,9 @@ export async function leaveClan(player: Player, now: number): Promise<Player> {
   const { clanId } = await membership(player);
   const db = await getDb();
 
+  // Guard duties are between clanmates: they all end.
+  await endSupportOf(player.id, now);
+
   await db.execute({
     sql: "UPDATE users SET clan_id = NULL, clan_joined_at = NULL, clan_role = NULL, clan_donated = 0 WHERE id = ? AND clan_id = ?",
     args: [player.id, clanId],
@@ -839,6 +869,7 @@ export async function kickMember(player: Player, body: any, now: number): Promis
   });
 
   if (rs.rowsAffected !== 1) throw new GameError("That player isn't in your clan", "not_member");
+  await endSupportOf(target, now);
   await setPerks(target, NO_PERKS, now);
   await syncClanPerks(clanId, now);
   await log(clanId, now, "kicked", player.id, target);
@@ -912,6 +943,16 @@ export async function updateClan(player: Player, body: any, now: number) {
     sets.push("description = ?");
     args.push(clean(body.description).slice(0, CLAN.descriptionMax));
     changed.push("motto");
+  }
+
+  if (body?.chatUrl !== undefined) {
+    const url = clean(body.chatUrl);
+
+    // Only Telegram links: a clan's group chat, never a link to anywhere else.
+    if (url && !/^https:\/\/t\.me\/[A-Za-z0-9_+\-/]{2,80}$/.test(url)) throw new GameError("Use your group's t.me link, e.g. https://t.me/+AbC123", "bad_link");
+    sets.push("chat_url = ?");
+    args.push(url || null);
+    changed.push("group chat");
   }
 
   const leaderOnly = body?.joinMode !== undefined || body?.minPopulation !== undefined || body?.name !== undefined;
@@ -1011,6 +1052,7 @@ export async function donate(player: Player, body: any, now: number): Promise<Pl
     throw new GameError("You're not in that clan any more", "no_clan");
   }
   await log(clanId, now, "donated", player.id, null, { key, amount });
+  await recordForClan(player.id, clanId, "donated", contributionValue(key, amount), now).catch((e) => console.error("clan week", e));
 
   return paid;
 }
