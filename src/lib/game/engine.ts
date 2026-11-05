@@ -1218,7 +1218,9 @@ export function outpostBlocked(s: GameState) {
   const short = RESOURCE_IDS.find((r) => s.resources[r] < cost.resources[r]);
 
   if (short) return `Not enough ${short}`;
-  if (s.population < cost.people) return `Needs ${cost.people} people to settle it`;
+  // People at home only: the population shown also counts soldiers, so "needs 500" read as a bug at 907.
+  if (s.population < cost.people)
+    return `Needs ${cost.people} people at home to settle it (you have ${Math.floor(s.population)}; soldiers don't count)`;
 
   return null;
 }

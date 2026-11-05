@@ -4,6 +4,7 @@ import clsx from "clsx";
 import Image from "next/image";
 
 import { ArmyLine, Card, Stepper, UnitBadge, UnitEmoji, fmt } from "./shared";
+import { FirstTroops } from "./FirstTroops";
 
 import { Button } from "@/components/atoms/Button";
 import { RESOURCES, useGame } from "@/context";
@@ -349,6 +350,8 @@ export const ArmyTab = () => {
         ))}
       </div>
 
+      {/* Nothing to train yet: say how to start, above the locked list. */}
+      {UNITS.every((u) => !unitUnlocked(state, u.id)) && <FirstTroops />}
       {unlocked.map((u) => (
         <UnitRow key={u.id} open={open === u.id} unit={u} onToggle={() => setOpen(open === u.id ? null : u.id)} />
       ))}

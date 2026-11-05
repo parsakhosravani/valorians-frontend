@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { Card, fmt } from "./shared";
 import { BattleSummary } from "./BattleSummary";
+import { FirstTroops } from "./FirstTroops";
 
 import { Drawer } from "@/components/molecules/Drawer";
 import { BattleReport, RESOURCES, useGame } from "@/context";
@@ -10,7 +11,8 @@ import { apiRequest } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { EmptyState } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
-import { shownXY } from "@/lib/game/config";
+import { UNITS, shownXY } from "@/lib/game/config";
+import { ownArmy } from "@/lib/game/engine";
 
 type Item = {
   id: number;
@@ -35,7 +37,8 @@ const Place = ({ at }: { at: { x: number; y: number } }) => (
 
 /** `onShowOnMap`: jump to a player's village on the map. */
 export const ReportsTab = ({ onShowOnMap }: { onShowOnMap?: (playerId: number) => void }) => {
-  const { authHeader, now } = useGame();
+  const { authHeader, now, state } = useGame();
+  const fighters = UNITS.reduce((n, u) => n + (u.transport ? 0 : ownArmy(state)[u.id] ?? 0), 0);
   const [items, setItems] = useState<Item[] | null>(null);
   const [open, setOpen] = useState<Item | null>(null);
 
@@ -51,9 +54,12 @@ export const ReportsTab = ({ onShowOnMap }: { onShowOnMap?: (playerId: number) =
       {!items && <p className="text-sm text-muted text-center py-6">Loading…</p>}
       {items?.length === 0 && (
         <EmptyState e="⚔️" title="No battles yet">
-          Raid a barbarian camp or a rival tribe from the map. Every fight is recorded here.
+          Every fight is recorded here.
+          {fighters > 0 ? " Raid a barbarian camp or a rival tribe from the map." : ""}
         </EmptyState>
       )}
+      {/* No troops yet: "raid a camp" would be a dead end, so say how to get some. */}
+      {items?.length === 0 && fighters === 0 && <FirstTroops reason="raid" />}
       {items?.map((it) => {
         const loot = RESOURCES.reduce((s, r) => s + (it.report.loot[r.id] ?? 0), 0);
 

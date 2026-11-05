@@ -6,7 +6,10 @@ test("a new tribe starts with the Town Hall, and locked buildings say what they 
   const id = newId();
   const noErrors = await open(page, id, "/tribe");
 
-  // Nothing but the Town Hall and the economy can start yet.
+  // Nothing but the Town Hall and the economy can start yet. Locked buildings
+  // fold away under "Locked · N" (so a new tribe doesn't see ~20 of them first).
+  await expect(page.getByText("Needs Town Hall 1")).toHaveCount(0);
+  await page.getByRole("button", { name: /Locked ·/ }).click();
   await expect(page.getByText("Needs Town Hall 1").first()).toBeVisible();
   await page.getByRole("button", { name: "Town Hall details" }).click();
   await page.getByRole("button", { name: "Upgrade" }).click();

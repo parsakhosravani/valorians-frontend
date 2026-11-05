@@ -306,8 +306,10 @@ export const Resources = () => {
         <GameIcon className="!w-[26px] !h-[26px] shrink-0 drop-shadow-[0_2px_2px_rgba(0,0,0,0.5)]" e="⚡" />
         <div className="flex-1 flex flex-col gap-1">
           <div className="flex justify-between text-sm font-extrabold">
+            {/* In strikes, like the Hall's "150 strikes left": stamina alone left players doing the sum. */}
             <span>
-              Daily stamina {grouped(Math.floor(state.energy))} / {grouped(rates.energyCapacity)}
+              {grouped(Math.floor(state.energy / STAMINA_PER_TAP))} strikes left
+              <span className="text-muted text-xs font-bold"> · {grouped(Math.floor(state.energy))} / {grouped(rates.energyCapacity)} stamina</span>
             </span>
             <span className="text-muted text-xs font-bold self-end">refills in <Countdown to={nextUtcMidnight(now)} /></span>
           </div>

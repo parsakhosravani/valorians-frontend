@@ -474,7 +474,8 @@ export const Hall = () => {
             )}
             onClick={() => setShieldOpen(true)}
           >
-            <GameIcon e="🛡️" /> {shielded ? formatDuration(state.shieldUntil - now) : "Unprotected"}
+            {/* "2d 23h" alone didn't say what it was counting down. */}
+            <GameIcon e="🛡️" /> {shielded ? `Shield ${formatDuration(state.shieldUntil - now)}` : "Unprotected"}
           </button>
           <button
             className={clsx(
