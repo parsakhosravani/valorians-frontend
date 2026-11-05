@@ -5,8 +5,13 @@ import Link from "next/link";
 import clsx from "clsx";
 
 import { RESOURCES, useGame, useGameStatus } from "@/context";
-import { OUTPOST, ResourceId } from "@/lib/game/config";
-import { fieldUpgradeInfo, outpostBlocked, outpostCost, outpostOutput, outpostSlots } from "@/lib/game/engine";
+import { OUTPOST, ResourceId, UNITS } from "@/lib/game/config";
+import { Army, emptyArmy, fieldUpgradeInfo, outpostBlocked, outpostCost, outpostOutput, outpostSlots, ownArmy } from "@/lib/game/engine";
+import { garrisonCap, garrisonOf, garrisonRoom, headingTo } from "@/lib/game/garrison";
+import { armySize } from "@/lib/game/war";
+import { Drawer } from "@/components/molecules/Drawer";
+import { Button } from "@/components/atoms/Button";
+import { UnitBadge } from "@/components/organisms/war/shared";
 import type { OutpostLand, OutpostSpot } from "@/lib/game/outpost";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
@@ -41,6 +46,125 @@ const LandChip = ({ land }: { land: OutpostLand }) => (
   </span>
 );
 
+/** Troops that can march overland (ships stay in the harbor). */
+const MARCHERS = UNITS.filter((u) => !u.transport);
+
+/**
+ * Moving troops between the village and an outpost: "station" sends troops
+ * from home into its garrison, "home" brings some of the garrison back.
+ */
+const GarrisonDrawer = ({ open, onClose }: { open: { idx: number; mode: "station" | "home" } | null; onClose: () => void }) => {
+  const { state, stationTroops, garrisonHome } = useGame();
+  const [units, setUnits] = useState<Army>(emptyArmy());
+  const [busy, setBusy] = useState(false);
+  const o = open ? state.outposts[open.idx] : undefined;
+  const station = open?.mode === "station";
+  const have = station ? ownArmy(state) : garrisonOf(o);
+  const room = open && station ? garrisonRoom(state, open.idx) : Infinity;
+  const list = MARCHERS.filter((u) => have[u.id] > 0);
+  const size = armySize(units);
+  const setOne = (id: keyof Army, n: number) => setUnits((a) => ({ ...a, [id]: Math.max(0, Math.min(have[id], Math.floor(n || 0))) }));
+  const close = () => {
+    setUnits(emptyArmy());
+    onClose();
+  };
+
+  return (
+    <Drawer
+      isOpen={!!open && !!o}
+      position="bottom"
+      title={open ? (station ? `Station troops at outpost ${open.idx + 1}` : `Bring troops home from outpost ${open.idx + 1}`) : "Garrison"}
+      onClose={close}
+    >
+      {open && o && (
+        <div className="flex flex-col gap-3 pt-2">
+          <p className="text-xs text-sub">
+            {station
+              ? `They march there and stay. From the outpost they can attack (the road is shorter) and come back there. They don't defend your village, and while troops are stationed there the outpost can be attacked: only its garrison defends it. Room for ${room} more.`
+              : "They march home and defend your village again."}
+          </p>
+          {list.length === 0 && <div className="card-flat rounded-xl p-3 text-center text-sm text-sub">{station ? "No troops of your own at home." : "Nobody is stationed here."}</div>}
+          {list.map((u) => (
+            <div key={u.id} className="flex items-center gap-2 rounded-xl border border-line bg-panel/60 px-2.5 py-2">
+              <UnitBadge size={30} unit={u.id} />
+              <div className="flex-1 min-w-0 leading-tight">
+                <div className="text-sm font-bold truncate">{u.name}</div>
+                <div className="text-[10px] text-muted">
+                  {compact(have[u.id])} {station ? "at home" : "here"}
+                </div>
+              </div>
+              <div className="flex gap-1">
+                {[0.25, 0.5, 1].map((f) => (
+                  <button key={f} className="btn btn-wood h-7 px-2 rounded-lg text-[11px] font-extrabold" type="button" onClick={() => setOne(u.id, Math.round(have[u.id] * f))}>
+                    {f === 1 ? "All" : f === 0.5 ? "½" : "¼"}
+                  </button>
+                ))}
+              </div>
+              <input
+                aria-label={`${u.name} to move`}
+                className="inset w-14 h-7 rounded-lg text-center text-sm font-extrabold tabular-nums outline-none focus:border-gold"
+                inputMode="numeric"
+                placeholder="0"
+                value={units[u.id] || ""}
+                onChange={(e) => setOne(u.id, Number(e.target.value.replace(/\D/g, "")))}
+              />
+            </div>
+          ))}
+          {station && size > room && <p className="text-xs text-bad">The outpost has room for {room} more.</p>}
+          <Button
+            isFull
+            disabled={busy || size === 0 || size > room}
+            size="large"
+            onClick={async () => {
+              setBusy(true);
+              const ok = station ? await stationTroops(open.idx, units) : await garrisonHome(open.idx, units);
+
+              setBusy(false);
+              if (ok) close();
+            }}
+          >
+            {busy ? "Marching…" : size ? `${station ? "Station" : "Bring home"} ${compact(size)} troops` : "Choose troops"}
+          </Button>
+        </div>
+      )}
+    </Drawer>
+  );
+};
+
+/** Garrison line of an outpost card: who's stationed, who's on the way, and the two buttons. */
+const GarrisonRow = ({ idx, onMove }: { idx: number; onMove: (mode: "station" | "home") => void }) => {
+  const { state } = useGame();
+  const o = state.outposts[idx];
+  const g = garrisonOf(o);
+  const n = armySize(g);
+  const coming = armySize(headingTo(state, idx));
+
+  return (
+    <div className="inset rounded-lg px-2 py-1.5 flex items-center gap-2">
+      <GameIcon e="🛡️" />
+      <div className="flex-1 min-w-0 leading-tight">
+        <div className="text-xs font-bold tabular-nums">
+          Garrison {compact(n)} / {compact(garrisonCap(o))}
+          {coming > 0 && <span className="text-muted font-normal"> · {compact(coming)} on the way</span>}
+        </div>
+        <div className="text-[10px] text-muted truncate">
+          {n > 0
+            ? MARCHERS.filter((u) => g[u.id] > 0).map((u) => `${compact(g[u.id])} ${u.name}`).join(" · ")
+            : "Empty: it can't be attacked"}
+        </div>
+      </div>
+      <button className="btn btn-wood btn-sm !px-2 text-xs shrink-0" onClick={() => onMove("station")}>
+        Station
+      </button>
+      {n > 0 && (
+        <button className="btn btn-wood btn-sm !px-2 text-xs shrink-0" onClick={() => onMove("home")}>
+          Home
+        </button>
+      )}
+    </div>
+  );
+};
+
 /**
  * The tribe's outposts (see OUTPOST): each with four resource fields, its own
  * builder and a land bonus from where it stands, feeding the home stores; and
@@ -52,6 +176,8 @@ export const Outposts = () => {
   const [busy, setBusy] = useState<string | null>(null);
   // The field tapped on each outpost, to show its cost and the Raise button.
   const [open, setOpen] = useState<Record<number, ResourceId | undefined>>({});
+  // Moving troops to or from an outpost's garrison.
+  const [moving, setMoving] = useState<{ idx: number; mode: "station" | "home" } | null>(null);
   // Spots offered for the next outpost (null: not asked yet).
   const [spots, setSpots] = useState<OutpostSpot[] | null>(null);
   const slots = outpostSlots(state);
@@ -93,7 +219,7 @@ export const Outposts = () => {
           {state.outposts.length} of {slots}
         </span>
         <InfoDrawer
-          content={`Found outposts on free land near your village: each has its own iron, wood, clay and crop fields (up to level ${OUTPOST.fieldMaxLevel}) and its own builder, and sends everything home. The land round an outpost favours one resource: woods give wood, hills clay, rocky ground iron, open fields and water crop, +${OUTPOST.landBonusPerTile}% for each tile of it, up to +${OUTPOST.landBonusMax}%. You choose where to settle. Town Hall ${OUTPOST.hallLevels.join(", ")} each allow one more. Outposts can't be attacked.`}
+          content={`Found outposts on free land near your village: each has its own iron, wood, clay and crop fields (up to level ${OUTPOST.fieldMaxLevel}) and its own builder, and sends everything home. The land round an outpost favours one resource: woods give wood, hills clay, rocky ground iron, open fields and water crop, +${OUTPOST.landBonusPerTile}% for each tile of it, up to +${OUTPOST.landBonusMax}%. You choose where to settle. Town Hall ${OUTPOST.hallLevels.join(", ")} each allow one more. Station troops there to attack from closer (they come back there); while troops are stationed there the outpost can be attacked, and only its garrison defends it. An empty outpost can't be attacked.`}
           title="Outposts"
         />
       </div>
@@ -134,6 +260,7 @@ export const Outposts = () => {
               </div>
             </div>
             {o.job && <Bar className="!h-1.5" max={o.job.endsAt - o.job.startedAt} value={now - o.job.startedAt} />}
+            <GarrisonRow idx={i} onMove={(mode) => setMoving({ idx: i, mode })} />
             <div className="grid grid-cols-4 gap-1.5">
               {RESOURCES.map((r) => {
                 const level = o.fields[r.id] ?? 0;
@@ -241,6 +368,7 @@ export const Outposts = () => {
           )}
         </div>
       )}
+      <GarrisonDrawer open={moving} onClose={() => setMoving(null)} />
     </section>
   );
 };

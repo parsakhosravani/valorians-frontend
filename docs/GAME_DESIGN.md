@@ -151,9 +151,17 @@ ask before "fixing" either. Add new decisions here when they are made.
   it, up to +40%. Even three outposts all on the same resource stay under a top village (~0.83).
 - Each outpost has **its own four resource fields (to level 10) and its own builder**, and sends
   everything home. Three full outposts add about half a top village's output.
-- **Not full villages, on purpose:** no buildings, army or storage of their own, and they
-  can't be attacked (yet). A whole second village would have meant a second copy of every
-  system; outposts give the late game its expansion without that risk.
+- **Not full villages, on purpose:** no buildings or storage of their own. A whole second
+  village would have meant a second copy of every system; outposts give the late game its
+  expansion without that risk.
+- **Garrisons** (Nov 2026, owner's call): troops can be stationed at an outpost (they march
+  there; room 500 + 100 per field level, up to 4,500). From there they **attack** (the road starts
+  at the outpost, over land only; no clan strikes, no new orders on the road) and **come back
+  there**; spoils still go home. They don't defend the village, but they still eat and count in
+  power. **An outpost with troops stationed can be attacked**: only its garrison defends, on open
+  ground (no walls, Watchtower, traps or militia), nothing can be looted and no shield comes of
+  it. An empty outpost can't be attacked; an army arriving at one that emptied turns back. So a
+  garrison is a forward base, not a safe vault (`garrison.ts`).
 
 ## Seasons and the World Wonder
 

@@ -124,14 +124,17 @@ export const notify = {
     return sendToPlayer(userId, `🎉 You were accepted into <b>${esc(clan)}</b>! Your clan's perks now apply.`, "🛡️ Open clan", "/clan");
   },
 
-  incoming(defenderId: number, attacker: string, units: Army | null, travelMs: number, from?: { x: number; y: number }) {
+  incoming(defenderId: number, attacker: string, units: Army | null, travelMs: number, from?: { x: number; y: number }, outpost?: number) {
+    const at = outpost != null ? `your <b>outpost ${outpost + 1}</b> and its garrison` : "your tribe";
+
     return sendToPlayer(
       defenderId,
-      `🔥 <b>${esc(attacker)}</b>${from ? ` (village at 📍 ${shownXY(from)})` : ""} is marching on your tribe!\n\n` +
+      `🔥 <b>${esc(attacker)}</b>${from ? ` (from 📍 ${shownXY(from)})` : ""} is marching on ${at}!\n\n` +
         `Army: ${armyText(units)}${units ? "" : " (build a Watchtower to see which troops)"}\n` +
-        `Arrives in <b>${inMinutes(travelMs)}</b>. Train defenders or upgrade your walls now.`,
+        `Arrives in <b>${inMinutes(travelMs)}</b>. ` +
+        (outpost != null ? "Send more troops there, or bring the garrison home." : "Train defenders or upgrade your walls now."),
       "🛡️ Prepare defenses",
-      "/battle?tab=army"
+      outpost != null ? "/tribe" : "/battle?tab=army"
     );
   },
 

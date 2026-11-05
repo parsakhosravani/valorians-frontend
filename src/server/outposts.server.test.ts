@@ -4,11 +4,12 @@ import { describe, expect, test } from "bun:test";
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
 import { homeOf, mapView } from "@/server/map";
-import { candidates, moveOutpostsOutOfWalls, offeredSpots, settleOutpost } from "@/server/outposts";
+import { bringHome, candidates, moveOutpostsOutOfWalls, offeredSpots, settleOutpost, stationTroops } from "@/server/outposts";
+import { advance, emptyArmy } from "@/lib/game/engine";
 import { outpostLand } from "@/lib/game/outpost";
 import { mutatePlayer } from "@/server/players";
 import { OUTPOST } from "@/lib/game/config";
-import { distance, terrainAt } from "@/lib/game/map";
+import { distance, seaRoute, terrainAt } from "@/lib/game/map";
 
 const ready = (s: Parameters<NonNullable<Parameters<typeof newPlayer>[1]>>[0]) => {
   s.buildings["town-hall"] = 20;
@@ -154,5 +155,47 @@ describe("outposts (server)", () => {
     expect(after.state.outposts.length).toBe(1);
     const rows = await db.execute({ sql: "SELECT x, y FROM outposts WHERE user_id = ?", args: [me.id] });
     expect(rows.rows.map((r) => `${r.x},${r.y}`)).toEqual([`${after.state.outposts[0].x},${after.state.outposts[0].y}`]);
+  });
+});
+
+describe("garrisons (server)", () => {
+  test("troops march to an outpost over land and back home", async () => {
+    const T0 = Date.now();
+    const p = await newPlayer(T0, (s) => {
+      s.army.axeman = 300;
+    });
+    const home = await homeOf(p.id);
+    let spot: { x: number; y: number } | null = null;
+
+    for (let r = 5; r <= 9 && !spot; r++)
+      for (const [dx, dy] of [[r, 0], [0, r], [-r, 0], [0, -r]]) {
+        const t = { x: home.x + dx, y: home.y + dy };
+
+        if (!["sea", "lake", "mountains"].includes(terrainAt(t.x, t.y)) && !seaRoute(home, t, { ...emptyArmy(), axeman: 1 }).naval) {
+          spot = t;
+          break;
+        }
+      }
+    if (!spot) return; // an island start: nothing to check here
+    const at = spot;
+
+    await mutatePlayer(p.id, T0, (s) => {
+      s.outposts = [{ x: at.x, y: at.y, foundedAt: T0, fields: { iron: 0, wood: 0, clay: 0, crop: 0 }, land: { resource: "iron", percent: 0 } }];
+      return s;
+    });
+    const sent = await stationTroops(await reload(p.id), 0, { ...emptyArmy(), axeman: 120 }, T0);
+    const m = sent.state.marches[0];
+
+    expect(m.to).toBe(0);
+    expect(sent.state.army.axeman).toBe(180);
+    const there = await reload(p.id);
+    const arrived = advance(there.state, m.returnsAt + 1);
+
+    expect(arrived.outposts[0].garrison?.axeman).toBe(120);
+    await mutatePlayer(p.id, m.returnsAt + 1, (s) => s);
+    const back = await bringHome(await reload(p.id), 0, { ...emptyArmy(), axeman: 20 }, m.returnsAt + 2);
+
+    expect(back.state.outposts[0].garrison?.axeman).toBe(100);
+    expect(back.state.marches.some((x) => x.to == null && x.units.axeman === 20)).toBe(true);
   });
 });

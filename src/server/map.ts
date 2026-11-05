@@ -251,7 +251,9 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     }),
     // Outposts in view, with their owner's name and clan tag.
     db.execute({
-      sql: `SELECT o.user_id, o.x, o.y, u.first_name, u.username, c.tag AS clan_tag
+      sql: `SELECT o.user_id, o.idx, o.x, o.y, u.first_name, u.username, c.tag AS clan_tag,
+                   json_extract(u.state, '$.outposts[' || o.idx || '].garrison') AS garrison,
+                   json_extract(u.state, '$.marches') AS marches
             FROM outposts o JOIN users u ON u.id = o.user_id LEFT JOIN clans c ON c.id = u.clan_id
             WHERE o.x BETWEEN ? AND ? AND o.y BETWEEN ? AND ? LIMIT ${MAX_TRIBES}`,
       args: [c.x - r, c.x + r, c.y - r, c.y + r],
@@ -372,9 +374,13 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           ? campName(campLevel)
           : a.lair_level != null
             ? "Bandit lair"
-            : atMe
-              ? "Your tribe"
-              : String(a.d_name || "A tribe"),
+            : a.target_outpost != null
+              ? atMe
+                ? `Your outpost ${Number(a.target_outpost) + 1}`
+                : `${String(a.d_name || "A tribe")}'s outpost`
+              : atMe
+                ? "Your tribe"
+                : String(a.d_name || "A tribe"),
       },
       /** For clan armies: the clanmate it belongs to, or the clanmate it marches on. */
       ...(clanSide ? { clanmate: clanSide === "clan-outgoing" ? Number(a.attacker_id) : Number(a.defender_id) } : {}),
@@ -461,9 +467,26 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       isMe: Number(o.user_id) === me.id,
       name: String(o.first_name || (o.username ? `@${o.username}` : "Player")),
       clanTag: o.clan_tag == null ? null : String(o.clan_tag),
+      idx: Number(o.idx),
+      /** Troops are stationed there: it can be attacked (how many isn't shown). */
+      garrisoned: garrisonedAt(o, now),
     })),
     myPower: powerScore(me.state),
   };
+}
+
+/**
+ * Whether troops are stationed at an outpost, from its owner's saved state:
+ * its garrison, plus marches bound for it that have arrived by now but
+ * weren't saved as landed yet (the state is only brought up to date on a save).
+ */
+function garrisonedAt(o: Record<string, unknown>, now: number) {
+  const some = (a: unknown) => !!a && Object.values(a as Record<string, number>).some((n) => Number(n) > 0);
+
+  if (o.garrison != null && some(JSON.parse(String(o.garrison)))) return true;
+  const marches = o.marches == null ? [] : (JSON.parse(String(o.marches)) as { to?: number; returnsAt: number; units: Record<string, number> }[]);
+
+  return marches.some((m) => m.to === Number(o.idx) && m.returnsAt <= now && some(m.units));
 }
 
 /** An ambush as its army's owner may see it: only once it has happened, and not if it was foiled. */

@@ -74,6 +74,11 @@ test player instead (`?dev_user=N` picks which one).
   (`joinAlly` → `reinforceAttack`). The leading row's `battle` lists `allies`; each ally's row keeps
   `status = 'fighting'` with `battle = {"allyOf": <leading id>}` and the same `ends_at`, and is
   finished by the leading row (`finishBattle` → `splitRaid`, one report per army).
+- Outpost garrisons: `outposts[i].garrison` in the state; a march with `to: i` lands in that
+  garrison (`returnMarch`). `attacks.base_outpost` = sent from that garrison (`withGarrison`;
+  every march home it creates is bound back there, see `homeward` in war.ts);
+  `attacks.target_outpost` = an attack on that outpost (`outpostField` / `engageGarrison` /
+  `defendOutpost`, its own "one battle at a time" field; no ally joining).
 - Battles get resolved by: the player's own requests, the post-response sweep, and the cron
   `GET /api/cron/battles`, called every 2 minutes by `.github/workflows/clock.yml` (a job that
   loops for ~6 h and starts its next run: GitHub's own 5-minute schedule ran only every 5–8 h),

@@ -73,7 +73,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 13; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at, 12: clans fighting together, 13: strikes muster at home, shields vs armies on the road
+const SCHEMA_VERSION = 14; // 14: outpost garrisons (attacks from and on outposts), 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at, 12: clans fighting together, 13: strikes muster at home, shields vs armies on the road
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -500,6 +500,9 @@ async function migrate(client: Client) {
   await client.execute("CREATE INDEX IF NOT EXISTS attacks_rally ON attacks(rally_id)");
   // When an army was committed (sent, or its clan strike called): shields raised later don't stop it.
   await client.execute("ALTER TABLE attacks ADD COLUMN committed_at INTEGER").catch(() => {});
+  // Outpost garrisons: an army sent from an outpost (it comes back there), and attacks on a garrisoned outpost.
+  await client.execute("ALTER TABLE attacks ADD COLUMN base_outpost INTEGER").catch(() => {});
+  await client.execute("ALTER TABLE attacks ADD COLUMN target_outpost INTEGER").catch(() => {});
   // Armies joining a clan strike wait at home and set out just in time (see resolveMusters).
   await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS rally_musters (

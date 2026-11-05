@@ -55,6 +55,21 @@ async function attackerAndTarget(now: number) {
   return { atk: await reload(atk.id), def: await reload(def.id) };
 }
 
+/** A dry tile near `p` that an army reaches on foot from `p` (and from `also`, if given). */
+function dryNear(p: { x: number; y: number }, also?: { x: number; y: number }) {
+  for (let r = 1; r <= 6; r++) {
+    for (const [dx, dy] of [[r, 0], [0, r], [-r, 0], [0, -r], [r, r], [-r, -r], [r, -r], [-r, r]]) {
+      const t = { x: p.x + dx, y: p.y + dy };
+
+      if (["sea", "lake", "mountains"].includes(terrainAt(t.x, t.y))) continue;
+      if (seaRoute(p, t, axemen(1)).naval || (also && seaRoute(also, t, axemen(1)).naval)) continue;
+
+      return t;
+    }
+  }
+  throw new Error("no dry land near");
+}
+
 async function battlesFor(attackId: number) {
   const db = await getDb();
   const rs = await db.execute({ sql: "SELECT * FROM battles WHERE attack_id = ?", args: [attackId] });
@@ -272,6 +287,77 @@ describe("raiding another player (server)", () => {
     const rows = (await db.execute({ sql: "SELECT status FROM attacks WHERE id IN (?, ?)", args: [first.id, second.id] })).rows;
 
     expect(rows.map((r) => String(r.status)).sort()).toEqual(["fighting", "marching"]);
+  });
+
+  test("an outpost's garrison attacks from there and comes back there; a garrisoned outpost can be attacked", async () => {
+    const T0 = Date.now();
+    const { atk, def } = await attackerAndTarget(T0);
+    const home = await homeOf(atk.id);
+    const dh = await homeOf(def.id);
+    const spot = dryNear(home, dh);
+    const theirs = dryNear(dh, spot);
+    const fields = { iron: 0, wood: 0, clay: 0, crop: 0 };
+
+    // Both have an outpost; the attacker's holds 200 axemen, the defender's 50 spearmen.
+    await mutatePlayer(atk.id, T0, (s) => {
+      s.outposts = [{ x: spot.x, y: spot.y, foundedAt: T0, fields, land: { resource: "iron", percent: 0 } }];
+      s.outposts[0].garrison = axemen(200);
+      s.army.axeman = 100;
+      return s;
+    });
+    await mutatePlayer(def.id, T0, (s) => {
+      s.outposts = [{ x: theirs.x, y: theirs.y, foundedAt: T0, fields, land: { resource: "iron", percent: 0 } }];
+      s.outposts[0].garrison = { ...emptyArmy(), spearman: 50 };
+      return s;
+    });
+    const db = await getDb();
+    const row = async (id: number) => (await db.execute({ sql: "SELECT * FROM attacks WHERE id = ?", args: [id] })).rows[0];
+
+    // From the outpost: only its garrison can go, and the road starts there.
+    await expect(marchTo(await reload(atk.id), { target: def.id, outpost: 0, base: 0 }, axemen(201), T0)).rejects.toThrow(/only have/);
+    const { march } = await marchTo(await reload(atk.id), { target: def.id, outpost: 0, base: 0 }, axemen(200), T0);
+    const sent = await row(march.id);
+
+    expect([Number(sent.from_x), Number(sent.from_y)]).toEqual([spot.x, spot.y]);
+    expect((await reload(atk.id)).state.army.axeman).toBe(100); // home untouched
+    expect((await reload(atk.id)).state.outposts[0].garrison?.axeman).toBe(0);
+
+    await resolveDueAttacks(march.arrivesAt + 1);
+    expect(String((await row(march.id)).status)).toBe("fighting");
+    expect((await reload(def.id)).state.outposts[0].garrison?.spearman).toBe(0); // on the field
+    expect((await reload(def.id)).state.army.spearman ?? 0).toBe(0); // the village didn't fight
+    const ends = Number((await row(march.id)).ends_at);
+
+    await resolveDueAttacks(ends + 1);
+    const [report] = await battlesFor(march.id);
+    const r = JSON.parse(String(report.report));
+
+    expect(Number(report.attacker_won)).toBe(1);
+    expect(total(r.loot)).toBe(0); // nothing to loot at an outpost
+    expect((await reload(def.id)).state.outposts[0].garrison?.spearman).toBe(50 - r.defenderLosses.spearman);
+    // The survivors march back to the outpost, not home.
+    const back = (await reload(atk.id)).state.marches;
+
+    expect(back.length).toBe(1);
+    expect(back[0].to).toBe(0);
+    const later = await reload(atk.id);
+    const { advance } = await import("@/lib/game/engine");
+    const there = advance(later.state, back[0].returnsAt + 1);
+
+    expect(there.outposts[0].garrison?.axeman).toBe(200 - r.attackerLosses.axeman);
+    expect(there.army.axeman).toBe(100);
+  });
+
+  test("an outpost with nobody stationed there can't be attacked", async () => {
+    const T0 = Date.now();
+    const { atk, def } = await attackerAndTarget(T0);
+    const dh = await homeOf(def.id);
+
+    await mutatePlayer(def.id, T0, (s) => {
+      s.outposts = [{ x: dh.x, y: dh.y + 1, foundedAt: T0, fields: { iron: 0, wood: 0, clay: 0, crop: 0 }, land: { resource: "iron", percent: 0 } }];
+      return s;
+    });
+    await expect(marchTo(await reload(atk.id), { target: def.id, outpost: 0 }, axemen(10), T0)).rejects.toThrow(/nothing to attack/);
   });
 
   test("a shielded tribe can't be raided and the troops stay home", async () => {

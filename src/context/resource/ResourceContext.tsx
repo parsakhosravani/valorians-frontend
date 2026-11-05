@@ -101,6 +101,9 @@ interface GameContextType {
   foundOutpost: (spot?: { x: number; y: number }) => Promise<boolean>;
   /** Raises one field of an outpost. */
   upgradeField: (outpost: number, resource: ResourceId) => Promise<boolean>;
+  /** Troops march from home to an outpost's garrison, or from the garrison home. */
+  stationTroops: (outpost: number, units: Army) => Promise<boolean>;
+  garrisonHome: (outpost: number, units: Army) => Promise<boolean>;
   startQuest: (id: QuestId) => Promise<boolean>;
   claimQuest: (id: QuestId) => Promise<boolean>;
   train: (unit: UnitId, count: number) => Promise<boolean>;
@@ -558,6 +561,8 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     masterBuilding: (building) => act("buildings/master", { building }, "Mastery work started"),
     foundOutpost: (spot) => act("outposts/found", spot ? { x: spot.x, y: spot.y } : {}, "An outpost is founded!"),
     upgradeField: (outpost, resource) => act("outposts/upgrade", { outpost, resource }, "The outpost's builder is at work"),
+    stationTroops: (outpost, units) => act("outposts/station", { outpost, units }, "Troops on their way to the outpost"),
+    garrisonHome: (outpost, units) => act("outposts/home", { outpost, units }, "The garrison is marching home"),
     startQuest: (quest) => act("quests/start", { quest }),
     claimQuest: (quest) => act("quests/claim", { quest }, "Reward claimed!"),
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),

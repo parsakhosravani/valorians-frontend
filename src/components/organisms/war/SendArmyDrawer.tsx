@@ -9,7 +9,8 @@ import { Drawer } from "@/components/molecules/Drawer";
 import { useGameActions, useLiveWhile, useTelegramContext } from "@/context";
 import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy, ownArmy } from "@/lib/game/engine";
-import { Point, TERRAIN, Terrain, armySpeed, routeFor, routeMs, shipsNeeded } from "@/lib/game/map";
+import { Point, TERRAIN, Terrain, armySpeed, distance, routeFor, routeMs, shipsNeeded } from "@/lib/game/map";
+import { garrisonOf } from "@/lib/game/garrison";
 import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
 import { strikeDeparture } from "@/lib/game/clanWar";
 import { formatDuration } from "@/lib/format";
@@ -17,7 +18,8 @@ import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 export type AttackTarget = {
   title: string;
-  to: { target?: number; camp?: number; lair?: Point };
+  /** `outpost`: with `target`, that tribe's garrisoned outpost of this index. */
+  to: { target?: number; camp?: number; lair?: Point; outpost?: number };
   /** Known defense before terrain, or a range. */
   defense: { min: number; max: number; exact: boolean };
   /** Tiles from your tribe. */
@@ -81,8 +83,14 @@ export const SendArmyDrawer = ({
   const { state, rates, now } = useLiveWhile(!!target);
   const { attack } = useGameActions();
   const { telegram } = useTelegramContext();
+  // Where the army sets out: home (null) or one of your outposts with a garrison.
+  const [base, setBase] = useState<number | null>(null);
+  const bases = target?.rally ? [] : state.outposts.flatMap((o, i) => (fighterCount(garrisonOf(o)) > 0 ? [i] : []));
+  const camp = base != null ? state.outposts[base] : undefined;
   // Clanmates' guards stand in the village too, but only your own troops march.
-  const own = ownArmy(state);
+  const own = camp ? garrisonOf(camp) : ownArmy(state);
+  // The road starts where the army is.
+  const start = camp ? { x: camp.x, y: camp.y } : target?.from;
   const [units, setUnits] = useState<Army>(emptyArmy());
   const [busy, setBusy] = useState(false);
   // The quick pick last tapped. Small armies round several picks to the same troops,
@@ -90,7 +98,7 @@ export const SendArmyDrawer = ({
   const [picked, setPicked] = useState<number | null>(null);
 
   const terrain = target?.terrain ?? "plains";
-  const route = target ? routeFor(units, target.from, target.at) : null;
+  const route = target && start ? routeFor(units, start, target.at) : null;
   const naval = !!route?.naval;
   // Landing on a tribe's beach favours them; barbarian camps have no harbor to defend.
   const landing = naval && target?.to.target ? landingFactorFor(target.harbor ?? 0) : 1;
@@ -116,7 +124,9 @@ export const SendArmyDrawer = ({
       setPicked(f);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.title]);
+  }, [target?.title, base]);
+  // A new target: from home again.
+  useEffect(() => setBase(null), [target?.title]);
 
   const { attack: power } = battleNumbers(state, units, null, terrain, 0);
   const verdict = !d ? "" : power > defMax * 1.1 ? "Likely victory" : power < defMin * 0.9 ? "Likely defeat" : "Close fight";
@@ -125,7 +135,7 @@ export const SendArmyDrawer = ({
   const shipsHome = state.army.longship;
   const shortOfShips = naval && ships > shipsHome;
   const carry = UNITS.reduce((s, u) => s + u.carry * units[u.id], 0) + (naval ? ships * UNIT_BY_ID.longship.carry : 0);
-  const walk = target ? routeMs(units, target.from, target.at, rates.marchMultiplier) : 0;
+  const walk = target && start ? routeMs(units, start, target.at, rates.marchMultiplier) : 0;
   // A clan strike: the army slows down to land with the others (late if it can't make it).
   const travel = target?.rally ? Math.max(walk, target.rally.landAt - now) : walk;
   const late = !!target?.rally && walk > target.rally.landAt - now;
@@ -146,7 +156,7 @@ export const SendArmyDrawer = ({
   const send = async () => {
     if (!target) return;
     setBusy(true);
-    const march = await attack({ ...target.to, ...(target.rally ? { rally: target.rally.id } : {}) }, units);
+    const march = await attack({ ...target.to, ...(target.rally ? { rally: target.rally.id } : {}), ...(base != null ? { base } : {}) }, units);
 
     setBusy(false);
     if (march) {
@@ -173,9 +183,23 @@ export const SendArmyDrawer = ({
             </p>
           )}
 
+          {/* Where the army sets out: home, or an outpost's garrison (it comes back there) */}
+          {bases.length > 0 && (
+            <div className="seg">
+              {[null, ...bases].map((b) => (
+                <button key={String(b)} aria-selected={base === b} className="seg-btn !h-8 text-xs" role="tab" type="button" onClick={() => setBase(b)}>
+                  {b == null ? "From home" : `From outpost ${b + 1}`}
+                </button>
+              ))}
+            </div>
+          )}
+          {camp && naval && <p className="text-xs text-bad">That&apos;s across the sea: ships sail from your harbor at home.</p>}
+
           {/* Where the fight will be */}
           <div className="flex flex-wrap gap-2 text-xs font-bold">
-            <span className="pill h-7 px-2"><GameIcon e="📍" /> {target.distance} tiles away</span>
+            <span className="pill h-7 px-2">
+              <GameIcon e="📍" /> {camp ? Math.round(distance(camp, target.at) * 10) / 10 : target.distance} tiles away
+            </span>
             <span className="pill h-7 px-2">
               <GameIcon e={terrain === "mountains" || terrain === "hills" ? "⛰️" : terrain === "forest" ? "🌲" : "🌾"} /> {TERRAIN[terrain].name}
               {TERRAIN[terrain].defense > 0 && <span className="text-bad"> · +{TERRAIN[terrain].defense * 100}% their defense</span>}
@@ -247,7 +271,7 @@ export const SendArmyDrawer = ({
                     <div className="flex-1 min-w-0 leading-tight">
                       <div className="text-sm font-bold truncate">{u.name}</div>
                       <div className="text-[10px] text-muted">
-                        {fmt(max - n)} stay home · {u.speed}s/tile
+                        {fmt(max - n)} stay {camp ? "at the outpost" : "home"} · {u.speed}s/tile
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
@@ -362,13 +386,13 @@ export const SendArmyDrawer = ({
           {size > 0 && (
             <p className="text-[11px] text-center text-muted -mt-1">
               Luck can swing it ±10%.
-              {slowest && size > units[slowest.id] ? ` ${UNIT_BY_ID[slowest.id].name} set the pace.` : ""} Back home in{" "}
+              {slowest && size > units[slowest.id] ? ` ${UNIT_BY_ID[slowest.id].name} set the pace.` : ""} {camp ? "Back at the outpost in" : "Back home in"}{" "}
               {formatDuration(travel + walk)}.
               {!d.exact && " Defense is a guess; scout first to know."}
             </p>
           )}
 
-          <Button isFull disabled={busy || size === 0 || shortOfShips} size="large" onClick={send}>
+          <Button isFull disabled={busy || size === 0 || shortOfShips || (!!camp && naval)} size="large" onClick={send}>
             {size === 0
               ? "Choose troops"
               : shortOfShips
