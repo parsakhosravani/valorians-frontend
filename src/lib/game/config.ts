@@ -572,6 +572,53 @@ export const CLAN = {
   logSize: 40,
 };
 
+/**
+ * Clans fighting together (Nov 2026, owner's call: "make clans a war band,
+ * not a savings account").
+ */
+export const CLAN_WAR = {
+  /**
+   * Reinforcements: a member's troops can stand guard in a clanmate's village.
+   * They fight in its battles under its banner (its walls, ranks and bonuses),
+   * the village feeds them (as in Travian), and they still count in their
+   * owner's power. At most this many guard groups out per tribe.
+   */
+  maxSupportsOut: 3,
+  /** Guards a village can host from different clanmates at once. */
+  maxGuestsIn: 5,
+  /**
+   * Attack alerts: when a member is attacked, every clanmate hears about it,
+   * at most once per attacked tribe per this long (a wave of 10 armies is one alert).
+   */
+  alertQuietMs: 10 * 60e3,
+  /**
+   * Rallies: an officer names a target and a landing time; armies sent to the
+   * rally slow down to land then, together. The time must be this far ahead
+   * at least (time to gather) and at most (a rally is a plan, not a standing order).
+   */
+  rallyMinLeadMs: 10 * 60e3,
+  rallyMaxLeadMs: 24 * 3600e3,
+  /** Rallies open at once per clan. */
+  maxRallies: 3,
+  /**
+   * Diplomacy. Allies and non-aggression pacts can't raid each other's members;
+   * a war is declared by one side and scores raid wins between the two clans.
+   * A clan can hold this many treaties (allies + pacts) at once.
+   */
+  maxTreaties: 5,
+  /** A war ends by itself after this long, if nobody makes peace first. */
+  warMs: 7 * 24 * 3600e3,
+  /**
+   * The weekly clan goal (one a week, the kind rotating): met by the whole clan
+   * together, it pays every member weeklyCoins. Targets grow with the members,
+   * so a big clan works as hard per head as a small one.
+   */
+  weeklyCoins: 3_000,
+  weeklyPerMember: { camps: 6, wins: 2, donated: 40_000 },
+  /** A season's runners-up (Wonder 2nd and 3rd) get these coins per member too. */
+  runnerUpCoins: [40_000, 20_000],
+} as const;
+
 // ─── Outposts ────────────────────────────────────────────────────────────────
 
 /**

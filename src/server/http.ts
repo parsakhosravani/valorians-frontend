@@ -6,6 +6,7 @@ import { AuthError, AuthResult, authenticate } from "./auth";
 import { getOrCreatePlayer, mutatePlayer, Player, playerView } from "./players";
 import { resolveDueAttacks } from "./war";
 import { resolveDueTrades } from "./trade";
+import { resolveSupport } from "./clanWar";
 
 import { GameError, GameState } from "@/lib/game/engine";
 import { maybeCheckRelease } from "./announce";
@@ -32,6 +33,7 @@ async function sweep() {
   await withEventContext("sweep", async () => {
     await resolveDueAttacks(now).catch((e) => console.error("resolveDueAttacks", e));
     await resolveDueTrades(now).catch((e) => console.error("resolveDueTrades", e));
+    await resolveSupport(now).catch((e) => console.error("resolveSupport", e));
     await maybeCheckRelease();
     // At most once a minute for the whole game (see ranks.ts).
     await maybeRefreshRanks(now).catch((e) => console.error("maybeRefreshRanks", e));
@@ -86,6 +88,7 @@ export function handler(
         await Promise.all([
           resolveDueAttacks(now, me).catch((e) => console.error("resolveDueAttacks", e)),
           resolveDueTrades(now, me).catch((e) => console.error("resolveDueTrades", e)),
+          resolveSupport(now, me).catch((e) => console.error("resolveSupport", e)),
         ]);
         // Everyone else's after the response is sent: the player doesn't wait for it.
         after(sweep);

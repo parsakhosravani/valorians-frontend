@@ -96,6 +96,29 @@ ask before "fixing" either. Add new decisions here when they are made.
   Hall still have no top.
 - **Clan aid limits** (against alt accounts): a member gets aid only after 3 days in the clan,
   and at most one day of their own output of that resource (or coins) per day, from any clan.
+- **Clans fight together** (Nov 2026, owner's call: a war band, not a savings account; rules in
+  `CLAN_WAR`, code in `src/lib/game/clanWar.ts` and `src/server/clanWar.ts`):
+  - **Guards (reinforcements):** a member sends troops to stand guard in a clanmate's village.
+    They fight in its battles under its banner (its walls, ranks, bonuses), lose the same share
+    as the village's own troops, and **the village feeds them** (as in Travian). They still count
+    in their owner's power and people, never the host's, and the host can't send them anywhere.
+    The owner calls them home, or the host sends them home, any time except mid-battle. Leaving
+    the clan ends every guard duty. No dragon (it guards only its Roost); ships sail along across
+    the sea. Up to 3 groups out per tribe, 5 guests per village.
+  - **Attack alerts:** when a member is attacked, every clanmate is told (bot + in-game), once
+    per attacked tribe per 10 minutes, with a "Send help" button.
+  - **Clan strikes (rallies):** the Jarl or a Huscarl names a tribe and a landing time (10 min to
+    24 h ahead). Armies sent to the strike slow down to land at that moment (a late army lands
+    when it can). Waves then queue at the gates (one battle at a time).
+  - **Diplomacy:** alliances and non-aggression pacts (both clans agree) block raids between
+    their members; a war is declared by one clan, scores every raid won between the two, and
+    ends with peace (both agree) or by itself after a week. Up to 5 treaties per clan.
+  - **Weekly goal:** one shared goal a week (camps cleared, raids won, or treasury donations,
+    rotating), sized by the number of members; met, every member gets 3,000 coins. The War tab
+    shows who did what this week.
+  - **Small things:** a clan can link its Telegram group (t.me only); villages of allied and
+    warring clans get their own colours on the map; the season's 2nd and 3rd Wonders get
+    40,000 / 20,000 coins per member.
 - **A clan needs at least 2 members.** A chief alone can found one, but it is *forming*: its
   techs give no perks and can't be raised until a second chief joins (and stop again if it
   drops back to one).

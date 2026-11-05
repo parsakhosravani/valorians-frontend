@@ -28,6 +28,8 @@ export const Battle = () => {
   const [camp, setCamp] = useState<number | undefined>();
   // ?attack=<playerId> (a spy's "Attack them"): also open the send-army sheet on arrival.
   const [strike, setStrike] = useState(false);
+  // ?rally=<id>&land=<ms> (a clan strike): the army sent to that tribe lands with the clan.
+  const [rally, setRally] = useState<{ id: number; landAt: number; target: number } | null>(null);
   // Bumped by every jump, so the map starts over on the new spot even when it was
   // already open (it only centres once, on its first load) or on the same tribe.
   const [jump, setJump] = useState(0);
@@ -50,10 +52,14 @@ export const Battle = () => {
     const t = q.get("tab");
     const c = Number(q.get("camp"));
 
-    if (["revenge", "target", "attack", "camp", "tab"].some((k) => q.has(k))) {
+    const r = Number(q.get("rally"));
+    const land = Number(q.get("land"));
+
+    if (r && attack && land) setRally({ id: r, landAt: land, target: attack });
+    if (["revenge", "target", "attack", "camp", "tab", "rally", "land"].some((k) => q.has(k))) {
       const rest = new URLSearchParams(query);
 
-      ["revenge", "target", "attack", "camp", "tab"].forEach((k) => rest.delete(k));
+      ["revenge", "target", "attack", "camp", "tab", "rally", "land"].forEach((k) => rest.delete(k));
       const search = rest.toString();
 
       window.history.replaceState(null, "", url.pathname + (search ? `?${search}` : "") + url.hash);
@@ -112,7 +118,9 @@ export const Battle = () => {
               attackFocus={strike}
               focusCamp={camp}
               focusId={revenge}
-              onAttack={setTarget}
+              onAttack={(t) =>
+                setTarget(rally && t.to.target === rally.target ? { ...t, rally: { id: rally.id, landAt: rally.landAt } } : t)
+              }
             />
           )}
           {tab === "army" && <ArmyTab />}
@@ -132,7 +140,10 @@ export const Battle = () => {
       <SendArmyDrawer
         target={target}
         onClose={() => setTarget(null)}
-        onSent={() => setTarget(null)}
+        onSent={() => {
+          if (target?.rally) setRally(null);
+          setTarget(null);
+        }}
       />
 
       <Image
