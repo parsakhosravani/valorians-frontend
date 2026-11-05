@@ -1577,10 +1577,20 @@ export const WarMap = ({
             picking && "hidden",
           )}
         >
-          <span className="flex items-center gap-2 text-[11px] font-bold text-sub">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 max-w-[250px] text-[11px] font-bold text-sub">
             <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-good bg-good/30" />weaker</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-goldtext bg-goldtext/20" />even</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-bad bg-bad/30" />stronger</span>
+            {/* Clan colours, only when they can show up for you. */}
+            {data?.tribes.some((t) => t.ally && !t.isMe) && (
+              <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-[#7FB3D0] bg-[#7FB3D0]/30" />clan</span>
+            )}
+            {data?.tribes.some((t) => t.relation === "ally" || t.relation === "nap") && (
+              <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-[#8FD1B8] bg-[#8FD1B8]/30" />treaty</span>
+            )}
+            {data?.tribes.some((t) => t.relation === "war") && (
+              <span className="flex items-center gap-1"><span className="w-2.5 h-1.5 rounded-[50%] border border-[#E0442A] bg-[#E0442A]/30" />war</span>
+            )}
           </span>
 
           <InfoDrawer
@@ -1739,7 +1749,7 @@ export const WarMap = ({
                             : "bg-panel2 border-gold text-goldtext",
                     )}
                   >
-                    <GameIcon e="💪" /> {fmt(t.power)}{" "}
+                    <GameIcon e="💪" /> Power {fmt(t.power)}{" "}
                     {t.isMe
                       ? ""
                       : s === "weaker"
@@ -1904,9 +1914,26 @@ export const WarMap = ({
                   .
                 </p>
                 {c.state === "locked" ? (
-                  <p className="text-sm font-bold text-muted">
-                    <GameIcon e="🔒" /> Beat camp {c.level - 1} first.
-                  </p>
+                  <>
+                    <p className="text-sm font-bold text-muted">
+                      <GameIcon e="🔒" /> Beat camp {c.level - 1} first.
+                    </p>
+                    {/* Straight to the camp that opens this one, instead of hunting for it on the map. */}
+                    {data?.camps.find((x) => x.level === c.level - 1) && (
+                      <Button
+                        isFull
+                        variant="secondary"
+                        onClick={() => {
+                          const prev = data!.camps.find((x) => x.level === c.level - 1)!;
+
+                          goTo(prev);
+                          setSelected({ kind: "camp", camp: prev });
+                        }}
+                      >
+                        <GameIcon e="🏕️" /> Go to camp {c.level - 1}
+                      </Button>
+                    )}
+                  </>
                 ) : c.state === "cooldown" ? (
                   <p className="text-sm font-bold text-muted">
                     The barbarians regroup in <Countdown to={c.readyAt} />.

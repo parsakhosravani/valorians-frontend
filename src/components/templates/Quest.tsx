@@ -4,6 +4,7 @@ import bg from "~/images/background/friends.webp";
 import population from "~/images/resources/population.webp";
 import viking from "~/images/quest/viking.webp";
 import Image from "next/image";
+import Link from "next/link";
 import clsx from "clsx";
 import { ACTIVE_QUESTS, QUEST_ICONS, QuestDrawer } from "@/components/organisms/quest/QuestDrawer";
 import { Coin } from "@/components/molecules/Coin";
@@ -43,8 +44,16 @@ export const Quest: FunctionComponent<QuestPropsType> = () => {
         </SectionTitle>
         <div className="grid gap-2 w-full">
           {ACTIVE_QUESTS.length === 0 && (
-            <EmptyState e="📦" title="No tasks right now">
-              New sagas arrive often. Check back soon!
+            <EmptyState
+              action={
+                <Link className="btn btn-gold btn-sm" href="/hall">
+                  Go to the Hall
+                </Link>
+              }
+              e="📦"
+              title="No tasks right now"
+            >
+              New sagas arrive often. Meanwhile, your next steps are waiting in the Hall.
             </EmptyState>
           )}
           {ACTIVE_QUESTS.map((item) => {

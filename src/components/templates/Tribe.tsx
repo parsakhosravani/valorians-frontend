@@ -26,11 +26,16 @@ import { Bar, SectionTitle, Segmented } from "@/components/atoms/Ui";
 
 const RES_IMG = Object.fromEntries(RESOURCES.map((r) => [r.id, r.img])) as Record<ResourceId, (typeof RESOURCES)[number]["img"]>;
 
-const BuildingThumb = ({ b, level, size = 52 }: { b: BuildingDef; level: number; size?: number }) => (
+/**
+ * `locked`: can't be built yet (a requirement is missing), shown grey. A
+ * building you can put up now shows in colour even at level 0: before, every
+ * level-0 building was grey, so the ones you could build looked locked too.
+ */
+const BuildingThumb = ({ b, level, size = 52, locked = false }: { b: BuildingDef; level: number; size?: number; locked?: boolean }) => (
   <div className="relative shrink-0" style={{ width: size, height: size }}>
     <Image
       alt=""
-      className={clsx("w-full h-full object-contain drop-shadow-[0_3px_4px_rgba(0,0,0,0.55)]", level === 0 && "opacity-50 grayscale")}
+      className={clsx("w-full h-full object-contain drop-shadow-[0_3px_4px_rgba(0,0,0,0.55)]", locked ? "opacity-50 grayscale" : level === 0 && "opacity-90")}
       height={size * 2}
       src={buildingImage(b)}
       width={size * 2}
@@ -53,9 +58,18 @@ const StatusLine = ({ o }: { o: UpgradeOption }) => {
   }
   if (o.blocked) return <span className="text-xs text-muted truncate">{o.blocked}</span>;
   if (!short.length) {
+    // What it takes of each resource ("7.8K in all" didn't say which).
     return (
-      <span className="text-xs text-muted tabular-nums truncate">
-        {compact(costTotal(o.cost))} in all · {formatDuration(o.seconds * 1000)}
+      <span className="text-[11px] text-muted tabular-nums flex items-center gap-1.5 min-w-0">
+        {(Object.entries(o.cost) as [ResourceId, number][])
+          .filter(([, n]) => n > 0)
+          .map(([r, n]) => (
+            <span key={r} className="inline-flex items-center gap-0.5 shrink-0">
+              <Image alt={RESOURCE_NAMES[r]} className="w-3 h-3" src={RES_IMG[r]} />
+              {compact(n)}
+            </span>
+          ))}
+        <span className="truncate">· {formatDuration(o.seconds * 1000)}</span>
       </span>
     );
   }
@@ -96,7 +110,7 @@ const UpgradeRow = ({
   return (
     <div className={clsx("flex items-center gap-3 px-2.5 py-2 rounded-xl", best ? "card-hero !shadow-none" : "card-flat")}>
       <button aria-label={`${o.building.name} details`} className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={onOpen}>
-        <BuildingThumb b={o.building} level={o.level} size={44} />
+        <BuildingThumb b={o.building} level={o.level} locked={isLocked(o)} size={44} />
         <span className="flex flex-col gap-0.5 min-w-0">
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="font-bold leading-tight truncate">{o.building.name}</span>
@@ -115,6 +129,9 @@ const UpgradeRow = ({
 };
 
 type Job = { building: string; toLevel: number; startedAt: number; endsAt: number };
+
+/** Not built and can't be yet: a requirement is missing (Town Hall level, another building). */
+const isLocked = (o: UpgradeOption) => o.level === 0 && !!o.blocked && !o.job;
 
 /**
  * The builders as a row of small slots instead of a stack of big rows:
@@ -157,6 +174,8 @@ const BuilderSlots = ({
       if (o)
         return (
           <div key={i} className="rounded-xl border border-gold/70 bg-gold/10 flex flex-col items-center gap-1 px-1.5 pt-2 pb-1.5 min-w-0">
+            {/* These are picks for idle builders, not buildings missing from the list below: say so. */}
+            <span className="text-[9px] font-extrabold tracking-wide text-goldtext uppercase leading-none">Suggested</span>
             <button aria-label={`${o.building.name} details`} className="flex flex-col items-center gap-1 w-full min-w-0" onClick={() => onOpen(o.building)}>
               <BuildingThumb b={o.building} level={o.level} size={40} />
               <span className="text-[11px] font-bold leading-tight truncate w-full text-center">{o.building.name}</span>
@@ -184,6 +203,7 @@ export const Tribe: FunctionComponent = () => {
   const [open, setOpen] = useState<BuildingDef | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
+  const [showLocked, setShowLocked] = useState(false);
 
   const options = useMemo(() => upgradeOptions(state), [state]);
   const advice = useMemo(() => recommendUpgrade(state, options), [state, options]);
@@ -253,7 +273,7 @@ export const Tribe: FunctionComponent = () => {
           onChange={setFilter}
         />
         <div className="flex flex-col gap-1.5">
-          {rest.map((o) => (
+          {rest.filter((o) => !isLocked(o)).map((o) => (
             <UpgradeRow
               key={o.building.id}
               best={o.building.id === best?.building.id}
@@ -265,6 +285,29 @@ export const Tribe: FunctionComponent = () => {
             />
           ))}
           {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
+          {/* Locked buildings fold away: a new tribe saw some 20 "Needs …" rows before anything useful. */}
+          {rest.some(isLocked) && (
+            <button
+              className="flex items-center justify-between px-2.5 py-2 rounded-xl border border-dashed border-line text-sm font-bold text-muted"
+              type="button"
+              onClick={() => setShowLocked((v) => !v)}
+            >
+              <span>🔒 Locked · {rest.filter(isLocked).length}</span>
+              <span className="text-xs">{showLocked ? "Hide ▲" : "Show ▼"}</span>
+            </button>
+          )}
+          {showLocked &&
+            rest.filter(isLocked).map((o) => (
+              <UpgradeRow
+                key={o.building.id}
+                best={false}
+                busy={false}
+                freeBuilder={freeBuilders > 0}
+                o={o}
+                onOpen={() => setOpen(o.building)}
+                onUpgrade={() => upgrade(o.building.id)}
+              />
+            ))}
         </div>
       </section>
 
