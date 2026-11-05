@@ -140,5 +140,19 @@ describe("outposts (server)", () => {
     // The spot is gone from the next offer.
     expect((await offeredSpots(await reload(me.id))).some((p) => p.x === pick.x && p.y === pick.y)).toBe(false);
   });
-});
 
+  test("a claim left behind by a crashed founding doesn't block the tribe forever", async () => {
+    const T0 = Date.now();
+    const me = await newPlayer(T0, ready);
+    const home = await homeOf(me.id);
+    const db = await getDb();
+
+    // The request claimed tile #0 and died before saving the outpost (timeout, crash): the row stays.
+    await db.execute({ sql: "INSERT INTO outposts (user_id, idx, x, y) VALUES (?, 0, ?, ?)", args: [me.id, home.x + 900, home.y + 900] });
+    const after = await settleOutpost(await reload(me.id), T0 + 120_000);
+
+    expect(after.state.outposts.length).toBe(1);
+    const rows = await db.execute({ sql: "SELECT x, y FROM outposts WHERE user_id = ?", args: [me.id] });
+    expect(rows.rows.map((r) => `${r.x},${r.y}`)).toEqual([`${after.state.outposts[0].x},${after.state.outposts[0].y}`]);
+  });
+});

@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 10; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log
+const SCHEMA_VERSION = 11; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -397,6 +397,10 @@ async function migrate(client: Client) {
     CREATE INDEX IF NOT EXISTS users_wins_rank ON users(wins_rank);
     CREATE INDEX IF NOT EXISTS clans_pop_rank ON clans(pop_rank);
   `);
+
+  // When a tile was claimed for an outpost being founded, so a claim left behind by a
+  // crashed request can be told from one in progress (see settleOutpost). 0 = before this column.
+  await client.execute("ALTER TABLE outposts ADD COLUMN claimed_at INTEGER NOT NULL DEFAULT 0").catch(() => {});
 
   // Everything that happened today, to check the game's flows each night
   // (see events.ts / eventReport.ts). The cron deletes each day after its report.
