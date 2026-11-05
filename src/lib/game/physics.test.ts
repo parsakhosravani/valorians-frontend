@@ -21,6 +21,7 @@ import * as C from "./config";
 import * as E from "./engine";
 import * as Tr from "./trade";
 import * as W from "./war";
+import * as G from "./garrison";
 import { clanLevel, techCap, techCost, TECH_IDS } from "./clan";
 import { distance, marchMs } from "./map";
 
@@ -221,6 +222,38 @@ describe("matter", () => {
         expect(r.builders).toBeGreaterThanOrEqual(prev.builders);
         prev = r;
       }
+    }
+  });
+});
+
+describe("garrisons", () => {
+  test("troops moved between home and outposts are never made or lost, and a garrison never passes its room", () => {
+    const r = rng(11);
+    for (let i = 0; i < 300; i++) {
+      let s = midGame(i);
+      s.outposts = [0, 1].map((k) => ({ x: 20 + k, y: 20, foundedAt: s.updatedAt, fields: { iron: Math.floor(r() * 10), wood: 0, clay: 0, crop: 0 }, land: { resource: "iron" as const, percent: 40 } }));
+      s.army.axeman = 2000;
+      const before = E.totalArmy(s);
+      let now = s.updatedAt;
+      for (let k = 0; k < 12; k++) {
+        const idx = Math.floor(r() * 3) - (r() < 0.1 ? 3 : 0);
+        const units = { ...E.emptyArmy(), axeman: Math.floor(r() * 700) - (r() < 0.05 ? 800 : 0) };
+        try {
+          s = r() < 0.6
+            ? G.sendToOutpost(s, idx, units, r() * 60_000, { x: 0, y: 0 }, now, r()).state
+            : G.leaveOutpost(s, idx, units, r() * 60_000, now, r()).state;
+        } catch (e) {
+          expect(e).toBeInstanceOf(E.GameError);
+        }
+        now += Math.floor(r() * 40_000);
+        s = E.advance(s, now);
+        for (const [j, o] of s.outposts.entries()) {
+          for (const u of C.UNIT_IDS) expect(o.garrison?.[u] ?? 0).toBeGreaterThanOrEqual(0);
+          expect(W.armySize(G.garrisonOf(o)) + W.armySize(G.headingTo(s, j))).toBeLessThanOrEqual(G.garrisonCap(o));
+        }
+      }
+      // Troop upkeep can starve soldiers; this test's tribes have crop to spare, so the count holds exactly.
+      if (s.resources.crop > 0) expect(E.totalArmy(s).axeman).toBe(before.axeman);
     }
   });
 });

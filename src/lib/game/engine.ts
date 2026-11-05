@@ -102,6 +102,8 @@ export type March = {
   from?: { x: number; y: number };
   /** New orders this expedition already took on the road (see REDIRECT). */
   hops?: number;
+  /** Bound for this outpost (its index) instead of home: the soldiers join its garrison, the spoils still go home. */
+  to?: number;
 };
 
 /** An outpost: a place on the map with four resource fields and one builder (see OUTPOST). */
@@ -114,6 +116,8 @@ export type Outpost = {
   land: OutpostLand;
   /** The field being raised now, if any. */
   job?: { resource: ResourceId; toLevel: number; startedAt: number; endsAt: number };
+  /** Troops stationed here (see OUTPOST.garrisonBase). Out fighting for the outpost, they're off this list. */
+  garrison?: Army;
 };
 
 /** A regiment's battle experience; it sets the regiment's rank. */
@@ -439,7 +443,12 @@ export function normalizeState(saved: GameState): GameState {
     mastery: { ...s.mastery },
     guests: Array.isArray(s.guests) ? s.guests.map((g) => ({ ...g, units: { ...emptyArmy(), ...g.units } })) : [],
     abroad: Array.isArray(s.abroad) ? s.abroad.map((a) => ({ ...a, units: { ...emptyArmy(), ...a.units } })) : [],
-    outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...emptyFields(), ...o.fields }, land: o.land ?? outpostLand(o.x, o.y) })),
+    outposts: (s.outposts ?? []).map((o) => ({
+      ...o,
+      fields: { ...emptyFields(), ...o.fields },
+      land: o.land ?? outpostLand(o.x, o.y),
+      ...(o.garrison ? { garrison: { ...emptyArmy(), ...o.garrison } } : {}),
+    })),
     queue: s.queue ?? [],
     quests: s.quests ?? {},
     army: { ...fresh.army, ...s.army },
@@ -506,10 +515,11 @@ export function peopleOf(s: GameState) {
   return s.population + sum(ownedArmy(s)) + training + (s.joining ?? []).reduce((n, j) => n + sum(j.units), 0);
 }
 
-/** Units at home + away on raids. */
+/** Units at home, on the way home (or to an outpost) and stationed at outposts. */
 export function totalArmy(s: GameState): Army {
   const a = { ...s.army };
   for (const m of s.marches) for (const u of UNIT_IDS) a[u] += m.units[u] ?? 0;
+  for (const o of s.outposts ?? []) for (const u of UNIT_IDS) a[u] += o.garrison?.[u] ?? 0;
   return a;
 }
 
@@ -893,6 +903,19 @@ export function advance(state: GameState, now: number): GameState {
 }
 
 function returnMarch(s: GameState, m: March) {
+  // Bound for an outpost: the soldiers join its garrison; spoils and coins go home.
+  const base = m.to != null ? s.outposts?.[m.to] : undefined;
+
+  if (base) {
+    const g = { ...emptyArmy(), ...base.garrison };
+
+    for (const u of UNIT_IDS) g[u] += m.units[u] ?? 0;
+    base.garrison = g;
+    for (const r of RESOURCE_IDS) s.resources[r] += m.loot[r] ?? 0;
+    s.coins += m.coins;
+
+    return;
+  }
   // The village is under attack: the soldiers go straight to the field (ships
   // and the spoils still go home).
   const fight = s.defending?.find((f) => m.returnsAt <= f.joinBy);
@@ -954,7 +977,12 @@ function structuredCloneState(s: GameState): GameState {
     fullEnergy: { ...s.fullEnergy },
     buildings: { ...s.buildings },
     mastery: { ...s.mastery },
-    outposts: (s.outposts ?? []).map((o) => ({ ...o, fields: { ...o.fields }, ...(o.job ? { job: { ...o.job } } : {}) })),
+    outposts: (s.outposts ?? []).map((o) => ({
+      ...o,
+      fields: { ...o.fields },
+      ...(o.job ? { job: { ...o.job } } : {}),
+      ...(o.garrison ? { garrison: { ...o.garrison } } : {}),
+    })),
     queue: s.queue.map((q) => ({ ...q })),
     plus: { ...s.plus },
     shield: { ...s.shield },

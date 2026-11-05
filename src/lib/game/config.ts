@@ -669,6 +669,16 @@ export const OUTPOST = {
   landBonusMax: 40,
   /** How many spots the player is offered when founding one (the best for each resource, nearest first). */
   spotChoices: 4,
+  /**
+   * Garrison (Nov 2026, owner's call): troops stationed at an outpost, to attack
+   * from closer or keep out of the home village's battles. Room for
+   * garrisonBase + garrisonPerFieldLevel × the outpost's field levels (up to 4,500
+   * with all four fields at 10): a real force, not the whole late-game army.
+   * A garrisoned outpost can be attacked (only its garrison defends, nothing to
+   * loot), so it's a forward base, not a safe vault.
+   */
+  garrisonBase: 500,
+  garrisonPerFieldLevel: 100,
 } as const;
 
 // ─── Seasons and the World Wonder ─────────────────────────────────────────────

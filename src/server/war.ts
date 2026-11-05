@@ -13,7 +13,8 @@ import { errorData, logEvent, withEventContext } from "./events";
 import { alertClan, rallyLanding, recordForClan, reconcileSupport, relationBetween, scoreWar } from "./clanWar";
 import { blocksRaids } from "@/lib/game/clanWar";
 
-import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp, shieldStops } from "@/lib/game/engine";
+import { GameError, GameState, advance, emptyArmy, getRates, peopleOf, rankForXp, shieldStops } from "@/lib/game/engine";
+import { defendOutpost, engageGarrison, garrisonOf, outpostField, returnToGarrison, withGarrison } from "@/lib/game/garrison";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceAttack, reinforceBattle, troopsOnField } from "@/lib/game/battle";
@@ -53,12 +54,17 @@ import {
   raidTravelMs,
   takeJoining,
   splitRaid,
+  armySize,
 } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
 
 /** Where an army can be sent: a tribe, one of your barbarian camps, or a bandit lair (its tile). */
 /** `rally`: an army sent to a clan strike lands with the others (see rallyLanding). */
-type MarchTarget = { target?: number; camp?: number; lair?: Point; rally?: number };
+/**
+ * `base`: sent from this outpost's garrison (it comes back there). `outpost`: with
+ * `target`, the target tribe's garrisoned outpost of this index instead of its village.
+ */
+type MarchTarget = { target?: number; camp?: number; lair?: Point; rally?: number; base?: number; outpost?: number };
 
 /** Most armies one tribe can have out at once. */
 
@@ -151,20 +157,33 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
   });
 
   if (Number(out.rows[0].n) >= MAX_MARCHES) throw new GameError(`You can have ${MAX_MARCHES} armies on the move at once`, "too_many");
-  const home = await homeOf(me.id);
+  const village = await homeOf(me.id);
+  // From an outpost: its garrison marches, from there, and comes back there.
+  const base = to.base == null ? null : Math.floor(Number(to.base));
+  const camp = base == null ? null : advance(me.state, now).outposts[base];
+
+  if (base != null && !camp) throw new GameError("No such outpost", "not_found");
+  if (base != null && to.rally) throw new GameError("Clan strike armies set out from home", "rally_home");
+  const home = camp ? { x: camp.x, y: camp.y } : village;
   // A clan strike: lands at its time, and counts as committed when the strike was called (see shieldStops).
   const rally = to.rally ? await rallyLanding(me, Math.floor(Number(to.rally)), Math.floor(Number(to.target)), now) : null;
   const landAt = rally?.landAt ?? null;
   const committedAt = rally?.createdAt ?? now;
-  const { dest, defenderId, campLevel, lairLevel } = await resolveTarget(me, to, now, home, committedAt);
+  const { dest, defenderId, campLevel, lairLevel, targetOutpost } = await resolveTarget(me, to, now, village, committedAt);
 
   // Across the sea the army sails, and takes the Longships it needs along.
   const naval = seaRoute(home, dest, units).naval;
+
+  if (naval && base != null) throw new GameError("That's across the sea. Ships sail from your harbor at home.", "naval_base");
   let sent!: Army;
   let travel = 0;
   const after = await mutatePlayer(me.id, now, (s) => {
-    const boarded = embark(s, units, naval);
-    const d = campLevel ? dispatchCamp(s, campLevel, boarded, now) : lairLevel ? dispatchLair(s, boarded) : dispatchRaid(s, boarded, now);
+    const go = (g: GameState) => {
+      const boarded = embark(g, units, naval);
+
+      return campLevel ? dispatchCamp(g, campLevel, boarded, now) : lairLevel ? dispatchLair(g, boarded) : dispatchRaid(g, boarded, now);
+    };
+    const d = base != null ? withGarrison(s, base, go) : go(s);
 
     sent = d.sent;
     travel = routeMs(sent, home, dest, getRates(s).marchMultiplier);
@@ -181,8 +200,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
     const ambush = await ambushOnRoad(me, sent, home, dest, now, now + travel);
     const ins = await db.execute({
       sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, lair_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
-                                 ambush, ambush_at, rally_id, committed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                 ambush, ambush_at, rally_id, committed_at, base_outpost, target_outpost)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         me.id,
         defenderId,
@@ -199,6 +218,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
         ambush?.at ?? null,
         landAt ? Math.floor(Number(to.rally)) : null,
         committedAt,
+        base,
+        targetOutpost ?? null,
       ],
     });
 
@@ -207,12 +228,12 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
       const def = await findById(defenderId);
       const watch = (def?.state.buildings["watchtower"] ?? 0) >= 1;
 
-      await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel, home);
+      await notify.incoming(defenderId, displayName(me), watch ? sent : null, travel, home, targetOutpost ?? undefined);
       // The whole clan hears it, and can send guards (see alertClan).
       await alertClan(defenderId, displayName(me), travel, now).catch((e) => console.error("clan alert", e));
     }
-    // Anyone with a spy in this village hears the army has gone.
-    await spiesSeeMarch(after, sent, travel, now).catch((e) => console.error("spies", e));
+    // Anyone with a spy in this village hears the army has gone (an outpost's garrison leaves unseen).
+    if (base == null) await spiesSeeMarch(after, sent, travel, now).catch((e) => console.error("spies", e));
     logEvent("war.march", {
       id: Number(ins.lastInsertRowid), defenderId, campLevel, lairLevel, units: sent, travelMs: travel, naval, ambush: !!ambush,
       from: home, to: dest,
@@ -220,7 +241,7 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
 
     return { player: after, march: { id: Number(ins.lastInsertRowid), arrivesAt: now + travel } };
   } catch (e) {
-    await mutatePlayer(me.id, now, (s) => cancelRaid(s, sent));
+    await mutatePlayer(me.id, now, (s) => (base != null ? returnToGarrison(s, base, sent) : cancelRaid(s, sent)));
     throw e;
   }
 }
@@ -232,7 +253,7 @@ async function ambushOnRoad(me: Player, units: Army, from: Point, to: Point, sta
   return rollAmbush(me.state, units, exposed, { startedAt, endsAt }, rand);
 }
 
-type Target = { dest: Point; defenderId: number | null; campLevel: number | null; lairLevel: number | null; name: string };
+type Target = { dest: Point; defenderId: number | null; campLevel: number | null; lairLevel: number | null; name: string; targetOutpost?: number | null };
 
 /** Where an attack on a tribe, one of your camps or a bandit lair goes, after checking it's allowed. */
 async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Point, committedAt = now): Promise<Target> {
@@ -281,7 +302,19 @@ async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Poi
     if (blocksRaids(r?.kind)) throw new GameError("Your clan has a treaty with theirs: no raids between you", "treaty");
   }
   // A shield raised after the clan strike was called doesn't stop its armies either.
-  if (shieldStops(advance(target.state, now), committedAt, now)) throw new GameError("This tribe is protected by a shield right now", "shielded");
+  const ts = advance(target.state, now);
+
+  if (shieldStops(ts, committedAt, now)) throw new GameError("This tribe is protected by a shield right now", "shielded");
+  if (to.outpost != null) {
+    // Their outpost: only while troops are stationed there (an empty one can't be attacked).
+    const idx = Math.floor(Number(to.outpost));
+    const o = Number.isInteger(idx) ? ts.outposts[idx] : undefined;
+
+    if (!o) throw new GameError("That outpost doesn't exist");
+    if (armySize(garrisonOf(o)) === 0) throw new GameError("No troops are stationed at that outpost: there's nothing to attack", "no_garrison");
+
+    return { dest: { x: o.x, y: o.y }, defenderId, campLevel: null, lairLevel: null, name: `${displayName(target)}'s outpost`, targetOutpost: idx };
+  }
 
   return { dest: await homeOf(defenderId), defenderId, campLevel: null, lairLevel: null, name: displayName(target) };
 }
@@ -304,6 +337,10 @@ type AttackRow = {
   battle: StoredBattle | null;
   /** This army joined the battle of attack `allyOf` (that row holds the battle). */
   allyOf: number | null;
+  /** Sent from this outpost of the attacker's: it comes back there, not home. */
+  base: number | null;
+  /** Marching on this outpost of the defender's (its garrison), not the village. */
+  targetOutpost: number | null;
   /** Spoils carried from an earlier battle of this expedition (after new orders). */
   loot: Loot | null;
   coins: number;
@@ -352,6 +389,8 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   arrivesAt: Number(r.arrives_at),
   endsAt: r.ends_at == null ? null : Number(r.ends_at),
   ...stored(r.battle),
+  base: r.base_outpost == null ? null : Number(r.base_outpost),
+  targetOutpost: r.target_outpost == null ? null : Number(r.target_outpost),
   loot: r.loot == null ? null : (JSON.parse(String(r.loot)) as Loot),
   coins: Number(r.coins ?? 0),
   hops: Number(r.hops ?? 0),
@@ -366,6 +405,19 @@ function stored(raw: unknown): { battle: StoredBattle | null; allyOf: number | n
 
   return "allyOf" in v ? { battle: null, allyOf: Number(v.allyOf) } : { battle: v, allyOf: null };
 }
+
+/**
+ * An army sent from an outpost goes back there: whatever march home the
+ * engine adds for it is bound for that outpost's garrison instead.
+ */
+const homeward = (a: Pick<AttackRow, "base">, fn: (s: GameState) => GameState) => (s: GameState) => {
+  const before = new Set(s.marches.map((m) => m.id));
+  const next = fn(s);
+
+  if (a.base != null && next.outposts?.[a.base]) for (const m of next.marches) if (!before.has(m.id)) m.to = a.base;
+
+  return next;
+};
 
 /** Spoils and order count an army keeps on its way home. */
 const carriedOf = (a: AttackRow) => ({ loot: a.loot ?? undefined, coins: a.coins, hops: a.hops });
@@ -384,9 +436,9 @@ const promotionsBetween = (before: { troops: Record<string, { xp: number }> }, a
 async function turnBack(a: AttackRow, attackerId: number, name: string | null, now: number, at = a.arrivesAt) {
   logEvent("war.turnback", { id: a.id, defenderId: a.defenderId, campLevel: a.campLevel, lairLevel: a.lairLevel, target: name, at }, { playerId: attackerId, at: now });
 
-  await mutatePlayer(attackerId, now, (s) =>
+  await mutatePlayer(attackerId, now, homeward(a, (s) =>
     returnHome(s, a.units, name ?? "Abandoned land", at + homeTripMs(a), now, rand(), a.to, at, carriedOf(a))
-  );
+  ));
   if (a.lairLevel) await notify.lairEmpty(attackerId).catch(() => {});
   else await notify.turnedBack(attackerId, name ?? "The target");
 }
@@ -408,8 +460,8 @@ async function fieldClearAt(a: AttackRow): Promise<number | null> {
             SUM(CASE WHEN status = 'fighting' THEN 1 ELSE 0 END) AS busy,
             MAX(CASE WHEN status = 'done' THEN ends_at END) AS cleared
           FROM attacks
-          WHERE defender_id = ? AND id <> ? AND ends_at IS NOT NULL AND ends_at > ?`,
-    args: [a.defenderId, a.id, a.arrivesAt],
+          WHERE defender_id = ? AND target_outpost IS ? AND id <> ? AND ends_at IS NOT NULL AND ends_at > ?`,
+    args: [a.defenderId, a.targetOutpost, a.id, a.arrivesAt],
   });
   const r = rs.rows[0] as Record<string, unknown> | undefined;
 
@@ -451,6 +503,47 @@ async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise
     }
     outcome = lairOutcome(attacker.state, a.lairLevel, a.units, rand(), { terrain });
     defenders = Math.round(banditStrength(a.lairLevel) / CAMP_DEFENSE_PER_TROOP);
+  } else if (a.targetOutpost != null) {
+    // A garrisoned outpost: only its garrison fights, on open ground (see outpostField).
+    const defender = a.defenderId ? await findById(a.defenderId) : null;
+    const idx = a.targetOutpost;
+
+    if (!defender) {
+      await turnBack(a, attacker.id, null, now);
+
+      return false;
+    }
+    let empty = false;
+
+    try {
+      await mutatePlayer(defender.id, now, (s) => {
+        if (shieldStops(s, a.committedAt, at)) throw new GameError("This tribe is protected by a shield right now", "shielded");
+        const field = s.outposts[idx] ? outpostField(s, idx) : null;
+
+        // Nobody stationed there any more (they went home, or the outpost is gone): nothing to fight.
+        if (!field || troopsOnField(field.army) === 0) {
+          empty = true;
+
+          return s;
+        }
+        const r = raidOutcome(field, attacker.state, a.units, rand(), { terrain });
+
+        outcome = r.outcome;
+        engaged = r.defenders;
+        defenders = troopsOnField(r.defenders);
+        villagePlan = planBattle(outcome, at, battleSize(attackers, defenders), rand());
+
+        return engageGarrison(s, idx, r.defenders);
+      });
+    } catch (e) {
+      if (!(e instanceof GameError)) throw e;
+      empty = true;
+    }
+    if (empty) {
+      await turnBack(a, attacker.id, `${displayName(defender)}'s empty outpost`, now, at);
+
+      return false;
+    }
   } else {
     const defender = a.defenderId ? await findById(a.defenderId) : null;
 
@@ -499,8 +592,8 @@ async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise
       args: [plan.endsAt, JSON.stringify(battle), a.id],
     });
   } catch (e) {
-    // The defenders already left home for the field: send them back.
-    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, engaged)).catch(() => {});
+    // The defenders already left home (or the outpost) for the field: send them back.
+    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => giveBack(a, s, engaged!)).catch(() => {});
     throw e;
   }
   logEvent("war.begin", {
@@ -513,6 +606,10 @@ async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise
 
   return true;
 }
+
+/** The defenders who took the field go back where they came from: the village, or the outpost's garrison. */
+const giveBack = (a: AttackRow, s: GameState, engaged: Army) =>
+  a.targetOutpost != null ? returnToGarrison(s, a.targetOutpost, engaged) : leaveField(s, a.id, engaged);
 
 /** One "war.finish" event: who won, what each side lost and what was carried off. */
 function logFinish(a: AttackRow, attackerId: number, r: RaidReport, now: number) {
@@ -536,7 +633,7 @@ async function finishBattle(a: AttackRow, now: number) {
   const attacker = await findById(a.attackerId);
 
   if (!attacker) {
-    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, engaged));
+    if (a.defenderId && engaged) await mutatePlayer(a.defenderId, now, (s) => giveBack(a, s, engaged));
     await releaseAllies(a, now);
 
     return;
@@ -545,13 +642,13 @@ async function finishBattle(a: AttackRow, now: number) {
   if (a.campLevel) {
     let report!: RaidReport;
 
-    await mutatePlayer(attacker.id, now, (s) => {
+    await mutatePlayer(attacker.id, now, homeward(a, (s) => {
       const r = campBattle(s, a.campLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to, outcome, ...carried });
 
       report = r.report;
 
       return r.state;
-    });
+    }));
     logFinish(a, attacker.id, report, now);
     if (report.attackerWon) await recordForClan(attacker.id, attacker.clanId, "camps", 1, now).catch((e) => console.error("clan week", e));
     const full: StoredReport = { ...report, ...story, attackerName: displayName(attacker), defenderName: campName(a.campLevel) };
@@ -565,13 +662,13 @@ async function finishBattle(a: AttackRow, now: number) {
   if (a.lairLevel) {
     let report!: RaidReport;
 
-    await mutatePlayer(attacker.id, now, (s) => {
+    await mutatePlayer(attacker.id, now, homeward(a, (s) => {
       const r = lairBattle(s, a.lairLevel!, a.units, at, rand(), { terrain, travelMs, from: a.to, outcome, ...carried });
 
       report = r.report;
 
       return r.state;
-    });
+    }));
     logFinish(a, attacker.id, report, now);
     if (report.attackerWon) await recordForClan(attacker.id, attacker.clanId, "camps", 1, now).catch((e) => console.error("clan week", e));
     if (report.attackerWon) await clearLair(a.to, attacker.id, at);
@@ -586,8 +683,14 @@ async function finishBattle(a: AttackRow, now: number) {
   const defender = a.defenderId ? await findById(a.defenderId) : null;
 
   if (!defender) {
+    if (a.targetOutpost != null && engaged) await mutatePlayer(a.defenderId!, now, (s) => giveBack(a, s, engaged)).catch(() => {});
     await turnBack(a, attacker.id, null, now);
     await releaseAllies(a, now);
+
+    return;
+  }
+  if (a.targetOutpost != null) {
+    await finishOutpostBattle(a, attacker, defender, now);
 
     return;
   }
@@ -645,13 +748,13 @@ async function finishBattle(a: AttackRow, now: number) {
   };
   let promoted: Promotion[] = [];
 
-  await mutatePlayer(attacker.id, now, (s) => {
+  await mutatePlayer(attacker.id, now, homeward(a, (s) => {
     const next = receiveRaidReport(s, report, full.defenderName, at, rand(), a.to, a.hops);
 
     promoted = promotionsBetween(s, next);
 
     return next;
-  });
+  }));
   full.attackerPromoted = promoted;
   await saveReport(attacker.id, defender.id, null, full, at, a.id);
   // Each army that joined: its share home, and its own report.
@@ -662,13 +765,13 @@ async function finishBattle(a: AttackRow, now: number) {
       const mine: StoredReport = { ...parts[i + 1], ...story, attackerName: displayName(p), defenderName: full.defenderName, allyOf: full.attackerName };
       let up: Promotion[] = [];
 
-      await mutatePlayer(p.id, now, (s) => {
+      await mutatePlayer(p.id, now, homeward(r, (s) => {
         const next = receiveRaidReport(s, parts[i + 1], full.defenderName, at, rand(), a.to, r.hops);
 
         up = promotionsBetween(s, next);
 
         return next;
-      });
+      }));
       mine.attackerPromoted = up;
       await saveReport(p.id, defender.id, null, mine, at, r.id);
       await notify.attackResult(p.id, full.defenderName, mine, now).catch(() => {});
@@ -681,6 +784,52 @@ async function finishBattle(a: AttackRow, now: number) {
       ? notify.raided(defender.id, full.attackerName, whole, attacker.id)
       : notify.defended(defender.id, full.attackerName, whole),
   ]);
+}
+
+/** A battle at a garrisoned outpost is over: the garrison's survivors stay, the attackers go back with nothing to carry. */
+async function finishOutpostBattle(a: AttackRow, attacker: Player, defender: Player, now: number) {
+  const { plan, outcome, engaged } = a.battle!;
+  const at = plan.endsAt;
+  const idx = a.targetOutpost!;
+  let report!: RaidReport;
+
+  await mutatePlayer(defender.id, now, (s) => {
+    const r = defendOutpost(s, idx, attacker.state, a.units, at, {
+      outcome,
+      engaged: engaged ?? emptyArmy(),
+      travelMs: homeTripMs(a),
+      carried: a.loot ?? undefined,
+      carriedCoins: a.coins,
+    });
+
+    report = r.report;
+
+    return r.state;
+  });
+  logFinish(a, attacker.id, report, now);
+  await scoreWar(attacker.clanId, defender.clanId, report.attackerWon, now).catch((e) => console.error("war score", e));
+  const full: StoredReport = {
+    ...report,
+    battleMs: plan.endsAt - plan.startedAt,
+    rounds: plan.rounds,
+    attackerName: displayName(attacker),
+    defenderName: `${displayName(defender)}'s outpost ${idx + 1}`,
+  };
+  let promoted: Promotion[] = [];
+
+  await mutatePlayer(attacker.id, now, homeward(a, (s) => {
+    const next = receiveRaidReport(s, report, full.defenderName, at, rand(), a.to, a.hops);
+
+    promoted = promotionsBetween(s, next);
+
+    return next;
+  }));
+  full.attackerPromoted = promoted;
+  await saveReport(attacker.id, defender.id, null, full, at, a.id);
+  await Promise.all([
+    notify.attackResult(attacker.id, full.defenderName, full, now),
+    report.attackerWon ? notify.raided(defender.id, full.attackerName, report, attacker.id) : notify.defended(defender.id, full.attackerName, report),
+  ]).catch(() => {});
 }
 
 /** The rows of the armies that joined battle `a`. */
@@ -699,9 +848,9 @@ async function releaseAllies(a: AttackRow, now: number) {
   const db = await getDb();
 
   for (const r of await allyRowsOf(a)) {
-    await mutatePlayer(r.attackerId, now, (s) =>
+    await mutatePlayer(r.attackerId, now, homeward(r, (s) =>
       returnHome(s, r.units, "a battle that didn't happen", now + homeTripMs(r), now, rand(), r.to, now, carriedOf(r))
-    ).catch((e) => console.error("ally home", r.id, e));
+    )).catch((e) => console.error("ally home", r.id, e));
     await db.execute({ sql: "UPDATE attacks SET status = 'done' WHERE id = ?", args: [r.id] });
   }
 }
@@ -710,11 +859,11 @@ async function releaseAllies(a: AttackRow, now: number) {
 async function abandon(a: AttackRow, now: number, e: unknown) {
   console.error("battle failed, sending the armies home", a.id, e);
   logEvent("war.abandon", { id: a.id, defenderId: a.defenderId, battle: !!a.battle, ...errorData(e) }, { playerId: a.attackerId, at: now, level: "error" });
-  await mutatePlayer(a.attackerId, now, (s) =>
+  await mutatePlayer(a.attackerId, now, homeward(a, (s) =>
     returnHome(s, a.units, "a failed march", now + 60_000, now, rand(), undefined, now, carriedOf(a))
-  ).catch(() => {});
+  )).catch(() => {});
   if (a.defenderId && a.battle?.engaged) {
-    await mutatePlayer(a.defenderId, now, (s) => leaveField(s, a.id, a.battle!.engaged)).catch(() => {});
+    await mutatePlayer(a.defenderId, now, (s) => giveBack(a, s, a.battle!.engaged!)).catch(() => {});
   }
   await releaseAllies(a, now).catch(() => {});
 }
@@ -809,13 +958,13 @@ const syncAllies = (hostId: number, endsAt: number) => ({
  * Returns whether it joined.
  */
 async function joinAlly(a: AttackRow, now: number): Promise<boolean> {
-  if (a.defenderId == null || a.campLevel || a.lairLevel) return false;
+  if (a.defenderId == null || a.campLevel || a.lairLevel || a.targetOutpost != null) return false;
   const db = await getDb();
   const rs = await db.execute({
     sql: `SELECT h.* FROM attacks h
             JOIN users hu ON hu.id = h.attacker_id
             JOIN users au ON au.id = ?
-          WHERE h.defender_id = ? AND h.id <> ? AND h.status = 'fighting' AND h.battle IS NOT NULL
+          WHERE h.defender_id = ? AND h.target_outpost IS NULL AND h.id <> ? AND h.status = 'fighting' AND h.battle IS NOT NULL
             AND json_extract(h.battle, '$.allyOf') IS NULL
             AND (h.attacker_id = au.id OR (au.clan_id IS NOT NULL AND hu.clan_id = au.clan_id))
           ORDER BY h.ends_at ASC LIMIT 1`,
@@ -883,7 +1032,7 @@ async function joinAlly(a: AttackRow, now: number): Promise<boolean> {
 async function joinReinforcements(now: number, playerId?: number) {
   const db = await getDb();
   const rs = await db.execute({
-    sql: `SELECT * FROM attacks WHERE status = 'fighting' AND defender_id IS NOT NULL${
+    sql: `SELECT * FROM attacks WHERE status = 'fighting' AND defender_id IS NOT NULL AND target_outpost IS NULL${
       playerId == null ? "" : " AND (attacker_id = ? OR defender_id = ?)"
     } ORDER BY ends_at ASC LIMIT 20`,
     args: playerId == null ? [] : [playerId, playerId],
@@ -1062,7 +1211,7 @@ export async function recallMarch(me: Player, id: number, now: number) {
   // home from where it is now, not back the way it came.
   const back = a.homeMs == null ? walked : routeMs(a.units, where, await homeOf(me.id), getRates(me.state).marchMultiplier);
 
-  return mutatePlayer(me.id, now, (s) => returnHome(s, a.units, "recalled", now + back, now, rand(), where, now, carriedOf(a)));
+  return mutatePlayer(me.id, now, homeward(a, (s) => returnHome(s, a.units, "recalled", now + back, now, rand(), where, now, carriedOf(a))));
 }
 
 /** Where an army is along its road, `f` of the way through in time: on a whole tile, and whether it's at sea. */
@@ -1115,6 +1264,9 @@ export async function redirectMarch(
 
     if (!rs.rows[0]) throw new GameError("That army can't take new orders anymore", "not_found");
     const a = toAttack(rs.rows[0] as Record<string, unknown>);
+
+    // Its road home leads to an outpost; new orders only for armies of the village.
+    if (a.base != null) throw new GameError("Armies from an outpost can't take new orders. Recall it, or send a new one.", "from_outpost");
     const pos = spotOnRoad(a.from, a.to, a.units, (now - a.sentAt) / Math.max(1, a.arrivesAt - a.sentAt));
 
     if (pos.atSea) throw new GameError("The army is out at sea. Give new orders once it's back on land.", "at_sea");
@@ -1124,6 +1276,7 @@ export async function redirectMarch(
 
     if (!m) throw new GameError("That army is already home", "not_found");
     if (!m.from) throw new GameError("This army's road isn't known. It has to come home first.", "not_found");
+    if (m.to != null) throw new GameError("Troops on their way to an outpost can't take new orders", "to_outpost");
     const leftAt = m.leftAt ?? m.returnsAt - routeMs(m.units, m.from, home, mult);
     const pos = spotOnRoad(m.from, home, m.units, (now - leftAt) / Math.max(1, m.returnsAt - leftAt));
 
@@ -1139,6 +1292,7 @@ export async function redirectMarch(
 
   checkOrdersLeft(me.state, ex.hops);
   if (to.camp) checkCamp(me.state, Math.floor(Number(to.camp)), now);
+  if (to.outpost != null || to.base != null) throw new GameError("New orders go to villages, camps and lairs", "bad_target");
   const t = await resolveTarget(me, to, now, home);
   const cur = ex.attack;
 

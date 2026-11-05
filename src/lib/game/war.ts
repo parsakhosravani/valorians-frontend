@@ -521,7 +521,7 @@ const survivorsOf = (sent: Army, losses: Army) => {
   return out;
 };
 
-const marchId = (now: number, rand: number) => `${now.toString(36)}${Math.floor(rand * 1e6).toString(36)}`;
+export const marchId = (now: number, rand: number) => `${now.toString(36)}${Math.floor(rand * 1e6).toString(36)}`;
 
 // ─── Raids on other players ──────────────────────────────────────────────────
 

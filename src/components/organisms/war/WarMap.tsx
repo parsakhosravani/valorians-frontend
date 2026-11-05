@@ -175,7 +175,7 @@ type MapData = {
   movements: Movement[];
   caravans?: Caravan[];
   /** Outposts in view (see OUTPOST). */
-  outposts?: { ownerId: number; x: number; y: number; isMe: boolean; name: string; clanTag: string | null }[];
+  outposts?: { ownerId: number; x: number; y: number; isMe: boolean; name: string; clanTag: string | null; idx?: number; garrisoned?: boolean }[];
   myPower: number;
 };
 
@@ -371,7 +371,8 @@ const SeaNote = ({
 // ─── On the road ─────────────────────────────────────────────────────────────
 
 /** One of your armies walking home, placed on the map. */
-type Homeward = { id: string; units: Army; from: Pt; returnsAt: number; leftAt: number };
+/** An army walking home, or (`to`) to one of your outposts. */
+type Homeward = { id: string; units: Army; from: Pt; to: Pt; returnsAt: number; leftAt: number };
 
 /**
  * Caravans, armies and battles on the map. The only part of the map that
@@ -439,7 +440,7 @@ const Travellers = ({
   };
 
   for (const m of marching) place(`t${m.id}`, spot(m.from, m.to, m.units, along(m)));
-  for (const m of home) place(`b${m.id}`, spot(m.from, data.home, m.units, progress(now, m.leftAt, m.returnsAt)));
+  for (const m of home) place(`b${m.id}`, spot(m.from, m.to, m.units, progress(now, m.leftAt, m.returnsAt)));
   for (const c of caravans) place(`c${c.id}`, spot(c.from, c.to, null, progress(now, c.sentAt, c.arrivesAt)));
 
   return (
@@ -460,7 +461,7 @@ const Travellers = ({
       ))}
       {home.map((m) => {
         const f = progress(now, m.leftAt, m.returnsAt);
-        const { road, atSea } = roadOf(m.from, data.home, m.units, f);
+        const { road, atSea } = roadOf(m.from, m.to, m.units, f);
 
         return (
           <ArmyToken
@@ -472,7 +473,7 @@ const Travellers = ({
             p={f}
             quiet={quiet.has(`b${m.id}`)}
             road={road}
-            to={{ x: px(data.home.x), y: py(data.home.y) }}
+            to={{ x: px(m.to.x), y: py(m.to.y) }}
             units={m.units}
             onClick={() => onHomeOrders(m)}
           />
@@ -533,6 +534,8 @@ export const WarMap = ({
   // own (Travellers, Countdown), so the whole map isn't redrawn every second.
   const now = useClock(5000);
   const getLive = useLiveGetter();
+  // Your outposts, for armies walking to one (a march with `to`).
+  const myOutposts = useLive((l) => l.state.outposts.map((o) => ({ x: o.x, y: o.y })), sameJson);
   const returning = useLive((l) => l.state.marches, sameJson);
   const myHarbor = useLive((l) => l.state.buildings["harbor"] ?? 0);
   // Your wall is built up as your City Gate goes up (see wallLook).
@@ -966,14 +969,19 @@ export const WarMap = ({
   const homeward = data
     ? returning
         .filter((m) => m.from && m.returnsAt > now)
-        .map((m) => ({
-          id: m.id,
-          units: m.units,
-          from: m.from!,
-          returnsAt: m.returnsAt,
-          leftAt:
-            m.leftAt ?? m.returnsAt - routeMs(m.units, m.from!, data.home),
-        }))
+        .map((m) => {
+          const base = m.to != null ? myOutposts[m.to] : undefined;
+          const to = base ? { x: base.x, y: base.y } : data.home;
+
+          return {
+            id: m.id,
+            units: m.units,
+            from: m.from!,
+            to,
+            returnsAt: m.returnsAt,
+            leftAt: m.leftAt ?? m.returnsAt - routeMs(m.units, m.from!, to),
+          };
+        })
     : [];
   // Armies still on the road, and the ones fighting where they arrived.
   const marching = data?.movements.filter((m) => !m.battle) ?? [];
@@ -1075,6 +1083,17 @@ export const WarMap = ({
       })(),
     };
   };
+  /** A tribe's garrisoned outpost: only its garrison defends, and how many there are isn't known. */
+  const outpostTarget = (t: Tribe, o: NonNullable<MapData["outposts"]>[number], from: { x: number; y: number }): AttackTarget => ({
+    title: `Attack ${t.name}'s outpost`,
+    to: { target: t.id, outpost: o.idx },
+    defense: { min: 0, max: t.defense?.max ?? 0, exact: false },
+    distance: Math.round(Math.hypot(o.x - from.x, o.y - from.y) * 10) / 10,
+    terrain: terrainAt(o.x, o.y),
+    from,
+    at: { x: o.x, y: o.y },
+    note: "Only its garrison defends it: no walls, and nothing to loot. Beat it and their troops there are lost.",
+  });
   const campTarget = (c: Camp, from: { x: number; y: number }): AttackTarget => ({
     title: campName(c.level),
     to: { camp: c.level },
@@ -1254,7 +1273,7 @@ export const WarMap = ({
   // The roads your armies, the armies coming for you and your merchants are on.
   const paths: TravelPath[] = data
     ? [
-        ...homeward.map((m) => ({ key: `b${m.id}`, kind: "homeward" as PathKind, runs: tripOf(m.from, data.home, m.units).runs })),
+        ...homeward.map((m) => ({ key: `b${m.id}`, kind: "homeward" as PathKind, runs: tripOf(m.from, m.to, m.units).runs })),
         ...marching.map((m) => ({
           key: `t${m.id}`,
           kind: (m.kind === "incoming" ? "incoming" : m.kind === "clan-outgoing" ? "clan" : m.kind === "clan-incoming" ? "clan-threat" : "army") as PathKind,
@@ -1600,7 +1619,16 @@ export const WarMap = ({
                 >
                   <span className="text-base">↩️</span>
                   <span className="flex-1 min-w-0 truncate">
-                    Back from <b>{m.target}</b>
+                    {m.to != null ? (
+                      <>
+                        To <b>outpost {m.to + 1}</b>
+                        {m.target !== `Outpost ${m.to + 1}` && <> from {m.target}</>}
+                      </>
+                    ) : (
+                      <>
+                        Back from <b>{m.target}</b>
+                      </>
+                    )}
                     <span className="block text-xs text-muted">
                       <ArmyLine army={m.units} />
                     </span>
@@ -1911,6 +1939,17 @@ export const WarMap = ({
                           <Button isFull disabled={shielded} onClick={() => attackTribe(t)}>
                             <GameIcon e="⚔️" /> Attack
                           </Button>
+                          {/* Their outposts with troops stationed: forward bases that can be hit on their own. */}
+                          {(data?.outposts ?? [])
+                            .filter((o) => o.ownerId === t.id && o.garrisoned && o.idx != null)
+                            .map((o) => (
+                              <Button key={o.idx} isFull disabled={shielded} variant="outline" onClick={() => {
+                                  setSelected(null);
+                                  onAttack(outpostTarget(t, o, data!.home));
+                                }}>
+                                <GameIcon e="🏕️" /> Attack their outpost {o.idx! + 1} (garrisoned)
+                              </Button>
+                            ))}
                           {me?.clan && !t.isMe && <RallyButton shieldUntil={t.shieldUntil} targetId={t.id} targetName={t.name} />}
                         </>
                       )}

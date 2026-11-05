@@ -6,8 +6,9 @@ import { homeOf } from "./map";
 import { Player, mutatePlayer } from "./players";
 
 import { OUTPOST } from "@/lib/game/config";
-import { GameError, foundOutpost, outpostBlocked } from "@/lib/game/engine";
-import { Point, distance, terrainAt } from "@/lib/game/map";
+import { Army, GameError, advance, foundOutpost, getRates, outpostBlocked } from "@/lib/game/engine";
+import { Point, distance, routeMs, seaRoute, terrainAt } from "@/lib/game/map";
+import { leaveOutpost, sendToOutpost } from "@/lib/game/garrison";
 import { outpostLand, outpostSpots } from "@/lib/game/outpost";
 
 /** Land an outpost can stand on: no sea, lakes or mountain peaks. */
@@ -214,4 +215,52 @@ export async function moveOutpostsOutOfWalls() {
   });
 
   return moved;
+}
+
+/** The march between a tribe's village and one of its outposts: over land only. */
+async function outpostRoad(me: Player, idx: number, units: Army, now: number) {
+  const s = advance(me.state, now);
+  const o = s.outposts[Math.floor(Number(idx))];
+
+  if (!o) throw new GameError("No such outpost", "not_found");
+  const home = await homeOf(me.id);
+  const spot = { x: o.x, y: o.y };
+
+  if (seaRoute(home, spot, units).naval) throw new GameError("That outpost is across the sea from your village", "naval");
+
+  return { home, spot, ms: (u: Army) => routeMs(u, home, spot, getRates(s).marchMultiplier) };
+}
+
+/** Troops march from the village to outpost `idx` and join its garrison there. */
+export async function stationTroops(me: Player, idx: number, units: Army, now: number) {
+  const road = await outpostRoad(me, idx, units, now);
+  let sent!: Army;
+  const p = await mutatePlayer(me.id, now, (s) => {
+    const r = sendToOutpost(s, idx, units, road.ms(units), road.home, now, Math.random());
+
+    sent = r.sent;
+
+    return r.state;
+  });
+
+  logEvent("outpost.station", { idx, units: sent }, { playerId: me.id, at: now });
+
+  return p;
+}
+
+/** Troops of outpost `idx`'s garrison march home to the village. */
+export async function bringHome(me: Player, idx: number, units: Army, now: number) {
+  const road = await outpostRoad(me, idx, units, now);
+  let sent!: Army;
+  const p = await mutatePlayer(me.id, now, (s) => {
+    const r = leaveOutpost(s, idx, units, road.ms(units), now, Math.random());
+
+    sent = r.sent;
+
+    return r.state;
+  });
+
+  logEvent("outpost.home", { idx, units: sent }, { playerId: me.id, at: now });
+
+  return p;
 }
