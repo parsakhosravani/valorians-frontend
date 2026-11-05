@@ -848,6 +848,19 @@ export async function scoreWar(attackerClan: number | null, defenderClan: number
   });
 }
 
+/**
+ * How the viewer's clan stands with clan `other`, for that clan's page: the
+ * relation (with proposals and peace offers, unlike relationBetween) and
+ * whether the viewer may act on it (the Jarl and Huscarls).
+ */
+export async function standingWith(viewer: Player, other: number, now: number) {
+  if (viewer.clanId == null || viewer.clanId === other) return null;
+  const mine = (await relationsView(viewer.clanId, now)).find((r) => r.clanId === other) ?? null;
+  const m = await roleIn(viewer);
+
+  return { relation: mine, officer: !!m && can.manage(m.role) };
+}
+
 async function relationsView(clanId: number, now: number) {
   const db = await getDb();
   const rs = await db.execute({
@@ -996,3 +1009,5 @@ export async function clanWarView(me: Player, now: number) {
 }
 
 export type ClanWarView = NonNullable<Awaited<ReturnType<typeof clanWarView>>>;
+/** How the viewer's clan stands with another clan, and whether they may act on it. */
+export type Standing = NonNullable<Awaited<ReturnType<typeof standingWith>>>;

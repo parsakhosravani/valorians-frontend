@@ -15,6 +15,8 @@ import { CLAN_WAR, UNITS } from "@/lib/game/config";
 import { Army, emptyArmy, ownArmy } from "@/lib/game/engine";
 import { GOAL_TEXT, RELATION_TEXT, RelationKind } from "@/lib/game/clanWar";
 import type { ClanWarView } from "@/server/clanWar";
+import type { ClanView } from "@/server/clans";
+import { ClanFlag } from "@/components/molecules/ClanFlag";
 
 const inputCls = "inset w-full h-10 px-3 text-sm font-bold text-parch placeholder:text-muted/70 outline-none focus:border-gold";
 
@@ -123,7 +125,6 @@ export const ClanWar = ({
   const [view, setView] = useState<ClanWarView | null>(null);
   const [guarding, setGuarding] = useState<{ id: number; name: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [otherTag, setOtherTag] = useState("");
 
   const load = useCallback(async () => {
     if (!authHeader) return;
@@ -358,73 +359,11 @@ export const ClanWar = ({
               </span>
             )}
             {proposal && <span className="text-xs text-sub">{t.name}: {t.hint}</span>}
-            {officer && (
-              <div className="flex flex-wrap gap-1.5">
-                {proposal && !r.byUs && (
-                  <>
-                    <Button size="small" disabled={busy != null} onClick={() => run(`d-${r.clanId}`, () => clan.diplomacy(r.clanId, "accept"))}>
-                      Accept
-                    </Button>
-                    <Button size="small" variant="secondary" disabled={busy != null} onClick={() => run(`d-${r.clanId}`, () => clan.diplomacy(r.clanId, "decline"))}>
-                      Decline
-                    </Button>
-                  </>
-                )}
-                {(proposal && r.byUs) || (!proposal && r.kind !== "war") ? (
-                  <Button size="small" variant="outline" disabled={busy != null} onClick={() => run(`d-${r.clanId}`, () => clan.diplomacy(r.clanId, "end"))}>
-                    {proposal ? "Withdraw" : "Break treaty"}
-                  </Button>
-                ) : null}
-                {r.kind === "war" && !(peace && r.byUs) && (
-                  <Button size="small" variant="secondary" disabled={busy != null} onClick={() => run(`d-${r.clanId}`, () => clan.diplomacy(r.clanId, "peace"))}>
-                    {peace ? "Accept peace" : "Offer peace"}
-                  </Button>
-                )}
-                {r.kind !== "war" && !proposal && (
-                  <Button size="small" variant="danger" disabled={busy != null} onClick={() => run(`d-${r.clanId}`, () => clan.diplomacy(r.clanId, "war"))}>
-                    Declare war
-                  </Button>
-                )}
-              </div>
-            )}
+            {officer && <DiplomacyButtons clanId={r.clanId} relation={r} onDone={load} />}
           </Card>
         );
       })}
-      {officer && (
-        <Card className="flex flex-col gap-2">
-          <span className="text-sm font-bold text-parch">Another clan</span>
-          <input
-            className={clsx(inputCls, "uppercase")}
-            maxLength={8}
-            placeholder="Their tag, e.g. WOLF"
-            value={otherTag}
-            onChange={(e) => setOtherTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
-          />
-          <div className="grid grid-cols-3 gap-1.5">
-            {(["ally", "nap", "war"] as RelationKind[]).map((k) => (
-              <Button
-                key={k}
-                disabled={busy != null || otherTag.length < 2}
-                size="small"
-                variant={k === "war" ? "danger" : "secondary"}
-                onClick={() => run(`new-${k}`, async () => {
-                  const ok = await clan.diplomacy(otherTag, k);
-
-                  if (ok) setOtherTag("");
-
-                  return ok;
-                })}
-              >
-                {RELATION_TEXT[k].icon} {k === "ally" ? "Ally" : k === "nap" ? "Pact" : "War"}
-              </Button>
-            ))}
-          </div>
-          <span className="text-[11px] text-muted">
-            Allies and pacts can&apos;t raid each other (both clans must agree). A war is declared by one clan, lasts up to a week,
-            and scores every raid won between you.
-          </span>
-        </Card>
-      )}
+      {officer && <ClanPicker myClanId={clanId} relations={view?.relations ?? []} onDone={load} />}
 
       {/* Keyed by the host: a fresh pick of troops for each clanmate. */}
       <GuardDrawer key={guarding?.id ?? 0} host={guarding} onClose={() => setGuarding(null)} />
@@ -509,5 +448,139 @@ export const RallyButton = ({ targetId, targetName, shieldUntil = 0 }: { targetI
         </div>
       </Drawer>
     </>
+  );
+};
+
+type Relation = ClanWarView["relations"][number];
+
+/**
+ * What an officer can do with another clan, given how the two stand: propose
+ * an alliance or a pact, answer a proposal, break a treaty, declare war, or
+ * offer (or accept) peace. Used in the War tab and on any clan's page.
+ */
+export const DiplomacyButtons = ({ clanId, relation: r, onDone }: { clanId: number; relation: Relation | null; onDone?: () => void }) => {
+  const { clan } = useGameActions();
+  const [busy, setBusy] = useState(false);
+  const act = async (a: Parameters<typeof clan.diplomacy>[1]) => {
+    setBusy(true);
+    await clan.diplomacy(clanId, a);
+    setBusy(false);
+    onDone?.();
+  };
+  const proposal = r?.status === "proposed";
+  const peace = r?.kind === "war" && r.status === "peace";
+
+  if (!r) {
+    return (
+      <div className="grid grid-cols-3 gap-1.5">
+        {(["ally", "nap", "war"] as RelationKind[]).map((k) => (
+          <Button key={k} disabled={busy} size="small" variant={k === "war" ? "danger" : "secondary"} onClick={() => act(k)}>
+            {RELATION_TEXT[k].icon} {k === "ally" ? "Ally" : k === "nap" ? "Pact" : "War"}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {proposal && !r.byUs && (
+        <>
+          <Button disabled={busy} size="small" onClick={() => act("accept")}>Accept</Button>
+          <Button disabled={busy} size="small" variant="secondary" onClick={() => act("decline")}>Decline</Button>
+        </>
+      )}
+      {(proposal && r.byUs) || (!proposal && r.kind !== "war") ? (
+        <Button disabled={busy} size="small" variant="outline" onClick={() => act("end")}>
+          {proposal ? "Withdraw" : "Break treaty"}
+        </Button>
+      ) : null}
+      {r.kind === "war" && !(peace && r.byUs) && (
+        <Button disabled={busy} size="small" variant="secondary" onClick={() => act("peace")}>
+          {peace ? "Accept peace" : "Offer peace"}
+        </Button>
+      )}
+      {r.kind !== "war" && !proposal && (
+        <Button disabled={busy} size="small" variant="danger" onClick={() => act("war")}>
+          Declare war
+        </Button>
+      )}
+    </div>
+  );
+};
+
+type ClanRow = ClanView["clans"][number];
+
+/**
+ * Pick another clan to ally with, sign a pact with or fight: the strongest
+ * clans first, or search by name or tag (typing an exact tag was hard: you had
+ * to know it, and a typo said "No clan with that tag").
+ */
+const ClanPicker = ({ myClanId, relations, onDone }: { myClanId: number; relations: Relation[]; onDone: () => void }) => {
+  const { authHeader } = useGame();
+  const [q, setQ] = useState("");
+  const [list, setList] = useState<ClanRow[] | null>(null);
+  const [picked, setPicked] = useState<ClanRow | null>(null);
+
+  useEffect(() => {
+    if (!authHeader) return;
+    let live = true;
+    const t = setTimeout(async () => {
+      try {
+        const v = await apiRequest<ClanView>(authHeader, `clan${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`);
+
+        if (live) setList(v.clans.filter((c) => c.id !== myClanId));
+      } catch {
+        // Offline: keep the last list.
+      }
+    }, q ? 300 : 0);
+
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q, authHeader, myClanId]);
+
+  const relationOf = (id: number) => relations.find((r) => r.clanId === id) ?? null;
+
+  return (
+    <Card className="flex flex-col gap-2">
+      <span className="text-sm font-bold text-parch">Find a clan</span>
+      <input className={inputCls} placeholder="Search by name or tag" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="flex flex-col gap-1 max-h-72 overflow-y-auto overscroll-contain">
+        {list?.length === 0 && <span className="text-xs text-muted text-center py-2">No clan matches that search.</span>}
+        {list?.slice(0, 20).map((c) => {
+          const r = relationOf(c.id);
+          const on = picked?.id === c.id;
+
+          return (
+            <div key={c.id} className={clsx("rounded-xl border px-2 py-1.5 flex flex-col gap-1.5", on ? "border-gold bg-gold/5" : "border-line bg-ink/40")}>
+              <button className="flex items-center gap-2 text-left" type="button" onClick={() => setPicked(on ? null : c)}>
+                <ClanFlag flag={c.flag} size={30} title={`${c.name} flag`} />
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate text-sm font-bold">
+                    <span className="text-goldtext">[{c.tag}]</span> {c.name}
+                  </span>
+                  <span className="block text-[11px] text-sub">
+                    👥 {c.members} · 💪 {compact(c.power)} · Lv {c.level}
+                  </span>
+                </span>
+                {r && (
+                  <span className={clsx("text-[10px] font-extrabold shrink-0", r.kind === "war" ? "text-bad" : "text-[#8FD1B8]")}>
+                    {RELATION_TEXT[r.kind].icon} {r.status === "proposed" ? "Proposed" : RELATION_TEXT[r.kind].name}
+                  </span>
+                )}
+                <span className="text-muted text-xs shrink-0">{on ? "▲" : "▼"}</span>
+              </button>
+              {on && <DiplomacyButtons clanId={c.id} relation={r} onDone={onDone} />}
+            </div>
+          );
+        })}
+      </div>
+      <span className="text-[11px] text-muted">
+        Allies and pacts can&apos;t raid each other (both clans must agree). A war is declared by one clan, lasts up to a week,
+        and scores every raid won between you.
+      </span>
+    </Card>
   );
 };

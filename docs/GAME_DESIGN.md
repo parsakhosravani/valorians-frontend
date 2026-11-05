@@ -121,6 +121,8 @@ ask before "fixing" either. Add new decisions here when they are made.
   - **Diplomacy:** alliances and non-aggression pacts (both clans agree) block raids between
     their members; a war is declared by one clan, scores every raid won between the two, and
     ends with peace (both agree) or by itself after a week. Up to 5 treaties per clan.
+    Officers find the other clan by searching (name or tag) in the War tab, or act from any
+    clan's page, which also shows how the two clans stand; nobody has to know a tag by heart.
   - **Weekly goal:** one shared goal a week (camps cleared, raids won, or treasury donations,
     rotating), sized by the number of members; met, every member gets 3,000 coins. The War tab
     shows who did what this week.
