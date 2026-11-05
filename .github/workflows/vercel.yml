@@ -9,7 +9,8 @@ name: Vercel
 #   deploy              only deploys main to production.
 #
 # Needs one repository secret: VERCEL_TOKEN (vercel.com → Account Settings →
-# Tokens, scoped to the team that owns the project). The team and project
+# Tokens, scoped to the team that owns the project: team "Parsa", the
+# pkhosravani76@gmail.com account since Nov 2026). The team and project
 # are looked up by name below.
 on:
   workflow_dispatch:
@@ -25,8 +26,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  VERCEL_TEAM_SLUG: parsas-projects-f8b4ea7e
-  VERCEL_PROJECT: valorians
+  VERCEL_TEAM_SLUG: parsa-6891
+  VERCEL_PROJECT: valorians-frontend
 
 jobs:
   vercel:
