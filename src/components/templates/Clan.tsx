@@ -41,14 +41,16 @@ import {
   defaultFlag,
 } from "@/lib/game/clan";
 import type { ClanPublic, ClanView } from "@/server/clans";
-import type { Standing } from "@/server/clanWar";
+import type { ClanWarView, Standing } from "@/server/clanWar";
 import { DiplomacyButtons } from "@/components/organisms/clan/ClanWar";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
 type Mine = NonNullable<ClanView["mine"]>;
 type Member = Mine["members"][number];
 type BrowseTab = "browse" | "found";
-type ClanTab = "members" | "war" | "treasury" | "banner" | "chronicle" | "explore";
+// Four tabs fit a phone's width. Banner & settings (officers only, rarely used) open from the
+// pencil on the clan's flag, and the other clans from the Rank box: six tabs were too cramped.
+type ClanTab = "members" | "war" | "treasury" | "chronicle";
 
 const inputCls = "inset w-full h-10 px-3 text-sm font-bold text-parch placeholder:text-muted/70 outline-none focus:border-gold";
 
@@ -71,12 +73,20 @@ const Tag = ({ tag }: { tag: string }) => (
   </span>
 );
 
-const Stat = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div className="inset flex flex-col items-center py-1.5">
-    <span className="text-sm font-extrabold text-parch">{value}</span>
-    <span className="label !text-micro">{label}</span>
-  </div>
-);
+const Stat = ({ label, value, onClick }: { label: string; value: React.ReactNode; onClick?: () => void }) =>
+  onClick ? (
+    <button className="inset flex flex-col items-center py-1.5 active:scale-[0.97] transition-transform" type="button" onClick={onClick}>
+      <span className="text-sm font-extrabold text-parch">
+        {value} <span className="text-muted font-bold">›</span>
+      </span>
+      <span className="label !text-micro">{label}</span>
+    </button>
+  ) : (
+    <div className="inset flex flex-col items-center py-1.5">
+      <span className="text-sm font-extrabold text-parch">{value}</span>
+      <span className="label !text-micro">{label}</span>
+    </div>
+  );
 
 const SectionTitle = ({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) => (
   <div className="flex items-center gap-3">
@@ -378,6 +388,11 @@ export const Clan: FunctionComponent = () => {
   const [confirmTransfer, setConfirmTransfer] = useState<number | null>(null);
   // A clan opened from the list, seen from outside.
   const [viewing, setViewing] = useState<number | null>(null);
+  // Sheets that replaced the old Banner and Explore tabs.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [exploreOpen, setExploreOpen] = useState(false);
+  // Clanmates under attack right now: a badge on the War tab so nobody has to open it to find out.
+  const [threats, setThreats] = useState(0);
 
   // Found-a-clan form
   const [name, setName] = useState("");
@@ -432,6 +447,31 @@ export const Clan: FunctionComponent = () => {
 
     return () => clearTimeout(t);
   }, [load, me.clan?.id, query]);
+
+  // Count clanmates under attack for the War tab's badge (the tab itself loads the full view).
+  const clanId = data?.mine?.id ?? null;
+
+  useEffect(() => {
+    if (!authHeader || clanId == null) return;
+    let live = true;
+    const poll = async () => {
+      try {
+        const r = await apiRequest<{ war: ClanWarView | null }>(authHeader, "clan/war");
+
+        if (live) setThreats(r.war?.threats.length ?? 0);
+      } catch {
+        // Offline: keep the last count.
+      }
+    };
+
+    poll();
+    const t = setInterval(poll, 60_000);
+
+    return () => {
+      live = false;
+      clearInterval(t);
+    };
+  }, [authHeader, clanId, tab]);
 
   const retry = async () => {
     setRetrying(true);
@@ -879,14 +919,7 @@ export const Clan: FunctionComponent = () => {
             {busy === "banner" ? "Saving…" : "Save banner"}
           </Button>
         </>
-      ) : (
-        <Card className="flex flex-col items-center gap-2 py-4">
-          <ClanFlag flag={mine.flag} size={120} />
-          <p className="text-xs text-muted text-center">
-            Only the {ROLE_NAMES.leader} and {ROLE_NAMES.officer}s can change the banner.
-          </p>
-        </Card>
-      )}
+      ) : null}
 
       {manager && (
         <Card className="flex flex-col gap-1.5">
@@ -1065,12 +1098,22 @@ export const Clan: FunctionComponent = () => {
       <div className="relative flex flex-col w-full px-3 pt-8 pb-28 gap-4">
         <div className={clsx("min-h-[104px] w-full flex", mine || badge ? "card" : "card-hero")}>
           {mine || badge ? (
-            <div className="w-1/4 flex items-center justify-center py-2 pl-1">
+            <div className="relative w-1/4 flex items-center justify-center py-2 pl-1">
               <ClanFlag
                 flag={mine ? (flagDraft ?? mine.flag) : badge!.flag}
                 size={88}
                 title={`${mine?.name ?? badge!.name} flag`}
               />
+              {mine && manager && (
+                <button
+                  aria-label="Banner & settings"
+                  className="absolute bottom-1.5 right-0 w-8 h-8 rounded-full flex items-center justify-center bg-ink/90 border border-gold/60 shadow-card active:scale-95"
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <GameIcon e="✏️" />
+                </button>
+              )}
             </div>
           ) : (
             <div className="w-2/6 flex flex-col justify-start relative">
@@ -1142,7 +1185,7 @@ export const Clan: FunctionComponent = () => {
         {mine && (
           <>
             <div className="grid grid-cols-4 gap-2">
-              <Stat label="Rank" value={`#${fmt(mine.rank)}`} />
+              <Stat label="Rank" value={`#${fmt(mine.rank)}`} onClick={() => setExploreOpen(true)} />
               <Stat label="Members" value={`${mine.members.length}/${mine.maxMembers}`} />
               <Stat label="Population" value={compact(mine.population)} />
               <Stat label="Power" value={compact(mine.power)} />
@@ -1165,11 +1208,9 @@ export const Clan: FunctionComponent = () => {
             <Tabs
               tabs={[
                 { id: "members", label: "Members", badge: manager ? mine.requests.length : 0 },
-                { id: "war", label: "War" },
+                { id: "war", label: "War", badge: tab === "war" || !mine ? 0 : threats },
                 { id: "treasury", label: "Treasury" },
-                { id: "banner", label: "Banner" },
                 { id: "chronicle", label: "Log" },
-                { id: "explore", label: "Explore" },
               ]}
               value={tab}
               onChange={setTab}
@@ -1185,10 +1226,15 @@ export const Clan: FunctionComponent = () => {
               />
             )}
             {tab === "treasury" && treasuryTab}
-            {tab === "banner" && bannerTab}
             {tab === "chronicle" && chronicleTab}
+
+            <Drawer isOpen={settingsOpen} position="bottom" title="🚩 Banner & settings" onClose={() => setSettingsOpen(false)}>
+              <div className="pt-3">{bannerTab}</div>
+            </Drawer>
             {/* Being in a clan doesn't shut you off from the rest of the world. */}
-            {tab === "explore" && clanList}
+            <Drawer isOpen={exploreOpen} position="bottom" title="🏆 Clans" onClose={() => setExploreOpen(false)}>
+              <div className="pt-3">{clanList}</div>
+            </Drawer>
           </>
         )}
 
