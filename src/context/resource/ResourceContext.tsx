@@ -163,6 +163,8 @@ interface GameContextType {
     /** Officers: a clan strike on a tribe, all armies landing at `landAt`. */
     rally: (target: number, landAt: number, note?: string) => Promise<boolean>;
     cancelRally: (id: number) => Promise<boolean>;
+    /** Takes back your army waiting at home for a strike. */
+    leaveStrike: (id: number) => Promise<boolean>;
     /** Officers: treaties and wars with another clan (by id or tag). */
     diplomacy: (clan: number | string, action: "ally" | "nap" | "accept" | "decline" | "war" | "peace" | "end") => Promise<boolean>;
   };
@@ -557,7 +559,20 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     train: (unit, count) => act("war/train", { unit, count }, "Training started"),
     cancelTraining: (startsAt) => act("war/train/cancel", { startsAt }, "Training cancelled, resources refunded"),
     attack: async (to, units) => {
-      const res = await send<PlayerView & { march: { id: number; arrivesAt: number } }>("war/march", { ...to, units }, "Army on the march");
+      const res = await send<PlayerView & { march: { id: number; arrivesAt: number }; muster?: { departAt: number } }>("war/march", { ...to, units });
+
+      if (res) {
+        toast.dismiss();
+        toast.success(
+          <IconText
+            text={
+              res.muster
+                ? `📯 Your army waits at home and sets out at ${new Date(res.muster.departAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "Army on the march"
+            }
+          />
+        );
+      }
 
       return res?.march ?? null;
     },
@@ -630,6 +645,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
       endGuard: (id, mine) => act("clan/support/recall", { id }, mine ? "Guards called home" : "Guards sent home"),
       rally: async (target, landAt, note) => !!(await sendRaw("clan/rally", { target, landAt, note }, "Clan strike called! Your clan has been told.")),
       cancelRally: async (id) => !!(await sendRaw("clan/rally/cancel", { id }, "Strike called off")),
+      leaveStrike: async (id) => !!(await sendRaw("clan/rally/leave", { id }, "Your army stays home")),
       diplomacy: async (clan, action) => !!(await sendRaw("clan/diplomacy", { clan, action }, DIPLOMACY_DONE[action])),
     },
     plus: {

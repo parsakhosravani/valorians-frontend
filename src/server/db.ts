@@ -44,7 +44,7 @@ declare global {
  * A database already at this version skips the whole setup, so a cold start
  * costs one query instead of ~40 round trips to Turso.
  */
-const SCHEMA_VERSION = 12; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at, 12: clans fighting together
+const SCHEMA_VERSION = 13; // 5: spies, 6: in-game notices, 7: clan_log_target (aid limits), 8: seasons + wonders, 9: outposts, 10: event_log, 11: outposts.claimed_at, 12: clans fighting together, 13: strikes muster at home, shields vs armies on the road
 
 async function schemaVersion(client: Client): Promise<number> {
   try {
@@ -469,6 +469,24 @@ async function migrate(client: Client) {
   `);
   await client.execute("ALTER TABLE attacks ADD COLUMN rally_id INTEGER").catch(() => {});
   await client.execute("CREATE INDEX IF NOT EXISTS attacks_rally ON attacks(rally_id)");
+  // When an army was committed (sent, or its clan strike called): shields raised later don't stop it.
+  await client.execute("ALTER TABLE attacks ADD COLUMN committed_at INTEGER").catch(() => {});
+  // Armies joining a clan strike wait at home and set out just in time (see resolveMusters).
+  await client.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS rally_musters (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      rally_id      INTEGER NOT NULL,
+      user_id       INTEGER NOT NULL,
+      target_id     INTEGER NOT NULL,
+      units         TEXT NOT NULL,                 -- JSON Army: what to send when it's time
+      depart_at     INTEGER NOT NULL,
+      land_at       INTEGER NOT NULL,
+      status        TEXT NOT NULL,                 -- waiting | leaving | gone | failed | cancelled
+      created_at    INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS rally_musters_due ON rally_musters(status, depart_at);
+    CREATE INDEX IF NOT EXISTS rally_musters_rally ON rally_musters(rally_id, status);
+  `);
   // The clan's Telegram group, shown on the Clan screen (a t.me link).
   await client.execute("ALTER TABLE clans ADD COLUMN chat_url TEXT").catch(() => {});
 

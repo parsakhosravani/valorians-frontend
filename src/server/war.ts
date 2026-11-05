@@ -13,7 +13,7 @@ import { errorData, logEvent, withEventContext } from "./events";
 import { alertClan, rallyLanding, recordForClan, reconcileSupport, relationBetween, scoreWar } from "./clanWar";
 import { blocksRaids } from "@/lib/game/clanWar";
 
-import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp } from "@/lib/game/engine";
+import { GameError, advance, emptyArmy, getRates, peopleOf, rankForXp, shieldStops } from "@/lib/game/engine";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
 import { BattlePlan, battleSize, joinDeadline, planBattle, reinforceBattle, troopsOnField } from "@/lib/game/battle";
@@ -147,11 +147,14 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
 
   if (Number(out.rows[0].n) >= MAX_MARCHES) throw new GameError(`You can have ${MAX_MARCHES} armies on the move at once`, "too_many");
   const home = await homeOf(me.id);
-  const { dest, defenderId, campLevel, lairLevel } = await resolveTarget(me, to, now, home);
+  // A clan strike: lands at its time, and counts as committed when the strike was called (see shieldStops).
+  const rally = to.rally ? await rallyLanding(me, Math.floor(Number(to.rally)), Math.floor(Number(to.target)), now) : null;
+  const landAt = rally?.landAt ?? null;
+  const committedAt = rally?.createdAt ?? now;
+  const { dest, defenderId, campLevel, lairLevel } = await resolveTarget(me, to, now, home, committedAt);
 
   // Across the sea the army sails, and takes the Longships it needs along.
   const naval = seaRoute(home, dest, units).naval;
-  const landAt = to.rally ? await rallyLanding(me, Math.floor(Number(to.rally)), defenderId, now) : null;
   let sent!: Army;
   let travel = 0;
   const after = await mutatePlayer(me.id, now, (s) => {
@@ -173,8 +176,8 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
     const ambush = await ambushOnRoad(me, sent, home, dest, now, now + travel);
     const ins = await db.execute({
       sql: `INSERT INTO attacks (attacker_id, defender_id, camp_level, lair_level, units, from_x, from_y, to_x, to_y, sent_at, arrives_at,
-                                 ambush, ambush_at, rally_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                 ambush, ambush_at, rally_id, committed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         me.id,
         defenderId,
@@ -190,6 +193,7 @@ export async function marchTo(me: Player, to: MarchTarget, units: Army, now: num
         ambush ? JSON.stringify(ambush) : null,
         ambush?.at ?? null,
         landAt ? Math.floor(Number(to.rally)) : null,
+        committedAt,
       ],
     });
 
@@ -226,7 +230,7 @@ async function ambushOnRoad(me: Player, units: Army, from: Point, to: Point, sta
 type Target = { dest: Point; defenderId: number | null; campLevel: number | null; lairLevel: number | null; name: string };
 
 /** Where an attack on a tribe, one of your camps or a bandit lair goes, after checking it's allowed. */
-async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Point): Promise<Target> {
+async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Point, committedAt = now): Promise<Target> {
   const db = await getDb();
 
   if (to.lair) {
@@ -271,7 +275,8 @@ async function resolveTarget(me: Player, to: MarchTarget, now: number, home: Poi
 
     if (blocksRaids(r?.kind)) throw new GameError("Your clan has a treaty with theirs: no raids between you", "treaty");
   }
-  if (target.state.shieldUntil > now) throw new GameError("This tribe is protected by a shield right now", "shielded");
+  // A shield raised after the clan strike was called doesn't stop its armies either.
+  if (shieldStops(advance(target.state, now), committedAt, now)) throw new GameError("This tribe is protected by a shield right now", "shielded");
 
   return { dest: await homeOf(defenderId), defenderId, campLevel: null, lairLevel: null, name: displayName(target) };
 }
@@ -287,6 +292,8 @@ type AttackRow = {
   from: Point;
   to: Point;
   sentAt: number;
+  /** When the army was committed: sent, or its clan strike called. Shields raised later don't stop it. */
+  committedAt: number;
   arrivesAt: number;
   endsAt: number | null;
   battle: StoredBattle | null;
@@ -319,6 +326,7 @@ const toAttack = (r: Record<string, unknown>): AttackRow => ({
   from: { x: Number(r.from_x), y: Number(r.from_y) },
   to: { x: Number(r.to_x), y: Number(r.to_y) },
   sentAt: Number(r.sent_at),
+  committedAt: Number(r.committed_at ?? r.sent_at),
   arrivesAt: Number(r.arrives_at),
   endsAt: r.ends_at == null ? null : Number(r.ends_at),
   battle: r.battle == null ? null : (JSON.parse(String(r.battle)) as StoredBattle),
@@ -427,7 +435,8 @@ async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise
       await mutatePlayer(defender.id, now, (s) => {
         // Checked again under the tribe's lock: two requests may have let two armies in at once.
         if ((s.defending ?? []).some((f) => f.id !== a.id)) throw new GameError("The village is fighting", "field_busy");
-        if (s.shieldUntil > at) throw new GameError("This tribe is protected by a shield right now", "shielded");
+        // A shield raised after this army set out doesn't stop it (see shieldStops).
+        if (shieldStops(s, a.committedAt, at)) throw new GameError("This tribe is protected by a shield right now", "shielded");
         const r = raidOutcome(s, attacker.state, a.units, rand(), { terrain, landing });
 
         outcome = r.outcome;

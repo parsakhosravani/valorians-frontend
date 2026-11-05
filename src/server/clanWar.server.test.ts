@@ -13,11 +13,14 @@ import {
   reconcileSupport,
   resolveSupport,
   sendSupport,
+  joinStrike,
+  resolveMusters,
 } from "@/server/clanWar";
 import { marchTo, resolveDueAttacks } from "@/server/war";
 import { homeOf } from "@/server/map";
 import { CLAN_WAR } from "@/lib/game/config";
-import { emptyArmy, ownArmy, peopleOf } from "@/lib/game/engine";
+import { emptyArmy, ownArmy, peopleOf, raiseShield } from "@/lib/game/engine";
+import { mutatePlayer } from "@/server/players";
 import { powerScore } from "@/lib/game/war";
 import { seaRoute, terrainAt } from "@/lib/game/map";
 import { weekOf, weeklyGoal } from "@/lib/game/clanWar";
@@ -217,5 +220,53 @@ describe("clans fighting together (server)", () => {
     // A second push doesn't pay again.
     await donate(lead, { key: "wood", amount: 10 }, T0 + 1);
     expect((await reload(mate.id)).state.coins).toBeCloseTo(paid, 0);
+  });
+
+  test("a shield bought after an army set out doesn't send it home", async () => {
+    const T0 = Date.now();
+    const atk = await newPlayer(T0, (s) => { s.army.knight = 400; s.shieldUntil = 0; });
+    const def = await newPlayer(T0, (s) => { s.shieldUntil = 0; s.shield.cooldownUntil = 0; });
+
+    await nextDoor(atk, def);
+    const { march } = await marchTo(await reload(atk.id), { target: def.id }, army({ knight: 400 }), T0);
+
+    // They see it coming and buy a shield: the army still lands and fights.
+    await mutatePlayer(def.id, T0 + 1000, (s) => raiseShield(s, 8, T0 + 1000));
+    await resolveDueAttacks(march.arrivesAt + 1);
+    await resolveDueAttacks(march.arrivesAt + HOUR);
+    const db = await getDb();
+    const fought = await db.execute({ sql: "SELECT 1 FROM battles WHERE attack_id = ?", args: [march.id] });
+
+    expect(fought.rows.length).toBe(1);
+    // A new army can't be sent while that shield is up.
+    await expect(marchTo(await reload(atk.id), { target: def.id }, army({ knight: 1 }), T0 + 2000)).rejects.toThrow(/shield/);
+  });
+
+  test("a strike army waits at home, sets out just in time, and the target hears of it only then", async () => {
+    const T0 = Date.now();
+    const { lead } = await band(T0, (s) => { s.army.axeman = 60; });
+    const target = await newPlayer(T0, (s) => { s.shieldUntil = 0; s.shield.cooldownUntil = 0; });
+
+    await nextDoor(lead, target);
+    const landAt = T0 + 6 * HOUR;
+    const { id } = await createRally(lead, { target: target.id, landAt }, T0);
+    const muster = await joinStrike(await reload(lead.id), id, target.id, army({ axeman: 60 }), T0 + 1);
+    const db = await getDb();
+    const onRoad = async () => (await db.execute({ sql: "SELECT * FROM attacks WHERE rally_id = ?", args: [id] })).rows;
+
+    expect(muster).not.toBeNull();
+    expect(muster!.departAt).toBeGreaterThan(T0 + HOUR);
+    // Still at home, still defending; nothing on the road for the target to see.
+    expect((await reload(lead.id)).state.army.axeman).toBe(60);
+    await resolveMusters(muster!.departAt - 1);
+    expect((await onRoad()).length).toBe(0);
+    // They buy a shield after the strike was called: it doesn't stop the strike.
+    await mutatePlayer(target.id, T0 + 2, (s) => raiseShield(s, 24, T0 + 2));
+    await resolveMusters(muster!.departAt + 1);
+    const rows = await onRoad();
+
+    expect(rows.length).toBe(1);
+    expect(Number(rows[0].arrives_at)).toBe(landAt);
+    expect((await reload(lead.id)).state.army.axeman).toBe(0);
   });
 });

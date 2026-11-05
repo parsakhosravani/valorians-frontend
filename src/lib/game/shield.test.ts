@@ -14,7 +14,7 @@ test("old saves get an empty shield record", () => {
   const { shield: _shield, ...old } = E.createInitialState(T0);
   const s = E.normalizeState(old as E.GameState);
 
-  expect(s.shield).toEqual({ cooldownUntil: 0, plusClaimedAt: 0 });
+  expect(s.shield).toEqual({ cooldownUntil: 0, plusClaimedAt: 0, raisedAt: 0, raisedUntil: 0 });
 });
 
 test("a bought shield protects, then cools down before the next one", () => {

@@ -601,6 +601,12 @@ export const CLAN_WAR = {
   /** Rallies open at once per clan. */
   maxRallies: 3,
   /**
+   * Armies joining a strike wait at home and set out this long before they
+   * need to (the server checks every few minutes; the march slows to land on
+   * time). Setting out early gave the target hours of warning to buy a shield.
+   */
+  musterLeadMs: 6 * 60e3,
+  /**
    * Diplomacy. Allies and non-aggression pacts can't raid each other's members;
    * a war is declared by one side and scores raid wins between the two clans.
    * A clan can hold this many treaties (allies + pacts) at once.

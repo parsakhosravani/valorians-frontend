@@ -4,7 +4,7 @@ import clsx from "clsx";
 
 import { Button } from "@/components/atoms/Button";
 import { Drawer } from "@/components/molecules/Drawer";
-import { useGameActions, useLiveWhile } from "@/context";
+import { useGameActions, useGameStatus, useLiveWhile } from "@/context";
 import { formatDuration } from "@/lib/format";
 import { PLUS, SHIELDS, ShieldId } from "@/lib/game/config";
 import { plusActive, plusShieldReadyAt, shieldBlocked } from "@/lib/game/engine";
@@ -26,6 +26,8 @@ export const ShieldDrawer = ({
   // The clock only while open: closed, it stays mounted (for its animation) without redrawing.
   const { state, now } = useLiveWhile(isOpen);
   const { shields } = useGameActions();
+  const { me } = useGameStatus();
+  const incoming = me?.incomingArmies ?? 0;
   const [busy, setBusy] = useState<ShieldId | "plus" | null>(null);
   const shielded = state.shieldUntil > now;
   const recharging = state.shield.cooldownUntil > now;
@@ -44,7 +46,7 @@ export const ShieldDrawer = ({
   return (
     <Drawer isOpen={isOpen} position="bottom" title="🛡️ Shields" onClose={onClose}>
       <p className="text-sm font-bold text-muted mt-1">
-        While your shield is up, no tribe can attack you. Barbarian camps are still fair game.
+        While your shield is up, no tribe can send an attack at you. Armies already on the way when it goes up still land. Barbarian camps are still fair game.
       </p>
 
       <p
@@ -55,6 +57,13 @@ export const ShieldDrawer = ({
       >
         {shielded ? `✅ Shielded · ${formatDuration(state.shieldUntil - now)} left` : "⚠️ No shield: rivals can raid you"}
       </p>
+      {/* Said before buying, not after: a shield only stops armies sent once it's up. */}
+      {incoming > 0 && (
+        <p className="mt-2 text-xs font-bold text-bad text-center">
+          <GameIcon e="🔥" /> {incoming} {incoming === 1 ? "army is" : "armies are"} already marching on you. A new shield won&apos;t stop{" "}
+          {incoming === 1 ? "it" : "them"}: it protects you from attacks sent after it goes up.
+        </p>
+      )}
 
       {/* Free weekly shield with Plus */}
       <div className="flex items-center gap-3 card-hero px-3 py-2.5 mt-4">
