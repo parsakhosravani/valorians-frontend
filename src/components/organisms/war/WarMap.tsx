@@ -82,6 +82,7 @@ import {
   seaRoute,
   terrainAt,
 } from "@/lib/game/map";
+import { outpostLand } from "@/lib/game/outpost";
 import { ISLAND_REACH } from "@/lib/game/island";
 import { landingFactorFor } from "@/lib/game/war";
 import type { Army } from "@/lib/game/engine";
@@ -1180,7 +1181,8 @@ export const WarMap = ({
               id: o.ownerId,
               x: px(o.x),
               y: py(o.y),
-              size: Math.round(VILLAGE_MIN * 0.7),
+              // A little under a village: big enough to make out its own picture.
+              size: Math.round(VILLAGE_MIN * 0.85),
               ring: (o.isMe
                 ? "me"
                 : owner?.ally
@@ -1198,8 +1200,10 @@ export const WarMap = ({
               shielded: false,
               isMe: o.isMe,
               townHall: 0,
-              flag: owner?.clan?.flag ?? null,
+              // Yours are joined to your village by a cart track instead (see supplyRoads).
+              flag: o.isMe ? null : (owner?.clan?.flag ?? null),
               name: `${o.isMe ? "Your" : `${o.clanTag ? `[${o.clanTag}] ` : ""}${o.name}'s`} outpost`,
+              outpost: outpostLand(o.x, o.y).resource,
             } satisfies CanvasTribe;
           })
         )
