@@ -127,7 +127,19 @@ export async function buildReport(day: string, now = Date.now()) {
   );
 
   // --- Checks on the log ---
-  const crashes = events.filter((e) => e.kind === "api" && e.data.status >= 500);
+  // The database not answering (see fetchRetrying) is the host's trouble, not a bug: counted on its own.
+  const unreachable = events.filter((e) => e.kind === "api" && e.data.code === "db_unreachable");
+  const crashes = events.filter((e) => e.kind === "api" && e.data.status >= 500 && e.data.code !== "db_unreachable");
+
+  if (unreachable.length) {
+    add({
+      level: "warn",
+      check: "db_unreachable",
+      detail: `${unreachable.length} API calls couldn't reach the database (Turso), even after a retry`,
+      count: unreachable.length,
+      sample: unreachable.slice(0, 5).map((e) => ({ at: e.at, player: e.playerId, route: e.ctx })),
+    });
+  }
 
   if (crashes.length) {
     add({

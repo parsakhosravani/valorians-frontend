@@ -21,7 +21,7 @@ export const maxDuration = 60;
 /**
  * Fights battles whose armies have arrived (and hands over traded goods), even when nobody has the game
  * open, so results (and bot notifications) go out on time. Called every few
- * minutes by .github/workflows/battles.yml.
+ * minutes by .github/workflows/clock.yml (and after each deploy by battles.yml).
  *
  * It only fights battles that are already due (the same thing any player's
  * request does), so it is safe to leave open. Set CRON_SECRET to require

@@ -11,6 +11,7 @@ import { resolveMusters, resolveSupport } from "./clanWar";
 import { GameError, GameState } from "@/lib/game/engine";
 import { maybeCheckRelease } from "./announce";
 import { maybeRefreshRanks } from "./ranks";
+import { neverConnected } from "./db";
 import { errorData, flushEvents, logEvent, safeBody, withEventContext } from "./events";
 
 type ApiError = { error: string; code: string };
@@ -121,6 +122,12 @@ export function handler(
         return fail(400, "Bad request", "bad_request");
       }
       console.error(e);
+      // The database didn't answer (even after a retry, see fetchRetrying): nothing was changed.
+      if (neverConnected(e)) {
+        done(503, "db_unreachable", errorData(e));
+
+        return fail(503, "Connection trouble. Try again in a moment.", "db_unreachable");
+      }
       done(500, "server_error", errorData(e));
 
       return fail(500, "Something went wrong", "server_error");

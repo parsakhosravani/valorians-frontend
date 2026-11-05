@@ -5,6 +5,35 @@ import fs from "fs";
 import path from "path";
 
 /**
+ * Couldn't reach the database at all: the connection was never made, so the
+ * statement never got there and sending it again is safe, writes included.
+ * (A connection cut mid-request is not on this list: it may have run.)
+ */
+export function neverConnected(e: unknown): boolean {
+  const cause = (e as { cause?: { code?: string } } | null)?.cause;
+  const code = cause?.code ?? (e as { code?: string } | null)?.code;
+
+  return ["UND_ERR_CONNECT_TIMEOUT", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "ENETUNREACH", "EHOSTUNREACH"].includes(String(code));
+}
+
+/**
+ * Turso now and then doesn't answer a new connection (5 Nov 2026: one map
+ * load failed after a 10 s connect timeout to us-east-1). Try once more
+ * before the player sees an error.
+ */
+export async function fetchRetrying(input: RequestInfo | URL, init?: RequestInit, tries = 2): Promise<Response> {
+  for (let i = 1; ; i++) {
+    try {
+      return await fetch(input, init);
+    } catch (e) {
+      if (i >= tries || !neverConnected(e)) throw e;
+      console.warn("database connection failed, retrying", (e as Error).message);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+}
+
+/**
  * Turso (hosted libSQL) in production: set TURSO_DATABASE_URL + TURSO_AUTH_TOKEN.
  * Without them we fall back to a local SQLite file, which is fine on a server
  * with a disk. On Vercel that file has to live in /tmp, which gets wiped, so it
@@ -19,7 +48,7 @@ function makeClient(): Client {
       // Next.js caches fetch() calls made while rendering GET routes. Turso talks
       // over HTTP, so without this a repeated SELECT can get a stale cached
       // answer (e.g. "player not found" right after creating them).
-      fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, cache: "no-store" }),
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => fetchRetrying(input, { ...init, cache: "no-store" }),
     });
   }
 

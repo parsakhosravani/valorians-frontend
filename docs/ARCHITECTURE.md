@@ -75,8 +75,11 @@ test player instead (`?dev_user=N` picks which one).
   `status = 'fighting'` with `battle = {"allyOf": <leading id>}` and the same `ends_at`, and is
   finished by the leading row (`finishBattle` → `splitRaid`, one report per army).
 - Battles get resolved by: the player's own requests, the post-response sweep, and the cron
-  `GET /api/cron/battles`, called every 5 minutes by `.github/workflows/battles.yml`
-  (also right after each production deploy). `CRON_SECRET` can protect it.
+  `GET /api/cron/battles`, called every 2 minutes by `.github/workflows/clock.yml` (a job that
+  loops for ~6 h and starts its next run: GitHub's own 5-minute schedule ran only every 5–8 h),
+  and right after each production deploy by `battles.yml`. `CRON_SECRET` can protect it.
+- A database that doesn't answer a new connection is tried once more (`fetchRetrying` in db.ts);
+  still down, the call answers 503 `db_unreachable` and the nightly report counts it apart from bugs.
 - The world map: positions, terrain, routes and sea travel in `src/lib/game/map.ts`;
   server placement in `src/server/map.ts`; drawn on a canvas in
   `src/components/organisms/war/` (`MapCanvas`, `MapGround` + `ground.worker.ts`, `useMapCamera`).
