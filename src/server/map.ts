@@ -129,7 +129,9 @@ const VIEW_RADIUS = 14;
 
 type Movement = {
   id: number;
-  kind: "outgoing" | "incoming";
+  /** clan-outgoing: a clanmate's army; clan-incoming: an army marching on a clanmate. */
+  kind: "outgoing" | "incoming" | "clan-outgoing" | "clan-incoming";
+  clanmate?: number;
   from: Point & { name: string };
   to: Point & { name: string };
   sentAt: number;
@@ -209,15 +211,18 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     }),
     // Your own barbarian camps: beaten ones, the next one, and two you can see beyond.
     campSpots(me.id, home, shown),
-    // Armies on the move that concern you.
+    // Armies on the move that concern you: yours, those coming at you, and your
+    // clan's (clanmates' armies, and armies marching on clanmates).
     db.execute({
-      sql: `SELECT a.*, au.first_name AS a_name, du.first_name AS d_name
+      sql: `SELECT a.*, au.first_name AS a_name, du.first_name AS d_name, au.clan_id AS a_clan, du.clan_id AS d_clan
             FROM attacks a
             LEFT JOIN users au ON au.id = a.attacker_id
             LEFT JOIN users du ON du.id = a.defender_id
-            WHERE a.status IN ('marching', 'resolving', 'fighting') AND (a.attacker_id = ? OR a.defender_id = ?)
-            ORDER BY a.arrives_at ASC`,
-      args: [me.id, me.id],
+            WHERE a.status IN ('marching', 'resolving', 'fighting')
+              AND (a.attacker_id = ? OR a.defender_id = ? OR (? IS NOT NULL AND (au.clan_id = ? OR du.clan_id = ?)))
+            ORDER BY (a.attacker_id = ? OR a.defender_id = ?) DESC, a.arrives_at ASC
+            LIMIT 80`,
+      args: [me.id, me.id, me.clanId, me.clanId, me.clanId, me.id, me.id],
     }),
     // Merchant caravans on the road: every accepted trade sends two loads, one
     // each way. Yours always show; other tribes' show when they pass through view.
@@ -310,6 +315,9 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const watch = (me.state.buildings["watchtower"] ?? 0) >= 1;
   const movements: Movement[] = mv.rows.map((a) => {
     const outgoing = Number(a.attacker_id) === me.id;
+    const atMe = a.defender_id != null && Number(a.defender_id) === me.id;
+    // Neither yours nor at you: a clanmate's army, or an army marching on a clanmate.
+    const clanSide = !outgoing && !atMe ? (me.clanId != null && Number(a.a_clan) === me.clanId ? "clan-outgoing" : "clan-incoming") : null;
     const campLevel = a.camp_level == null ? null : Number(a.camp_level);
     const stored = a.status === "fighting" && a.battle != null ? (JSON.parse(String(a.battle)) as StoredBattle) : null;
     const battle: LiveBattle | null = stored
@@ -326,7 +334,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
 
     return {
       id: Number(a.id),
-      kind: outgoing ? "outgoing" : "incoming",
+      kind: clanSide ?? (outgoing ? "outgoing" : "incoming"),
       from: { x: Number(a.from_x), y: Number(a.from_y), name: outgoing ? "Your tribe" : String(a.a_name || "A tribe") },
       to: {
         x: Number(a.to_x),
@@ -335,13 +343,16 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           ? campName(campLevel)
           : a.lair_level != null
             ? "Bandit lair"
-            : outgoing
-              ? String(a.d_name || "A tribe")
-              : "Your tribe",
+            : atMe
+              ? "Your tribe"
+              : String(a.d_name || "A tribe"),
       },
+      /** For clan armies: the clanmate it belongs to, or the clanmate it marches on. */
+      ...(clanSide ? { clanmate: clanSide === "clan-outgoing" ? Number(a.attacker_id) : Number(a.defender_id) } : {}),
       sentAt: Number(a.sent_at),
       arrivesAt: Number(a.arrives_at),
-      units: outgoing || watch || battle ? JSON.parse(String(a.units)) : null,
+      // Clanmates' own armies are shown in full (they march together); armies at a clanmate only once they fight.
+      units: outgoing || clanSide === "clan-outgoing" || (atMe && watch) || battle ? JSON.parse(String(a.units)) : null,
       campLevel,
       lairLevel: a.lair_level == null ? null : Number(a.lair_level),
       battle,

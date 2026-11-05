@@ -17,7 +17,7 @@ import {
   resolveMusters,
 } from "@/server/clanWar";
 import { marchTo, resolveDueAttacks } from "@/server/war";
-import { homeOf } from "@/server/map";
+import { homeOf, mapView } from "@/server/map";
 import { CLAN_WAR } from "@/lib/game/config";
 import { emptyArmy, ownArmy, peopleOf, raiseShield } from "@/lib/game/engine";
 import { mutatePlayer } from "@/server/players";
@@ -268,5 +268,26 @@ describe("clans fighting together (server)", () => {
     expect(rows.length).toBe(1);
     expect(Number(rows[0].arrives_at)).toBe(landAt);
     expect((await reload(lead.id)).state.army.axeman).toBe(0);
+  });
+
+  test("the clan's armies show on every member's map: theirs, and those marching on them", async () => {
+    const T0 = Date.now();
+    const { lead, mate } = await band(T0, (s) => { s.army.axeman = 30; });
+    const enemy = await newPlayer(T0, (s) => { s.army.knight = 20; s.shieldUntil = 0; });
+    const stranger = await newPlayer(T0, (s) => { s.shieldUntil = 0; });
+
+    await nextDoor(mate, enemy);
+    const hit = await marchTo(await reload(enemy.id), { target: mate.id }, army({ knight: 20 }), T0);
+    const out = await marchTo(await reload(mate.id), { camp: 1 }, army({ axeman: 30 }), T0 + 1);
+    const view = await mapView(await reload(lead.id), T0 + 2);
+    const threat = view.movements.find((m) => m.id === hit.march.id);
+    const ours = view.movements.find((m) => m.id === out.march.id);
+
+    expect(threat).toMatchObject({ kind: "clan-incoming", clanmate: mate.id, units: null });
+    expect(ours).toMatchObject({ kind: "clan-outgoing", clanmate: mate.id });
+    expect(ours!.units).toMatchObject({ axeman: 30 });
+    // Someone outside the clan sees neither.
+    const theirs = await mapView(await reload(stranger.id), T0 + 2);
+    expect(theirs.movements.some((m) => m.id === hit.march.id || m.id === out.march.id)).toBe(false);
   });
 });
