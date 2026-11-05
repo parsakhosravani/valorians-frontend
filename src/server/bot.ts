@@ -23,6 +23,7 @@ import { getDb } from "./db";
 import { findById, rankOf } from "./players";
 import { PreCheckoutQuery, RefundedPayment, SuccessfulPayment, answerPreCheckout, plusPrice, recordPayment, recordRefund } from "./plus";
 import { sendStats } from "./stats";
+import { sendHealth } from "./alerts";
 import { displayName } from "./war";
 
 import { FLAG_EMBLEMS, TECH_IDS, Techs, clanLevel, maxMembers, storedFlag } from "@/lib/game/clan";
@@ -331,6 +332,7 @@ export async function handleUpdate(u: Update) {
   if (name === "announce" && (await startAnnounce(m.chat.id, m.from.id))) return;
   if (name === "cancel" && (await cancelAnnounce(m.chat.id, m.from.id))) return;
   if (name === "stats" && (await sendStats(m.chat.id, m.from.id))) return;
+  if (name === "health" && (await sendHealth(m.chat.id, m.from.id))) return;
   if (name === "releases" && (await sendReleaseMode(m.chat.id, m.from.id))) return;
   if (name === "news") return toggleNews(m.chat.id, m.from.id);
 

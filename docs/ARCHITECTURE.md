@@ -109,6 +109,11 @@ test player instead (`?dev_user=N` picks which one).
 - Read it with `EVENT_LOG_KEY` (or `CRON_SECRET`) as `Authorization: Bearer` or `?key=`:
   `/api/admin/report?day=YYYY-MM-DD|last` and `/api/admin/events?kind=war.&player=…&level=error`.
   No key set: both answer 401.
+- Live alerts (`src/server/alerts.ts`): every error event is sent to the admins on Telegram
+  as it is written (one alert per kind of problem per 30 min, claimed in `meta` as `alert:<key>`),
+  and printed as `[valorians-event]` so it also shows in Vercel's error view (kept 7 days).
+  The cron's `watchdog` alerts on battles, trades or attacks stuck right now (every 2 h per kind).
+  Admins send `/health` to the bot for today's report so far.
 - New server code that moves resources, troops or money: add a `logEvent` (or let a save
   through `mutatePlayer` log it) so the nightly check can see it.
 

@@ -10,6 +10,7 @@ import { getDb } from "@/server/db";
 import { dayOf, dayRange, flushEvents, logEvent, stateChange } from "@/server/events";
 import { buildReport, dailyLogJobs, listEvents } from "@/server/eventReport";
 import { createInitialState } from "@/lib/game/engine";
+import { alertAdmins, watchdog } from "@/server/alerts";
 
 /** The event log: every move is written, the nightly report finds broken flows, each day is deleted. */
 describe("event log (server)", () => {
@@ -112,5 +113,29 @@ describe("event log (server)", () => {
     process.env.CRON_SECRET = cron;
     if (saved === undefined) delete process.env.EVENT_LOG_KEY;
     if (cron === undefined) delete process.env.CRON_SECRET;
+  });
+
+  test("an alert goes out once per quiet period, and the watchdog sees a half-resolved attack", async () => {
+    const db = await getDb();
+    const key = `test-${Math.random()}`;
+    const sent = async () => String((await db.execute({ sql: "SELECT value FROM meta WHERE key = ?", args: [`alert:${key}`] })).rows[0]?.value);
+
+    await alertAdmins(key, "first", 1_000_000);
+    expect(await sent()).toBe("1000000");
+    await alertAdmins(key, "muted", 1_000_000 + 60_000); // within 30 min: not sent
+    expect(await sent()).toBe("1000000");
+    await alertAdmins(key, "again", 1_000_000 + 31 * 60_000);
+    expect(await sent()).toBe(String(1_000_000 + 31 * 60_000));
+
+    // A crash between claiming an attack and finishing it leaves it 'resolving' forever.
+    const now = Date.now();
+    const ins = await db.execute({
+      sql: `INSERT INTO attacks (attacker_id, units, from_x, from_y, to_x, to_y, sent_at, arrives_at, status)
+            VALUES (1, '{}', 0, 0, 1, 1, ?, ?, 'resolving')`,
+      args: [now - 7_200_000, now - 3_600_000],
+    });
+
+    expect(await watchdog(now)).toBeGreaterThanOrEqual(1);
+    await db.execute({ sql: "DELETE FROM attacks WHERE id = ?", args: [Number(ins.lastInsertRowid)] });
   });
 });

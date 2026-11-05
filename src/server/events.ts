@@ -16,6 +16,8 @@ import type { GameState } from "@/lib/game/engine";
  * memory and go out in one INSERT after the response (flushEvents), and a
  * failed write is dropped with a console line, never thrown.
  *
+ * Error events also alert the admins on Telegram right away (alerts.ts).
+ *
  * The log is a working tool, not an archive: the cron deletes the previous
  * day once a day (see dailyLogJobs), after the day's report is made.
  */
@@ -74,6 +76,8 @@ export function logEvent(
       ctx: opts.ctx === undefined ? eventContext() : opts.ctx,
       data: clip(data),
     });
+    // Errors also go to the server log, so they show in Vercel's error view (kept 7 days).
+    if (opts.level === "error") console.error(`[valorians-event] ${kind}`, pending[pending.length - 1].ctx ?? "", pending[pending.length - 1].data);
     if (pending.length >= FLUSH_AT) void flushEvents();
   } catch (e) {
     console.error("logEvent", e);
@@ -108,6 +112,15 @@ export function flushEvents(): Promise<void> {
       }
     } catch (e) {
       console.error("writing the event log failed, dropped", batch.length, "events", e);
+    }
+    // The admins hear about errors now, not at midnight (see alerts.ts).
+    const errors = batch.filter((r) => r.level === "error");
+
+    if (errors.length) {
+      // Loaded here: alerts.ts reaches the bot, which itself writes events.
+      const { alertOnErrors } = await import("./alerts");
+
+      await alertOnErrors(errors).catch((e) => console.error("alerts", e));
     }
   });
 
