@@ -33,7 +33,7 @@ Add `?dev_user=2` to the URL to play as another test player.
 4. **State changes go through `action()` / `mutatePlayer()`** (`src/server/http.ts`, `src/server/players.ts`).
    They bring state up to `now` with `advance()` and save with optimistic locking (retry on clash).
 5. **Time-based progress is computed from timestamps** (`advance()`), never by a background loop.
-   The only scheduled work is the `/api/cron/battles` sweep (GitHub Action every 5 min).
+   The only scheduled work is the `/api/cron/battles` sweep (the `clock.yml` GitHub Action, every 2 min).
 6. **Changing `GameState`** (engine.ts): add the default in `createInitialState` **and** merge it in
    `normalizeState` so old saves still load. Removing a field: drop it in `normalizeState`.
 7. **Changing the DB schema** (`src/server/db.ts`): use `CREATE … IF NOT EXISTS` / safe `ALTER`s and

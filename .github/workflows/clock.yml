@@ -1,0 +1,43 @@
+name: Battle clock
+
+# GitHub runs "every 5 minutes" schedules only every 5–8 hours on this repo
+# (Nov 2026: the nightly report showed 483 min without a cron run, and the
+# schedule's run history agrees). So this job keeps the clock itself: it calls
+# the battle resolver every 2 minutes for almost 6 hours (a job's limit), then
+# starts its next run. The schedule below only restarts the chain if it ever
+# breaks; the concurrency group keeps one clock running at a time.
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: battle-clock
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Call the battle resolver every 2 minutes
+        env:
+          # Optional repository secrets; the defaults work for the live game.
+          APP_URL: ${{ secrets.APP_URL || 'https://valorians-frontend.vercel.app' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          end=$(( $(date +%s) + 345 * 60 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            # A failed call (deploy in progress, database hiccup) just waits for the next tick.
+            curl -fsS -o /dev/null --max-time 60 ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} "$APP_URL/api/cron/battles" \
+              || echo "tick failed at $(date -u +%H:%M)"
+            sleep 120
+          done
+      - name: Start the next run
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run clock.yml --repo "$GITHUB_REPOSITORY" --ref main
