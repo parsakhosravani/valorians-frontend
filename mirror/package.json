@@ -1,0 +1,16 @@
+{
+  "name": "valorians-mirror",
+  "private": true,
+  "type": "module",
+  "description": "Valorians Legend on Telegram Serverless, built from the same source as the Vercel app. See README.md.",
+  "scripts": {
+    "build": "bun build.ts",
+    "build:backend": "bun build.ts backend",
+    "build:site": "bun build.ts site",
+    "deploy": "bun build.ts && tgcloud push",
+    "status": "tgcloud status"
+  },
+  "devDependencies": {
+    "@tgcloud/cli": "^0.2.0"
+  }
+}

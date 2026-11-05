@@ -1,0 +1,8 @@
+{
+  // The Mini App: Next.js static export, built by `bun mirror/build.ts site`.
+  "static": {
+    "source": "site",
+    // Unknown extension-less paths fall back to index.html.
+    "spa": true
+  }
+}
