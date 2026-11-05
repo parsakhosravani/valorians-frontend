@@ -17,8 +17,8 @@ import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 /** What players call the land that favours each resource. */
 const LAND_NAME: Record<ResourceId, string> = { wood: "Woodland", clay: "Hill land", iron: "Rocky land", crop: "Farmland" };
 const res = (id: ResourceId) => RESOURCES.find((r) => r.id === id)!;
-/** Its own picture (not a small Town Hall), with what its land favours on a badge. */
-const OUTPOST_IMG = "/images/buildings/Outpost.webp";
+/** Its own picture (the tower icon reads better this small than the wide map camp), with what its land favours on a badge. */
+const OUTPOST_IMG = "/images/icons/outpost.webp";
 
 const OutpostPicture = ({ land, dim }: { land?: OutpostLand; dim?: boolean }) => (
   <span className="relative shrink-0 w-14 h-14">

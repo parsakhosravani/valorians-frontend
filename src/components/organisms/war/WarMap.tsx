@@ -1181,8 +1181,8 @@ export const WarMap = ({
               id: o.ownerId,
               x: px(o.x),
               y: py(o.y),
-              // A little under a village: big enough to make out its own picture.
-              size: Math.round(VILLAGE_MIN * 0.85),
+              // Its picture is a wide, low camp: as wide as a grown village so it reads, yet it stands lower.
+              size: VILLAGE_MIN + VILLAGE_GROW,
               ring: (o.isMe
                 ? "me"
                 : owner?.ally
