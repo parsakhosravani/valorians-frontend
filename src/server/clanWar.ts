@@ -435,6 +435,9 @@ export async function createRally(me: Player, body: any, now: number) {
       "bad_time"
     );
   }
+  if (advance(target.state, now).shieldUntil > landAt) {
+    throw new GameError("They're shielded past that time: pick a landing after their shield drops", "shielded");
+  }
   const db = await getDb();
   const open = await db.execute({ sql: "SELECT COUNT(*) AS n FROM clan_rallies WHERE clan_id = ? AND land_at > ?", args: [m.clanId, now] });
 

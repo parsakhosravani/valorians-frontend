@@ -1841,7 +1841,7 @@ export const WarMap = ({
                           <Button isFull disabled={shielded} onClick={() => attackTribe(t)}>
                             <GameIcon e="⚔️" /> Attack
                           </Button>
-                          {me?.clan && !t.isMe && <RallyButton targetId={t.id} targetName={t.name} />}
+                          {me?.clan && !t.isMe && <RallyButton shieldUntil={t.shieldUntil} targetId={t.id} targetName={t.name} />}
                         </>
                       )}
                       {canScout ? (
