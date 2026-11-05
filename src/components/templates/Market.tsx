@@ -460,8 +460,10 @@ export const Market = () => {
 
   const level = data?.limits.level ?? 0;
   const maxAmount = merchantLoad(level);
+  // Busy: offers waiting on the market, and loads on the road (older servers don't send onRoad).
+  const onRoad = data?.limits.onRoad ?? 0;
   const freeMerchants = data
-    ? data.limits.maxOffers - data.limits.openOffers
+    ? Math.max(0, data.limits.maxOffers - data.limits.openOffers - onRoad)
     : 0;
   const ratio = giveAmount > 0 ? wantAmount / giveAmount : 0;
   const ratioOk = ratio >= MIN_TRADE_RATIO && ratio <= MAX_TRADE_RATIO;
@@ -469,7 +471,7 @@ export const Market = () => {
     level < 1
       ? "Build a Trading Post first"
       : freeMerchants <= 0
-        ? "All merchants are busy. Upgrade the Trading Post for more offers"
+        ? "All merchants are busy. They're free again when their loads arrive"
         : giveAmount < MIN_TRADE_AMOUNT || wantAmount < MIN_TRADE_AMOUNT
           ? `Trade at least ${MIN_TRADE_AMOUNT} of each`
           : giveAmount > maxAmount
@@ -569,7 +571,9 @@ export const Market = () => {
         {data && level >= 1 && (
           <p className="text-xs text-sub text-center">
             <GameIcon e="🐪" /> Merchants free: <b className="text-parch">{freeMerchants}</b> of{" "}
-            {data.limits.maxOffers} · carry up to{" "}
+            {data.limits.maxOffers}
+            {onRoad > 0 && <> · {onRoad} on the road</>}
+            {data.limits.openOffers > 0 && <> · {data.limits.openOffers} on the market</>} · carry up to{" "}
             <b className="text-parch">{fmt(maxAmount)}</b> per load
           </p>
         )}
@@ -699,18 +703,20 @@ export const Market = () => {
                       tiles away
                     </span>
                     <Button
-                      disabled={level < 1 || short || tooBig || broke || busy != null}
+                      disabled={level < 1 || short || tooBig || broke || freeMerchants <= 0 || busy != null}
                       size="small"
                       onClick={() => accept(o.id)}
                     >
                       {busy === o.id ? "…" : "Trade"}
                     </Button>
                   </div>
-                  {level >= 1 && (short || tooBig) && (
+                  {level >= 1 && (short || tooBig || freeMerchants <= 0) && (
                     <p className="text-[11px] text-bad">
                       {short
                         ? `You need ${fmt(o.wantAmount - state.resources[o.want])} more ${RESOURCE_NAMES[o.want].toLowerCase()}`
-                        : `Too heavy for your merchants (max ${fmt(maxAmount)})`}
+                        : tooBig
+                          ? `Too heavy for your merchants (max ${fmt(maxAmount)})`
+                          : "All your merchants are busy. They're free again when their loads arrive"}
                     </p>
                   )}
                 </Card>

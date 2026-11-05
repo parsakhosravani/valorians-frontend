@@ -116,4 +116,31 @@ describe("market trades (server)", () => {
     expect(String((await trade(id)).status)).toBe("delivered");
     expect((await reload(seller.id)).state.resources.clay - sellerBefore.clay).toBeCloseTo(500, 0);
   });
+
+  test("merchants stay busy while their loads are on the road, for buyer and seller", async () => {
+    noBandits();
+    const T0 = Date.now();
+    // A Trading Post of 1: one merchant each.
+    const buyer = await newPlayer(T0, (s) => { s.buildings["trading-post"] = 1; });
+    const { seller, id } = await offer(T0);
+    const { id: second } = await offer(T0);
+
+    await acceptTrade(buyer, id, T0);
+    // The buyer's only merchant is on the road with the payment: no second purchase.
+    await expect(acceptTrade(await reload(buyer.id), second, T0 + 1)).rejects.toThrow(/merchants are busy/);
+    // The seller's merchant is on the road too (Trading Post 3: 2 of 3 still free).
+    const db = await getDb();
+    const road = await db.execute({
+      sql: "SELECT COUNT(*) AS n FROM trades WHERE (seller_id = ? OR buyer_id = ?) AND status = 'accepted'",
+      args: [seller.id, seller.id],
+    });
+
+    expect(Number(road.rows[0].n)).toBe(1);
+    // Delivered: the merchant is home and can carry again.
+    const arrives = Number((await trade(id)).arrives_at);
+
+    await resolveDueTrades(arrives + 1);
+    await acceptTrade(await reload(buyer.id), second, arrives + 2);
+    expect(Number((await trade(second)).buyer_id)).toBe(buyer.id);
+  });
 });
