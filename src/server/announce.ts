@@ -38,6 +38,7 @@ export const ADMIN_COMMANDS = [
   { command: "announce", description: "📢 Send an update announcement" },
   { command: "cancel", description: "✖️ Cancel the announcement" },
   { command: "stats", description: "📊 Player numbers" },
+  { command: "health", description: "🩺 Bugs and stuck flows today" },
   { command: "releases", description: "🚀 Update posts: auto, ask me, or off" },
   { command: "start", description: "⚔️ Begin your legend" },
   { command: "tribe", description: "🏰 Your tribe at a glance" },

@@ -11,6 +11,7 @@ import { refreshTribeColumns } from "@/server/tribeColumns";
 import { maybeRefreshRanks } from "@/server/ranks";
 import { errorData, flushEvents, logEvent, withEventContext } from "@/server/events";
 import { dailyLogJobs } from "@/server/eventReport";
+import { watchdog } from "@/server/alerts";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -86,7 +87,14 @@ async function run(started: number) {
     return null;
   });
 
-  logEvent("cron.run", { ms: Date.now() - started, ...(log ? { log } : {}) }, { at: started });
+  // Battles or trades stuck right now: tell the admins (at most every 2 hours per kind).
+  const stuck = await watchdog(Date.now()).catch((e) => {
+    console.error("watchdog failed", e);
+
+    return 0;
+  });
+
+  logEvent("cron.run", { ms: Date.now() - started, stuck, ...(log ? { log } : {}) }, { at: started });
 
   return NextResponse.json({ ok: true, ms: Date.now() - started, ...(bot ? { botSetup: bot } : {}), ...(release ? { release } : {}), ...(log ? { log } : {}) });
 }

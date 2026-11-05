@@ -224,23 +224,7 @@ export async function buildReport(day: string, now = Date.now()) {
   else if (gap > CRON_GAP_MS) add({ level: "warn", check: "cron_gap", detail: `Longest gap between cron runs: ${Math.round(gap / 60_000)} min` });
 
   // --- Checks on the live tables: things stuck right now ---
-  const stuck = async (sql: string, args: (string | number)[]) => (await db.execute({ sql, args })).rows.map((r) => ({ ...r }));
-  const stuckMarch = await stuck("SELECT id, attacker_id, defender_id, arrives_at FROM attacks WHERE status = 'marching' AND arrives_at < ? LIMIT 20", [now - STUCK_MS]);
-  const stuckFight = await stuck("SELECT id, attacker_id, defender_id, ends_at FROM attacks WHERE status = 'fighting' AND ends_at < ? LIMIT 20", [now - STUCK_MS]);
-  const stuckResolving = await stuck(
-    "SELECT id, attacker_id, defender_id, arrives_at, ends_at FROM attacks WHERE status = 'resolving' AND COALESCE(ends_at, arrives_at) < ? LIMIT 20",
-    [now - STUCK_MS]
-  );
-  const stuckTrades = await stuck(
-    "SELECT id, seller_id, buyer_id, status, arrives_at FROM trades WHERE status IN ('accepted', 'seller-paid', 'delivering') AND arrives_at < ? LIMIT 20",
-    [now - STUCK_MS]
-  );
-
-  // Armies waiting at the gates of a village still fighting are expected (one battle at a time), so marching ones are a warning.
-  if (stuckMarch.length) add({ level: "warn", check: "army_waiting_long", detail: `${stuckMarch.length} armies arrived 30+ min ago and have not fought (waiting at the gates, or stuck)`, count: stuckMarch.length, sample: stuckMarch });
-  if (stuckFight.length) add({ level: "error", check: "battle_stuck", detail: `${stuckFight.length} battles past their end and still 'fighting'`, count: stuckFight.length, sample: stuckFight });
-  if (stuckResolving.length) add({ level: "error", check: "attack_stuck_resolving", detail: `${stuckResolving.length} attacks left in 'resolving' (a crash between claim and finish)`, count: stuckResolving.length, sample: stuckResolving });
-  if (stuckTrades.length) add({ level: "error", check: "trade_stuck", detail: `${stuckTrades.length} trades past arrival and not delivered`, count: stuckTrades.length, sample: stuckTrades });
+  for (const f of await stuckNow(now)) add(f);
 
   const errors = findings.filter((f) => f.level === "error").length;
 
@@ -261,6 +245,34 @@ export async function buildReport(day: string, now = Date.now()) {
       abandoned: kinds["war.abandon"] ?? 0,
     },
   };
+}
+
+/**
+ * Things stuck in the live tables right now: battles past their end, attacks
+ * left half-resolved by a crash, trades never delivered, armies at the gates
+ * too long. Used by the day report and by the cron's watchdog (see alerts.ts).
+ */
+export async function stuckNow(now: number): Promise<Finding[]> {
+  const db = await getDb();
+  const out: Finding[] = [];
+  const stuck = async (sql: string) => (await db.execute({ sql, args: [now - STUCK_MS] })).rows.map((r) => ({ ...r }));
+  const stuckMarch = await stuck("SELECT id, attacker_id, defender_id, arrives_at FROM attacks WHERE status = 'marching' AND arrives_at < ? LIMIT 20");
+  const stuckFight = await stuck("SELECT id, attacker_id, defender_id, ends_at FROM attacks WHERE status = 'fighting' AND ends_at < ? LIMIT 20");
+  const stuckResolving = await stuck(
+    "SELECT id, attacker_id, defender_id, arrives_at, ends_at FROM attacks WHERE status = 'resolving' AND COALESCE(ends_at, arrives_at) < ? LIMIT 20"
+  );
+  const stuckTrades = await stuck(
+    "SELECT id, seller_id, buyer_id, status, arrives_at FROM trades WHERE status IN ('accepted', 'seller-paid', 'delivering') AND arrives_at < ? LIMIT 20"
+  );
+  const sample = (xs: unknown[]) => xs.slice(0, 5);
+
+  // Armies waiting at the gates of a village still fighting are expected (one battle at a time), so marching ones are a warning.
+  if (stuckMarch.length) out.push({ level: "warn", check: "army_waiting_long", detail: `${stuckMarch.length} armies arrived 30+ min ago and have not fought (waiting at the gates, or stuck)`, count: stuckMarch.length, sample: sample(stuckMarch) });
+  if (stuckFight.length) out.push({ level: "error", check: "battle_stuck", detail: `${stuckFight.length} battles past their end and still 'fighting'`, count: stuckFight.length, sample: sample(stuckFight) });
+  if (stuckResolving.length) out.push({ level: "error", check: "attack_stuck_resolving", detail: `${stuckResolving.length} attacks left in 'resolving' (a crash between claim and finish)`, count: stuckResolving.length, sample: sample(stuckResolving) });
+  if (stuckTrades.length) out.push({ level: "error", check: "trade_stuck", detail: `${stuckTrades.length} trades past arrival and not delivered`, count: stuckTrades.length, sample: sample(stuckTrades) });
+
+  return out;
 }
 
 export type DayReport = Awaited<ReturnType<typeof buildReport>>;
