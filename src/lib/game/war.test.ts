@@ -586,6 +586,26 @@ test("the dead take their share of a regiment's experience", () => {
   expect(s.troops.archer.xp).toBe(0); // all died → all XP lost, nothing earned
 });
 
+test("a beaten dragon loses a fifth of its XP and learns nothing; a winning one grows as before", () => {
+  const s = E.createInitialState(T0);
+  const empty = () => Object.fromEntries(Object.keys(s.troops).map((u) => [u, 0])) as any;
+  const regiment = { ...empty(), dragon: 1, knight: 100 };
+  const dead = { ...empty(), knight: 50 };
+  const earned = { ...empty(), dragon: 500, knight: 100 };
+
+  s.troops.dragon.xp = 12_000; // Legend
+  s.troops.knight.xp = 1000;
+  W.applyBattleXp(s, regiment, dead, earned, true);
+  expect(s.troops.dragon.xp).toBe(9_600); // −20%, no XP from the defeat: down to Champion
+  expect(E.rankForXp(s.troops.dragon.xp)).toBeLessThan(E.rankForXp(12_000));
+  expect(s.troops.knight.xp).toBe(600); // other troops: unchanged rule
+  W.applyBattleXp(s, regiment, empty(), earned, false);
+  expect(s.troops.dragon.xp).toBe(10_100);
+  // A dragon that wasn't in the battle keeps its XP.
+  W.applyBattleXp(s, { ...empty(), knight: 10 }, empty(), empty(), true);
+  expect(s.troops.dragon.xp).toBe(10_100);
+});
+
 // ─── Troop roles (Nov 2026 rebalance) ─────────────────────────────────────────
 
 const fighters = C.UNITS.filter((u) => !u.transport && !u.flying && !u.wallBreak && !u.towerBreak);

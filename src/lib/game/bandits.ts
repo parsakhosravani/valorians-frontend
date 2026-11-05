@@ -321,7 +321,7 @@ export function resolveBanditRaid(s0: GameState, manned: boolean, rand: () => nu
   for (const u of UNIT_IDS) if (!UNIT_BY_ID[u].transport && !UNIT_BY_ID[u].maxOwned) lost[u] = Math.floor((s.army[u] ?? 0) * share);
   const xp = battleXp(s, defenders, attack, won, "defense");
 
-  applyBattleXp(s, totalArmy(s), lost, xp);
+  applyBattleXp(s, totalArmy(s), lost, xp, !won);
   for (const u of UNIT_IDS) s.army[u] -= lost[u];
 
   if (won) {

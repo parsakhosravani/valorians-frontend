@@ -344,13 +344,18 @@ export function battleXp(
 /**
  * Applies a battle to the regiments: the dead take their share of the XP with
  * them, then the survivors add what they earned. A wiped-out regiment ends at 0. `regiment` is each type's size before
- * the battle. Returns the types that went up a rank.
+ * the battle. `beaten`: this side lost, so a unit that is never lost (the dragon)
+ * pays DRAGON.defeatXpLoss of its XP instead and earns nothing. Returns the types that went up a rank.
  */
-export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army): Promotion[] {
+export function applyBattleXp(s: GameState, regiment: Army, dead: Army, earned: Army, beaten = false): Promotion[] {
   const promoted: Promotion[] = [];
   for (const u of UNIT_IDS) {
     const t = s.troops[u];
     const before = rankForXp(t.xp);
+    if (UNIT_BY_ID[u].maxOwned && regiment[u] > 0 && beaten) {
+      t.xp = Math.round(t.xp * (1 - DRAGON.defeatXpLoss));
+      continue;
+    }
     const wiped = regiment[u] > 0 && dead[u] >= regiment[u];
     if (wiped) {
       // No one survived to carry the experience home.
@@ -749,7 +754,7 @@ export function defendRaid(
   const defenderXp = battleXp(d, defenders, outcome.attack, won, "defense");
   const attackerXp = battleXp(attacker, sent, outcome.defense, outcome.attackerWon, "attack");
   const regiment = engaged ? regimentWith(d, engaged) : totalArmy(d);
-  const defenderPromoted = applyBattleXp(d, regiment, outcome.defenderLosses, defenderXp);
+  const defenderPromoted = applyBattleXp(d, regiment, outcome.defenderLosses, defenderXp, outcome.attackerWon);
 
   // Healed defenders recover at home straight away, so only real losses go.
   for (const u of UNIT_IDS) {
@@ -841,7 +846,7 @@ export function receiveRaidReport(
   hops = 0
 ) {
   const s = cloneState(s0);
-  if (report.attackerXp) applyBattleXp(s, regimentWith(s, report.sent), report.attackerLosses, report.attackerXp);
+  if (report.attackerXp) applyBattleXp(s, regimentWith(s, report.sent), report.attackerLosses, report.attackerXp, !report.attackerWon);
   woundDragon(s, report.sent, report.attackerWon, report.returnsAt);
   const units = survivorsOf(report.sent, report.attackerLosses);
   for (const u of UNIT_IDS) units[u] += report.attackerHealed[u];
@@ -967,7 +972,7 @@ function pveBattle(
   const s = cloneState(s0);
   const r = getRates(s);
   const attackerXp = battleXp(s, sent, outcome.defense, outcome.attackerWon, "attack", xpShare);
-  const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp);
+  const attackerPromoted = applyBattleXp(s, regimentWith(s, sent), outcome.attackerLosses, attackerXp, !outcome.attackerWon);
   const home = survivorsOf(sent, outcome.attackerLosses);
   for (const u of UNIT_IDS) home[u] += outcome.attackerHealed[u];
 
