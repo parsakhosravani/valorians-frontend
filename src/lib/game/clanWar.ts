@@ -5,7 +5,8 @@
  */
 import { CLAN_WAR, UNIT_BY_ID, UNIT_IDS } from "./config";
 import { Abroad, Army, GameError, GameState, Guest, cloneState, emptyArmy } from "./engine";
-import { embark, fighterCount, validateSend } from "./war";
+import { embark, fighterCount, raidTravelMs, validateSend } from "./war";
+import { Point, routeMs } from "./map";
 
 // ─── Reinforcements ──────────────────────────────────────────────────────────
 
@@ -116,3 +117,16 @@ export const blocksRaids = (kind: RelationKind | null | undefined) => kind === "
 
 /** The same pair of clans always as (smaller id, larger id), so one row holds their relation. */
 export const pairOf = (a: number, b: number): [number, number] => (a < b ? [a, b] : [b, a]);
+
+// ─── Clan strikes ────────────────────────────────────────────────────────────
+
+/**
+ * When an army joining a strike sets out: as late as it can and still land
+ * at `landAt` (it waits at home, defending, until then). The target hears
+ * of it only then, with the usual time to react, not hours ahead.
+ */
+export function strikeDeparture(units: Army, from: Point, to: Point, landAt: number, marchMultiplier = 1) {
+  const travel = raidTravelMs(routeMs(units, from, to, marchMultiplier));
+
+  return { travel, departAt: landAt - travel - CLAN_WAR.musterLeadMs };
+}

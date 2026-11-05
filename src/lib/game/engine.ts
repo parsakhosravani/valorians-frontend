@@ -240,9 +240,11 @@ export type GameState = {
   plus: { until: number; trialUsed: boolean; paid: boolean };
   /**
    * Raised shields (bought or Plus): no new one before cooldownUntil, and the
-   * last free weekly Plus shield was claimed at plusClaimedAt.
+   * last free weekly Plus shield was claimed at plusClaimedAt. The last one
+   * raised went up at raisedAt and runs to raisedUntil: armies already on
+   * their way by then still land (see shieldStops).
    */
-  shield: { cooldownUntil: number; plusClaimedAt: number };
+  shield: { cooldownUntil: number; plusClaimedAt: number; raisedAt?: number; raisedUntil?: number };
   /** Outposts the tribe founded (see OUTPOST). */
   outposts: Outpost[];
   /** Seasons this tribe's clan won by finishing the World Wonder first (a badge). */
@@ -406,7 +408,7 @@ export function createInitialState(now: number): GameState {
     troops: emptyTroops(),
     clanPerks: { ...NO_PERKS },
     plus: { until: 0, trialUsed: false, paid: false },
-    shield: { cooldownUntil: 0, plusClaimedAt: 0 },
+    shield: { cooldownUntil: 0, plusClaimedAt: 0, raisedAt: 0, raisedUntil: 0 },
     cards: { orders: 0 },
   };
 }
@@ -574,8 +576,25 @@ export function raiseShield(s0: GameState, hours: number, now: number): GameStat
 
   s.shieldUntil = end;
   s.shield.cooldownUntil = end + SHIELDS.cooldownMs;
+  s.shield.raisedAt = now;
+  s.shield.raisedUntil = end;
 
   return s;
+}
+
+/**
+ * Does the village's shield stop an army landing at `at` that was committed
+ * (sent, or its clan strike called) at `committedAt`? A shield bought or
+ * claimed after the army set out doesn't: seeing an attack coming and buying
+ * a shield used to send a whole clan strike home with nothing. Shields that
+ * were already up (a new tribe's, or one bought earlier) and raid shields
+ * earned from a real hit still stop it.
+ */
+export function shieldStops(s: GameState, committedAt: number, at: number) {
+  if (s.shieldUntil <= at) return false;
+  const raisedAfter = (s.shield.raisedAt ?? 0) > committedAt && s.shieldUntil === (s.shield.raisedUntil ?? 0);
+
+  return !raisedAfter;
 }
 
 /** Why a shield of `hours` can't be raised now, or null if it can. */

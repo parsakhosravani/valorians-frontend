@@ -11,6 +11,7 @@ import { UNITS, UNIT_BY_ID } from "@/lib/game/config";
 import { Army, GameState, emptyArmy, ownArmy } from "@/lib/game/engine";
 import { Point, TERRAIN, Terrain, armySpeed, routeFor, routeMs, shipsNeeded } from "@/lib/game/map";
 import { battleNumbers, fighterCount, landingFactorFor } from "@/lib/game/war";
+import { strikeDeparture } from "@/lib/game/clanWar";
 import { formatDuration } from "@/lib/format";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 
@@ -128,6 +129,9 @@ export const SendArmyDrawer = ({
   // A clan strike: the army slows down to land with the others (late if it can't make it).
   const travel = target?.rally ? Math.max(walk, target.rally.landAt - now) : walk;
   const late = !!target?.rally && walk > target.rally.landAt - now;
+  // Far ahead, the army waits at home (still defending) and sets out just in time.
+  const departAt = target?.rally ? strikeDeparture(units, target.from, target.at, target.rally.landAt, rates.marchMultiplier).departAt : 0;
+  const waits = !!target?.rally && departAt > now + 60e3;
   const slowest = UNITS.find((u) => !u.transport && units[u.id] > 0 && u.speed === armySpeed(units));
   const hasCavalry = UNITS.some((u) => u.mounted && units[u.id] > 0);
   const size = fighterCount(units);
@@ -164,6 +168,8 @@ export const SendArmyDrawer = ({
               <GameIcon e="📯" /> Clan strike: lands with your clan at{" "}
               {new Date(target.rally.landAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               {late ? `. Too far to make it: lands ${formatDuration(walk - (target.rally.landAt - now))} late.` : "."}
+              {waits &&
+                ` Your army waits at home, still defending it, and sets out at ${new Date(departAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: they won't see it coming until then.`}
             </p>
           )}
 

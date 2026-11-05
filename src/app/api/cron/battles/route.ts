@@ -12,7 +12,7 @@ import { maybeRefreshRanks } from "@/server/ranks";
 import { errorData, flushEvents, logEvent, withEventContext } from "@/server/events";
 import { dailyLogJobs } from "@/server/eventReport";
 import { watchdog } from "@/server/alerts";
-import { reconcileSupport, resolveSupport } from "@/server/clanWar";
+import { reconcileSupport, resolveMusters, resolveSupport } from "@/server/clanWar";
 
 export const dynamic = "force-dynamic";
 // Room to keep sending a big announcement (the workflow waits up to 60s).
@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
 }
 
 async function run(started: number) {
+  // Armies waiting for a clan strike set out first, so they're on the road in time.
+  await resolveMusters(started).catch((e) => console.error("strike departures failed", e));
   await resolveDueAttacks(started);
   await resolveDueTrades(started);
   // Guards reaching clanmates, and guards' losses (battles, hunger) reaching their owners.

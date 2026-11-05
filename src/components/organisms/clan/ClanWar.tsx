@@ -298,8 +298,25 @@ export const ClanWar = ({
             {r.note && <span className="text-xs text-sub">“{r.note}”</span>}
             <span className="text-[11px] text-muted">
               Called by {r.by} · {r.armies.length} armies, {fmt(r.armies.reduce((n, a) => n + a.troops, 0))} troops
-              {r.armies.length ? `: ${r.armies.map((a) => a.name).join(", ")}` : ""}
             </span>
+            {r.armies.map((a, i) => (
+              <span key={`${a.playerId}-${i}`} className="flex items-center justify-between gap-2 text-xs text-sub">
+                <span className="truncate">
+                  {a.playerId === me.id ? "You" : a.name} · {fmt(a.troops)} troops ·{" "}
+                  {a.departAt ? `waiting at home, sets out ${clock(a.departAt)}` : "on the road"}
+                </span>
+                {a.musterId && a.playerId === me.id && !landed && (
+                  <button
+                    className="text-[11px] font-bold text-bad shrink-0"
+                    disabled={busy != null}
+                    type="button"
+                    onClick={() => run(`leave-${a.musterId}`, () => clan.leaveStrike(a.musterId!))}
+                  >
+                    Keep home
+                  </button>
+                )}
+              </span>
+            ))}
             {!landed && (
               <div className="flex gap-2">
                 <Link className="btn btn-gold btn-sm flex-1" href={`/battle?attack=${r.targetId}&rally=${r.id}&land=${r.landAt}`}>

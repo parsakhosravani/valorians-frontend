@@ -6,7 +6,7 @@ import { AuthError, AuthResult, authenticate } from "./auth";
 import { getOrCreatePlayer, mutatePlayer, Player, playerView } from "./players";
 import { resolveDueAttacks } from "./war";
 import { resolveDueTrades } from "./trade";
-import { resolveSupport } from "./clanWar";
+import { resolveMusters, resolveSupport } from "./clanWar";
 
 import { GameError, GameState } from "@/lib/game/engine";
 import { maybeCheckRelease } from "./announce";
@@ -34,6 +34,7 @@ async function sweep() {
     await resolveDueAttacks(now).catch((e) => console.error("resolveDueAttacks", e));
     await resolveDueTrades(now).catch((e) => console.error("resolveDueTrades", e));
     await resolveSupport(now).catch((e) => console.error("resolveSupport", e));
+    await resolveMusters(now).catch((e) => console.error("resolveMusters", e));
     await maybeCheckRelease();
     // At most once a minute for the whole game (see ranks.ts).
     await maybeRefreshRanks(now).catch((e) => console.error("maybeRefreshRanks", e));

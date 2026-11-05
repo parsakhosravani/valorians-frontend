@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import { UNIT_IDS } from "./config";
-import { Army, applyGuestLosses, clampGuests, createInitialState, emptyArmy, guestArmy, ownArmy, ownedArmy, peopleOf } from "./engine";
-import { dispatchSupport, receiveGuest, releaseGuest, weekOf, weekEnds, weeklyGoal, blocksRaids } from "./clanWar";
+import { Army, applyGuestLosses, clampGuests, createInitialState, emptyArmy, guestArmy, ownArmy, ownedArmy, peopleOf, raiseShield, shieldStops } from "./engine";
+import { dispatchSupport, receiveGuest, releaseGuest, strikeDeparture, weekOf, weekEnds, weeklyGoal, blocksRaids } from "./clanWar";
+import { CLAN_WAR } from "./config";
 import { powerScore } from "./war";
 
 const T0 = Date.UTC(2026, 10, 5, 12);
@@ -99,5 +100,36 @@ describe("weekly goal and treaties (rules)", () => {
     expect(blocksRaids("nap")).toBe(true);
     expect(blocksRaids("war")).toBe(false);
     expect(blocksRaids(null)).toBe(false);
+  });
+});
+
+describe("shields and armies on the road (rules)", () => {
+  test("a shield raised after an army set out doesn't stop it; one already up does", () => {
+    const s = createInitialState(T0);
+
+    s.shieldUntil = 0;
+    s.shield.cooldownUntil = 0;
+    const bought = raiseShield(s, 8, T0 + 60_000);
+
+    // Sent before the shield went up: lands.
+    expect(shieldStops(bought, T0, T0 + 2 * 3600e3)).toBe(false);
+    // Sent after: stopped.
+    expect(shieldStops(bought, T0 + 120_000, T0 + 2 * 3600e3)).toBe(true);
+    // After it ends: nothing to stop.
+    expect(shieldStops(bought, T0 + 120_000, T0 + 9 * 3600e3)).toBe(false);
+    // A raid shield earned from a real hit (it moves shieldUntil) still stops everyone.
+    const hit = { ...bought, shieldUntil: T0 + 12 * 3600e3 };
+
+    expect(shieldStops(hit, T0, T0 + 10 * 3600e3)).toBe(true);
+    // A new tribe's protection was there before any army: it stops them.
+    expect(shieldStops(createInitialState(T0), T0 + 1, T0 + 3600e3)).toBe(true);
+  });
+
+  test("a strike army sets out as late as it can and still lands on time", () => {
+    const units = { ...emptyArmy(), axeman: 10 };
+    const { travel, departAt } = strikeDeparture(units, { x: 0, y: 0 }, { x: 6, y: 0 }, T0 + 4 * 3600e3);
+
+    expect(departAt + travel + CLAN_WAR.musterLeadMs).toBe(T0 + 4 * 3600e3);
+    expect(travel).toBeGreaterThan(0);
   });
 });

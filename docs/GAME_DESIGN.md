@@ -108,8 +108,16 @@ ask before "fixing" either. Add new decisions here when they are made.
   - **Attack alerts:** when a member is attacked, every clanmate is told (bot + in-game), once
     per attacked tribe per 10 minutes, with a "Send help" button.
   - **Clan strikes (rallies):** the Jarl or a Huscarl names a tribe and a landing time (10 min to
-    24 h ahead). Armies sent to the strike slow down to land at that moment (a late army lands
-    when it can). Waves then queue at the gates (one battle at a time).
+    24 h ahead, never onto a shield). An army joining far ahead **waits at home** (still defending)
+    and sets out just in time (`CLAN_WAR.musterLeadMs` early, slowing to land on the minute), so
+    the target is warned only the usual travel time before (Nov 2026: setting out at once gave
+    hours to buy a shield). A late army lands when it can. Waves queue at the gates (one battle
+    at a time).
+- **Shields vs armies on the road** (Nov 2026, owner's call): a shield bought or claimed **after**
+  an army set out (or after its clan strike was called) doesn't stop it; it stops attacks sent
+  after it goes up (`shieldStops`). Shields already up (a new tribe's, an earlier one) and raid
+  shields earned from a real hit still turn armies back. The Shield sheet warns how many armies
+  are already marching.
   - **Diplomacy:** alliances and non-aggression pacts (both clans agree) block raids between
     their members; a war is declared by one clan, scores every raid won between the two, and
     ends with peace (both agree) or by itself after a week. Up to 5 treaties per clan.

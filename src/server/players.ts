@@ -271,13 +271,25 @@ async function marketOffers(id: number) {
   return Number(rs.rows[0]?.n ?? 0);
 }
 
+/** Armies marching on this tribe right now. */
+async function incomingArmies(id: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: "SELECT COUNT(*) AS n FROM attacks WHERE defender_id = ? AND status IN ('marching', 'resolving', 'fighting')",
+    args: [id],
+  });
+
+  return Number(rs.rows[0]?.n ?? 0);
+}
+
 export async function playerView(p: Player, now: number) {
   // Independent lookups: run them together instead of one after another.
-  const [clan, rank, trades, notices] = await Promise.all([
+  const [clan, rank, trades, notices, incoming] = await Promise.all([
     clanBadge(p.clanId),
     rankOf(p),
     marketOffers(p.id),
     unreadNotices(p.id).catch(() => 0),
+    incomingArmies(p.id).catch(() => 0),
   ]);
 
   return {
@@ -294,6 +306,8 @@ export async function playerView(p: Player, now: number) {
       marketOffers: trades,
       /** Unread messages in the in-game inbox (the bell in the header). */
       unreadNotices: notices,
+      /** Armies on their way to attack this tribe: a shield raised now won't stop them (see shieldStops). */
+      incomingArmies: incoming,
       /** Monthly Valorians Plus price in Telegram Stars. */
       plusPrice: plusPrice(),
     },

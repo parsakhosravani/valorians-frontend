@@ -9,8 +9,8 @@ import { sendToPlayer } from "./notify";
 import { Player, findById, mutatePlayer } from "./players";
 
 import { CLAN_WAR, UNITS } from "@/lib/game/config";
-import { Army, GameError, advance, emptyArmy, getRates } from "@/lib/game/engine";
-import { fighterCount, returnHome } from "@/lib/game/war";
+import { Army, GameError, advance, emptyArmy, getRates, ownArmy } from "@/lib/game/engine";
+import { embark, fighterCount, returnHome, validateSend } from "@/lib/game/war";
 import { routeMs, seaRoute } from "@/lib/game/map";
 import { can, ClanRole } from "@/lib/game/clan";
 import {
@@ -22,6 +22,7 @@ import {
   pairOf,
   receiveGuest,
   releaseGuest,
+  strikeDeparture,
   updateAbroad,
   weekEnds,
   weekOf,
@@ -450,14 +451,14 @@ export async function createRally(me: Player, body: any, now: number) {
 
   await clanLog(m.clanId, now, "rally", me.id, targetId, { landAt });
   const members = await db.execute({ sql: "SELECT id FROM users WHERE clan_id = ? AND id != ?", args: [m.clanId, me.id] });
-  const at = new Date(landAt).toISOString().slice(11, 16);
 
   await Promise.all(
     members.rows.map((r) =>
       sendToPlayer(
         Number(r.id),
         `📯 <b>${esc(nameOf(me))}</b> calls a clan strike on <b>${esc(nameOf(target))}</b>!\n` +
-          `All armies land together at <b>${at} UTC</b> (in ${inMinutes(landAt - now)}).${note ? `\n“${esc(note)}”` : ""}`,
+          // In time from now, not a UTC clock time (players read it in their own time zone).
+          `All armies land together in <b>${inMinutes(landAt - now)}</b>. Join now: your army waits at home and sets out just in time.${note ? `\n“${esc(note)}”` : ""}`,
         "⚔️ Join the strike",
         `/battle?attack=${targetId}&rally=${id}&land=${landAt}`
       ).catch(() => {})
@@ -474,6 +475,8 @@ export async function cancelRally(me: Player, body: any, now: number) {
   const rs = await db.execute({ sql: "DELETE FROM clan_rallies WHERE id = ? AND clan_id = ?", args: [Math.floor(Number(body?.id)), m.clanId] });
 
   if (rs.rowsAffected !== 1) throw new GameError("No such strike", "not_found");
+  // Armies still waiting at home stay there.
+  await db.execute({ sql: "UPDATE rally_musters SET status = 'cancelled' WHERE rally_id = ? AND status = 'waiting'", args: [Math.floor(Number(body?.id))] });
   await clanLog(m.clanId, now, "rally_off", me.id, null);
 }
 
@@ -482,7 +485,7 @@ export async function cancelRally(me: Player, body: any, now: number) {
  * others. Returns the landing time, after checking the rally is this clan's,
  * on this target, and not over.
  */
-export async function rallyLanding(me: Player, rallyId: number, defenderId: number | null, now: number) {
+export async function rallyLanding(me: Player, rallyId: number, defenderId: number | null, now: number): Promise<{ landAt: number; createdAt: number }> {
   const db = await getDb();
   const rs = await db.execute({ sql: "SELECT * FROM clan_rallies WHERE id = ?", args: [rallyId] });
   const r = rs.rows[0];
@@ -491,7 +494,7 @@ export async function rallyLanding(me: Player, rallyId: number, defenderId: numb
   if (Number(r.target_id) !== defenderId) throw new GameError("That strike is on another tribe", "bad_request");
   if (Number(r.land_at) <= now) throw new GameError("That strike has already landed", "too_late");
 
-  return Number(r.land_at);
+  return { landAt: Number(r.land_at), createdAt: Number(r.created_at) };
 }
 
 async function rallies(clanId: number, now: number) {
@@ -503,6 +506,13 @@ async function rallies(clanId: number, now: number) {
     args: [clanId, now - 3600e3],
   });
   const ids = rs.rows.map((r) => Number(r.id));
+  const waiting = ids.length
+    ? await db.execute({
+        sql: `SELECT m.id, m.rally_id, m.user_id, m.units, m.depart_at, u.first_name FROM rally_musters m JOIN users u ON u.id = m.user_id
+              WHERE m.rally_id IN (${ids.map(() => "?").join(",")}) AND m.status = 'waiting'`,
+        args: ids,
+      })
+    : { rows: [] };
   const joined = ids.length
     ? await db.execute({
         sql: `SELECT a.rally_id, a.attacker_id, a.units, a.arrives_at, u.first_name FROM attacks a JOIN users u ON u.id = a.attacker_id
@@ -525,8 +535,115 @@ async function rallies(clanId: number, now: number) {
         name: String(j.first_name || "A chief"),
         troops: fighterCount(JSON.parse(String(j.units))),
         arrivesAt: Number(j.arrives_at),
-      })),
+        /** On the road (null), or waiting at home to set out then. */
+        departAt: null as number | null,
+        musterId: null as number | null,
+      }))
+      .concat(
+        waiting.rows
+          .filter((w) => Number(w.rally_id) === Number(r.id))
+          .map((w) => ({
+            playerId: Number(w.user_id),
+            name: String(w.first_name || "A chief"),
+            troops: fighterCount(JSON.parse(String(w.units))),
+            arrivesAt: Number(r.land_at),
+            departAt: Number(w.depart_at),
+            musterId: Number(w.id),
+          }))
+      ),
   }));
+}
+
+/**
+ * Joins a clan strike. Far from the landing time, the army waits at home
+ * (still defending it) and sets out just in time (resolveMusters): the target
+ * gets the usual warning, not hours to prepare or buy a shield. Returns null
+ * when it's time to set out now (the caller marches it straight away).
+ */
+export async function joinStrike(me: Player, rallyId: number, targetId: number, units: Army, now: number) {
+  const { landAt } = await rallyLanding(me, rallyId, targetId, now);
+  const [from, to] = await Promise.all([homeOf(me.id), homeOf(targetId)]);
+  const s = advance(me.state, now);
+  // Checked now, so a bad pick fails at once rather than hours later.
+  const naval = seaRoute(from, to, units).naval;
+  const sent = embark(s, validateSend(s, { ...emptyArmy(), ...units }), naval);
+  const { departAt } = strikeDeparture(sent, from, to, landAt, getRates(s).marchMultiplier);
+
+  if (departAt <= now + 60e3) return null;
+  const db = await getDb();
+  const dup = await db.execute({
+    sql: "SELECT 1 FROM rally_musters WHERE rally_id = ? AND user_id = ? AND status = 'waiting' LIMIT 1",
+    args: [rallyId, me.id],
+  });
+
+  if (dup.rows.length) throw new GameError("Your army already waits for this strike. Call it off first to change it.", "busy");
+  const ins = await db.execute({
+    sql: `INSERT INTO rally_musters (rally_id, user_id, target_id, units, depart_at, land_at, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'waiting', ?)`,
+    args: [rallyId, me.id, targetId, JSON.stringify(units), departAt, landAt, now],
+  });
+
+  logEvent("rally.muster", { rallyId, targetId, units, departAt, landAt }, { playerId: me.id, at: now });
+
+  return { id: Number(ins.lastInsertRowid), departAt, landAt };
+}
+
+/** A member takes back the army waiting at home for a strike. */
+export async function leaveStrike(me: Player, body: any) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: "UPDATE rally_musters SET status = 'cancelled' WHERE id = ? AND user_id = ? AND status = 'waiting'",
+    args: [Math.floor(Number(body?.id)), me.id],
+  });
+
+  if (rs.rowsAffected !== 1) throw new GameError("That army isn't waiting for a strike", "not_found");
+}
+
+/**
+ * Armies waiting for a strike whose time has come set out now, with what is
+ * at home of what was picked (some may have fallen, or been sent elsewhere).
+ * Run on every sweep and by the cron.
+ */
+export async function resolveMusters(now: number, playerId?: number) {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: `SELECT * FROM rally_musters WHERE status = 'waiting' AND depart_at <= ?${playerId == null ? "" : " AND user_id = ?"}
+          ORDER BY depart_at ASC LIMIT 20`,
+    args: playerId == null ? [now] : [now, playerId],
+  });
+  // Loaded here: war.ts itself uses this module.
+  const { marchTo } = await import("./war");
+
+  for (const r of rs.rows) {
+    const id = Number(r.id);
+    const claim = await db.execute({ sql: "UPDATE rally_musters SET status = 'leaving' WHERE id = ? AND status = 'waiting'", args: [id] });
+
+    if (claim.rowsAffected !== 1) continue;
+    const me = await findById(Number(r.user_id));
+    let status = "failed";
+    let why = "";
+
+    try {
+      if (!me) throw new GameError("Tribe gone");
+      const want = { ...emptyArmy(), ...JSON.parse(String(r.units)) } as Army;
+      const home = ownArmy(advance(me.state, now));
+      const units = emptyArmy();
+
+      for (const u of UNITS) units[u.id] = Math.max(0, Math.min(want[u.id] ?? 0, home[u.id] ?? 0));
+      if (fighterCount(units) === 0) throw new GameError("None of the troops you picked are at home any more");
+      await withEventContext(`rally:depart #${id}`, () =>
+        marchTo(me, { target: Number(r.target_id), rally: Number(r.rally_id) }, units, now)
+      );
+      status = "gone";
+    } catch (e) {
+      why = (e as Error).message;
+      logEvent("rally.depart_failed", { id, why }, { playerId: Number(r.user_id), at: now, level: e instanceof GameError ? "warn" : "error" });
+    }
+    await db.execute({ sql: "UPDATE rally_musters SET status = ? WHERE id = ?", args: [status, id] });
+    if (status === "failed" && me) {
+      await sendToPlayer(me.id, `📯 Your army couldn't set out for the clan strike: ${esc(why)}`, "🛡️ Open clan", "/clan?tab=war").catch(() => {});
+    }
+  }
 }
 
 // ─── Diplomacy ───────────────────────────────────────────────────────────────
