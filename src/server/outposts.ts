@@ -1,5 +1,6 @@
 import "server-only";
 
+import { logEvent } from "./events";
 import { getDb } from "./db";
 import { homeOf } from "./map";
 import { Player, mutatePlayer } from "./players";
@@ -87,9 +88,11 @@ export async function settleOutpost(me: Player, now: number, pick?: Point) {
 
   if (blocked) throw new GameError(blocked, "blocked");
   const db = await getDb();
+  const idx = me.state.outposts.length;
+
+  await repairClaims(me, now);
   const home = await homeOf(me.id);
   const { villages, taken } = await around(home);
-  const idx = me.state.outposts.length;
   const free = candidates(home, taken, villages);
   let spots = free.slice(0, 8);
 
@@ -103,7 +106,7 @@ export async function settleOutpost(me: Player, now: number, pick?: Point) {
 
   for (const spot of spots) {
     const claim = await db
-      .execute({ sql: "INSERT INTO outposts (user_id, idx, x, y) VALUES (?, ?, ?, ?)", args: [me.id, idx, spot.x, spot.y] })
+      .execute({ sql: "INSERT INTO outposts (user_id, idx, x, y, claimed_at) VALUES (?, ?, ?, ?, ?)", args: [me.id, idx, spot.x, spot.y, now] })
       .catch(() => null);
 
     if (!claim) continue; // someone took it a moment ago, or this outpost is already being founded
@@ -119,7 +122,37 @@ export async function settleOutpost(me: Player, now: number, pick?: Point) {
     }
   }
   if (pick) throw new GameError("That land was just taken: pick another spot", "taken");
+  logEvent("outpost.no_land", { home, idx, candidates: free.length, villages: villages.length, taken: taken.size }, { playerId: me.id, at: now, level: "warn" });
   throw new GameError("No free land near your village for an outpost", "no_land");
+}
+
+/** A claim younger than this may still be a founding in progress: leave it alone. */
+const CLAIM_TIMEOUT_MS = 60_000;
+
+/**
+ * Brings the tribe's rows in `outposts` back in line with its state before
+ * founding. A request that claimed a tile and then died (a timeout, a crash)
+ * before saving the outpost left its row behind; the next founding uses the
+ * same number, so every claim failed and the tribe got "No free land" forever,
+ * however much land was free. Such rows are dropped once they are older than
+ * a founding could take. Outposts in the state with no row get theirs back,
+ * so nobody else can settle on them.
+ */
+async function repairClaims(me: Player, now: number) {
+  const db = await getDb();
+  const have = me.state.outposts ?? [];
+  const stale = await db.execute({
+    sql: "DELETE FROM outposts WHERE user_id = ? AND idx >= ? AND claimed_at < ?",
+    args: [me.id, have.length, now - CLAIM_TIMEOUT_MS],
+  });
+
+  if (stale.rowsAffected) logEvent("outpost.stale_claim", { removed: stale.rowsAffected, outposts: have.length }, { playerId: me.id, at: now, level: "warn" });
+  for (const [i, o] of have.entries()) {
+    await db.execute({
+      sql: "INSERT INTO outposts (user_id, idx, x, y, claimed_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+      args: [me.id, i, o.x, o.y, now],
+    });
+  }
 }
 
 /**
