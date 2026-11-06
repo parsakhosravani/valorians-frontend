@@ -6,7 +6,7 @@ import clsx from "clsx";
 
 import { RESOURCES, useGame, useGameStatus } from "@/context";
 import { OUTPOST, ResourceId, UNITS } from "@/lib/game/config";
-import { Army, emptyArmy, fieldUpgradeInfo, outpostBlocked, outpostCost, outpostOutput, outpostSlots, ownArmy } from "@/lib/game/engine";
+import { Army, emptyArmy, fieldUpgradeInfo, getRates, outpostBlocked, outpostCost, outpostOutput, outpostSlots, outpostWaitMs, ownArmy } from "@/lib/game/engine";
 import { garrisonCap, garrisonOf, garrisonRoom, headingTo } from "@/lib/game/garrison";
 import { armySize } from "@/lib/game/war";
 import { Drawer } from "@/components/molecules/Drawer";
@@ -18,6 +18,7 @@ import { compact, formatDuration } from "@/lib/format";
 import { Bar } from "@/components/atoms/Ui";
 import { GameIcon } from "@/components/atoms/GameIcon";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
+import population from "~/images/resources/population.webp";
 
 /** What players call the land that favours each resource. */
 const LAND_NAME: Record<ResourceId, string> = { wood: "Woodland", clay: "Hill land", iron: "Rocky land", crop: "Farmland" };
@@ -183,6 +184,13 @@ export const Outposts = () => {
   const slots = outpostSlots(state);
   const blocked = outpostBlocked(state);
   const cost = outpostCost(state);
+  // What the next outpost still lacks, shown under its card like a building's price.
+  const hallNeeded = OUTPOST.hallLevels[state.outposts.length];
+  const hallShort = state.outposts.length >= slots;
+  const lacking = RESOURCES.filter((r) => state.resources[r.id] < cost.resources[r.id]);
+  const peopleShort = state.population < cost.people;
+  const tooBig = cost.resources.iron > getRates(state).capacity;
+  const wait = outpostWaitMs(state);
   // Everything the outposts send home each hour.
   const total = state.outposts.reduce((n, o) => {
     const out = outpostOutput(o);
@@ -325,12 +333,15 @@ export const Outposts = () => {
             <OutpostPicture dim={!!blocked} />
             <div className="flex-1 min-w-0 flex flex-col gap-0.5">
               <span className="font-display font-bold text-sm text-parch">New outpost</span>
-              <span className="text-xs text-sub">
-                {blocked ?? (
-                  <>
-                    Costs {compact(cost.resources.iron)} of each resource and {compact(cost.people)} people.
-                  </>
-                )}
+              <span className={clsx("text-xs", blocked ? "text-bad" : "text-good")}>
+                {hallShort
+                  ? `Needs Town Hall ${hallNeeded}`
+                  : lacking.length || peopleShort
+                    ? `Still needed: ${[
+                        ...lacking.map((r) => `${compact(cost.resources[r.id] - state.resources[r.id])} ${r.name.toLowerCase()}`),
+                        ...(peopleShort ? [`${compact(cost.people - state.population)} people`] : []),
+                      ].join(", ")}`
+                    : "Ready to found"}
               </span>
             </div>
             {spots == null && (
@@ -339,6 +350,39 @@ export const Outposts = () => {
               </button>
             )}
           </div>
+          <div className="inset grid grid-cols-5 divide-x divide-line/50 py-2">
+            {RESOURCES.map((r) => (
+              <span key={r.id} className="flex flex-col items-center gap-0.5">
+                <Image alt={r.name} className="w-6 h-6 object-contain" src={r.img} />
+                <span className={clsx("text-xs font-extrabold tabular-nums", lacking.includes(r) ? "text-bad" : "text-parch")}>
+                  {compact(cost.resources[r.id])}
+                </span>
+              </span>
+            ))}
+            <span className="flex flex-col items-center gap-0.5">
+              <Image alt="People" className="w-6 h-6 object-contain" src={population} />
+              <span className={clsx("text-xs font-extrabold tabular-nums", peopleShort ? "text-bad" : "text-parch")}>{compact(cost.people)}</span>
+            </span>
+          </div>
+          <span className="text-[11px] text-muted">
+            {hallShort ? (
+              <>
+                <GameIcon e="🏛️" /> Town Hall {hallNeeded} opens this outpost. Settlers are people at home; soldiers don&apos;t count.
+              </>
+            ) : tooBig ? (
+              <>
+                <GameIcon e="📦" /> Your warehouse holds {compact(getRates(state).capacity)}: raise it to store {compact(cost.resources.iron)} of each.
+              </>
+            ) : lacking.length && Number.isFinite(wait) ? (
+              <>
+                <GameIcon e="⏳" /> Enough resources in about {formatDuration(wait)} at your current production.
+              </>
+            ) : peopleShort ? (
+              <>
+                <GameIcon e="👥" /> Settlers are people at home ({compact(state.population)} now); soldiers don&apos;t count.
+              </>
+            ) : null}
+          </span>
           {spots != null && (
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-bold text-sub">Choose the land to settle</span>

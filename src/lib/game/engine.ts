@@ -1254,6 +1254,27 @@ export function outpostCost(s: GameState) {
   };
 }
 
+/**
+ * How long until the stores hold what the next outpost costs, from production
+ * alone: 0 if they already do, Infinity if the warehouse can't hold it or a
+ * short resource isn't growing. Shown under "New outpost" like a building's wait.
+ */
+export function outpostWaitMs(s: GameState) {
+  const cost = outpostCost(s);
+  const rates = getRates(s);
+  let hours = 0;
+
+  for (const r of RESOURCE_IDS) {
+    const missing = cost.resources[r] - s.resources[r];
+
+    if (missing <= 0) continue;
+    if (cost.resources[r] > rates.capacity || rates.productionPerHour[r] <= 0) return Infinity;
+    hours = Math.max(hours, missing / rates.productionPerHour[r]);
+  }
+
+  return Math.ceil(hours * 3_600_000);
+}
+
 /** Why the tribe can't found an outpost now, or null. */
 export function outpostBlocked(s: GameState) {
   const slots = outpostSlots(s);

@@ -375,6 +375,21 @@ test("outposts: the Town Hall allows them, they cost resources and settlers, and
   expect(() => E.upgradeField(s, 0, "gold" as C.ResourceId, 0)).toThrow(E.GameError);
 });
 
+test("outposts: the wait for the next one comes from what's missing and production", () => {
+  const s = rich();
+  s.buildings["resource-warehouse"] = 20;
+  const cost = E.outpostCost(s).resources;
+  const rates = E.getRates(s);
+  for (const r of C.RESOURCE_IDS) s.resources[r] = cost[r];
+  expect(E.outpostWaitMs(s)).toBe(0);
+  // Crop 1 hour of production short: about an hour to wait.
+  s.resources.crop = cost.crop - rates.productionPerHour.crop;
+  expect(E.outpostWaitMs(s)).toBeCloseTo(3_600_000, -3);
+  // A warehouse too small for the price never fills.
+  s.buildings["resource-warehouse"] = 1;
+  if (E.getRates(s).capacity < cost.crop) expect(E.outpostWaitMs(s)).toBe(Infinity);
+});
+
 test("three full outposts add about half a top village's output, not a second village", () => {
   const top = C.productionAt(C.OUTPOST.fieldYield, 20);
   const outposts = 3 * C.productionAt(C.OUTPOST.fieldYield, C.OUTPOST.fieldMaxLevel);
