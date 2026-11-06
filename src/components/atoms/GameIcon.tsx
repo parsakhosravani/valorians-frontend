@@ -31,7 +31,8 @@ const ICON_BY_EMOJI: Record<string, string> = {
   "🏛️": "hall",
   "🚩": "banner",
   "🤝": "handshake",
-  "👥": "members",
+  // People (population, troop and member counts): the horned helmet, which stays clear at text size.
+  "👥": "resources/population",
   "✉️": "letter",
   "💰": "coins",
   "📦": "crate",
