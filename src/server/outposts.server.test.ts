@@ -9,7 +9,7 @@ import { advance, emptyArmy } from "@/lib/game/engine";
 import { outpostLand } from "@/lib/game/outpost";
 import { mutatePlayer } from "@/server/players";
 import { OUTPOST } from "@/lib/game/config";
-import { distance, seaRoute, terrainAt } from "@/lib/game/map";
+import { distance, pickHomeSite, seaRoute, terrainAt } from "@/lib/game/map";
 
 const ready = (s: Parameters<NonNullable<Parameters<typeof newPlayer>[1]>>[0]) => {
   s.buildings["town-hall"] = 20;
@@ -75,6 +75,38 @@ describe("outposts (server)", () => {
       // Packed this tight, it settles for the minimum: still past every wall.
       for (const v of crowd.slice(1)) expect(distance(p, v)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillagesMin);
     }
+  });
+
+  test("in a crowded world, the oldest tribes in the middle still find land for all their outposts", () => {
+    // A world settled the way the game settles it (pickHomeSite), 800 tribes. The oldest sit in its
+    // crowded middle: before clearOfVillagesLast, a third of them had no land for their outposts.
+    let seed = 7;
+    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const homes: { x: number; y: number }[] = [];
+
+    for (let i = 0; i < 800; i++) {
+      const p = pickHomeSite(homes, rand);
+
+      if (!p) break;
+      homes.push(p);
+    }
+    const outposts: { x: number; y: number }[] = [];
+    let stuck = 0;
+
+    for (const home of homes.slice(0, 40)) {
+      for (let k = 0; k < OUTPOST.hallLevels.length; k++) {
+        const taken = new Set([...homes, ...outposts].map((p) => `${p.x},${p.y}`));
+        const spots = candidates(home, taken, homes, outposts);
+
+        if (!spots.length) {
+          stuck++;
+          break;
+        }
+        for (const v of homes) if (v !== home) expect(distance(spots[0], v)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillagesLast);
+        outposts.push(spots[0]);
+      }
+    }
+    expect(stuck).toBe(0);
   });
 
   test("outposts keep clear of other outposts, not just their tile", async () => {

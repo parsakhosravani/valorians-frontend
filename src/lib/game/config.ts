@@ -666,6 +666,14 @@ export const OUTPOST = {
    * neighbour's wall, with its buildings drawn round the outpost.
    */
   clearOfVillagesMin: 4,
+  /**
+   * Last resort, for a tribe deep in a cluster where even 4 tiles clear of every
+   * village is nowhere within reach (Nov 2026: a rank-3 tribe with two outposts got
+   * "No free land" for its third; in a simulated crowded world a third of the
+   * oldest, middle-of-the-map tribes had none): right at a neighbour's wall
+   * (drawn ~2.6–3 tiles out). With it, no simulated tribe was left without land.
+   */
+  clearOfVillagesLast: 3,
   /** And this many tiles from every other outpost, so two never stand on top of each other (only the same tile was refused). */
   clearOfOutposts: 2.5,
   /** An outpost's field yields like a home producer of the same level (per-level base, see productionAt). */

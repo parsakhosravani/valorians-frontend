@@ -146,8 +146,10 @@ ask before "fixing" either. Add new decisions here when they are made.
   at least 5 from any other village (clear of its town: the wall reaches ~3 tiles and workshops
   stand a tile past it) and 2.5 from any other outpost. Where a crowded corner leaves nothing in
   that ring, the search widens up to 16 tiles; only if that still finds nothing does it settle
-  for 4 tiles from villages (just past the wall), so a tribe that can pay always has land (in a
-  simulated 400-tribe world: 395 clear, 5 at the minimum, none without land). The best land for
+  for 4 tiles from villages (just past the wall), then, deep in a cluster, 3 (right at the
+  wall). Nov 2026: a rank-3 tribe got "No free land" for its third outpost; in a world settled
+  like the game's, a third of the oldest tribes in the crowded middle had none at 4, none at 3.
+  The best land for
   each resource is offered.
 - Outposts founded under the older, closer rule are **moved once** to their owner's best proper
   spot, keeping their land's resource where possible (fields, builder and garrison go with them).

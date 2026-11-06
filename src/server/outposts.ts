@@ -18,7 +18,8 @@ const buildable = (p: Point) => !["sea", "lake", "mountains"].includes(terrainAt
 /**
  * Free tiles between OUTPOST.minDistance and maxDistance from home, nearest
  * first, skipping tribes and other outposts, never within
- * OUTPOST.clearOfVillages of another tribe's village (its town on the map) nor
+ * OUTPOST.clearOfVillages of another tribe's village (its town on the map; in a
+ * crowd, clearOfVillagesMin, then clearOfVillagesLast) nor
  * within OUTPOST.clearOfOutposts of another outpost. When that ring has no free land (a crowded corner of the map), the
  * search widens a few tiles at a time up to OUTPOST.farthestDistance.
  * Deterministic: the same map always offers the same spots.
@@ -27,7 +28,7 @@ export function candidates(home: Point, taken: Set<string>, villages: Point[] = 
   let out: Point[] = [];
 
   // Clear of everyone's town first; only a tribe with no such land anywhere in reach settles closer.
-  for (const clear of [OUTPOST.clearOfVillages, OUTPOST.clearOfVillagesMin])
+  for (const clear of [OUTPOST.clearOfVillages, OUTPOST.clearOfVillagesMin, OUTPOST.clearOfVillagesLast])
     for (let r: number = OUTPOST.maxDistance; ; r = Math.min(OUTPOST.farthestDistance, r + 3)) {
       out = within(home, r, taken, villages, outposts, clear);
       if (out.length) return out;
@@ -83,8 +84,12 @@ async function around(home: Point) {
 export async function offeredSpots(me: Player) {
   const home = await homeOf(me.id);
   const { villages, outposts, taken } = await around(home);
+  const spots = outpostSpots(home, candidates(home, taken, villages, outposts));
 
-  return outpostSpots(home, candidates(home, taken, villages, outposts));
+  // The player sees "No free land": say so in the event log, with what's round them.
+  if (!spots.length) logEvent("outpost.no_land", { home, offered: 0, villages: villages.length, outposts: outposts.length }, { playerId: me.id, level: "warn" });
+
+  return spots;
 }
 
 /**
@@ -233,8 +238,10 @@ export async function moveOutpostsOutOfWalls(now = Date.now()) {
     const free = candidates(home, near.taken, near.villages, near.outposts.filter((p) => p.x !== o.x || p.y !== o.y));
     // Nowhere roomier for this tribe: leave it where it is unless it's inside a wall or on an outpost.
     const roomier = free.some((p) => near.villages.every((v) => (v.x === home.x && v.y === home.y) || distance(v, p) >= OUTPOST.clearOfVillages));
+    // Founding may settle as close as clearOfVillagesLast in a crowd: only closer than that is moved,
+    // or such an outpost would hop between equally cramped spots every sweep.
     const awful =
-      villages.some((v) => (v.x !== home.x || v.y !== home.y) && distance(v, o) < OUTPOST.clearOfVillagesMin) ||
+      villages.some((v) => (v.x !== home.x || v.y !== home.y) && distance(v, o) < OUTPOST.clearOfVillagesLast) ||
       others.some((p) => distance(p, o) < OUTPOST.clearOfOutposts);
 
     if (!roomier && !awful) continue;
