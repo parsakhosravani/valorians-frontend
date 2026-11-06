@@ -72,8 +72,18 @@ describe("outposts (server)", () => {
     expect(spots.length).toBeGreaterThan(0);
     for (const p of spots) {
       expect(distance(p, home)).toBeLessThanOrEqual(OUTPOST.farthestDistance);
-      for (const v of crowd.slice(1)) expect(distance(p, v)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillages);
+      // Packed this tight, it settles for the minimum: still past every wall.
+      for (const v of crowd.slice(1)) expect(distance(p, v)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillagesMin);
     }
+  });
+
+  test("outposts keep clear of other outposts, not just their tile", async () => {
+    const home = await homeOf((await newPlayer(Date.now())).id);
+    const first = candidates(home, new Set())[0];
+    const spots = candidates(home, new Set([`${first.x},${first.y}`]), [home], [first]);
+
+    expect(spots.length).toBeGreaterThan(0);
+    for (const p of spots) expect(distance(p, first)).toBeGreaterThanOrEqual(OUTPOST.clearOfOutposts);
   });
 
   test("an outpost never stands inside another tribe's walls", async () => {
@@ -106,7 +116,7 @@ describe("outposts (server)", () => {
 
       return s;
     });
-    await db.execute("DELETE FROM meta WHERE key = 'outposts_clear_v1'");
+    await db.execute("DELETE FROM meta WHERE key = 'outposts_clear_v2'");
 
     expect(await moveOutpostsOutOfWalls()).toBeGreaterThanOrEqual(1);
     const o = (await reload(me.id)).state.outposts[0];
@@ -116,8 +126,42 @@ describe("outposts (server)", () => {
     expect(distance(o, theirs)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillages);
     expect(distance(o, home)).toBeLessThanOrEqual(OUTPOST.maxDistance);
     expect(o.fields).toEqual({ iron: 3, wood: 2, clay: 1, crop: 4 });
+    expect(o.land).toEqual(outpostLand(o.x, o.y));
     // Once only.
     expect(await moveOutpostsOutOfWalls()).toBe(0);
+  });
+
+  test("an outpost with troops on it or on the way waits to be moved", async () => {
+    const T0 = Date.now();
+    const me = await newPlayer(T0, ready);
+    const them = await newPlayer(T0);
+    await homeOf(me.id);
+    const theirs = await homeOf(them.id);
+    const db = await getDb();
+    const bad = { x: theirs.x, y: theirs.y + 2 };
+
+    await db.execute({ sql: "DELETE FROM outposts WHERE x = ? AND y = ?", args: [bad.x, bad.y] });
+    await db.execute({ sql: "INSERT INTO outposts (user_id, idx, x, y) VALUES (?, 0, ?, ?)", args: [me.id, bad.x, bad.y] });
+    await mutatePlayer(me.id, T0, (s) => {
+      s.outposts = [{ x: bad.x, y: bad.y, foundedAt: T0, fields: { iron: 1, wood: 1, clay: 1, crop: 1 }, land: outpostLand(bad.x, bad.y), garrison: { ...emptyArmy(), spearman: 10 } }];
+
+      return s;
+    });
+    await db.execute("DELETE FROM meta WHERE key = 'outposts_clear_v2'");
+
+    await moveOutpostsOutOfWalls();
+    expect((await reload(me.id)).state.outposts[0]).toMatchObject(bad);
+    // Not marked done: it moves once its garrison has gone.
+    expect((await db.execute("SELECT 1 FROM meta WHERE key = 'outposts_clear_v2'")).rows.length).toBe(0);
+    await mutatePlayer(me.id, T0, (s) => {
+      s.outposts[0].garrison = emptyArmy();
+
+      return s;
+    });
+    await moveOutpostsOutOfWalls();
+    const o = (await reload(me.id)).state.outposts[0];
+    expect(distance(o, theirs)).toBeGreaterThanOrEqual(OUTPOST.clearOfVillagesMin);
+    expect(o.garrison ?? emptyArmy()).toEqual(emptyArmy());
   });
 
   test("the player picks the land: offered spots can be settled, others refused", async () => {

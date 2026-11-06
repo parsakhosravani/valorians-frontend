@@ -3,12 +3,13 @@ import "server-only";
 import { logEvent } from "./events";
 import { getDb } from "./db";
 import { homeOf } from "./map";
-import { Player, mutatePlayer } from "./players";
+import { Player, findById, mutatePlayer } from "./players";
 
 import { OUTPOST } from "@/lib/game/config";
 import { Army, GameError, advance, foundOutpost, getRates, outpostBlocked } from "@/lib/game/engine";
 import { Point, distance, routeMs, seaRoute, terrainAt } from "@/lib/game/map";
-import { leaveOutpost, sendToOutpost } from "@/lib/game/garrison";
+import { garrisonOf, headingTo, leaveOutpost, sendToOutpost } from "@/lib/game/garrison";
+import { armySize } from "@/lib/game/war";
 import { outpostLand, outpostSpots } from "@/lib/game/outpost";
 
 /** Land an outpost can stand on: no sea, lakes or mountain peaks. */
@@ -16,21 +17,27 @@ const buildable = (p: Point) => !["sea", "lake", "mountains"].includes(terrainAt
 
 /**
  * Free tiles between OUTPOST.minDistance and maxDistance from home, nearest
- * first, skipping tribes and other outposts, and never within
- * OUTPOST.clearOfVillages of another tribe's village (inside its walls on the
- * map). When that ring has no free land (a crowded corner of the map), the
+ * first, skipping tribes and other outposts, never within
+ * OUTPOST.clearOfVillages of another tribe's village (its town on the map) nor
+ * within OUTPOST.clearOfOutposts of another outpost. When that ring has no free land (a crowded corner of the map), the
  * search widens a few tiles at a time up to OUTPOST.farthestDistance.
  * Deterministic: the same map always offers the same spots.
  */
-export function candidates(home: Point, taken: Set<string>, villages: Point[] = []) {
-  for (let r: number = OUTPOST.maxDistance; ; r = Math.min(OUTPOST.farthestDistance, r + 3)) {
-    const out = within(home, r, taken, villages);
+export function candidates(home: Point, taken: Set<string>, villages: Point[] = [], outposts: Point[] = []) {
+  let out: Point[] = [];
 
-    if (out.length || r >= OUTPOST.farthestDistance) return out;
-  }
+  // Clear of everyone's town first; only a tribe with no such land anywhere in reach settles closer.
+  for (const clear of [OUTPOST.clearOfVillages, OUTPOST.clearOfVillagesMin])
+    for (let r: number = OUTPOST.maxDistance; ; r = Math.min(OUTPOST.farthestDistance, r + 3)) {
+      out = within(home, r, taken, villages, outposts, clear);
+      if (out.length) return out;
+      if (r >= OUTPOST.farthestDistance) break;
+    }
+
+  return out;
 }
 
-function within(home: Point, r: number, taken: Set<string>, villages: Point[]) {
+function within(home: Point, r: number, taken: Set<string>, villages: Point[], outposts: Point[], clear: number) {
   const out: Point[] = [];
   const others = villages.filter((v) => v.x !== home.x || v.y !== home.y);
 
@@ -41,7 +48,8 @@ function within(home: Point, r: number, taken: Set<string>, villages: Point[]) {
 
       if (d < OUTPOST.minDistance || d > r) continue;
       if (taken.has(`${p.x},${p.y}`) || !buildable(p)) continue;
-      if (others.some((v) => distance(v, p) < OUTPOST.clearOfVillages)) continue;
+      if (others.some((v) => distance(v, p) < clear)) continue;
+      if (outposts.some((o) => distance(o, p) < OUTPOST.clearOfOutposts)) continue;
       out.push(p);
     }
   }
@@ -65,17 +73,18 @@ async function around(home: Point) {
   );
   const pt = (row: Record<string, unknown>) => ({ x: Number(row.x), y: Number(row.y) });
   const villages = users.rows.map(pt);
-  const taken = new Set([...villages, ...outs.rows.map(pt)].map((p) => `${p.x},${p.y}`));
+  const outposts = outs.rows.map(pt);
+  const taken = new Set([...villages, ...outposts].map((p) => `${p.x},${p.y}`));
 
-  return { villages, taken };
+  return { villages, outposts, taken };
 }
 
 /** The spots this tribe is offered for its next outpost: the best land for each resource (see outpostSpots). */
 export async function offeredSpots(me: Player) {
   const home = await homeOf(me.id);
-  const { villages, taken } = await around(home);
+  const { villages, outposts, taken } = await around(home);
 
-  return outpostSpots(home, candidates(home, taken, villages));
+  return outpostSpots(home, candidates(home, taken, villages, outposts));
 }
 
 /**
@@ -93,8 +102,8 @@ export async function settleOutpost(me: Player, now: number, pick?: Point) {
 
   await repairClaims(me, now);
   const home = await homeOf(me.id);
-  const { villages, taken } = await around(home);
-  const free = candidates(home, taken, villages);
+  const { villages, outposts, taken } = await around(home);
+  const free = candidates(home, taken, villages, outposts);
   let spots = free.slice(0, 8);
 
   if (pick) {
@@ -157,16 +166,20 @@ async function repairClaims(me: Player, now: number) {
 }
 
 /**
- * Outposts founded before they kept clear of other villages (Nov 2026) could
- * stand inside a neighbour's walls on the map. Moves each of those, once, to
- * its owner's nearest proper spot (see candidates): only the tile changes,
- * its fields and builder go with it. Outposts can't be attacked, so nothing
- * on the road depends on where one stands. Done when meta `outposts_clear_v1`
- * is set; returns how many moved.
+ * Outposts founded before the clearances grew (Nov 2026) can stand on a
+ * neighbour's wall, among its buildings, or on top of another outpost. Moves
+ * each of those to its owner's best proper spot (see candidates), keeping the
+ * land it was founded for when it can (same resource, highest bonus, nearest):
+ * its fields, builder and garrison go with it.
+ *
+ * An outpost troops are marching to, or an army set out from, or one under
+ * attack waits: it moves on a later sweep, once the roads are clear, so no
+ * march lands somewhere it didn't set out for. Done (meta `outposts_clear_v2`)
+ * when nothing is left to move; returns how many moved this time.
  */
-export async function moveOutpostsOutOfWalls() {
+export async function moveOutpostsOutOfWalls(now = Date.now()) {
   const db = await getDb();
-  const done = await db.execute("SELECT value FROM meta WHERE key = 'outposts_clear_v1'");
+  const done = await db.execute("SELECT value FROM meta WHERE key = 'outposts_clear_v2'");
 
   if (done.rows.length) return 0;
   const homes = (await db.execute("SELECT id, map_x AS x, map_y AS y FROM users WHERE map_x IS NOT NULL")).rows.map((r) => ({
@@ -175,44 +188,84 @@ export async function moveOutpostsOutOfWalls() {
     y: Number(r.y),
   }));
   const homeById = new Map(homes.map((h) => [h.id, h]));
-  const outs = (await db.execute("SELECT user_id, idx, x, y FROM outposts")).rows.map((r) => ({
+  const outs = (await db.execute("SELECT user_id, idx, x, y FROM outposts ORDER BY user_id, idx")).rows.map((r) => ({
     owner: Number(r.user_id),
     idx: Number(r.idx),
     x: Number(r.x),
     y: Number(r.y),
   }));
   let moved = 0;
+  let waiting = 0;
 
   for (const o of outs) {
     const home = homeById.get(o.owner);
 
     if (!home) continue;
-    const inside = homes.some((h) => h.id !== o.owner && distance(h, o) < OUTPOST.clearOfVillages);
+    // Checked against the map as it is now: an outpost moved a moment ago may have cleared this one.
+    const { villages, outposts, taken } = await around(o);
+    const others = outposts.filter((p) => p.x !== o.x || p.y !== o.y);
+    const cramped =
+      villages.some((v) => (v.x !== home.x || v.y !== home.y) && distance(v, o) < OUTPOST.clearOfVillages) ||
+      others.some((p) => distance(p, o) < OUTPOST.clearOfOutposts);
 
-    if (!inside) continue;
-    const { villages, taken } = await around(home);
+    if (!cramped) continue;
+    const owner = await findById(o.owner);
+    const mine = owner?.state.outposts?.[o.idx];
 
-    for (const spot of candidates(home, taken, villages).slice(0, 8)) {
+    if (!owner || !mine || mine.x !== o.x || mine.y !== o.y) continue;
+    const busy =
+      armySize(garrisonOf(mine)) > 0 ||
+      armySize(headingTo(owner.state, o.idx)) > 0 ||
+      (
+        await db.execute({
+          sql: `SELECT 1 FROM attacks WHERE status IN ('marching','resolving','fighting')
+                  AND ((attacker_id = ? AND base_outpost = ?) OR (defender_id = ? AND target_outpost = ?)) LIMIT 1`,
+          args: [o.owner, o.idx, o.owner, o.idx],
+        })
+      ).rows.length > 0;
+
+    if (busy) {
+      waiting++;
+      continue;
+    }
+    const near = await around(home);
+    const want = mine.land ?? outpostLand(o.x, o.y);
+    const free = candidates(home, near.taken, near.villages, near.outposts.filter((p) => p.x !== o.x || p.y !== o.y));
+    // Nowhere roomier for this tribe: leave it where it is unless it's inside a wall or on an outpost.
+    const roomier = free.some((p) => near.villages.every((v) => (v.x === home.x && v.y === home.y) || distance(v, p) >= OUTPOST.clearOfVillages));
+    const awful =
+      villages.some((v) => (v.x !== home.x || v.y !== home.y) && distance(v, o) < OUTPOST.clearOfVillagesMin) ||
+      others.some((p) => distance(p, o) < OUTPOST.clearOfOutposts);
+
+    if (!roomier && !awful) continue;
+    const spots = free
+      .map((p) => ({ p, land: outpostLand(p.x, p.y) }))
+      .sort((a, b) => Number(b.land.resource === want.resource) - Number(a.land.resource === want.resource) || b.land.percent - a.land.percent || distance(home, a.p) - distance(home, b.p))
+      .slice(0, 8);
+
+    for (const { p: spot, land } of spots) {
       const up = await db
         .execute({ sql: "UPDATE outposts SET x = ?, y = ? WHERE user_id = ? AND idx = ? AND x = ? AND y = ?", args: [spot.x, spot.y, o.owner, o.idx, o.x, o.y] })
         .catch(() => null); // someone took the tile a moment ago
 
       if (!up?.rowsAffected) continue;
-      await mutatePlayer(o.owner, Date.now(), (s) => {
-        const mine = s.outposts[o.idx];
+      await mutatePlayer(o.owner, now, (s) => {
+        const it = s.outposts[o.idx];
 
-        if (mine && mine.x === o.x && mine.y === o.y) s.outposts[o.idx] = { ...mine, x: spot.x, y: spot.y, land: outpostLand(spot.x, spot.y) };
+        if (it && it.x === o.x && it.y === o.y) s.outposts[o.idx] = { ...it, x: spot.x, y: spot.y, land };
 
         return s;
       });
+      logEvent("outpost.moved", { idx: o.idx, from: { x: o.x, y: o.y }, to: spot, land }, { playerId: o.owner, at: now });
       moved++;
       break;
     }
   }
-  await db.execute({
-    sql: "INSERT INTO meta (key, value) VALUES ('outposts_clear_v1', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-    args: [String(moved)],
-  });
+  if (!waiting)
+    await db.execute({
+      sql: "INSERT INTO meta (key, value) VALUES ('outposts_clear_v2', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      args: [String(moved)],
+    });
 
   return moved;
 }
