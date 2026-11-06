@@ -652,10 +652,22 @@ export const OUTPOST = {
   farthestDistance: 16,
   /**
    * Kept this many tiles from every other tribe's village too, so an outpost never
-   * stands inside a neighbour's walls (drawn about 2.6–3 tiles out, see claimEdge).
-   * Was 5: in busy parts of the map that left no land at all within maxDistance.
+   * stands in a neighbour's town on the map. The wall is drawn about 2.6–3 tiles out
+   * (see claimEdge) and the workshops and fields stand up to a tile past it
+   * (villagePlan), so the town reaches ~4 tiles; the outpost's own picture is
+   * about a tile wide. 4 → 5 (Nov 2026): at 4, outposts sat on walls and among a
+   * neighbour's Sawmill and Arsenal. (5 once left crowded tribes with no land, back
+   * when the search stopped at maxDistance; it now widens to farthestDistance.)
    */
-  clearOfVillages: 4,
+  clearOfVillages: 5,
+  /**
+   * Only where no land within farthestDistance keeps clearOfVillages (a tribe deep in
+   * a crowded cluster: homes can stand 5 apart), the search settles for this: past the
+   * neighbour's wall, with its buildings drawn round the outpost.
+   */
+  clearOfVillagesMin: 4,
+  /** And this many tiles from every other outpost, so two never stand on top of each other (only the same tile was refused). */
+  clearOfOutposts: 2.5,
   /** An outpost's field yields like a home producer of the same level (per-level base, see productionAt). */
   fieldYield: 60,
   /**

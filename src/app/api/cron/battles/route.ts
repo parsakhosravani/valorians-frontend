@@ -64,7 +64,7 @@ async function run(started: number) {
   );
   // Villages already on the map move to better land nearby, a batch at a time (see resettleVillages).
   await resettleVillages().catch((e) => console.error("resettling villages failed", e));
-  // Outposts that went up inside a neighbour's walls move out, once (see moveOutpostsOutOfWalls).
+  // Outposts standing in a neighbour's town or on another outpost move out (see moveOutpostsOutOfWalls).
   await moveOutpostsOutOfWalls().catch((e) => console.error("moving outposts out of walls failed", e));
   // Map copies of tribes that went stale (or predate them): a few seconds at most.
   await refreshTribeColumns(started, 8_000).catch((e) =>

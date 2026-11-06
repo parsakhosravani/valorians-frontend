@@ -1384,7 +1384,8 @@ export const WarMap = ({
                 <HomeVillage
                   at={{ x: px(data.home.x), y: py(data.home.y) }}
                   home={data.home}
-                  neighbours={data.tribes.filter((t) => !t.isMe)}
+                  // Outposts too (anyone's, yours included): no building is drawn on one.
+                  neighbours={[...data.tribes.filter((t) => !t.isMe), ...(data.outposts ?? [])]}
                   zoom={restZoom}
                   onOpen={setBuilding}
                 />
