@@ -59,3 +59,19 @@ export async function markNoticesRead(userId: number, upTo: number) {
 
   await db.execute({ sql: "UPDATE notices SET read = 1 WHERE user_id = ? AND id <= ? AND read = 0", args: [userId, upTo] });
 }
+
+/**
+ * The cheapest look at the inbox: the newest notice's id and how many are
+ * unread. The game asks every few seconds while it's open (see the pulse in
+ * ResourceContext); a new id means something happened (a trade went through,
+ * an army was spotted, a battle ended) and the game syncs and shows it.
+ */
+export async function noticePulse(userId: number): Promise<{ newest: number; unread: number }> {
+  const db = await getDb();
+  const rs = await db.execute({
+    sql: "SELECT COALESCE(MAX(id), 0) AS newest, COALESCE(SUM(read = 0), 0) AS unread FROM notices WHERE user_id = ?",
+    args: [userId],
+  });
+
+  return { newest: Number(rs.rows[0]?.newest ?? 0), unread: Number(rs.rows[0]?.unread ?? 0) };
+}
