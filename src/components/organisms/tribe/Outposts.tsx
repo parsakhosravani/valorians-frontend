@@ -416,3 +416,37 @@ export const Outposts = () => {
     </section>
   );
 };
+
+/**
+ * A one-line summary of the outposts near the top of the Build screen (they
+ * live under their own tab, past every building): what they send home, idle
+ * builders and the troops stationed there. Tapping it opens the tab.
+ */
+export const OutpostsShortcut = ({ onOpen }: { onOpen: () => void }) => {
+  const { state } = useGame();
+  const perHour = state.outposts.reduce((n, o) => {
+    const out = outpostOutput(o);
+
+    return n + RESOURCES.reduce((m, r) => m + out[r.id], 0);
+  }, 0);
+  const idle = state.outposts.filter((o) => !o.job).length;
+  const stationed = state.outposts.reduce((n, o) => n + armySize(garrisonOf(o)), 0);
+
+  return (
+    <button className="card-flat rounded-xl px-2.5 py-2 flex items-center gap-2.5 text-left active:scale-[0.99]" type="button" onClick={onOpen}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img alt="" className="w-9 h-9 object-contain" src={OUTPOST_IMG} />
+      <span className="flex-1 min-w-0 leading-tight">
+        <span className="block text-sm font-bold">
+          {state.outposts.length} outpost{state.outposts.length === 1 ? "" : "s"}
+          {perHour > 0 && <span className="text-good tabular-nums"> · +{compact(perHour)}/h home</span>}
+        </span>
+        <span className={clsx("block text-[11px] truncate", idle ? "text-goldtext" : "text-muted")}>
+          {idle ? `${idle} builder${idle === 1 ? "" : "s"} free` : "Builders at work"}
+          {stationed > 0 && <span className="text-muted"> · 🛡️ {compact(stationed)} stationed</span>}
+        </span>
+      </span>
+      <span className="text-muted text-sm">›</span>
+    </button>
+  );
+};

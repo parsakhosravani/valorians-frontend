@@ -134,7 +134,7 @@ export const notify = {
         `Arrives in <b>${inMinutes(travelMs)}</b>. ` +
         (outpost != null ? "Send more troops there, or bring the garrison home." : "Train defenders or upgrade your walls now."),
       "🛡️ Prepare defenses",
-      outpost != null ? "/tribe" : "/battle?tab=army"
+      outpost != null ? "/tribe?tab=outposts" : "/battle?tab=army"
     );
   },
 
