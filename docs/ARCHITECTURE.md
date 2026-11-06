@@ -54,6 +54,10 @@ test player instead (`?dev_user=N` picks which one).
   between syncs using the same engine functions (`advance`, `getRates`).
 - Taps in the Daily Mine apply instantly on screen and are sent in batches
   (`{ taps, crits, comboSum, frenzyTaps }`); the server caps them (speed, crit share, combo, Frenzy).
+- Syncs: a full sync every 60 s and when the app comes back to the screen. Between them, while
+  visible, a pulse every 8 s (`GET /api/notices/pulse`: newest notice id + unread, one indexed
+  query, no player load or event-log line). A new notice → full sync now, and the bell shows it as
+  a toast. (Polling, not SSE: Vercel functions bill for every second a stream stays open.)
 - Pages in `src/app/(routes)/` only render a template from `src/components/templates/`.
 
 ## War and battles

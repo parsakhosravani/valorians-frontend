@@ -267,6 +267,13 @@ function bindLatest<T extends object>(get: () => T): T {
 
 const FLUSH_DELAY_MS = 700;
 const RESYNC_MS = 60_000;
+/**
+ * How often an open game asks whether anything happened (notices/pulse). The
+ * bot's Telegram ping rang while you played, but the game only noticed on the
+ * next full sync (a minute) or after reopening. A pulse is one tiny query; a
+ * full sync follows only when there's news.
+ */
+const PULSE_MS = 8_000;
 
 type Pending = Record<ResourceId, Required<TapBatch>>;
 const emptyBatch = (): Required<TapBatch> => ({ taps: 0, crits: 0, comboSum: 0, frenzyTaps: 0 });
@@ -393,6 +400,24 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     const r = setInterval(() => {
       flush().then(load);
     }, RESYNC_MS);
+    // Something new in the inbox (a trade went through, an attack is coming, a battle ended): sync now,
+    // and the bell shows it as a toast (NoticesBell).
+    let newest: number | null = null;
+    let asking = false;
+    const p = setInterval(async () => {
+      if (document.visibilityState !== "visible" || asking || !authHeader) return;
+      asking = true;
+      try {
+        const pulse = await apiRequest<{ newest: number; unread: number }>(authHeader, "notices/pulse");
+
+        if (newest !== null && pulse.newest > newest) await flush().then(load);
+        newest = pulse.newest;
+      } catch {
+        // Offline for a moment: the next pulse tries again.
+      } finally {
+        asking = false;
+      }
+    }, PULSE_MS);
     const onHide = () => {
       if (document.visibilityState === "hidden") flush();
       else load();
@@ -401,9 +426,10 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     return () => {
       clearInterval(t);
       clearInterval(r);
+      clearInterval(p);
       document.removeEventListener("visibilitychange", onHide);
     };
-  }, [status, flush, load]);
+  }, [status, flush, load, authHeader]);
 
   const comboRef = useRef({ count: 0, last: 0 });
   const [combo, setCombo] = useState({ count: 0, multiplier: 1 });
