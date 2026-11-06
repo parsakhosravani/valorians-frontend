@@ -28,6 +28,8 @@ test.describe("Valorians 2 late game", () => {
     await editState(id, lateGame);
     const noErrors = await open(page, id, "/tribe");
 
+    // Outposts have their own tab on the Build screen.
+    await page.getByRole("tab", { name: "Outposts" }).click();
     // Founding offers the land to choose from, each with its bonus.
     await page.getByRole("button", { name: "Found outpost" }).click();
     await expect(page.getByText("Choose the land to settle")).toBeVisible();

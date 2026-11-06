@@ -1,13 +1,13 @@
 "use client";
 
-import React, { FunctionComponent, useMemo, useState } from "react";
+import React, { FunctionComponent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
 
 import builderImg from "~/images/resources/builder.webp";
 
 import { Building } from "@/components/organisms/tribe/Building";
-import { Outposts } from "@/components/organisms/tribe/Outposts";
+import { Outposts, OutpostsShortcut } from "@/components/organisms/tribe/Outposts";
 import { Drawer } from "@/components/molecules/Drawer";
 import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import { RESOURCES, useGame, useTelegramContext } from "@/context";
@@ -132,6 +132,8 @@ type Job = { building: string; toLevel: number; startedAt: number; endsAt: numbe
 
 /** Not built and can't be yet: a requirement is missing (Town Hall level, another building). */
 const isLocked = (o: UpgradeOption) => o.level === 0 && !!o.blocked && !o.job;
+/** Nothing more to do here: at its top, and no Mastery stars to earn. */
+const isDone = (o: UpgradeOption) => o.blocked === "Max level" && !canMaster(o.building) && !o.job;
 
 /**
  * The builders as a row of small slots instead of a stack of big rows:
@@ -196,7 +198,8 @@ const BuilderSlots = ({
   </div>
 );
 
-type Filter = "all" | BuildingGroup;
+/** "outposts": the outposts instead of the buildings (they sat below every building, a long scroll late on). */
+type Filter = "all" | BuildingGroup | "outposts";
 export const Tribe: FunctionComponent = () => {
   const { telegram } = useTelegramContext();
   const { state, rates, now, upgradeBuilding } = useGame();
@@ -204,6 +207,13 @@ export const Tribe: FunctionComponent = () => {
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [showLocked, setShowLocked] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+  // Outposts open up at Town Hall 10; until then they'd only be a promise.
+  // /tribe?tab=outposts (the bot's outpost alerts) opens on the outposts.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "outposts") setFilter("outposts");
+  }, []);
+  const outpostsOpen = rates.builders > 1 || state.outposts.length > 0 || (state.buildings["town-hall"] ?? 0) >= 8;
 
   const options = useMemo(() => upgradeOptions(state), [state]);
   const advice = useMemo(() => recommendUpgrade(state, options), [state, options]);
@@ -227,6 +237,7 @@ export const Tribe: FunctionComponent = () => {
   const rest = options
     .filter((o) => !o.job && !picked.has(o.building.id))
     .filter((o) => filter === "all" || buildingGroup(o.building) === filter)
+    .sort((a, b) => Number(isDone(a)) - Number(isDone(b)))
     .sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? costTotal(a.cost) - costTotal(b.cost) : (a.hoursToAfford ?? 1e9) - (b.hoursToAfford ?? 1e9)));
 
   const upgrade = async (id: string) => {
@@ -257,6 +268,7 @@ export const Tribe: FunctionComponent = () => {
           />
         </div>
         <BuilderSlots busy={busy} free={freeBuilders} jobs={jobs} now={now} picks={picks} onOpen={setOpen} onUpgrade={upgrade} />
+        {state.outposts.length > 0 && filter !== "outposts" && <OutpostsShortcut onOpen={() => setFilter("outposts")} />}
         {freeBuilders > picks.length && saving && (
           <p className="text-xs text-muted">
             Saving for <b className="text-sub">{saving.building.name}</b>, ready in ~{formatDuration((saving.hoursToAfford ?? 0) * 3600e3)}.
@@ -268,12 +280,16 @@ export const Tribe: FunctionComponent = () => {
       <section className="flex flex-col gap-2.5 min-w-0">
         <SectionTitle>Buildings</SectionTitle>
         <Segmented
-          tabs={(["all", "economy", "military", "defense"] as Filter[]).map((f) => ({ id: f, label: f === "all" ? "All" : GROUP_LABEL[f] }))}
+          tabs={(["all", "economy", "military", "defense", ...(outpostsOpen ? ["outposts"] : [])] as Filter[]).map((f) => ({
+            id: f,
+            label: f === "all" ? "All" : f === "outposts" ? "Outposts" : GROUP_LABEL[f],
+          }))}
           value={filter}
           onChange={setFilter}
         />
-        <div className="flex flex-col gap-1.5">
-          {rest.filter((o) => !isLocked(o)).map((o) => (
+        {filter === "outposts" && <Outposts />}
+        <div className={clsx("flex flex-col gap-1.5", filter === "outposts" && "hidden")}>
+          {rest.filter((o) => !isLocked(o) && !isDone(o)).map((o) => (
             <UpgradeRow
               key={o.building.id}
               best={o.building.id === best?.building.id}
@@ -285,6 +301,29 @@ export const Tribe: FunctionComponent = () => {
             />
           ))}
           {rest.length === 0 && <p className="text-sm text-muted">Nothing else here right now.</p>}
+          {/* Finished buildings fold away too: late on they were a dozen "Max level" rows. */}
+          {rest.some(isDone) && (
+            <button
+              className="flex items-center justify-between px-2.5 py-2 rounded-xl border border-dashed border-line text-sm font-bold text-muted"
+              type="button"
+              onClick={() => setShowDone((v) => !v)}
+            >
+              <span>✓ At their top · {rest.filter(isDone).length}</span>
+              <span className="text-xs">{showDone ? "Hide ▲" : "Show ▼"}</span>
+            </button>
+          )}
+          {showDone &&
+            rest.filter(isDone).map((o) => (
+              <UpgradeRow
+                key={o.building.id}
+                best={false}
+                busy={false}
+                freeBuilder={freeBuilders > 0}
+                o={o}
+                onOpen={() => setOpen(o.building)}
+                onUpgrade={() => upgrade(o.building.id)}
+              />
+            ))}
           {/* Locked buildings fold away: a new tribe saw some 20 "Needs …" rows before anything useful. */}
           {rest.some(isLocked) && (
             <button
@@ -311,8 +350,6 @@ export const Tribe: FunctionComponent = () => {
         </div>
       </section>
 
-      {/* Outposts open up at Town Hall 10; until then they'd only be a promise. */}
-      {(rates.builders > 1 || state.outposts.length > 0 || (state.buildings["town-hall"] ?? 0) >= 8) && <Outposts />}
 
       <Drawer isOpen={!!open} position="bottom" onClose={() => setOpen(null)}>
         {open && (
