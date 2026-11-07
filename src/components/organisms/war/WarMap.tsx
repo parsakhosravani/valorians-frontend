@@ -149,6 +149,8 @@ type Movement = {
   battle?: LiveBattleData | null;
   /** Fighting in another army's battle (same side): that army's id. */
   allyOf?: number;
+  /** The clans on each side, and whether your clan is at war over it (older servers don't send it). */
+  clans?: BattleMovement["clans"];
   /** Your armies: spoils carried from an earlier battle and new orders taken (older servers don't send them). */
   loot?: Partial<Record<ResourceId, number>> | null;
   coins?: number;

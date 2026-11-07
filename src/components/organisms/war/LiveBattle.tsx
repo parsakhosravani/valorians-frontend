@@ -9,6 +9,8 @@ import { UNITS, shownXY } from "@/lib/game/config";
 import type { BattleRound } from "@/lib/game/battle";
 import type { Army } from "@/lib/game/engine";
 import { GameIcon, IconText } from "@/components/atoms/GameIcon";
+import { ClanFlag } from "@/components/molecules/ClanFlag";
+import type { ClanFlag as Flag } from "@/lib/game/clan";
 
 /** A battle under way, as /api/war/map sends it: only the rounds fought so far. */
 export type LiveBattleData = {
@@ -23,11 +25,16 @@ export type LiveBattleData = {
   defense?: number;
 };
 
+/** A clan riding into battle with its member (older servers don't send it). */
+export type BattleClan = { id: number; tag: string; name: string; flag: Flag };
+
 export type BattleMovement = {
   id: number;
   /** This army joined the battle of army `allyOf` (its own, or a clanmate's). */
   allyOf?: number;
-  kind: "outgoing" | "incoming";
+  kind: "outgoing" | "incoming" | "clan-outgoing" | "clan-incoming";
+  /** The clans on each side, and whether the viewer's clan is at war over this fight. */
+  clans?: { attacker: BattleClan | null; defender: BattleClan | null; war: boolean };
   from: { x: number; y: number; name: string };
   to: { x: number; y: number; name: string };
   units: Army | null;
@@ -55,6 +62,26 @@ const sides = (m: BattleMovement) => ({
   attacker: m.kind === "outgoing" ? "Your army" : m.from.name,
   defender: m.kind === "incoming" ? "Your troops" : m.campLevel ? "Barbarians" : m.to.name,
 });
+
+/** "[TAG] name", so a clan battle reads as clan against clan, not just two players. */
+const tagged = (name: string, clan: BattleClan | null | undefined) => (clan ? `[${clan.tag}] ${name}` : name);
+
+/** One side of a clan battle: the banner, the clan's name and the player fighting for it. */
+const ClanSide = ({ clan, who, align }: { clan: BattleClan | null; who: string; align: "left" | "right" }) => (
+  <div className={clsx("flex-1 min-w-0 flex items-center gap-2", align === "right" && "flex-row-reverse text-right")}>
+    {clan ? (
+      <ClanFlag className="shrink-0" flag={clan.flag} size={40} title={`${clan.name} flag`} />
+    ) : (
+      <span className="shrink-0 w-[34px] h-10 flex items-center justify-center text-2xl opacity-70"><GameIcon e="🏳️" /></span>
+    )}
+    <div className="min-w-0">
+      <div className="font-display font-black text-sm text-parch truncate">{clan ? clan.name : "No clan"}</div>
+      <div className="text-xs text-muted truncate">
+        {clan && <b className="text-goldtext">[{clan.tag}]</b>} {who}
+      </div>
+    </div>
+  </div>
+);
 
 /** The clash on the map, where the armies met: crossed swords, the round and the time left. */
 export const BattleToken = ({
@@ -188,18 +215,45 @@ export const LiveBattleDrawer = ({
 }) => {
   const b = m?.battle;
   const last = b ? lastRound(b) : null;
-  const names = m ? sides(m) : null;
+  const plain = m ? sides(m) : null;
+  const clans = m && !m.campLevel ? m.clans : undefined;
+  const clanFight = !!(clans && (clans.attacker || clans.defender));
+  const names = plain && {
+    attacker: tagged(plain.attacker, clans?.attacker),
+    defender: plain.defender === "Your troops" ? plain.defender : tagged(plain.defender, clans?.defender),
+  };
   const done = b ? Math.min(1, Math.max(0, (now - b.startedAt) / Math.max(1, b.endsAt - b.startedAt))) : 0;
   const waitNext = b?.nextRoundAt != null ? b.nextRoundAt - now : null;
 
   return (
     <Drawer isOpen={!!m} position="bottom" title={m ? `Battle at ${m.kind === "incoming" ? "your walls" : m.to.name}` : ""} onClose={onClose}>
-      {m && b && names && (
+      {m && b && plain && names && (
         <div className="flex flex-col gap-3">
+          {/* A clan battle: the two clans' banners face each other, so you see the war, not only the players. */}
+          {clanFight && clans && plain && (
+            <div
+              className={clsx(
+                "rounded-xl border px-3 py-2.5 flex flex-col gap-1.5",
+                clans.war ? "border-[#8A3B23] bg-[#2A140E]" : "border-line bg-ink/40",
+              )}
+            >
+              {clans.war && (
+                <div className="text-center text-[10px] font-extrabold tracking-[0.14em] text-[#FFB27A]">
+                  <GameIcon e="🔥" /> CLAN WAR
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <ClanSide align="left" clan={clans.attacker} who={plain.attacker} />
+                <span className="shrink-0 font-display font-black text-goldtext text-sm">VS</span>
+                <ClanSide align="right" clan={clans.defender} who={plain.defender === "Your troops" ? "You" : plain.defender} />
+              </div>
+            </div>
+          )}
+
           <div className="text-center">
             <div className="text-4xl animate-clash inline-block"><GameIcon e="⚔️" /></div>
             <div className="text-sm text-muted">
-              {names.attacker} attacking {names.defender === "Your troops" ? "you" : names.defender}
+              {plain.attacker} attacking {plain.defender === "Your troops" ? "you" : plain.defender}
             </div>
             {/* Which player it is: where their village is, tap to see it on the map. */}
             {m.kind !== "outgoing" && (
@@ -239,12 +293,12 @@ export const LiveBattleDrawer = ({
           {/* Troops still standing */}
           <div className="text-sm flex flex-col gap-1">
             <div>
-              <span className="text-muted">{names.attacker} standing: </span>
+              <span className="text-muted">{plain.attacker} standing: </span>
               <ArmyLine army={minus(m.units, last?.attackerFallen ?? null)} />
             </div>
             <div>
               <span className="text-muted">
-                {b.defenders && !m.campLevel ? `${names.defender === "Your troops" ? "Your" : `${names.defender}'s`} soldiers standing: ` : `${names.defender} standing: `}
+                {b.defenders && !m.campLevel ? `${plain.defender === "Your troops" ? "Your" : `${plain.defender}'s`} soldiers standing: ` : `${plain.defender} standing: `}
               </span>
               {b.defenders ? (
                 <ArmyLine army={minus(b.defenders, last?.defenderFallen ?? null)} />
@@ -290,12 +344,12 @@ export const LiveBattleDrawer = ({
                     </span>
                   )}
                   <span>
-                    <span className="text-muted">{names.attacker} lost </span>
+                    <span className="text-muted">{plain.attacker} lost </span>
                     <ArmyLine army={minus(r.attackerFallen, prev?.attackerFallen ?? null)} />
                   </span>
                   {b.defenders && (
                     <span>
-                      <span className="text-muted">{names.defender} lost </span>
+                      <span className="text-muted">{plain.defender} lost </span>
                       <ArmyLine army={minus(r.defenderFallen, prev?.defenderFallen ?? null)} />
                     </span>
                   )}
