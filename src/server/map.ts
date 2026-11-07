@@ -7,7 +7,7 @@ import { TRIBE_FRESH, TRIBE_SELECT, tribeLook } from "./tribeColumns";
 
 import { relationsOf } from "./clanWar";
 import type { RelationKind } from "@/lib/game/clanWar";
-import { storedFlag } from "@/lib/game/clan";
+import { storedFlag, type ClanFlag } from "@/lib/game/clan";
 import { banditStrength, campDefense, campName, lairBounty, CAMP_STEEP_UNTIL } from "@/lib/game/config";
 import type { Ambush, Robbery } from "@/lib/game/bandits";
 import { CAMP_REACH, Point, campPositions, distance, isCoastal, pickHomeSite, terrainAt, worldCapacity } from "@/lib/game/map";
@@ -149,7 +149,11 @@ type Movement = {
   loot?: Record<string, number> | null;
   coins?: number;
   hops?: number;
+  /** The clans on each side (players outside a clan have none), and whether the viewer's clan is at war over it. */
+  clans?: { attacker: ClanBadge | null; defender: ClanBadge | null; war: boolean };
 };
+
+type ClanBadge = { id: number; tag: string; name: string; flag: ClanFlag };
 
 /** A battle under way, as far as it has gone: later rounds stay secret until they're fought. */
 type LiveBattle = {
@@ -214,10 +218,14 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     // Armies on the move that concern you: yours, those coming at you, and your
     // clan's (clanmates' armies, and armies marching on clanmates).
     db.execute({
-      sql: `SELECT a.*, au.first_name AS a_name, du.first_name AS d_name, au.clan_id AS a_clan, du.clan_id AS d_clan
+      sql: `SELECT a.*, au.first_name AS a_name, du.first_name AS d_name, au.clan_id AS a_clan, du.clan_id AS d_clan,
+                   ac.tag AS a_clan_tag, ac.name AS a_clan_name, ac.flag AS a_clan_flag,
+                   dc.tag AS d_clan_tag, dc.name AS d_clan_name, dc.flag AS d_clan_flag
             FROM attacks a
             LEFT JOIN users au ON au.id = a.attacker_id
             LEFT JOIN users du ON du.id = a.defender_id
+            LEFT JOIN clans ac ON ac.id = au.clan_id
+            LEFT JOIN clans dc ON dc.id = du.clan_id
             WHERE a.status IN ('marching', 'resolving', 'fighting')
               AND (a.attacker_id = ? OR a.defender_id = ? OR (? IS NOT NULL AND (au.clan_id = ? OR du.clan_id = ?)))
             ORDER BY (a.attacker_id = ? OR a.defender_id = ?) DESC, a.arrives_at ASC
@@ -343,7 +351,15 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     return v.allyOf == null ? null : Number(v.allyOf);
   };
 
+  const badge = (id: unknown, tag: unknown, name: unknown, flag: unknown): ClanBadge | null =>
+    id == null || tag == null ? null : { id: Number(id), tag: String(tag), name: String(name ?? tag), flag: storedFlag(flag, Number(id)) };
+
   const movements: Movement[] = mv.rows.map((a) => {
+    // Camps, lairs and outposts aside, a tribe's clan rides with it: clan wars show as clan against clan.
+    const aClan = badge(a.a_clan, a.a_clan_tag, a.a_clan_name, a.a_clan_flag);
+    const dClan = a.camp_level == null && a.lair_level == null ? badge(a.d_clan, a.d_clan_tag, a.d_clan_name, a.d_clan_flag) : null;
+    const atWar =
+      aClan != null && dClan != null && aClan.id !== dClan.id && (relations.get(aClan.id) === "war" || relations.get(dClan.id) === "war");
     const outgoing = Number(a.attacker_id) === me.id;
     const atMe = a.defender_id != null && Number(a.defender_id) === me.id;
     // Neither yours nor at you: a clanmate's army, or an army marching on a clanmate.
@@ -393,6 +409,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
       battle,
       /** Fighting in another army's battle (that army's id): the battle is drawn once, for the leading army. */
       ...(joinedTo != null ? { allyOf: joinedTo } : {}),
+      ...(aClan || dClan ? { clans: { attacker: aClan, defender: dClan, war: atWar } } : {}),
       // Your own army after new orders: the spoils it carries and how many orders it took.
       ...(outgoing
         ? {
