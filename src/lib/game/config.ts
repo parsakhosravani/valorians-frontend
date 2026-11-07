@@ -243,8 +243,13 @@ export const effectAt = (e: { perLevel: number; growth?: number }, level: number
 
 /** Most of a raid's attackers the Trapmaker's traps can catch. */
 export const TRAP_MAX = 0.25;
-/** Most of the warehouse a Hideout can keep hidden, however high it's built. */
-export const HIDEOUT_MAX_SHARE = 0.4;
+/**
+ * Most of the warehouse a Hideout can keep hidden, however high it's built.
+ * 0.4 → 0.25 (Nov 2026): the Hideout is now the only thing that protects stores
+ * (raiders used to take at most half of the rest too, see MAX_LOOT_SHARE), so a
+ * full warehouse always keeps a quarter and the pile above it is fair game.
+ */
+export const HIDEOUT_MAX_SHARE = 0.25;
 
 /**
  * Shields after being raided, by how many raid shields you got in the day
@@ -417,7 +422,7 @@ export const BUILDINGS: BuildingDef[] = [
   // Grows 12% a level so it still counts against big late armies (was +60 flat: 1,200 at level 20, now ~4,300).
   def("Watchtower", 200, { kind: "military", stat: "flatDefense", perLevel: 60, growth: 1.12 }, "+60 defense points at level 1, and each level adds 12% more, even with no troops home."),
   def("Trapmaker", 200, { kind: "military", stat: "traps", perLevel: 1.25 }, "Traps catch 1.25% of attackers per level before the battle starts (up to 25%)."),
-  def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level."),
+  def("Hideout", 200, { kind: "military", stat: "protect", perLevel: 0 }, "Hides more of each resource from raiders every level (up to a quarter of the warehouse). Raiders can carry off everything above it."),
   def("Hospital", 250, { kind: "military", stat: "heal", perLevel: 2.5 }, "Treats the wounded after a battle: saves 2.5% of them per level (up to 50%). The killed can't be saved."),
   def("War hall", 350, { kind: "military", stat: "march", perLevel: 2.5 }, "Armies come home 2.5% faster per level (up to 50%)."),
   def("Exploration Center", 300, { kind: "military", stat: "scout", perLevel: 0 }, "Reveals enemies' exact defense before you attack, and sends spies.", { maxLevel: 1 }),
@@ -964,8 +969,14 @@ export const militiaDefense = (population: number) => Math.round(Math.min(MILITI
 /** Resources of each type a Hideout keeps safe from raiders. */
 export const hiddenResources = (hideoutLevel: number) => Math.round(500 * Math.pow(1.4, hideoutLevel));
 
-/** Raiders can take at most this share of what isn't hidden. */
-export const MAX_LOOT_SHARE = 0.5;
+/**
+ * Raiders can take at most this share of what isn't hidden (still limited by what
+ * their survivors can carry). 0.5 → 1 (Nov 2026): with half always kept on top of the
+ * Hideout, a tribe holding under its hidden amount (Hideout 15 ≈ 78k a resource)
+ * couldn't be looted at all and late-game raids stopped paying. Now only the Hideout
+ * hides; everything above it can be carried off.
+ */
+export const MAX_LOOT_SHARE = 1;
 
 /** Seconds an army is away on a raid before it comes home with loot (used when no map distance is known). */
 export const RAID_TRAVEL_SECONDS = 90;

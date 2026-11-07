@@ -45,7 +45,10 @@ ask before "fixing" either. Add new decisions here when they are made.
   round under way is fought out as it was). The rest of the battle is decided again with them;
   rounds already fought never change. Ships and carried loot go home. Arriving after the last
   round has begun is too late: they wait at home for the result.
-- **Hideout** protection is capped.
+- **Only the Hideout hides resources** (Nov 2026). It keeps 500 × 1.4^level of each resource
+  safe, at most a quarter of the warehouse (`HIDEOUT_MAX_SHARE`); raiders can carry off everything
+  above it (`MAX_LOOT_SHARE` = 1, was 0.5 on top of a 40% Hideout cap, which made active late-game
+  tribes unlootable). Carry room and the weak-target halving still limit a raid.
 - **Raid shield grows** when a player is raided again and again.
 - **A raid shield is earned by real damage** (Nov 2026), not by being attacked: damage = loot +
   cost of defenders killed, over lootable stores + cost of defenders (never less than 12 h of the
