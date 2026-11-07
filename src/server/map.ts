@@ -166,7 +166,14 @@ type LiveBattle = {
   defenders: Record<string, number> | null;
   /** The defense they fought at: soldiers, villagers, Watchtower and walls, with bonuses. */
   defense?: number;
+  /** Every player on the attackers' side (the leader first, then clanmates who joined) and their troops together. */
+  attackers?: Fighter[];
+  attackArmy?: Record<string, number>;
+  /** Clanmates' guards stationed in the village, fighting for it. */
+  guards?: Fighter[];
 };
+
+type Fighter = { name: string; tag: string | null };
 
 type Caravan = {
   id: string;
@@ -325,6 +332,8 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
   const watch = (me.state.buildings["watchtower"] ?? 0) >= 1;
   // An army that joined another's battle shows that battle (its row only points to it, see joinAlly).
   const battleOf = new Map<number, StoredBattle>();
+  /** The row of the army leading each battle (who attacks, who defends, its troops). */
+  const leadOf = new Map<number, Record<string, unknown>>();
   const wanted = new Set<number>();
 
   for (const a of mv.rows) {
@@ -332,18 +341,82 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
     const v = JSON.parse(String(a.battle)) as StoredBattle | { allyOf: number };
 
     if ("allyOf" in v) wanted.add(Number(v.allyOf));
-    else battleOf.set(Number(a.id), v);
+    else {
+      battleOf.set(Number(a.id), v);
+      leadOf.set(Number(a.id), a);
+    }
   }
   const missing = [...wanted].filter((id) => !battleOf.has(id));
 
   if (missing.length) {
     const hs = await db.execute({
-      sql: `SELECT id, battle FROM attacks WHERE status = 'fighting' AND id IN (${missing.map(() => "?").join(",")})`,
+      sql: `SELECT id, battle, attacker_id, defender_id, units FROM attacks WHERE status = 'fighting' AND id IN (${missing.map(() => "?").join(",")})`,
       args: missing,
     });
 
-    for (const h of hs.rows) if (h.battle != null) battleOf.set(Number(h.id), JSON.parse(String(h.battle)) as StoredBattle);
+    for (const h of hs.rows) {
+      if (h.battle == null) continue;
+      battleOf.set(Number(h.id), JSON.parse(String(h.battle)) as StoredBattle);
+      leadOf.set(Number(h.id), h);
+    }
   }
+
+  // Everyone on each side of a battle: the leading army and the clanmates who joined it,
+  // and the guards stationed in the village. A clan battle is more than two players.
+  const sideIds = new Set<number>();
+  const hosts = new Set<number>();
+
+  for (const [id, v] of battleOf) {
+    const lead = leadOf.get(id);
+
+    if (lead) sideIds.add(Number(lead.attacker_id));
+    if (lead?.defender_id != null) hosts.add(Number(lead.defender_id));
+    for (const x of v.allies ?? []) sideIds.add(x.attackerId);
+  }
+  const guardRows = hosts.size
+    ? (
+        await db.execute({
+          sql: `SELECT owner_id, host_id FROM support WHERE status = 'stationed' AND host_id IN (${[...hosts].map(() => "?").join(",")})`,
+          args: [...hosts],
+        })
+      ).rows
+    : [];
+
+  for (const g of guardRows) sideIds.add(Number(g.owner_id));
+  const fighters = new Map<number, Fighter>();
+
+  if (sideIds.size) {
+    const fs = await db.execute({
+      sql: `SELECT u.id, u.first_name, c.tag FROM users u LEFT JOIN clans c ON c.id = u.clan_id
+            WHERE u.id IN (${[...sideIds].map(() => "?").join(",")})`,
+      args: [...sideIds],
+    });
+
+    for (const f of fs.rows) {
+      const id = Number(f.id);
+
+      fighters.set(id, { name: id === me.id ? "You" : String(f.first_name || "A tribe"), tag: f.tag == null ? null : String(f.tag) });
+    }
+  }
+  const who = (id: number): Fighter => fighters.get(id) ?? { name: "A tribe", tag: null };
+  const sidesOf = (id: number, v: StoredBattle) => {
+    const lead = leadOf.get(id);
+
+    if (!lead) return {};
+    let army = { ...(JSON.parse(String(lead.units)) as Record<string, number>) };
+
+    for (const x of v.allies ?? []) {
+      army = { ...army };
+      for (const [u, n] of Object.entries(x.units)) army[u] = (army[u] ?? 0) + n;
+    }
+    const host = lead.defender_id == null ? null : Number(lead.defender_id);
+
+    return {
+      attackers: [Number(lead.attacker_id), ...(v.allies ?? []).map((x) => x.attackerId)].map(who),
+      attackArmy: army,
+      guards: host == null ? [] : guardRows.filter((g) => Number(g.host_id) === host).map((g) => who(Number(g.owner_id))),
+    };
+  };
   const allyOf = (a: Record<string, unknown>) => {
     if (a.status !== "fighting" || a.battle == null) return null;
     const v = JSON.parse(String(a.battle)) as { allyOf?: number };
@@ -376,6 +449,7 @@ export async function mapView(me: Player, now: number, center?: Point, radius = 
           nextRoundAt: nextRoundAt(stored.plan, now),
           defenders: defendersSoFar(stored.plan, stored.engaged, now),
           defense: Math.round(stored.outcome.defense),
+          ...sidesOf(joinedTo ?? Number(a.id), stored),
         }
       : null;
 
