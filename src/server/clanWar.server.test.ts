@@ -224,6 +224,12 @@ describe("clans fighting together (server)", () => {
     const joined = lead === a ? b : a;
 
     expect(JSON.parse(String(joined.battle)).allyOf).toBe(Number(lead.id));
+    // Watching it, the whole side shows: both clanmates and all their troops, not only the leader.
+    const watched = (await mapView(await reload(target.id), Number(lead.arrives_at) + 1)).movements.find((m) => m.battle && m.allyOf == null)!;
+
+    expect(watched.battle!.attackers!.length).toBe(2);
+    expect(watched.battle!.attackers!.every((f) => f.tag != null)).toBe(true);
+    expect(watched.battle!.attackArmy!.axeman).toBe(800);
     await resolveDueAttacks(Number(lead.ends_at) + 1);
     const reports = (await db.execute({ sql: "SELECT attacker_id, report FROM battles WHERE attack_id IN (?, ?)", args: [first.id, second.id] })).rows;
 
