@@ -15,6 +15,9 @@ export const LAND_RESOURCE: Record<Terrain, ResourceId> = {
   sea: "crop",
 };
 
+/** What players call each kind of outpost land. */
+export const LAND_NAME: Record<ResourceId, string> = { wood: "Woodland", clay: "Hill land", iron: "Rocky land", crop: "Farmland" };
+
 /** An outpost's land bonus: +percent% to one of its fields. */
 export type OutpostLand = { resource: ResourceId; percent: number };
 
@@ -54,3 +57,25 @@ export function outpostSpots(home: Point, candidates: Point[], at?: (x: number, 
 
   return [...best.values()].sort((a, b) => a.distance - b.distance).slice(0, OUTPOST.spotChoices);
 }
+
+/** Stronghold ground: an outpost here gets OUTPOST.strongholdDefense for its garrison. */
+export const STRONGHOLD_TERRAIN: Terrain[] = ["hills", "forest"];
+
+export const isStronghold = (x: number, y: number, at: (x: number, y: number) => Terrain = terrainAt) => STRONGHOLD_TERRAIN.includes(at(x, y));
+
+/** Extra defense for the garrison of an outpost at (x, y). */
+export const outpostFortify = (x: number, y: number, at?: (x: number, y: number) => Terrain) => (isStronghold(x, y, at) ? OUTPOST.strongholdDefense : 0);
+
+/** Every tile the player may settle on (or move an outpost to), with its land: what the map shows when choosing. */
+export function landChoices(home: Point, candidates: Point[], at: (x: number, y: number) => Terrain = terrainAt) {
+  return candidates.map((p) => ({
+    x: p.x,
+    y: p.y,
+    distance: Math.round(distance(home, p) * 10) / 10,
+    land: outpostLand(p.x, p.y, at),
+    terrain: at(p.x, p.y),
+    stronghold: isStronghold(p.x, p.y, at),
+  }));
+}
+
+export type LandChoice = ReturnType<typeof landChoices>[number];

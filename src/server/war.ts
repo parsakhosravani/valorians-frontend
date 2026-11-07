@@ -14,6 +14,7 @@ import { alertClan, rallyLanding, recordForClan, reconcileSupport, relationBetwe
 import { blocksRaids } from "@/lib/game/clanWar";
 
 import { GameError, GameState, advance, emptyArmy, getRates, peopleOf, rankForXp, shieldStops } from "@/lib/game/engine";
+import { outpostFortify } from "@/lib/game/outpost";
 import { defendOutpost, engageGarrison, garrisonOf, outpostField, returnToGarrison, withGarrison } from "@/lib/game/garrison";
 import { CAMP_DEFENSE_PER_TROOP, EMPTY_VILLAGE_DEFENSE_PER_TROOP, campName, MAX_LOOT_SHARE, MAX_MARCHES, RESOURCE_IDS, UNIT_IDS, banditStrength, campDefense } from "@/lib/game/config";
 import { Ambush, afterAmbush, rollAmbush, spoilsTaken } from "@/lib/game/bandits";
@@ -526,7 +527,8 @@ async function beginBattle(a: AttackRow, now: number, at = a.arrivesAt): Promise
 
           return s;
         }
-        const r = raidOutcome(field, attacker.state, a.units, rand(), { terrain });
+        // An outpost on hills or in a forest is a stronghold (see OUTPOST.strongholdDefense).
+        const r = raidOutcome(field, attacker.state, a.units, rand(), { terrain, fortify: outpostFortify(a.to.x, a.to.y) });
 
         outcome = r.outcome;
         engaged = r.defenders;

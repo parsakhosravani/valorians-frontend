@@ -4,6 +4,7 @@ import * as E from "./engine";
 import * as G from "./garrison";
 import * as W from "./war";
 import { OUTPOST } from "./config";
+import { isStronghold, landChoices, outpostLand } from "./outpost";
 
 const T0 = Date.UTC(2026, 10, 5, 12);
 const HOME = { x: 10, y: 10 };
@@ -118,5 +119,57 @@ describe("outpost garrisons", () => {
     expect(report.shieldMs).toBeUndefined();
     expect(state.resources).toEqual(owner.resources);
     expect(state.army).toEqual(owner.army);
+  });
+});
+
+describe("choosing and moving outpost land", () => {
+  test("moving an outpost costs half its founding, drops each field a level, takes the new land's bonus, and waits 3 days", () => {
+    const s = tribe();
+    s.resources = { iron: 100_000, wood: 100_000, clay: 100_000, crop: 100_000 };
+    s.outposts[0].fields = { iron: 3, wood: 0, clay: 2, crop: 1 };
+    const cost = E.outpostMoveCost(0);
+
+    expect(cost.iron).toBe(OUTPOST.foundResources * OUTPOST.moveCostShare);
+    const moved = E.moveOutpost(s, 0, { x: 20, y: 14 }, T0);
+
+    expect([moved.outposts[0].x, moved.outposts[0].y]).toEqual([20, 14]);
+    expect(moved.outposts[0].fields).toEqual({ iron: 2, wood: 0, clay: 1, crop: 0 });
+    expect(moved.outposts[0].land).toEqual(outpostLand(20, 14));
+    expect(moved.resources.iron).toBe(100_000 - cost.iron);
+    expect(E.outpostMoveBlocked(moved, 0, T0 + 3600_000)).toMatch(/moved recently/);
+    expect(E.outpostMoveBlocked(moved, 0, T0 + OUTPOST.moveCooldownMs)).toBeNull();
+  });
+
+  test("an outpost with a garrison, troops on the way, a builder at work, or no money can't move", () => {
+    const base = tribe();
+    base.resources = { iron: 100_000, wood: 100_000, clay: 100_000, crop: 100_000 };
+    const g = E.cloneState(base);
+    g.outposts[0].garrison = army({ axeman: 1 });
+    expect(() => E.moveOutpost(g, 0, { x: 20, y: 14 }, T0)).toThrow(/garrison home/);
+    const coming = G.sendToOutpost(base, 0, army({ axeman: 5 }), 60_000, HOME, T0, 0.2).state;
+    expect(() => E.moveOutpost(coming, 0, { x: 20, y: 14 }, T0)).toThrow(/on their way/);
+    const busy = E.cloneState(base);
+    busy.outposts[0].job = { resource: "iron", toLevel: 2, startedAt: T0, endsAt: T0 + 1000 };
+    expect(() => E.moveOutpost(busy, 0, { x: 20, y: 14 }, T0)).toThrow(/builder/);
+    const poor = tribe();
+    poor.resources = { iron: 0, wood: 0, clay: 0, crop: 0 };
+    expect(() => E.moveOutpost(poor, 0, { x: 20, y: 14 }, T0)).toThrow(/Not enough/);
+    expect(() => E.moveOutpost(base, 5, { x: 20, y: 14 }, T0)).toThrow(/No such outpost/);
+  });
+
+  test("a stronghold (hills, forest) makes its garrison harder to beat", () => {
+    const owner = tribe();
+    owner.outposts[0].garrison = army({ spearman: 200 });
+    const attacker = tribe();
+    const field = G.outpostField(owner, 0);
+    const plain = W.battleNumbers(attacker, army({ axeman: 300 }), field, "plains").defense;
+    const held = W.battleNumbers(attacker, army({ axeman: 300 }), field, "plains", 0, false, OUTPOST.strongholdDefense).defense;
+
+    expect(held).toBeCloseTo(plain * (1 + OUTPOST.strongholdDefense));
+    expect(isStronghold(0, 0, () => "hills")).toBe(true);
+    expect(isStronghold(0, 0, () => "forest")).toBe(true);
+    expect(isStronghold(0, 0, () => "plains")).toBe(false);
+    const choice = landChoices({ x: 0, y: 0 }, [{ x: 3, y: 4 }], () => "hills")[0];
+    expect(choice).toMatchObject({ x: 3, y: 4, distance: 5, terrain: "hills", stronghold: true, land: { resource: "clay" } });
   });
 });

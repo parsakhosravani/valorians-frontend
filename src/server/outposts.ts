@@ -6,11 +6,11 @@ import { homeOf } from "./map";
 import { Player, findById, mutatePlayer } from "./players";
 
 import { OUTPOST } from "@/lib/game/config";
-import { Army, GameError, advance, foundOutpost, getRates, outpostBlocked } from "@/lib/game/engine";
+import { Army, GameError, advance, foundOutpost, getRates, moveOutpost, outpostBlocked, outpostMoveBlocked, outpostMoveCost } from "@/lib/game/engine";
 import { Point, distance, routeMs, seaRoute, terrainAt } from "@/lib/game/map";
 import { garrisonOf, headingTo, leaveOutpost, sendToOutpost } from "@/lib/game/garrison";
 import { armySize } from "@/lib/game/war";
-import { outpostLand, outpostSpots } from "@/lib/game/outpost";
+import { landChoices, outpostLand, outpostSpots } from "@/lib/game/outpost";
 
 /** Land an outpost can stand on: no sea, lakes or mountain peaks. */
 const buildable = (p: Point) => !["sea", "lake", "mountains"].includes(terrainAt(p.x, p.y));
@@ -323,4 +323,86 @@ export async function bringHome(me: Player, idx: number, units: Army, now: numbe
   logEvent("outpost.home", { idx, units: sent }, { playerId: me.id, at: now });
 
   return p;
+}
+
+/**
+ * Every tile the tribe may settle its next outpost on, or (`move`) move that
+ * outpost to: what the map shows when choosing land. Moving, the outpost's own
+ * tile doesn't count against it.
+ */
+export async function landToChoose(me: Player, now: number, move?: number) {
+  const home = await homeOf(me.id);
+  const near = await around(home);
+  const s = advance(me.state, now);
+  const i = move == null ? null : Math.floor(Number(move));
+  const o = i != null ? s.outposts[i] : undefined;
+
+  if (i != null && !o) throw new GameError("No such outpost", "not_found");
+  const taken = new Set(near.taken);
+
+  if (o) taken.delete(`${o.x},${o.y}`);
+  const others = o ? near.outposts.filter((p) => p.x !== o.x || p.y !== o.y) : near.outposts;
+  // Its own tile is free for itself, but isn't a move.
+  const choices = landChoices(home, candidates(home, taken, near.villages, others).filter((p) => !o || p.x !== o.x || p.y !== o.y));
+
+  if (!choices.length) logEvent("outpost.no_land", { home, move: i, villages: near.villages.length }, { playerId: me.id, level: "warn" });
+
+  return {
+    home,
+    choices,
+    ...(o && i != null ? { move: { index: i, from: { x: o.x, y: o.y }, cost: outpostMoveCost(i), blocked: outpostMoveBlocked(s, i, now) } } : {}),
+  };
+}
+
+/**
+ * Moves outpost `idx` to the tile picked (see moveOutpost): the land must be
+ * free for it, nobody may be marching from or on it, and the new tile is
+ * claimed in the outposts table before the state is saved.
+ */
+export async function relocateOutpost(me: Player, idx: number, pick: Point, now: number) {
+  const i = Math.floor(Number(idx));
+  const s = advance(me.state, now);
+  const o = s.outposts[i];
+
+  if (!o) throw new GameError("No such outpost", "not_found");
+  const blocked = outpostMoveBlocked(s, i, now);
+
+  if (blocked) throw new GameError(blocked, "blocked");
+  const db = await getDb();
+  const busy = await db.execute({
+    sql: `SELECT 1 FROM attacks WHERE status IN ('marching','resolving','fighting')
+            AND ((attacker_id = ? AND base_outpost = ?) OR (defender_id = ? AND target_outpost = ?)) LIMIT 1`,
+    args: [me.id, i, me.id, i],
+  });
+
+  if (busy.rows.length) throw new GameError("An army is out from it, or marching on it: wait until it's done", "busy");
+  const { choices } = await landToChoose(me, now, i);
+  const p = { x: Math.round(Number(pick.x)), y: Math.round(Number(pick.y)) };
+
+  if (!choices.some((c) => c.x === p.x && c.y === p.y)) throw new GameError("That land can't be settled: pick another spot", "taken");
+  // Claim the new tile: the row keeps its number; another tribe taking it a moment ago fails here.
+  const up = await db
+    .execute({
+      sql: "UPDATE outposts SET x = ?, y = ?, claimed_at = ? WHERE user_id = ? AND idx = ? AND x = ? AND y = ?",
+      args: [p.x, p.y, now, me.id, i, o.x, o.y],
+    })
+    .catch(() => null);
+
+  if (!up?.rowsAffected) throw new GameError("That land was just taken: pick another spot", "taken");
+  try {
+    const saved = await mutatePlayer(me.id, now, (st) => {
+      const it = st.outposts[i];
+
+      if (!it || it.x !== o.x || it.y !== o.y) throw new GameError("That outpost just changed", "conflict");
+
+      return moveOutpost(st, i, p, now);
+    });
+
+    logEvent("outpost.moved", { idx: i, from: { x: o.x, y: o.y }, to: p, byPlayer: true }, { playerId: me.id, at: now });
+
+    return saved;
+  } catch (e) {
+    await db.execute({ sql: "UPDATE outposts SET x = ?, y = ? WHERE user_id = ? AND idx = ? AND x = ? AND y = ?", args: [o.x, o.y, me.id, i, p.x, p.y] });
+    throw e;
+  }
 }

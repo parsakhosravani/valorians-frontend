@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { newPlayer, reload } from "@/server/testing/harness";
 import { getDb } from "@/server/db";
 import { homeOf, mapView } from "@/server/map";
-import { bringHome, candidates, moveOutpostsOutOfWalls, offeredSpots, settleOutpost, stationTroops } from "@/server/outposts";
+import { bringHome, landToChoose, relocateOutpost, candidates, moveOutpostsOutOfWalls, offeredSpots, settleOutpost, stationTroops } from "@/server/outposts";
 import { advance, emptyArmy } from "@/lib/game/engine";
 import { outpostLand } from "@/lib/game/outpost";
 import { mutatePlayer } from "@/server/players";
@@ -273,5 +273,40 @@ describe("garrisons (server)", () => {
 
     expect(back.state.outposts[0].garrison?.axeman).toBe(100);
     expect(back.state.marches.some((x) => x.to == null && x.units.axeman === 20)).toBe(true);
+  });
+});
+
+describe("choosing land on the map, and moving an outpost", () => {
+  test("the map offers every free tile; founding and moving take any of them, and the table follows", async () => {
+    const T0 = Date.now();
+    const me = await newPlayer(T0, ready);
+    const land = await landToChoose(me, T0);
+
+    expect(land.choices.length).toBeGreaterThan(OUTPOST.spotChoices);
+    // Found on a tile far down the list (not one of the few the old list offered).
+    const far = land.choices[land.choices.length - 1];
+    const founded = await settleOutpost(me, T0, far);
+
+    expect([founded.state.outposts[0].x, founded.state.outposts[0].y]).toEqual([far.x, far.y]);
+    // Moving: its own tile isn't offered, the others are.
+    const moving = await landToChoose(await reload(me.id), T0, 0);
+
+    expect(moving.move?.blocked).toBeNull();
+    expect(moving.choices.some((c) => c.x === far.x && c.y === far.y)).toBe(false);
+    const to = moving.choices[0];
+    const moved = await relocateOutpost(await reload(me.id), 0, to, T0 + 1);
+
+    expect([moved.state.outposts[0].x, moved.state.outposts[0].y]).toEqual([to.x, to.y]);
+    expect(moved.state.resources.iron).toBeCloseTo(founded.state.resources.iron - moving.move!.cost.iron, 0);
+    const db = await getDb();
+    const rows = await db.execute({ sql: "SELECT x, y FROM outposts WHERE user_id = ?", args: [me.id] });
+
+    expect(rows.rows.map((r) => [Number(r.x), Number(r.y)])).toEqual([[to.x, to.y]]);
+    // Not again for 3 days; a tile that isn't free is refused.
+    await expect(relocateOutpost(await reload(me.id), 0, moving.choices[1], T0 + 2)).rejects.toThrow(/moved recently/);
+    const later = T0 + OUTPOST.moveCooldownMs + 10;
+    const home = await homeOf(me.id);
+
+    await expect(relocateOutpost(await reload(me.id), 0, home, later)).rejects.toThrow(/can't be settled/);
   });
 });
