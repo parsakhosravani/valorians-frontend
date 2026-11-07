@@ -119,7 +119,7 @@ test.describe("Valorians 2 late game", () => {
     noErrors();
   });
 
-  test("the clan screen has four tabs; banner and other clans open from the header", async ({ page }) => {
+  test("the clan screen has five tabs, Explore among them; banner opens from the header", async ({ page }) => {
     const leader = newId();
     const member = newId();
 
@@ -128,13 +128,13 @@ test.describe("Valorians 2 late game", () => {
     const now = Date.now();
     const tag = `T${leader % 10000}`;
 
-    await sql("INSERT INTO clans (name, tag, leader_id, created_at) VALUES (?, ?, ?, ?)", [`Four Tabs ${leader}`, tag, leader, now]);
+    await sql("INSERT INTO clans (name, tag, leader_id, created_at) VALUES (?, ?, ?, ?)", [`Clan Tabs ${leader}`, tag, leader, now]);
     const clan = await sql("SELECT id FROM clans WHERE tag = ?", [tag]);
 
     await sql("UPDATE users SET clan_id = ?, clan_joined_at = ? WHERE id IN (?, ?)", [Number(clan.rows[0].id), now, leader, member]);
     const noErrors = await open(page, leader, "/clan");
 
-    await expect(page.getByRole("tab")).toHaveText(["Members", "War", "Treasury", "Log"]);
+    await expect(page.getByRole("tab")).toHaveText(["Members", "War", "Treasury", "Log", "Explore"]);
     await page.screenshot({ path: "test-results/clan-tabs.png" });
 
     await page.getByRole("button", { name: "Banner & settings" }).click();
@@ -142,7 +142,7 @@ test.describe("Valorians 2 late game", () => {
     await page.screenshot({ path: "test-results/clan-settings.png" });
     await page.keyboard.press("Escape");
 
-    await page.getByRole("button", { name: /RANK/i }).click();
+    await page.getByRole("tab", { name: "Explore" }).click();
     await expect(page.getByPlaceholder("Search by name or tag")).toBeVisible();
     await expect(page.getByText("YOURS")).toBeVisible();
     await page.screenshot({ path: "test-results/clan-explore.png" });

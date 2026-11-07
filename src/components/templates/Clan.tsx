@@ -48,9 +48,9 @@ import { GameIcon, IconText } from "@/components/atoms/GameIcon";
 type Mine = NonNullable<ClanView["mine"]>;
 type Member = Mine["members"][number];
 type BrowseTab = "browse" | "found";
-// Four tabs fit a phone's width. Banner & settings (officers only, rarely used) open from the
-// pencil on the clan's flag, and the other clans from the Rank box: six tabs were too cramped.
-type ClanTab = "members" | "war" | "treasury" | "chronicle";
+// Banner & settings (officers only, rarely used) open from the pencil on the clan's flag.
+// Explore stays a tab so other clans are one tap away.
+type ClanTab = "members" | "war" | "treasury" | "chronicle" | "explore";
 
 const inputCls = "inset w-full h-10 px-3 text-sm font-bold text-parch placeholder:text-muted/70 outline-none focus:border-gold";
 
@@ -388,9 +388,8 @@ export const Clan: FunctionComponent = () => {
   const [confirmTransfer, setConfirmTransfer] = useState<number | null>(null);
   // A clan opened from the list, seen from outside.
   const [viewing, setViewing] = useState<number | null>(null);
-  // Sheets that replaced the old Banner and Explore tabs.
+  // Sheet that replaced the old Banner tab.
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [exploreOpen, setExploreOpen] = useState(false);
   // Clanmates under attack right now: a badge on the War tab so nobody has to open it to find out.
   const [threats, setThreats] = useState(0);
 
@@ -1185,7 +1184,7 @@ export const Clan: FunctionComponent = () => {
         {mine && (
           <>
             <div className="grid grid-cols-4 gap-2">
-              <Stat label="Rank" value={`#${fmt(mine.rank)}`} onClick={() => setExploreOpen(true)} />
+              <Stat label="Rank" value={`#${fmt(mine.rank)}`} onClick={() => setTab("explore")} />
               <Stat label="Members" value={`${mine.members.length}/${mine.maxMembers}`} />
               <Stat label="Population" value={compact(mine.population)} />
               <Stat label="Power" value={compact(mine.power)} />
@@ -1211,6 +1210,7 @@ export const Clan: FunctionComponent = () => {
                 { id: "war", label: "War", badge: tab === "war" || !mine ? 0 : threats },
                 { id: "treasury", label: "Treasury" },
                 { id: "chronicle", label: "Log" },
+                { id: "explore", label: "Explore" },
               ]}
               value={tab}
               onChange={setTab}
@@ -1227,13 +1227,11 @@ export const Clan: FunctionComponent = () => {
             )}
             {tab === "treasury" && treasuryTab}
             {tab === "chronicle" && chronicleTab}
+            {/* Being in a clan doesn't shut you off from the rest of the world. */}
+            {tab === "explore" && clanList}
 
             <Drawer isOpen={settingsOpen} position="bottom" title="🚩 Banner & settings" onClose={() => setSettingsOpen(false)}>
               <div className="pt-3">{bannerTab}</div>
-            </Drawer>
-            {/* Being in a clan doesn't shut you off from the rest of the world. */}
-            <Drawer isOpen={exploreOpen} position="bottom" title="🏆 Clans" onClose={() => setExploreOpen(false)}>
-              <div className="pt-3">{clanList}</div>
             </Drawer>
           </>
         )}
