@@ -118,6 +118,8 @@ export type Outpost = {
   job?: { resource: ResourceId; toLevel: number; startedAt: number; endsAt: number };
   /** Troops stationed here (see OUTPOST.garrisonBase). Out fighting for the outpost, they're off this list. */
   garrison?: Army;
+  /** When it last moved (see moveOutpost): once every OUTPOST.moveCooldownMs. */
+  movedAt?: number;
 };
 
 /** A regiment's battle experience; it sets the regiment's rank. */
@@ -1306,6 +1308,56 @@ export function foundOutpost(s0: GameState, at: { x: number; y: number }, now: n
   const y = Math.round(at.y);
 
   s.outposts = [...s.outposts, { x, y, foundedAt: now, fields: emptyFields(), land: outpostLand(x, y) }];
+
+  return s;
+}
+
+/** What moving outpost `index` costs: a share of what it cost to found (see OUTPOST.moveCostShare). */
+export function outpostMoveCost(index: number) {
+  const each = Math.round(OUTPOST.foundResources * Math.pow(OUTPOST.foundGrowth, index) * OUTPOST.moveCostShare);
+
+  return Object.fromEntries(RESOURCE_IDS.map((r) => [r, each])) as Record<ResourceId, number>;
+}
+
+/** Why outpost `index` can't move now, or null. The server also checks no army is bound for it or fighting there. */
+export function outpostMoveBlocked(s: GameState, index: number, now: number): string | null {
+  const o = s.outposts?.[index];
+
+  if (!o) return "No such outpost";
+  if (o.job) return "Its builder is at work: wait for the field to finish";
+  if (Object.values(o.garrison ?? {}).some((n) => n > 0)) return "Bring its garrison home first";
+  if (s.marches.some((m) => m.to === index)) return "Troops are on their way to it";
+  const wait = (o.movedAt ?? 0) + OUTPOST.moveCooldownMs - now;
+
+  if (wait > 0) return `It moved recently: again in ${Math.ceil(wait / 3600_000)} h`;
+  const cost = outpostMoveCost(index);
+  const short = RESOURCE_IDS.find((r) => s.resources[r] < cost[r]);
+
+  return short ? `Not enough ${short}` : null;
+}
+
+/**
+ * Moves outpost `index` to tile `at` (the server checks the land is free): it
+ * pays outpostMoveCost, its fields lose a level each, and its land is that of
+ * the new place.
+ */
+export function moveOutpost(s0: GameState, index: number, at: { x: number; y: number }, now: number): GameState {
+  const i = Math.floor(Number(index));
+  const blocked = outpostMoveBlocked(s0, i, now);
+
+  if (blocked) throw new GameError(blocked, "blocked");
+  const s = structuredCloneState(s0);
+  const cost = outpostMoveCost(i);
+  const o = s.outposts[i];
+  const x = Math.round(at.x);
+  const y = Math.round(at.y);
+
+  if (o.x === x && o.y === y) throw new GameError("It already stands there");
+  for (const r of RESOURCE_IDS) s.resources[r] -= cost[r];
+  const fields = { ...o.fields };
+
+  for (const r of RESOURCE_IDS) fields[r] = Math.max(0, (fields[r] ?? 0) - 1);
+  s.outposts[i] = { ...o, x, y, fields, land: outpostLand(x, y), movedAt: now };
 
   return s;
 }

@@ -99,6 +99,8 @@ interface GameContextType {
   masterBuilding: (id: string) => Promise<boolean>;
   /** Founds the next outpost on the spot picked (see /api/outposts/spots), or on the nearest free land. */
   foundOutpost: (spot?: { x: number; y: number }) => Promise<boolean>;
+  /** Moves outpost `outpost` to the land picked on the map. */
+  moveOutpost: (outpost: number, spot: { x: number; y: number }) => Promise<boolean>;
   /** Raises one field of an outpost. */
   upgradeField: (outpost: number, resource: ResourceId) => Promise<boolean>;
   /** Troops march from home to an outpost's garrison, or from the garrison home. */
@@ -586,6 +588,7 @@ export const ResourceProvider: React.FC<{ children: ReactNode }> = ({ children }
     finishBuilding: (building) => act("buildings/finish", { building }, "Done!"),
     masterBuilding: (building) => act("buildings/master", { building }, "Mastery work started"),
     foundOutpost: (spot) => act("outposts/found", spot ? { x: spot.x, y: spot.y } : {}, "An outpost is founded!"),
+    moveOutpost: (outpost, spot) => act("outposts/move", { outpost, x: spot.x, y: spot.y }, "The outpost has moved"),
     upgradeField: (outpost, resource) => act("outposts/upgrade", { outpost, resource }, "The outpost's builder is at work"),
     stationTroops: (outpost, units) => act("outposts/station", { outpost, units }, "Troops on their way to the outpost"),
     garrisonHome: (outpost, units) => act("outposts/home", { outpost, units }, "The garrison is marching home"),

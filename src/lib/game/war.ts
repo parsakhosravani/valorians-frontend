@@ -239,7 +239,9 @@ export function battleNumbers(
   defender: GameState | null,
   terrain: Terrain = "plains",
   campDef = 0,
-  landing = false
+  landing = false,
+  /** Extra defense from where the defenders stand (an outpost stronghold, see OUTPOST.strongholdDefense). */
+  fortify = 0
 ) {
   const bonus = 1 + getRates(attacker).attackBonus;
   let cav = UNITS.filter((u) => u.mounted).reduce((a, u) => a + unitAttack(attacker, u.id) * (sent[u.id] ?? 0), 0) * bonus;
@@ -276,6 +278,7 @@ export function battleNumbers(
       bows * ANTI_INFANTRY_BONUS * footShare +
       archers * DRAGON.archerBonus * dragonShare;
     if (landing) defense *= landingFactor(defender);
+    defense *= 1 + fortify;
   } else {
     defense = campDef * ground;
   }
@@ -625,7 +628,7 @@ export function raidOutcome(
   attacker: GameState,
   sent: Army,
   rand: number,
-  opts: Pick<MapOpts, "terrain" | "landing"> = {}
+  opts: Pick<MapOpts, "terrain" | "landing"> & { fortify?: number } = {}
 ) {
   const defenders = fightersOf(defender.army);
   // The Trapmaker's traps catch some attackers before the battle starts:
@@ -640,7 +643,7 @@ export function raidOutcome(
       trapped[u] = Math.floor((sent[u] ?? 0) * trapShare);
       fighting[u] = (sent[u] ?? 0) - trapped[u];
     }
-  const nums = battleNumbers(attacker, fighting, defender, opts.terrain, 0, opts.landing);
+  const nums = battleNumbers(attacker, fighting, defender, opts.terrain, 0, opts.landing, opts.fortify);
   const outcome = resolve(
     nums.attack,
     nums.defense,

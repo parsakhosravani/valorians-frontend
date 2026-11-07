@@ -104,6 +104,9 @@ const picture = (src: string, onLoad: () => void) => {
 const loaded = (img: HTMLImageElement) => img.complete && img.naturalWidth > 0;
 
 const TOWN_HALL = buildingImage(BUILDING_BY_ID["town-hall"]);
+/** A tile offered for an outpost (world px), see MapPainter.setSpots. */
+export type CanvasSpot = { x: number; y: number; resource: string; stronghold: boolean };
+
 /** Outposts have their own picture, so they never pass for a small village. */
 const OUTPOST_IMG = "/images/buildings/Outpost.webp";
 const resourceImg = (r: string) => `/images/resources/${r}.webp`;
@@ -349,6 +352,8 @@ export class MapPainter {
   private parchment: { img: CanvasImageSource; size: number } | null = null;
   private tribes: CanvasTribe[] = [];
   private camps: CanvasCamp[] = [];
+  private spots: CanvasSpot[] = [];
+  private chosen: { x: number; y: number } | null = null;
   /** The clock for camp cooldown labels. */
   now = 0;
 
@@ -404,6 +409,20 @@ export class MapPainter {
     this.tribes = tribes;
     this.camps = camps;
     this.request();
+  }
+
+  /** Land to choose for an outpost (world px), and the one picked: drawn as marks on the ground. */
+  setSpots(spots: CanvasSpot[], chosen: { x: number; y: number } | null) {
+    this.spots = spots;
+    this.chosen = chosen;
+    this.request();
+  }
+
+  /** A point on the canvas (CSS px) in world px. */
+  toWorld(sx: number, sy: number) {
+    const { x, y, z } = this.cam;
+
+    return { x: (sx - x) / z, y: (sy - y) / z };
   }
 
   /** The village or camp under a point on the canvas (CSS px), the top one first. */
@@ -474,9 +493,67 @@ export class MapPainter {
     const redraw = this.request;
 
     this.supplyRoads(z);
+    for (const sp of this.spots) if (near(sp.x, sp.y)) this.spot(sp, pin, redraw);
     for (const c of this.camps) if (!c.picked && near(c.x, c.y)) this.camp(c, pin, redraw);
     for (const t of this.order(this.tribes)) if (near(t.x, t.y)) this.village(t, pin, redraw);
     for (const c of this.camps) if (c.picked && near(c.x, c.y)) this.camp(c, pin, redraw);
+  }
+
+  /**
+   * A tile you may settle an outpost on: a disc with the resource its land
+   * favours (gold rim and a shield notch for a stronghold); the picked one is
+   * bigger, with a flag.
+   */
+  private spot(sp: CanvasSpot, pin: number, redraw: () => void) {
+    const { g } = this;
+    const on = !!this.chosen && this.chosen.x === sp.x && this.chosen.y === sp.y;
+    const r = (on ? 13 : 8.5) * pin;
+    const icon = picture(resourceImg(sp.resource), redraw);
+
+    g.save();
+    g.beginPath();
+    g.arc(sp.x, sp.y, r, 0, Math.PI * 2);
+    g.fillStyle = on ? "rgba(26,18,11,0.92)" : "rgba(26,18,11,0.62)";
+    g.fill();
+    g.lineWidth = (on ? 2.5 : 1.4) * pin;
+    g.strokeStyle = on ? "#F2C66D" : sp.stronghold ? "rgba(242,198,109,0.9)" : "rgba(233,223,201,0.55)";
+    g.stroke();
+    if (loaded(icon)) g.drawImage(icon, sp.x - r * 0.7, sp.y - r * 0.7, r * 1.4, r * 1.4);
+    if (sp.stronghold) {
+      // A small shield at the top right: the garrison holds better here.
+      const sx = sp.x + r * 0.75;
+      const sy = sp.y - r * 0.75;
+      const w = 4.5 * pin;
+
+      g.beginPath();
+      g.moveTo(sx - w, sy - w);
+      g.lineTo(sx + w, sy - w);
+      g.lineTo(sx + w, sy + w * 0.2);
+      g.quadraticCurveTo(sx, sy + w * 1.4, sx - w, sy + w * 0.2);
+      g.closePath();
+      g.fillStyle = "#8C5A2B";
+      g.fill();
+      g.lineWidth = 1 * pin;
+      g.strokeStyle = "#F2C66D";
+      g.stroke();
+    }
+    if (on) {
+      // A flag where the outpost would stand.
+      g.beginPath();
+      g.moveTo(sp.x, sp.y - r);
+      g.lineTo(sp.x, sp.y - r - 16 * pin);
+      g.lineWidth = 1.6 * pin;
+      g.strokeStyle = "#E9DFC9";
+      g.stroke();
+      g.beginPath();
+      g.moveTo(sp.x, sp.y - r - 16 * pin);
+      g.lineTo(sp.x + 11 * pin, sp.y - r - 12.5 * pin);
+      g.lineTo(sp.x, sp.y - r - 9 * pin);
+      g.closePath();
+      g.fillStyle = "#B8372C";
+      g.fill();
+    }
+    g.restore();
   }
 
   /**

@@ -163,6 +163,13 @@ ask before "fixing" either. Add new decisions here when they are made.
 - **Not full villages, on purpose:** no buildings or storage of their own. A whole second
   village would have meant a second copy of every system; outposts give the late game its
   expansion without that risk.
+- **Choosing land on the map** (Nov 2026, owner's call): "On the map" marks every free tile
+  (with the resource its land favours) and the player taps one; the quick list still offers the
+  best land for each resource. **Strongholds:** an outpost on hills or in a forest gives its
+  garrison +25% defense on top of the ground's own (`OUTPOST.strongholdDefense`), so the choice is
+  between the land's resource and a base that holds. **Moving:** an outpost can move to new land
+  once every 3 days, for half its founding cost, its fields losing a level each; not with a
+  garrison, troops on the way, a builder at work or an army out from or marching on it.
 - **Garrisons** (Nov 2026, owner's call): troops can be stationed at an outpost (they march
   there; room 500 + 100 per field level, up to 4,500). From there they **attack** (the road starts
   at the outpost, over land only; no clan strikes, no new orders on the road) and **come back

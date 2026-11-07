@@ -12,6 +12,7 @@ import { armySize } from "@/lib/game/war";
 import { Drawer } from "@/components/molecules/Drawer";
 import { Button } from "@/components/atoms/Button";
 import { UnitBadge } from "@/components/organisms/war/shared";
+import { LAND_NAME, isStronghold } from "@/lib/game/outpost";
 import type { OutpostLand, OutpostSpot } from "@/lib/game/outpost";
 import { apiRequest } from "@/lib/api";
 import { compact, formatDuration } from "@/lib/format";
@@ -21,7 +22,6 @@ import { InfoDrawer } from "@/components/organisms/InfoDrawer";
 import population from "~/images/resources/population.webp";
 
 /** What players call the land that favours each resource. */
-const LAND_NAME: Record<ResourceId, string> = { wood: "Woodland", clay: "Hill land", iron: "Rocky land", crop: "Farmland" };
 const res = (id: ResourceId) => RESOURCES.find((r) => r.id === id)!;
 /** Its own picture (the tower icon reads better this small than the wide map camp), with what its land favours on a badge. */
 const OUTPOST_IMG = "/images/icons/outpost.webp";
@@ -248,6 +248,11 @@ export const Outposts = () => {
                   {o.land ? `${LAND_NAME[o.land.resource]} outpost` : `Outpost ${i + 1}`}
                 </span>
                 {o.land && <LandChip land={o.land} />}
+                {isStronghold(o.x, o.y) && (
+                  <span className="text-[11px] font-bold text-[#8FD1B8]">
+                    <GameIcon e="🛡️" /> Stronghold: garrison +{Math.round(OUTPOST.strongholdDefense * 100)}% defense
+                  </span>
+                )}
                 <span className="text-[11px] text-muted">
                   {o.job ? (
                     <>
@@ -262,9 +267,15 @@ export const Outposts = () => {
                 <span className={clsx("text-sm font-extrabold tabular-nums", perHour > 0 ? "text-good" : "text-muted")}>
                   {perHour > 0 ? `+${compact(perHour)}/h` : o.job ? "First field soon" : "No fields yet"}
                 </span>
-                <Link aria-label="Show on the map" className="btn btn-wood btn-sm !px-2 text-xs" href="/battle?tab=map">
-                  <GameIcon e="📍" /> Map
-                </Link>
+                <span className="flex gap-1">
+                  <Link aria-label="Show on the map" className="btn btn-wood btn-sm !px-2 text-xs" href="/battle?tab=map">
+                    <GameIcon e="📍" />
+                  </Link>
+                  {/* Move it: choose new land on the map (see moveOutpost). */}
+                  <Link aria-label="Move this outpost" className="btn btn-wood btn-sm !px-2 text-xs" href={`/battle?move=${i}`}>
+                    <GameIcon e="🧭" /> Move
+                  </Link>
+                </span>
               </div>
             </div>
             {o.job && <Bar className="!h-1.5" max={o.job.endsAt - o.job.startedAt} value={now - o.job.startedAt} />}
@@ -344,12 +355,24 @@ export const Outposts = () => {
                     : "Ready to found"}
               </span>
             </div>
-            {spots == null && (
-              <button className="btn btn-sm btn-gold shrink-0" disabled={!!blocked || busy != null} onClick={chooseSpot}>
+          </div>
+          {spots == null && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {/* Choose any free tile on the map; the quick list offers the best land for each resource. */}
+              {blocked ? (
+                <button className="btn btn-sm btn-gold" disabled type="button">
+                  <GameIcon e="🧭" /> Choose on the map
+                </button>
+              ) : (
+                <Link className="btn btn-sm btn-gold" href="/battle?settle=1">
+                  <GameIcon e="🧭" /> Choose on the map
+                </Link>
+              )}
+              <button className="btn btn-sm btn-wood" disabled={!!blocked || busy != null} onClick={chooseSpot}>
                 {busy === "spots" ? "Looking…" : "Found outpost"}
               </button>
-            )}
-          </div>
+            </div>
+          )}
           <div className="inset grid grid-cols-5 divide-x divide-line/50 py-2">
             {RESOURCES.map((r) => (
               <span key={r.id} className="flex flex-col items-center gap-0.5">

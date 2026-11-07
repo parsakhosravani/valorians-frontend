@@ -698,6 +698,19 @@ export const OUTPOST = {
    * loot), so it's a forward base, not a safe vault.
    */
   garrisonBase: 500,
+  /**
+   * Stronghold: an outpost on hills or in a forest is easier to hold. Its garrison
+   * defends +25% on top of the ground's own bonus (hills +20%, forest +10%), so
+   * where you settle is a choice between the land's resource and a base that holds.
+   */
+  strongholdDefense: 0.25,
+  /**
+   * Moving an outpost (choose new land on the map): once every 3 days, for half of
+   * what that outpost cost to found, and its fields lose a level each (the settlers
+   * rebuild). Lets a badly placed outpost be fixed without making it free to hop.
+   */
+  moveCooldownMs: 3 * 24 * 3600_000,
+  moveCostShare: 0.5,
   garrisonPerFieldLevel: 100,
 } as const;
 

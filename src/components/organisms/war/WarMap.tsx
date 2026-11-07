@@ -10,6 +10,7 @@ import {
 import Image from "next/image";
 import clsx from "clsx";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   ArmyToken,
@@ -37,6 +38,8 @@ import { pinScale, useMapCamera } from "./useMapCamera";
 import { CanvasCamp, CanvasTribe, MapCanvas, MapPainter, Ring, PARCHMENT_FULL, VILLAGE_GROW, VILLAGE_MIN, parchmentShare } from "./MapCanvas";
 import { parchmentImage } from "./parchmentImage";
 import { WorldMap } from "./WorldMap";
+import { LandData, LandPicker } from "./LandPicker";
+import type { LandChoice } from "@/lib/game/outpost";
 import { MapKey } from "./MapKey";
 import { roadShape, timeAt } from "./roadShape";
 
@@ -519,8 +522,13 @@ export const WarMap = ({
   focusId,
   focusCamp,
   attackFocus,
+  choosingLand,
+  onLandDone,
 }: {
   onAttack: (t: AttackTarget) => void;
+  /** Choosing land for an outpost (founding, or moving outpost `move`): the free tiles are marked to pick from. */
+  choosingLand?: { move?: number } | null;
+  onLandDone?: () => void;
   focusId?: number;
   /** Open the send-army sheet on the focused tribe straight away (a spy saw its army leave). */
   attackFocus?: boolean;
@@ -528,7 +536,35 @@ export const WarMap = ({
   focusCamp?: number;
 }) => {
   const { authHeader, me } = useGameStatus();
-  const { recall, scout, spy, refresh } = useGameActions();
+  const { recall, scout, spy, refresh, foundOutpost, moveOutpost } = useGameActions();
+  const router = useRouter();
+  // Choosing land for an outpost: every free tile, and the one picked.
+  const [land, setLand] = useState<LandData | null>(null);
+  const [chosenLand, setChosenLand] = useState<LandChoice | null>(null);
+  const [settling, setSettling] = useState(false);
+
+  useEffect(() => {
+    if (!choosingLand || !authHeader) return;
+    let live = true;
+
+    apiRequest<LandData>(authHeader, `outposts/land${choosingLand.move != null ? `?move=${choosingLand.move}` : ""}`)
+      .then((d) => live && setLand(d))
+      .catch(() => live && setLand({ home: { x: 0, y: 0 }, choices: [] }));
+
+    return () => {
+      live = false;
+    };
+  }, [choosingLand, authHeader]);
+  const settleOn = async (c: LandChoice) => {
+    setSettling(true);
+    const ok = choosingLand?.move != null ? await moveOutpost(choosingLand.move, c) : await foundOutpost(c);
+
+    setSettling(false);
+    if (ok) {
+      onLandDone?.();
+      router.push("/tribe?tab=outposts");
+    }
+  };
   // The map follows the clock in 5-second steps (has a shield run out, has a
   // caravan arrived). What moves or counts down every second does so on its
   // own (Travellers, Countdown), so the whole map isn't redrawn every second.
@@ -1245,6 +1281,10 @@ export const WarMap = ({
     if (!p) return;
     p.now = campClock || now;
     p.setMarkers(canvasTribes, canvasCamps);
+    p.setSpots(
+      choosingLand && land ? land.choices.map((c) => ({ x: px(c.x), y: py(c.y), resource: c.land.resource, stronghold: c.stronghold })) : [],
+      choosingLand && chosenLand ? { x: px(chosenLand.x), y: py(chosenLand.y) } : null
+    );
   });
 
   /** A tap on the land picks the village or camp under it. */
@@ -1252,6 +1292,29 @@ export const WarMap = ({
     // Armies, caravans and battles are page elements with their own buttons.
     if ((e.target as Element).closest("button") || !data) return;
     const r = e.currentTarget.getBoundingClientRect();
+
+    // Choosing land: the tap picks the marked tile under it (or the nearest within a tile).
+    if (choosingLand) {
+      const w = painter.current?.toWorld(e.clientX - r.left, e.clientY - r.top);
+
+      if (!w || !land) return;
+      const tx = (w.x - T / 2) / T + MAP_MIN;
+      const ty = (w.y - T / 2) / T + MAP_MIN;
+      let best: LandChoice | null = null;
+      let bestD = 0.9;
+
+      for (const c of land.choices) {
+        const d = Math.hypot(c.x - tx, c.y - ty);
+
+        if (d < bestD) {
+          best = c;
+          bestD = d;
+        }
+      }
+      setChosenLand(best);
+
+      return;
+    }
     const hit = painter.current?.hit(e.clientX - r.left, e.clientY - r.top);
 
     if (hit?.kind === "tribe") {
@@ -1419,6 +1482,21 @@ export const WarMap = ({
         {/* Frame: a soft vignette and a gold hairline, like a map under glass */}
         <div className="pointer-events-none absolute inset-0 z-[5] rounded-2xl shadow-[inset_0_0_42px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-gold/20" />
 
+        {choosingLand && (
+          <LandPicker
+            busy={settling}
+            chosen={chosenLand}
+            data={land}
+            onCancel={() => {
+              if (chosenLand) setChosenLand(null);
+              else {
+                onLandDone?.();
+                router.push("/tribe?tab=outposts");
+              }
+            }}
+            onSettle={settleOn}
+          />
+        )}
         {picking && (
           <div className="absolute inset-x-2 bottom-2 z-20 flex items-center gap-2 rounded-xl px-3 py-2 bg-ink/90 border border-gold text-sm shadow-lg mr-14">
             <span className="text-lg animate-pulse">

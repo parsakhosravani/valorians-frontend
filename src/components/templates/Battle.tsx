@@ -33,6 +33,8 @@ export const Battle = () => {
   // Bumped by every jump, so the map starts over on the new spot even when it was
   // already open (it only centres once, on its first load) or on the same tribe.
   const [jump, setJump] = useState(0);
+  // ?settle=1 (found an outpost) or ?move=<index> (move one): the map opens to choose the land.
+  const [land, setLand] = useState<{ move?: number } | null>(null);
 
   // /battle?revenge=<playerId> (Hall), ?target=<playerId> (Leaderboard) or
   // ?attack=<playerId> (a spy's report, sheet open) opens the map on
@@ -56,10 +58,17 @@ export const Battle = () => {
     const land = Number(q.get("land"));
 
     if (r && attack && land) setRally({ id: r, landAt: land, target: attack });
-    if (["revenge", "target", "attack", "camp", "tab", "rally", "land"].some((k) => q.has(k))) {
+    const keys = ["revenge", "target", "attack", "camp", "tab", "rally", "land", "settle", "move"];
+
+    if (q.has("settle") || q.has("move")) {
+      setLand(q.has("move") ? { move: Number(q.get("move")) } : {});
+      setJump((j) => j + 1);
+      setTab("map");
+    }
+    if (keys.some((k) => q.has(k))) {
       const rest = new URLSearchParams(query);
 
-      ["revenge", "target", "attack", "camp", "tab", "rally", "land"].forEach((k) => rest.delete(k));
+      keys.forEach((k) => rest.delete(k));
       const search = rest.toString();
 
       window.history.replaceState(null, "", url.pathname + (search ? `?${search}` : "") + url.hash);
@@ -116,6 +125,8 @@ export const Battle = () => {
             <WarMap
               key={jump}
               attackFocus={strike}
+              choosingLand={land}
+              onLandDone={() => setLand(null)}
               focusCamp={camp}
               focusId={revenge}
               onAttack={(t) =>
