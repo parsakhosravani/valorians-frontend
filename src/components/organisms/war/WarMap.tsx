@@ -1717,6 +1717,8 @@ export const WarMap = ({
                         You can recall an army before it arrives. A tribe that loses a real share of
                         its stores or troops in a raid gets a shield: up to 2h, growing to 6h and 12h if hit hard
                         again within a day. Small hits give little or nothing.
+                        Raiders carry off everything above what the Hideout hides (up to a quarter of
+                        the warehouse), as much as their troops can carry.
                         Raiding a tribe under half your power takes only half the loot.
                       </span>
                       <span>

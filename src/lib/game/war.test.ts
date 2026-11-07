@@ -111,8 +111,8 @@ test("raid: shields, loot limited by carry and hideout, defender shielded after"
   const { state: def2, report } = W.defendRaid(defender, d.state, d.sent, T0, 0.5);
   expect(report.attackerWon).toBe(true);
   const protectedAmount = hiddenResources(0);
-  // takes at most half of what isn't hidden
-  expect(report.loot.iron).toBeLessThanOrEqual((10000 - protectedAmount) * 0.5);
+  // takes at most what isn't hidden
+  expect(report.loot.iron).toBeLessThanOrEqual(10000 - protectedAmount);
   expect(def2.resources.iron).toBe(10000 - report.loot.iron);
   expect(def2.shieldUntil).toBeGreaterThan(T0);
   expect(def2.war.defensesLost).toBe(1);
@@ -122,6 +122,28 @@ test("raid: shields, loot limited by carry and hideout, defender shielded after"
   const home = E.advance(atk2, report.returnsAt);
   expect(home.army.cavalry).toBeGreaterThan(90);
   expect(home.war.attacksWon).toBe(1);
+});
+
+test("only the Hideout hides: raiders with room take everything above it, the Hideout keeps at most a quarter", () => {
+  const attacker = withBarracks();
+  attacker.army.cavalry = 1000; // carries 100k, more than there is
+  const defender = E.createInitialState(T0);
+  defender.shieldUntil = 0;
+  defender.buildings.hideout = 20; // would hide 418k a resource uncapped
+  const cap = E.getRates(defender).capacity;
+  defender.resources = { iron: cap, wood: cap, clay: cap, crop: cap };
+  const hidden = E.getRates(defender).hidden;
+  expect(hidden).toBe(Math.round(cap * C.HIDEOUT_MAX_SHARE));
+  expect(hidden).toBeLessThan(hiddenResources(20));
+
+  const d = W.dispatchRaid(attacker, { ...E.emptyArmy(), cavalry: 1000 }, T0);
+  const { state: after, report } = W.defendRaid(defender, d.state, d.sent, T0, 0.5);
+  expect(report.attackerWon).toBe(true);
+  const share = report.weakTarget ? C.LOOT_WEAK_SHARE : 1;
+  for (const r of C.RESOURCE_IDS) {
+    expect(report.loot[r]).toBe(Math.floor((cap - hidden) * share));
+    expect(after.resources[r]).toBeGreaterThanOrEqual(hidden);
+  }
 });
 
 test("defenders and walls can win", () => {
@@ -495,11 +517,11 @@ test("raiding a tribe under half your power takes half the loot", () => {
   expect(total(weak.loot)).toBeLessThan(total(even.loot));
 });
 
-test("the Hideout never hides more than 40% of the warehouse", () => {
+test("the Hideout never hides more than a quarter of the warehouse", () => {
   const s = withBarracks();
   s.buildings["hideout"] = 60;
   const r = E.getRates(s);
-  expect(r.hidden).toBe(Math.round(r.capacity * 0.4));
+  expect(r.hidden).toBe(Math.round(r.capacity * 0.25));
 });
 
 // ─── The dragon ──────────────────────────────────────────────────────────────
